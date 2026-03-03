@@ -6,6 +6,7 @@ import { deleteStudent } from '../services/studentService';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
+import { exportStudentsPdf } from '../utils/studentsPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
 
 const PAGE_SIZE = 100;
@@ -58,6 +59,7 @@ export function Students() {
   }
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  const [savingPdf, setSavingPdf] = useState(false);
 
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; student: Student | null }>({
     open: false,
@@ -147,6 +149,27 @@ export function Students() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  function handleSavePdf() {
+    setSavingPdf(true);
+    // Defer to next tick so the button state renders before the synchronous PDF work
+    setTimeout(() => {
+      try {
+        exportStudentsPdf(filteredStudents, {
+          academicYear,
+          courseFilter,
+          yearFilter,
+          genderFilter,
+          admTypeFilter,
+          admCatFilter,
+          admStatusFilter,
+          searchTerm: debouncedSearch,
+        });
+      } finally {
+        setSavingPdf(false);
+      }
+    }, 0);
   }
 
   const isLoading = settingsLoading || loading;
@@ -305,6 +328,15 @@ export function Students() {
               className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors"
             >
               Clear Filters
+            </button>
+          )}
+          {!isLoading && filteredStudents.length > 0 && (
+            <button
+              onClick={handleSavePdf}
+              disabled={savingPdf}
+              className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              {savingPdf ? 'Generating…' : 'Save PDF'}
             </button>
           )}
         </div>
