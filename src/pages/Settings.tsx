@@ -5,7 +5,19 @@ import { deleteStudentsByAcademicYear, deleteAllStudents } from '../services/stu
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
+import { FeeStructurePage } from './FeeStructurePage';
+import { ImportStudents } from './ImportStudents';
+import { ImportFeeRegister } from './ImportFeeRegister';
 import type { AcademicYear } from '../types';
+
+type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'fee-structure', label: 'Fee Structure' },
+  { id: 'import-students', label: 'Import Students' },
+  { id: 'import-fee', label: 'Import Fee Register' },
+];
 
 const ACADEMIC_YEAR_OPTIONS = [
   { value: '2029-30', label: '2029-30' },
@@ -31,6 +43,8 @@ const ACADEMIC_YEAR_OPTIONS = [
 const RESET_PASSKEY = 'teju2015';
 
 export function Settings() {
+  const [activeTab, setActiveTab] = useState<Tab>('general');
+
   const { settings, loading, refetch } = useSettings();
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
   const [saving, setSaving] = useState(false);
@@ -194,95 +208,140 @@ export function Settings() {
   }
 
   return (
-    <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Settings</h2>
+    <div className="h-full flex flex-col">
 
-      {/* Academic Year */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-5">
-        <h3 className="text-base font-medium text-gray-800 mb-4">Academic Year</h3>
-
-        {loading ? (
-          <p className="text-sm text-gray-500">Loading settings...</p>
-        ) : (
-          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
-            <Select
-              label="Current Academic Year"
-              options={ACADEMIC_YEAR_OPTIONS}
-              value={currentValue}
-              onChange={(e) => setSelectedYear(e.target.value as AcademicYear)}
-              placeholder="Select academic year"
-            />
-
-            {successMsg && (
-              <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2">
-                {successMsg}
-              </p>
-            )}
-            {errorMsg && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
-                {errorMsg}
-              </p>
-            )}
-
-            <Button type="submit" loading={saving} disabled={!currentValue}>
-              Save Settings
-            </Button>
-          </form>
-        )}
+      {/* Tab bar */}
+      <div className="flex-shrink-0 flex gap-1 border-b border-gray-200 mb-4">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
+              activeTab === tab.id
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Danger Zone */}
-      <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
-        <h3 className="text-base font-medium text-red-700 mb-1">Danger Zone</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Permanently delete student records. These actions cannot be undone.
-        </p>
+      {/* Tab content */}
+      <div className="flex-1 min-h-0">
 
-        {(resetMsg || fullResetMsg || feeResetMsg) && (
-          <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2 mb-4">
-            {resetMsg || fullResetMsg || feeResetMsg}
-          </p>
+        {/* ── General ── */}
+        {activeTab === 'general' && (
+          <div className="h-full overflow-auto">
+            <div className="max-w-lg">
+              {/* Academic Year */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-5">
+                <h3 className="text-base font-medium text-gray-800 mb-4">Academic Year</h3>
+
+                {loading ? (
+                  <p className="text-sm text-gray-500">Loading settings...</p>
+                ) : (
+                  <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+                    <Select
+                      label="Current Academic Year"
+                      options={ACADEMIC_YEAR_OPTIONS}
+                      value={currentValue}
+                      onChange={(e) => setSelectedYear(e.target.value as AcademicYear)}
+                      placeholder="Select academic year"
+                    />
+
+                    {successMsg && (
+                      <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2">
+                        {successMsg}
+                      </p>
+                    )}
+                    {errorMsg && (
+                      <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
+                        {errorMsg}
+                      </p>
+                    )}
+
+                    <Button type="submit" loading={saving} disabled={!currentValue}>
+                      Save Settings
+                    </Button>
+                  </form>
+                )}
+              </div>
+
+              {/* Danger Zone */}
+              <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
+                <h3 className="text-base font-medium text-red-700 mb-1">Danger Zone</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Permanently delete student records. These actions cannot be undone.
+                </p>
+
+                {(resetMsg || fullResetMsg || feeResetMsg) && (
+                  <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2 mb-4">
+                    {resetMsg || fullResetMsg || feeResetMsg}
+                  </p>
+                )}
+                {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg) && (
+                  <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 mb-4">
+                    {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Current academic year only</p>
+                    <Button
+                      variant="danger"
+                      disabled={!currentValue || loading}
+                      onClick={openResetModal}
+                    >
+                      Year Data Reset ({currentValue || '—'})
+                    </Button>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">All academic years</p>
+                    <Button
+                      variant="danger"
+                      disabled={loading}
+                      onClick={openFullResetModal}
+                    >
+                      Full Data Reset
+                    </Button>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Fee records — current year only</p>
+                    <Button
+                      variant="danger"
+                      disabled={!currentValue || loading}
+                      onClick={openFeeResetModal}
+                    >
+                      Reset Fee Register ({currentValue || '—'})
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
-        {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg) && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 mb-4">
-            {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg}
-          </p>
+
+        {/* ── Fee Structure ── */}
+        {activeTab === 'fee-structure' && <FeeStructurePage />}
+
+        {/* ── Import Students ── */}
+        {activeTab === 'import-students' && (
+          <div className="h-full overflow-auto">
+            <ImportStudents />
+          </div>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Current academic year only</p>
-            <Button
-              variant="danger"
-              disabled={!currentValue || loading}
-              onClick={openResetModal}
-            >
-              Year Data Reset ({currentValue || '—'})
-            </Button>
+        {/* ── Import Fee Register ── */}
+        {activeTab === 'import-fee' && (
+          <div className="h-full overflow-auto">
+            <ImportFeeRegister />
           </div>
+        )}
 
-          <div>
-            <p className="text-xs text-gray-500 mb-1">All academic years</p>
-            <Button
-              variant="danger"
-              disabled={loading}
-              onClick={openFullResetModal}
-            >
-              Full Data Reset
-            </Button>
-          </div>
-
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Fee records — current year only</p>
-            <Button
-              variant="danger"
-              disabled={!currentValue || loading}
-              onClick={openFeeResetModal}
-            >
-              Reset Fee Register ({currentValue || '—'})
-            </Button>
-          </div>
-        </div>
       </div>
 
       {/* Year Reset Passkey Modal */}
@@ -333,6 +392,7 @@ export function Settings() {
           </div>
         </div>
       )}
+
       {/* Fee Register Reset Passkey Modal */}
       {feeResetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -381,6 +441,7 @@ export function Settings() {
           </div>
         </div>
       )}
+
       {/* Full Reset Passkey Modal */}
       {fullResetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

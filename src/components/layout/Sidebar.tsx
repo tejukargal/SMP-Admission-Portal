@@ -2,13 +2,10 @@ import { NavLink } from 'react-router-dom';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/enroll', label: 'Enroll Student' },
   { to: '/students', label: 'Students' },
   { to: '/fees', label: 'Collect Fee' },
   { to: '/fee-register', label: 'Fee Register' },
-  { to: '/fee-structure', label: 'Fee Structure' },
-  { to: '/enroll', label: 'Enroll Student' },
-  { to: '/import', label: 'Import Students' },
-  { to: '/import-fee', label: 'Import Fee Reg' },
   { to: '/settings', label: 'Settings' },
 ];
 
