@@ -31,3 +31,6 @@ firestore-debug.log
 
 # Claude Code
 .claude/
+
+# Local Netlify folder
+.netlify
