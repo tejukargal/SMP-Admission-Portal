@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -18,6 +18,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+// Use session-scoped persistence: auth state is cleared automatically when
+// the tab or browser window is closed, but survives page refreshes.
+void setPersistence(auth, browserSessionPersistence);
 
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
