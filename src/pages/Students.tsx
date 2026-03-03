@@ -96,11 +96,11 @@ export function Students() {
       });
     }
     return result.slice().sort((a, b) => {
-      const n = a.studentNameSSLC.localeCompare(b.studentNameSSLC);
-      if (n !== 0) return n;
+      const y = (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
+      if (y !== 0) return y;
       const c = a.course.localeCompare(b.course);
       if (c !== 0) return c;
-      return (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
+      return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
   }, [allStudents, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter, debouncedSearch]);
 
