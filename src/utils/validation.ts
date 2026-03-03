@@ -1,0 +1,174 @@
+import type { StudentFormData } from '../types';
+
+export interface ValidationErrors {
+  [key: string]: string;
+}
+
+const MOBILE_RE = /^[6-9]\d{9}$/;
+
+// Fields that block save in edit mode
+const EDIT_MANDATORY: (keyof StudentFormData)[] = [
+  'studentNameSSLC',
+  'studentNameAadhar',
+  'course',
+  'year',
+];
+
+// Fields shown in red (warned) but don't block save in edit mode
+const EDIT_WARN_EMPTY: (keyof StudentFormData)[] = [
+  'fatherName',
+  'motherName',
+  'dateOfBirth',
+  'gender',
+  'religion',
+  'caste',
+  'category',
+  'address',
+  'admType',
+  'admCat',
+  'academicYear',
+  'admissionStatus',
+  'regNumber',
+];
+
+export interface EditValidationResult {
+  errors: ValidationErrors;
+  warnings: ValidationErrors;
+}
+
+export function validateStudentFormEdit(data: StudentFormData): EditValidationResult {
+  const errors: ValidationErrors = {};
+  const warnings: ValidationErrors = {};
+
+  for (const field of EDIT_MANDATORY) {
+    if (!data[field] || String(data[field]).trim() === '') {
+      errors[field as string] = 'This field is required';
+    }
+  }
+
+  for (const field of EDIT_WARN_EMPTY) {
+    if (!data[field] || String(data[field]).trim() === '') {
+      warnings[field as string] = 'This field is empty';
+    }
+  }
+
+  // Date format (only if non-empty — empty already caught above)
+  if (data.dateOfBirth && !/^\d{2}\/\d{2}\/\d{4}$/.test(data.dateOfBirth)) {
+    warnings['dateOfBirth'] = 'Enter date in DD/MM/YYYY format';
+  } else if (data.dateOfBirth && /^\d{2}\/\d{2}\/\d{4}$/.test(data.dateOfBirth)) {
+    const [dd, mm, yyyy] = data.dateOfBirth.split('/').map(Number);
+    const date = new Date(yyyy, mm - 1, dd);
+    if (date.getDate() !== dd || date.getMonth() !== mm - 1 || date.getFullYear() !== yyyy) {
+      warnings['dateOfBirth'] = 'Invalid date';
+    }
+  }
+
+  // Mobile format warnings
+  for (const field of (['fatherMobile', 'studentMobile'] as (keyof StudentFormData)[])) {
+    const val = String(data[field] ?? '');
+    if (val && !MOBILE_RE.test(val)) {
+      warnings[field as string] = 'Enter a valid 10-digit mobile number starting with 6-9';
+    }
+  }
+
+  // Marks warnings
+  const markFields: (keyof StudentFormData)[] = [
+    'sslcMaxTotal', 'sslcObtainedTotal', 'scienceMax', 'scienceObtained', 'mathsMax', 'mathsObtained',
+  ];
+  for (const field of markFields) {
+    if (isNaN(Number(data[field])) || Number(data[field]) < 0) {
+      warnings[field as string] = 'Value must be 0 or greater';
+    }
+  }
+  if (Number(data.sslcObtainedTotal) > Number(data.sslcMaxTotal))
+    warnings['sslcObtainedTotal'] = 'Obtained cannot exceed maximum';
+  if (Number(data.scienceObtained) > Number(data.scienceMax))
+    warnings['scienceObtained'] = 'Obtained cannot exceed maximum';
+  if (Number(data.mathsObtained) > Number(data.mathsMax))
+    warnings['mathsObtained'] = 'Obtained cannot exceed maximum';
+
+  return { errors, warnings };
+}
+
+export function validateStudentForm(data: StudentFormData): ValidationErrors {
+  const errors: ValidationErrors = {};
+
+  const requiredText: (keyof StudentFormData)[] = [
+    'studentNameSSLC',
+    'studentNameAadhar',
+    'fatherName',
+    'motherName',
+    'dateOfBirth',
+    'gender',
+    'religion',
+    'caste',
+    'category',
+    'address',
+    'course',
+    'year',
+    'admType',
+    'admCat',
+    'academicYear',
+    'admissionStatus',
+    'regNumber',
+  ];
+
+  for (const field of requiredText) {
+    const val = data[field];
+    if (!val || String(val).trim() === '') {
+      errors[field] = 'This field is required';
+    }
+  }
+
+  // Date of birth DD/MM/YYYY validation
+  if (data.dateOfBirth && !/^\d{2}\/\d{2}\/\d{4}$/.test(data.dateOfBirth)) {
+    errors['dateOfBirth'] = 'Enter date in DD/MM/YYYY format';
+  } else if (data.dateOfBirth) {
+    const [dd, mm, yyyy] = data.dateOfBirth.split('/').map(Number);
+    const date = new Date(yyyy, mm - 1, dd);
+    if (date.getDate() !== dd || date.getMonth() !== mm - 1 || date.getFullYear() !== yyyy) {
+      errors['dateOfBirth'] = 'Invalid date';
+    }
+  }
+
+  // Mobile validation
+  const mobileFields: (keyof StudentFormData)[] = [
+    'fatherMobile',
+    'studentMobile',
+  ];
+  for (const field of mobileFields) {
+    const val = String(data[field] ?? '');
+    if (val && !MOBILE_RE.test(val)) {
+      errors[field] = 'Enter a valid 10-digit mobile number starting with 6-9';
+    }
+  }
+
+  // Marks non-negative
+  const markFields: (keyof StudentFormData)[] = [
+    'sslcMaxTotal',
+    'sslcObtainedTotal',
+    'scienceMax',
+    'scienceObtained',
+    'mathsMax',
+    'mathsObtained',
+  ];
+  for (const field of markFields) {
+    const val = Number(data[field]);
+    if (isNaN(val) || val < 0) {
+      errors[field] = 'Value must be 0 or greater';
+    }
+  }
+
+  // Obtained ≤ Max
+  if (Number(data.sslcObtainedTotal) > Number(data.sslcMaxTotal)) {
+    errors['sslcObtainedTotal'] = 'Obtained cannot exceed maximum';
+  }
+  if (Number(data.scienceObtained) > Number(data.scienceMax)) {
+    errors['scienceObtained'] = 'Obtained cannot exceed maximum';
+  }
+  if (Number(data.mathsObtained) > Number(data.mathsMax)) {
+    errors['mathsObtained'] = 'Obtained cannot exceed maximum';
+  }
+
+  return errors;
+}

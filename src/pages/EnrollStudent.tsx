@@ -1,0 +1,754 @@
+import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSettings } from '../hooks/useSettings';
+import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear } from '../services/studentService';
+import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
+import { Input } from '../components/common/Input';
+import { Select } from '../components/common/Select';
+import { Button } from '../components/common/Button';
+import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, Religion, Category, AdmType, AdmCat } from '../types';
+
+const GENDER_OPTIONS = [
+  { value: 'BOY', label: 'BOY' },
+  { value: 'GIRL', label: 'GIRL' },
+];
+
+const RELIGION_OPTIONS = [
+  { value: 'HINDU', label: 'HINDU' },
+  { value: 'MUSLIM', label: 'MUSLIM' },
+  { value: 'CHRISTIAN', label: 'CHRISTIAN' },
+  { value: 'JAIN', label: 'JAIN' },
+  { value: 'BUDDHIST', label: 'BUDDHIST' },
+  { value: 'SIKH', label: 'SIKH' },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: 'GM', label: 'GM' },
+  { value: 'SC', label: 'SC' },
+  { value: 'ST', label: 'ST' },
+  { value: 'C1', label: 'C1' },
+  { value: '2A', label: '2A' },
+  { value: '2B', label: '2B' },
+  { value: '3A', label: '3A' },
+  { value: '3B', label: '3B' },
+];
+
+const COURSE_OPTIONS = [
+  { value: 'CE', label: 'CE - Civil Engineering' },
+  { value: 'ME', label: 'ME - Mechanical Engineering' },
+  { value: 'EC', label: 'EC - Electronics & Communication' },
+  { value: 'CS', label: 'CS - Computer Science' },
+  { value: 'EE', label: 'EE - Electrical Engineering' },
+];
+
+const YEAR_OPTIONS = [
+  { value: '1ST YEAR', label: '1ST YEAR' },
+  { value: '2ND YEAR', label: '2ND YEAR' },
+  { value: '3RD YEAR', label: '3RD YEAR' },
+];
+
+const ADM_TYPE_OPTIONS = [
+  { value: 'REGULAR', label: 'REGULAR' },
+  { value: 'REPEATER', label: 'REPEATER' },
+  { value: 'LATERAL', label: 'LATERAL' },
+  { value: 'EXTERNAL', label: 'EXTERNAL' },
+];
+
+const ADM_CAT_OPTIONS = [
+  { value: 'GM', label: 'GM' },
+  { value: 'SNQ', label: 'SNQ' },
+  { value: 'OTHERS', label: 'OTHERS' },
+];
+
+const ACADEMIC_YEAR_OPTIONS = [
+  { value: '2024-25', label: '2024-25' },
+  { value: '2025-26', label: '2025-26' },
+  { value: '2026-27', label: '2026-27' },
+  { value: '2027-28', label: '2027-28' },
+  { value: '2028-29', label: '2028-29' },
+  { value: '2029-30', label: '2029-30' },
+];
+
+const ADMISSION_STATUS_OPTIONS = [
+  { value: 'PROVISIONAL', label: 'PROVISIONAL' },
+  { value: 'CONFIRMED', label: 'CONFIRMED' },
+  { value: 'CANCELLED', label: 'CANCELLED' },
+  { value: 'PENDING', label: 'PENDING' },
+];
+
+function emptyForm(defaultYear?: AcademicYear): StudentFormData {
+  return {
+    studentNameSSLC: '',
+    studentNameAadhar: '',
+    fatherName: '',
+    motherName: '',
+    dateOfBirth: '',
+    gender: '' as Gender,
+    religion: '' as Religion,
+    caste: '',
+    category: 'GM' as Category,
+    sslcMaxTotal: 625,
+    sslcObtainedTotal: 0,
+    scienceMax: 100,
+    scienceObtained: 0,
+    mathsMax: 100,
+    mathsObtained: 0,
+    mathsScienceMaxTotal: 200,
+    mathsScienceObtainedTotal: 0,
+    annualIncome: 0,
+    address: '',
+    fatherMobile: '',
+    studentMobile: '',
+    course: '' as Course,
+    year: '' as Year,
+    admType: 'REGULAR' as AdmType,
+    admCat: 'GM' as AdmCat,
+    academicYear: defaultYear ?? ('' as AcademicYear),
+    admissionStatus: '',
+    meritNumber: '',
+    regNumber: '',
+  };
+}
+
+export function EnrollStudent() {
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const fromDashboard = searchParams.get('from') === 'dashboard';
+  const backTo = fromDashboard ? '/dashboard' : '/students';
+  const backLabel = fromDashboard ? 'Back to Dashboard' : 'Back to Students';
+  const navigate = useNavigate();
+  const { settings } = useSettings();
+
+  const [form, setForm] = useState<StudentFormData>(emptyForm());
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Re-enroll from previous year
+  const [prevQuery, setPrevQuery] = useState('');
+  const [prevResults, setPrevResults] = useState<Student[]>([]);
+  const [prevSearching, setPrevSearching] = useState(false);
+  const [prevSourceStudent, setPrevSourceStudent] = useState<Student | null>(null);
+  const prevStudentsCache = useRef<Student[] | null>(null);
+
+  // In edit mode: merge live-computed warnings with any blocking errors from submit attempt.
+  // Warnings show red but don't block save; blocking errors (mandatory fields) take priority.
+  const displayErrors = useMemo<ValidationErrors>(() => {
+    if (!editId) return errors;
+    const { warnings } = validateStudentFormEdit(form);
+    return { ...warnings, ...errors };
+  }, [editId, form, errors]);
+
+  useEffect(() => {
+    if (!editId && settings?.currentAcademicYear) {
+      setForm((prev) => ({ ...prev, academicYear: settings.currentAcademicYear }));
+    }
+  }, [settings, editId]);
+
+  // Debounced search across previous-year students
+  useEffect(() => {
+    if (editId) return;
+    const trimmed = prevQuery.trim();
+    if (trimmed.length < 2) {
+      setPrevResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setPrevSearching(true);
+      try {
+        if (prevStudentsCache.current === null) {
+          const all = await getAllStudents();
+          prevStudentsCache.current = settings?.currentAcademicYear
+            ? all.filter((s) => s.academicYear !== settings.currentAcademicYear)
+            : all;
+        }
+        const q = trimmed.toUpperCase();
+        const results = prevStudentsCache.current
+          .filter(
+            (s) =>
+              s.studentNameSSLC.toUpperCase().includes(q) ||
+              s.regNumber.toUpperCase().includes(q)
+          )
+          .slice(0, 8);
+        setPrevResults(results);
+      } catch {
+        setPrevResults([]);
+      } finally {
+        setPrevSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [prevQuery, editId, settings?.currentAcademicYear]);
+
+  useEffect(() => {
+    if (!editId) return;
+    setLoadingEdit(true);
+    getStudent(editId)
+      .then((student) => {
+        if (student) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id: _id, createdAt: _c, updatedAt: _u, motherMobile: _mm, ...rest } = student as Student & { motherMobile?: string };
+          // Convert YYYY-MM-DD to DD/MM/YYYY if needed
+          if (rest.dateOfBirth && /^\d{4}-\d{2}-\d{2}$/.test(rest.dateOfBirth)) {
+            const [y, m, d] = rest.dateOfBirth.split('-');
+            rest.dateOfBirth = `${d}/${m}/${y}`;
+          }
+          // Default missing fields for records predating these additions
+          const formData = rest as StudentFormData;
+          if (!formData.meritNumber) formData.meritNumber = '';
+          if (!formData.regNumber) formData.regNumber = formData.course ? `308${formData.course}` : '';
+          if (!formData.admType) formData.admType = 'REGULAR';
+          if (!formData.admCat) formData.admCat = 'GM';
+          setForm(formData);
+        }
+      })
+      .catch(() => setErrorMsg('Failed to load student data'))
+      .finally(() => setLoadingEdit(false));
+  }, [editId]);
+
+  function handleFieldChange(field: keyof StudentFormData, value: string | number) {
+    setForm((prev) => {
+      const updated: StudentFormData = { ...prev, [field]: value };
+      const newScienceMax = field === 'scienceMax' ? Number(value) : Number(prev.scienceMax);
+      const newMathsMax = field === 'mathsMax' ? Number(value) : Number(prev.mathsMax);
+      const newScienceObtained =
+        field === 'scienceObtained' ? Number(value) : Number(prev.scienceObtained);
+      const newMathsObtained =
+        field === 'mathsObtained' ? Number(value) : Number(prev.mathsObtained);
+
+      if (['scienceMax', 'mathsMax'].includes(field as string)) {
+        updated.mathsScienceMaxTotal = newScienceMax + newMathsMax;
+      }
+      if (['scienceObtained', 'mathsObtained'].includes(field as string)) {
+        updated.mathsScienceObtainedTotal = newScienceObtained + newMathsObtained;
+      }
+      // Auto-fill regNumber when course changes (only if empty or was previously auto-filled)
+      if (field === 'course' && value) {
+        const prevAutoFill = prev.course ? `308${prev.course}` : '';
+        if (!prev.regNumber || prev.regNumber === prevAutoFill) {
+          updated.regNumber = `308${value}`;
+        }
+      }
+      return updated;
+    });
+
+    if (errors[field as string]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field as string];
+        return next;
+      });
+    }
+  }
+
+  function handleTextChange(field: keyof StudentFormData) {
+    return (e: ChangeEvent<HTMLInputElement>) => handleFieldChange(field, e.target.value);
+  }
+
+  function handleNumberChange(field: keyof StudentFormData) {
+    return (e: ChangeEvent<HTMLInputElement>) => handleFieldChange(field, Number(e.target.value));
+  }
+
+  function handleSelectChange(field: keyof StudentFormData) {
+    return (e: ChangeEvent<HTMLSelectElement>) => handleFieldChange(field, e.target.value);
+  }
+
+  function handlePrevStudentSelect(student: Student) {
+    // Find the most recent enrollment for this student across all cached previous years
+    const allRecords = (prevStudentsCache.current ?? []).filter(
+      (s) => s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase()
+    );
+    const latest = allRecords.sort((a, b) => {
+      const yearA = parseInt(a.academicYear.split('-')[0], 10);
+      const yearB = parseInt(b.academicYear.split('-')[0], 10);
+      return yearB - yearA;
+    })[0] ?? student;
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _id, createdAt: _c, updatedAt: _u, meritNumber: _m, ...rest } = latest;
+    // Convert DOB from YYYY-MM-DD to DD/MM/YYYY if needed
+    let dob = rest.dateOfBirth;
+    if (dob && /^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      const [y, mo, d] = dob.split('-');
+      dob = `${d}/${mo}/${y}`;
+    }
+    setForm({
+      ...rest,
+      dateOfBirth: dob,
+      meritNumber: '',
+      admissionStatus: '',
+      academicYear: settings?.currentAcademicYear ?? ('' as AcademicYear),
+    });
+    setErrors({});
+    setPrevSourceStudent(latest);
+    setPrevQuery('');
+    setPrevResults([]);
+  }
+
+  function handleClearPrevStudent() {
+    setPrevSourceStudent(null);
+    setForm(emptyForm(settings?.currentAcademicYear));
+    setErrors({});
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSuccessMsg('');
+    setErrorMsg('');
+    if (editId) {
+      const { errors: blockingErrors } = validateStudentFormEdit(form);
+      if (Object.keys(blockingErrors).length > 0) {
+        setErrors(blockingErrors);
+        return;
+      }
+      setErrors({});
+    } else if (prevSourceStudent) {
+      // Re-enroll: only block on the critical fields (name, course, year)
+      const { errors: blockingErrors } = validateStudentFormEdit(form);
+      if (Object.keys(blockingErrors).length > 0) {
+        setErrors(blockingErrors);
+        return;
+      }
+      setErrors({});
+    } else {
+      const validationErrors = validateStudentForm(form);
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        return;
+      }
+    }
+    setSaving(true);
+    try {
+      // Duplicate guard: check if student already enrolled in the target academic year
+      if (prevSourceStudent && form.academicYear) {
+        const existing = await getStudentsByAcademicYear(form.academicYear as AcademicYear);
+        const dup = existing.find(
+          (s) => s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase()
+        );
+        if (dup) {
+          setErrorMsg(
+            `${form.studentNameSSLC} is already enrolled in ${form.academicYear} (Merit No: ${dup.meritNumber})`
+          );
+          setSaving(false);
+          return;
+        }
+      }
+      if (editId) {
+        await updateStudent(editId, form);
+        setSuccessMsg('Student updated successfully!');
+      } else {
+        const { meritNumber } = await addStudent(form);
+        setSuccessMsg(`Student enrolled successfully! Merit Number: ${meritNumber}`);
+        setForm(emptyForm(settings?.currentAcademicYear));
+        setPrevSourceStudent(null);
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to save student');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadingEdit) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">Loading student data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">
+          {editId ? 'Edit Student' : 'Enroll Student'}
+        </h2>
+        <Button variant="secondary" size="sm" onClick={() => void navigate(backTo)}>
+          {backLabel}
+        </Button>
+      </div>
+
+      {!editId && (
+        <div className="bg-blue-50 rounded-lg border border-blue-200 p-5 mb-6">
+          <h3 className="text-sm font-semibold text-blue-800 mb-1">Re-enroll from Previous Year</h3>
+          {prevSourceStudent ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-sm text-blue-700">
+                Pre-filled from:{' '}
+                <span className="font-medium">{prevSourceStudent.studentNameSSLC}</span>
+                {' '}— {prevSourceStudent.course}, {prevSourceStudent.year},{' '}
+                {prevSourceStudent.academicYear}
+              </p>
+              <button
+                type="button"
+                onClick={handleClearPrevStudent}
+                className="text-xs text-red-600 hover:text-red-800 underline"
+              >
+                Clear &amp; start fresh
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <p className="text-xs text-blue-600 mb-2">
+                Search by name or register number to pre-fill the form with an existing student's details.
+              </p>
+              <input
+                type="text"
+                value={prevQuery}
+                onChange={(e) => setPrevQuery(e.target.value)}
+                placeholder="Type name or register number..."
+                className="block w-full md:w-96 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              {prevSearching && (
+                <p className="text-xs text-blue-500 mt-1">Searching...</p>
+              )}
+              {prevQuery.trim().length >= 2 && !prevSearching && prevResults.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">No students found in previous years.</p>
+              )}
+              {prevResults.length > 0 && (
+                <ul className="absolute z-10 w-full md:w-96 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
+                  {prevResults.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => handlePrevStudentSelect(s)}
+                        className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                      >
+                        <p className="text-sm font-medium text-gray-900">{s.studentNameSSLC}</p>
+                        <p className="text-xs text-gray-500">
+                          {s.course} · {s.year} · {s.academicYear}
+                          {s.regNumber ? ` · ${s.regNumber}` : ''}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
+        {/* Personal Info */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">Personal Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Name as per SSLC"
+              value={form.studentNameSSLC}
+              onChange={handleTextChange('studentNameSSLC')}
+              error={displayErrors['studentNameSSLC']}
+              uppercase
+              placeholder="STUDENT NAME (SSLC)"
+            />
+            <Input
+              label="Name as per Aadhar"
+              value={form.studentNameAadhar}
+              onChange={handleTextChange('studentNameAadhar')}
+              error={displayErrors['studentNameAadhar']}
+              uppercase
+              placeholder="STUDENT NAME (AADHAR)"
+            />
+            <Input
+              label="Father Name"
+              value={form.fatherName}
+              onChange={handleTextChange('fatherName')}
+              error={displayErrors['fatherName']}
+              uppercase
+              placeholder="FATHER NAME"
+            />
+            <Input
+              label="Mother Name"
+              value={form.motherName}
+              onChange={handleTextChange('motherName')}
+              error={displayErrors['motherName']}
+              uppercase
+              placeholder="MOTHER NAME"
+            />
+            <Input
+              label="Date of Birth"
+              value={form.dateOfBirth}
+              onChange={(e) => {
+                let val = e.target.value.replace(/[^\d/]/g, '');
+                const raw = val.replace(/\//g, '');
+                if (raw.length >= 3 && !val.includes('/')) {
+                  val = raw.slice(0, 2) + '/' + raw.slice(2);
+                }
+                if (raw.length >= 5 && val.split('/').length < 3) {
+                  const parts = val.split('/');
+                  val = parts[0] + '/' + (parts[1] ?? '').slice(0, 2) + '/' + (parts[1] ?? '').slice(2) + (parts[2] ?? '');
+                }
+                if (val.length > 10) val = val.slice(0, 10);
+                handleFieldChange('dateOfBirth', val);
+              }}
+              error={displayErrors['dateOfBirth']}
+              placeholder="DD/MM/YYYY"
+              maxLength={10}
+            />
+            <Select
+              label="Gender"
+              options={GENDER_OPTIONS}
+              value={form.gender}
+              onChange={handleSelectChange('gender')}
+              error={displayErrors['gender']}
+              placeholder="Select gender"
+            />
+            <Select
+              label="Religion"
+              options={RELIGION_OPTIONS}
+              value={form.religion}
+              onChange={handleSelectChange('religion')}
+              error={displayErrors['religion']}
+              placeholder="Select religion"
+            />
+            <Input
+              label="Caste"
+              value={form.caste}
+              onChange={handleTextChange('caste')}
+              error={displayErrors['caste']}
+              uppercase
+              placeholder="CASTE"
+            />
+            <Select
+              label="Category"
+              options={CATEGORY_OPTIONS}
+              value={form.category}
+              onChange={handleSelectChange('category')}
+              error={displayErrors['category']}
+            />
+            <Input
+              label="Annual Income"
+              type="number"
+              min={0}
+              value={form.annualIncome}
+              onChange={handleNumberChange('annualIncome')}
+              error={displayErrors['annualIncome']}
+              placeholder="0"
+            />
+            <div className="md:col-span-2">
+              <Input
+                label="Address"
+                value={form.address}
+                onChange={handleTextChange('address')}
+                error={displayErrors['address']}
+                uppercase
+                placeholder="FULL ADDRESS"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Contact */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">Contact Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Father Mobile"
+              value={form.fatherMobile}
+              onChange={handleTextChange('fatherMobile')}
+              error={displayErrors['fatherMobile']}
+              placeholder="9XXXXXXXXX"
+              maxLength={10}
+            />
+            <Input
+              label="Student Mobile"
+              value={form.studentMobile}
+              onChange={handleTextChange('studentMobile')}
+              error={displayErrors['studentMobile']}
+              placeholder="9XXXXXXXXX"
+              maxLength={10}
+            />
+          </div>
+        </section>
+
+        {/* SSLC Marks */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">SSLC Marks</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="SSLC Max Total"
+              type="number"
+              min={0}
+              value={form.sslcMaxTotal}
+              onChange={handleNumberChange('sslcMaxTotal')}
+              error={displayErrors['sslcMaxTotal']}
+            />
+            <Input
+              label="SSLC Obtained Total"
+              type="number"
+              min={0}
+              value={form.sslcObtainedTotal}
+              onChange={handleNumberChange('sslcObtainedTotal')}
+              error={displayErrors['sslcObtainedTotal']}
+            />
+            <Input
+              label="Science Max"
+              type="number"
+              min={0}
+              value={form.scienceMax}
+              onChange={handleNumberChange('scienceMax')}
+              error={displayErrors['scienceMax']}
+            />
+            <Input
+              label="Science Obtained"
+              type="number"
+              min={0}
+              value={form.scienceObtained}
+              onChange={handleNumberChange('scienceObtained')}
+              error={displayErrors['scienceObtained']}
+            />
+            <Input
+              label="Maths Max"
+              type="number"
+              min={0}
+              value={form.mathsMax}
+              onChange={handleNumberChange('mathsMax')}
+              error={displayErrors['mathsMax']}
+            />
+            <Input
+              label="Maths Obtained"
+              type="number"
+              min={0}
+              value={form.mathsObtained}
+              onChange={handleNumberChange('mathsObtained')}
+              error={displayErrors['mathsObtained']}
+            />
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">
+                Maths + Science Max Total
+              </label>
+              <input
+                type="number"
+                readOnly
+                value={form.mathsScienceMaxTotal}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">
+                Maths + Science Obtained Total
+              </label>
+              <input
+                type="number"
+                readOnly
+                value={form.mathsScienceObtainedTotal}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Enrollment */}
+        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">Enrollment Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Course"
+              options={COURSE_OPTIONS}
+              value={form.course}
+              onChange={handleSelectChange('course')}
+              error={displayErrors['course']}
+              placeholder="Select course"
+            />
+            <div>
+              {prevSourceStudent && (
+                <p className="text-xs text-amber-600 font-medium mb-1">
+                  Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
+                </p>
+              )}
+              <Select
+                label="Year"
+                options={YEAR_OPTIONS}
+                value={form.year}
+                onChange={handleSelectChange('year')}
+                error={displayErrors['year']}
+                placeholder="Select year"
+              />
+            </div>
+            <Select
+              label="Adm Type"
+              options={ADM_TYPE_OPTIONS}
+              value={form.admType}
+              onChange={handleSelectChange('admType')}
+              error={displayErrors['admType']}
+            />
+            <Select
+              label="Adm Cat"
+              options={ADM_CAT_OPTIONS}
+              value={form.admCat}
+              onChange={handleSelectChange('admCat')}
+              error={displayErrors['admCat']}
+            />
+            <Select
+              label="Academic Year"
+              options={ACADEMIC_YEAR_OPTIONS}
+              value={form.academicYear}
+              onChange={handleSelectChange('academicYear')}
+              error={displayErrors['academicYear']}
+              placeholder="Select academic year"
+            />
+            <Select
+              label="Admission Status"
+              options={ADMISSION_STATUS_OPTIONS}
+              value={form.admissionStatus}
+              onChange={handleSelectChange('admissionStatus')}
+              error={displayErrors['admissionStatus']}
+              placeholder="Select status"
+            />
+            <Input
+              label="Reg Number"
+              value={form.regNumber}
+              onChange={handleTextChange('regNumber')}
+              error={displayErrors['regNumber']}
+              uppercase
+              placeholder="308CE"
+            />
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">
+                Merit Number
+              </label>
+              {editId ? (
+                <input
+                  readOnly
+                  value={form.meritNumber || 'Not assigned'}
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed font-mono tracking-wider"
+                />
+              ) : (
+                <input
+                  readOnly
+                  value=""
+                  placeholder="Auto-generated on enrollment"
+                  className="block w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed italic"
+                />
+              )}
+            </div>
+          </div>
+        </section>
+
+        {successMsg && (
+          <p className="text-sm text-green-700 bg-green-50 rounded-md px-4 py-3">{successMsg}</p>
+        )}
+        {errorMsg && (
+          <p className="text-sm text-red-600 bg-red-50 rounded-md px-4 py-3">{errorMsg}</p>
+        )}
+
+        <div className="flex gap-3">
+          <Button type="submit" loading={saving} size="lg">
+            {editId ? 'Update Student' : 'Enroll Student'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={() => void navigate(backTo)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,647 @@
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAllStudents } from '../hooks/useAllStudents';
+import { useSettings } from '../hooks/useSettings';
+import { Button } from '../components/common/Button';
+import { useFilters } from '../contexts/FiltersContext';
+import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
+
+const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+
+const fs =
+  'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+
+function statusBadgeClass(status: string): string {
+  if (status === 'CONFIRMED') return 'bg-green-100 text-green-700';
+  if (status === 'CANCELLED') return 'bg-red-100 text-red-700';
+  return 'bg-yellow-100 text-yellow-700';
+}
+
+// ─── Animated number ────────────────────────────────────────────────────────
+function AnimNum({ value }: { value: number }) {
+  return (
+    <span
+      key={value}
+      className="tabular-nums"
+      style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}
+    >
+      {value}
+    </span>
+  );
+}
+
+// ─── Stat card ───────────────────────────────────────────────────────────────
+interface StatCardProps {
+  label: string;
+  value: number;
+  /** Pass 0 to suppress the progress bar (e.g. the Total card) */
+  total: number;
+  bg: string;
+  border: string;
+  textColor: string;
+  barFill: string;
+  subText?: string;
+  breakdown?: { label: string; value: number }[];
+  className?: string;
+}
+
+function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '' }: StatCardProps) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className={`rounded-xl border ${border} ${bg} p-4 flex flex-col gap-1.5 ${className}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 truncate leading-tight">
+        {label}
+      </p>
+      <p className={`text-3xl font-bold leading-none ${textColor}`}>
+        <AnimNum value={value} />
+      </p>
+      {total > 0 ? (
+        <div className="mt-auto pt-2 space-y-1">
+          <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${barFill} transition-all duration-700 ease-out`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {breakdown ? (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
+              {breakdown.map((b) => (
+                <span key={b.label} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
+                  <span className="text-gray-400 font-medium">{b.label}</span>
+                  <span className="font-bold text-gray-600">{b.value}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">{subText ?? `${pct}% of total`}</p>
+          )}
+        </div>
+      ) : (
+        subText && <p className="text-xs text-gray-400 mt-auto">{subText}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Breakdown panel (list-style rows) ──────────────────────────────────────
+interface BreakdownItem {
+  label: string;
+  value: number;
+  dotClass: string;
+  barClass: string;
+}
+
+function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">{title}</h4>
+      <div className="space-y-3.5">
+        {items.map((item) => {
+          const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+          return (
+            <div key={item.label} className="flex items-center gap-2.5">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.dotClass}`} />
+              <span className="text-xs text-gray-600 w-24 truncate shrink-0">{item.label}</span>
+              <span className="text-sm font-bold text-gray-800 w-7 tabular-nums text-right shrink-0">
+                <AnimNum value={item.value} />
+              </span>
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${item.barClass} rounded-full transition-all duration-700 ease-out`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="text-xs text-gray-400 w-8 tabular-nums text-right shrink-0">
+                {pct}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Section label ───────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
+      {children}
+    </p>
+  );
+}
+
+// ─── Main Dashboard ──────────────────────────────────────────────────────────
+export function Dashboard() {
+  const navigate = useNavigate();
+  const { students: allStudents, loading, error } = useAllStudents();
+  const { settings } = useSettings();
+  const { dashboardFilters, setDashboardFilters } = useFilters();
+
+  const {
+    searchTerm,
+    academicYearFilter,
+    courseFilter,
+    yearFilter,
+    genderFilter,
+    admTypeFilter,
+    admCatFilter,
+    admStatusFilter,
+  } = dashboardFilters;
+
+  function setSearchTerm(v: string) { setDashboardFilters({ searchTerm: v }); }
+  function setAcademicYearFilter(v: AcademicYear | '') { setDashboardFilters({ academicYearFilter: v }); }
+  function setCourseFilter(v: Course | '') { setDashboardFilters({ courseFilter: v }); }
+  function setYearFilter(v: Year | '') { setDashboardFilters({ yearFilter: v }); }
+  function setGenderFilter(v: Gender | '') { setDashboardFilters({ genderFilter: v }); }
+  function setAdmTypeFilter(v: AdmType | '') { setDashboardFilters({ admTypeFilter: v }); }
+  function setAdmCatFilter(v: AdmCat | '') { setDashboardFilters({ admCatFilter: v }); }
+  function setAdmStatusFilter(v: string) { setDashboardFilters({ admStatusFilter: v }); }
+
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  // Auto-default academic year to current year once settings load
+  const didAutoSet = useRef(false);
+  useEffect(() => {
+    if (!didAutoSet.current && settings?.currentAcademicYear && !academicYearFilter) {
+      setAcademicYearFilter(settings.currentAcademicYear);
+      didAutoSet.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.currentAcademicYear]);
+
+  const isSearchMode = debouncedSearch.trim().length > 0;
+
+  const sortedAcademicYears = useMemo(() => {
+    const years = new Set(allStudents.map((s) => s.academicYear));
+    return Array.from(years).sort().reverse();
+  }, [allStudents]);
+
+  // Filtered students — feed both stats cards and search results
+  const filteredStudents = useMemo(() => {
+    let result = allStudents;
+    if (!isSearchMode && academicYearFilter) result = result.filter((s) => s.academicYear === academicYearFilter);
+    if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
+    if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
+    if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
+    if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
+    if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
+    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
+    return result;
+  }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+
+  // Search results (cross-year, all filters except academicYear)
+  const searchResults = useMemo(() => {
+    if (!isSearchMode) return [];
+    const search = debouncedSearch.trim().toUpperCase();
+    let result = allStudents.filter((s) => {
+      return (
+        s.studentNameSSLC.toUpperCase().includes(search) ||
+        s.studentNameAadhar.toUpperCase().includes(search) ||
+        s.regNumber?.toUpperCase().includes(search) ||
+        s.fatherMobile?.includes(search) ||
+        s.studentMobile?.includes(search)
+      );
+    });
+    if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
+    if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
+    if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
+    if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
+    if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
+    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
+    return result;
+  }, [isSearchMode, debouncedSearch, allStudents, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+
+  interface StudentGroup {
+    key: string;
+    nameSSLC: string;
+    nameAadhar: string;
+    dob: string;
+    gender: Gender;
+    records: Student[];
+  }
+
+  const studentGroups = useMemo((): StudentGroup[] => {
+    const map = new Map<string, StudentGroup>();
+    for (const s of searchResults) {
+      const key = `${s.studentNameSSLC}|${s.dateOfBirth}`;
+      if (!map.has(key)) {
+        map.set(key, { key, nameSSLC: s.studentNameSSLC, nameAadhar: s.studentNameAadhar, dob: s.dateOfBirth, gender: s.gender, records: [] });
+      }
+      map.get(key)!.records.push(s);
+    }
+    for (const group of map.values()) {
+      group.records.sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+    }
+    return Array.from(map.values()).sort((a, b) => a.nameSSLC.localeCompare(b.nameSSLC));
+  }, [searchResults]);
+
+  // ── Metrics ──────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const total = filteredStudents.length;
+    const boys  = filteredStudents.filter((s) => s.gender === 'BOY').length;
+    const girls = filteredStudents.filter((s) => s.gender === 'GIRL').length;
+
+    const byCourse: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    const byYear:   Record<Year,   number> = { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 };
+    const byStatus: Record<string, number> = { PROVISIONAL: 0, CONFIRMED: 0, CANCELLED: 0, PENDING: 0 };
+    const byAdmType: Record<string, number> = { REGULAR: 0, REPEATER: 0, LATERAL: 0, EXTERNAL: 0, SNQ: 0 };
+
+    const byCourseByYear: Record<Course, Record<Year, number>> = {
+      CE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      ME: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      EC: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      CS: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      EE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+    };
+    const byYearByCourse: Record<Year, Record<Course, number>> = {
+      '1ST YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+      '2ND YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+      '3RD YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+    };
+
+    for (const s of filteredStudents) {
+      if (s.course in byCourse) byCourse[s.course]++;
+      if (s.year   in byYear)   byYear[s.year]++;
+      const status = s.admissionStatus?.trim() || 'PENDING';
+      if (status in byStatus) byStatus[status]++;
+      else byStatus['PENDING']++;
+      if (s.admType in byAdmType) byAdmType[s.admType]++;
+      if (s.course in byCourseByYear && s.year in byCourseByYear[s.course]) byCourseByYear[s.course][s.year]++;
+      if (s.year in byYearByCourse && s.course in byYearByCourse[s.year]) byYearByCourse[s.year][s.course]++;
+    }
+
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, byCourseByYear, byYearByCourse };
+  }, [filteredStudents]);
+
+  // Year-chips stats — per-academic-year counts from active source
+  const activeSource = isSearchMode ? searchResults : filteredStudents;
+  const activeStats = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const s of activeSource) {
+      map[s.academicYear] = (map[s.academicYear] ?? 0) + 1;
+    }
+    return sortedAcademicYears.map((ay) => ({ year: ay, count: map[ay] ?? 0 }));
+  }, [activeSource, sortedAcademicYears]);
+
+  const hasActiveFilters =
+    !!searchTerm || !!academicYearFilter || !!courseFilter || !!yearFilter ||
+    !!genderFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+
+  function clearFilters() {
+    setDebouncedSearch('');
+    setDashboardFilters({
+      searchTerm: '',
+      academicYearFilter: settings?.currentAcademicYear ?? '',
+      courseFilter: '',
+      yearFilter: '',
+      genderFilter: '',
+      admTypeFilter: '',
+      admCatFilter: '',
+      admStatusFilter: '',
+    });
+  }
+
+  const yearLabel = academicYearFilter
+    ? `AY ${academicYearFilter}`
+    : 'All academic years';
+
+  const subLabel = loading
+    ? 'Loading…'
+    : `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''} · ${yearLabel}`;
+
+  // ── Course colour map ────────────────────────────────────────────────────
+  const courseConfig: Record<Course, { bg: string; border: string; textColor: string; barFill: string }> = {
+    CE: { bg: 'bg-orange-50', border: 'border-orange-200', textColor: 'text-orange-700', barFill: 'bg-orange-400' },
+    ME: { bg: 'bg-rose-50',   border: 'border-rose-200',   textColor: 'text-rose-700',   barFill: 'bg-rose-400'   },
+    EC: { bg: 'bg-violet-50', border: 'border-violet-200', textColor: 'text-violet-700', barFill: 'bg-violet-400' },
+    CS: { bg: 'bg-indigo-50', border: 'border-indigo-200', textColor: 'text-indigo-700', barFill: 'bg-indigo-400' },
+    EE: { bg: 'bg-amber-50',  border: 'border-amber-200',  textColor: 'text-amber-700',  barFill: 'bg-amber-400'  },
+  };
+
+  const yearConfig: Record<Year, { label: string; bg: string; border: string; textColor: string; barFill: string }> = {
+    '1ST YEAR': { label: '1st Year', bg: 'bg-cyan-50',    border: 'border-cyan-200',    textColor: 'text-cyan-700',    barFill: 'bg-cyan-400'    },
+    '2ND YEAR': { label: '2nd Year', bg: 'bg-teal-50',    border: 'border-teal-200',    textColor: 'text-teal-700',    barFill: 'bg-teal-400'    },
+    '3RD YEAR': { label: '3rd Year', bg: 'bg-emerald-50', border: 'border-emerald-200', textColor: 'text-emerald-700', barFill: 'bg-emerald-400' },
+  };
+
+  return (
+    <div className="h-full flex flex-col gap-3">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 leading-tight">Dashboard</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{subLabel}</p>
+        </div>
+        <Button size="sm" onClick={() => void navigate('/enroll')}>
+          + Enroll Student
+        </Button>
+      </div>
+
+      {/* ── Year chips bar ──────────────────────────────────────────────── */}
+      {!loading && allStudents.length > 0 && (
+        <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {/* Total chip */}
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+            <span className="text-gray-400 font-medium">Total</span>
+            <span className="font-bold tabular-nums text-gray-800">
+              <AnimNum value={activeSource.length} />
+            </span>
+            {activeSource.length < allStudents.length && (
+              <span className="text-gray-300 text-[10px]">/{allStudents.length}</span>
+            )}
+          </div>
+          <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+          {/* Per-year chips */}
+          {activeStats.map(({ year, count }) => {
+            const isSelected = !isSearchMode && academicYearFilter === year;
+            const isDimmed = count === 0;
+            return (
+              <button
+                key={year}
+                type="button"
+                disabled={isSearchMode}
+                onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
+                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 ${
+                  isSearchMode ? 'cursor-default' : 'cursor-pointer'
+                } ${
+                  isSelected
+                    ? 'bg-blue-50 border-blue-300'
+                    : isDimmed
+                    ? 'bg-white border-gray-100 hover:border-gray-200'
+                    : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {year}
+                </span>
+                <span className={`font-bold tabular-nums ${isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
+                  <AnimNum value={count} />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Filters ────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2">
+        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto">
+          <input
+            type="text"
+            placeholder="Search name / reg / mobile…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-40 shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <select
+            className={`${fs} w-[90px] shrink-0 ${isSearchMode ? 'opacity-40 cursor-not-allowed' : ''}`}
+            value={academicYearFilter}
+            onChange={(e) => setAcademicYearFilter(e.target.value as AcademicYear | '')}
+            disabled={isSearchMode}
+            title={isSearchMode ? 'Disabled during search' : 'Academic year'}
+          >
+            <option value="">Acad Yr</option>
+            {sortedAcademicYears.map((ay) => (
+              <option key={ay} value={ay}>{ay}</option>
+            ))}
+          </select>
+          <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
+            <option value="">Course</option>
+            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
+            <option value="">Study Yr</option>
+            {YEARS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+          </select>
+          <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
+            <option value="">Gender</option>
+            <option value="BOY">BOY</option>
+            <option value="GIRL">GIRL</option>
+          </select>
+          <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
+            <option value="">Adm Type</option>
+            <option value="REGULAR">REGULAR</option>
+            <option value="REPEATER">REPEATER</option>
+            <option value="LATERAL">LATERAL</option>
+            <option value="EXTERNAL">EXTERNAL</option>
+            <option value="SNQ">SNQ</option>
+          </select>
+          <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
+            <option value="">Adm Cat</option>
+            <option value="GM">GM</option>
+            <option value="SNQ">SNQ</option>
+            <option value="OTHERS">OTHERS</option>
+          </select>
+          <select className={`${fs} w-[86px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
+            <option value="">Status</option>
+            <option value="PROVISIONAL">PROVISIONAL</option>
+            <option value="CONFIRMED">CONFIRMED</option>
+            <option value="CANCELLED">CANCELLED</option>
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Content ────────────────────────────────────────────────────── */}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+          Loading students…
+        </div>
+      ) : error ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+      ) : isSearchMode ? (
+
+        /* ── Search results ─────────────────────────────────────────── */
+        <div className="flex-1 min-h-0 overflow-auto space-y-3">
+          {studentGroups.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+              No students found.
+            </div>
+          ) : (
+            studentGroups.map((group) => (
+              <div key={group.key} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-baseline gap-3 flex-wrap">
+                  <span className="font-semibold text-gray-900 text-sm">{group.nameSSLC}</span>
+                  {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
+                    <span className="text-xs text-gray-500">({group.nameAadhar})</span>
+                  )}
+                  <span className="text-xs text-gray-500">DOB: {group.dob || '—'}</span>
+                  <span className="text-xs text-gray-500">{group.gender}</span>
+                  <span className="text-xs text-blue-600 font-medium ml-auto">
+                    {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs divide-y divide-gray-100">
+                    <thead className="bg-white">
+                      <tr>
+                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', ''].map((h) => (
+                          <th key={h} className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {group.records.map((s) => (
+                        <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
+                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.year}</td>
+                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.course}</td>
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
+                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
+                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(s.admissionStatus)}`}>
+                              {s.admissionStatus || '—'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.studentMobile}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
+                            >
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+      ) : (
+
+        /* ── Metric cards ───────────────────────────────────────────── */
+        <div className="flex-1 min-h-0 overflow-auto pb-4">
+          <div className="space-y-5 min-w-0">
+
+            {/* Overview row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                className="col-span-2"
+                label="Total Enrolled"
+                value={stats.total}
+                total={0}
+                bg="bg-sky-50"
+                border="border-sky-200"
+                textColor="text-sky-700"
+                barFill="bg-sky-400"
+                subText={academicYearFilter ? `Academic year ${academicYearFilter}` : 'All academic years'}
+              />
+              <StatCard
+                label="Boys"
+                value={stats.boys}
+                total={stats.total}
+                bg="bg-blue-50"
+                border="border-blue-200"
+                textColor="text-blue-700"
+                barFill="bg-blue-400"
+              />
+              <StatCard
+                label="Girls"
+                value={stats.girls}
+                total={stats.total}
+                bg="bg-pink-50"
+                border="border-pink-200"
+                textColor="text-pink-700"
+                barFill="bg-pink-400"
+              />
+            </div>
+
+            {/* By Course */}
+            <div>
+              <SectionLabel>By Course</SectionLabel>
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                {COURSES.map((course) => {
+                  const c = courseConfig[course];
+                  return (
+                    <StatCard
+                      key={course}
+                      label={course}
+                      value={stats.byCourse[course]}
+                      total={stats.total}
+                      bg={c.bg}
+                      border={c.border}
+                      textColor={c.textColor}
+                      barFill={c.barFill}
+                      breakdown={YEARS.map((yr, i) => ({ label: `${i + 1}Y`, value: stats.byCourseByYear[course][yr] }))}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* By Year of Study */}
+            <div>
+              <SectionLabel>By Year of Study</SectionLabel>
+              <div className="grid grid-cols-3 gap-3">
+                {YEARS.map((year) => {
+                  const y = yearConfig[year];
+                  return (
+                    <StatCard
+                      key={year}
+                      label={y.label}
+                      value={stats.byYear[year]}
+                      total={stats.total}
+                      bg={y.bg}
+                      border={y.border}
+                      textColor={y.textColor}
+                      barFill={y.barFill}
+                      breakdown={COURSES.map((course) => ({ label: course, value: stats.byYearByCourse[year][course] }))}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Admission Status + Adm Type */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <BreakdownPanel
+                title="Admission Status"
+                total={stats.total}
+                items={[
+                  { label: 'Provisional', value: stats.byStatus['PROVISIONAL'], dotClass: 'bg-amber-400',  barClass: 'bg-amber-400'  },
+                  { label: 'Confirmed',   value: stats.byStatus['CONFIRMED'],   dotClass: 'bg-green-400', barClass: 'bg-green-400' },
+                  { label: 'Cancelled',   value: stats.byStatus['CANCELLED'],   dotClass: 'bg-red-400',   barClass: 'bg-red-400'   },
+                  { label: 'Pending',     value: stats.byStatus['PENDING'],     dotClass: 'bg-gray-300',  barClass: 'bg-gray-300'  },
+                ]}
+              />
+              <BreakdownPanel
+                title="Admission Type"
+                total={stats.total}
+                items={[
+                  { label: 'Regular',  value: stats.byAdmType['REGULAR'],  dotClass: 'bg-indigo-400', barClass: 'bg-indigo-400' },
+                  { label: 'Repeater', value: stats.byAdmType['REPEATER'], dotClass: 'bg-orange-400', barClass: 'bg-orange-400' },
+                  { label: 'Lateral',  value: stats.byAdmType['LATERAL'],  dotClass: 'bg-purple-400', barClass: 'bg-purple-400' },
+                  { label: 'External', value: stats.byAdmType['EXTERNAL'], dotClass: 'bg-teal-400',   barClass: 'bg-teal-400'   },
+                  { label: 'SNQ',      value: stats.byAdmType['SNQ'],      dotClass: 'bg-gray-400',   barClass: 'bg-gray-400'   },
+                ]}
+              />
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
