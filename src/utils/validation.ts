@@ -93,50 +93,46 @@ export function validateStudentFormEdit(data: StudentFormData): EditValidationRe
 export function validateStudentForm(data: StudentFormData): ValidationErrors {
   const errors: ValidationErrors = {};
 
-  const requiredText: (keyof StudentFormData)[] = [
+  // Mandatory personal identity fields
+  const requiredPersonal: (keyof StudentFormData)[] = [
     'studentNameSSLC',
     'studentNameAadhar',
-    'fatherName',
-    'motherName',
-    'dateOfBirth',
     'gender',
     'religion',
-    'caste',
-    'category',
-    'address',
+  ];
+
+  // Mandatory enrollment details fields
+  const requiredEnrollment: (keyof StudentFormData)[] = [
     'course',
     'year',
     'admType',
     'admCat',
     'academicYear',
     'admissionStatus',
-    'regNumber',
   ];
 
-  for (const field of requiredText) {
+  for (const field of [...requiredPersonal, ...requiredEnrollment]) {
     const val = data[field];
     if (!val || String(val).trim() === '') {
       errors[field] = 'This field is required';
     }
   }
 
-  // Date of birth DD/MM/YYYY validation
-  if (data.dateOfBirth && !/^\d{2}\/\d{2}\/\d{4}$/.test(data.dateOfBirth)) {
-    errors['dateOfBirth'] = 'Enter date in DD/MM/YYYY format';
-  } else if (data.dateOfBirth) {
-    const [dd, mm, yyyy] = data.dateOfBirth.split('/').map(Number);
-    const date = new Date(yyyy, mm - 1, dd);
-    if (date.getDate() !== dd || date.getMonth() !== mm - 1 || date.getFullYear() !== yyyy) {
-      errors['dateOfBirth'] = 'Invalid date';
+  // Date of birth DD/MM/YYYY validation (only if provided)
+  if (data.dateOfBirth) {
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(data.dateOfBirth)) {
+      errors['dateOfBirth'] = 'Enter date in DD/MM/YYYY format';
+    } else {
+      const [dd, mm, yyyy] = data.dateOfBirth.split('/').map(Number);
+      const date = new Date(yyyy, mm - 1, dd);
+      if (date.getDate() !== dd || date.getMonth() !== mm - 1 || date.getFullYear() !== yyyy) {
+        errors['dateOfBirth'] = 'Invalid date';
+      }
     }
   }
 
-  // Mobile validation
-  const mobileFields: (keyof StudentFormData)[] = [
-    'fatherMobile',
-    'studentMobile',
-  ];
-  for (const field of mobileFields) {
+  // Mobile validation (only if provided)
+  for (const field of (['fatherMobile', 'studentMobile'] as (keyof StudentFormData)[])) {
     const val = String(data[field] ?? '');
     if (val && !MOBILE_RE.test(val)) {
       errors[field] = 'Enter a valid 10-digit mobile number starting with 6-9';

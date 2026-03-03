@@ -76,6 +76,167 @@ const ADMISSION_STATUS_OPTIONS = [
   { value: 'PENDING', label: 'PENDING' },
 ];
 
+interface YearWarningModalProps {
+  studentName: string;
+  selectedYear: string;
+  conflictRecord: Student;
+  onProceed: () => void;
+  onEdit: () => void;
+}
+
+function YearWarningModal({ studentName, selectedYear, conflictRecord, onProceed, onEdit }: YearWarningModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-gray-200">
+          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <span className="text-amber-500">⚠</span> Year Conflict Detected
+          </h3>
+        </div>
+        <div className="px-6 py-5 space-y-3">
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold">{studentName}</span> was already enrolled as{' '}
+            <span className="font-semibold text-amber-700">{conflictRecord.year}</span> in{' '}
+            <span className="font-semibold text-amber-700">{conflictRecord.academicYear}</span>.
+          </p>
+          <p className="text-sm text-gray-700">
+            Saving as <span className="font-semibold">{selectedYear}</span> again may indicate the student
+            was <span className="font-semibold text-red-600">not promoted</span>. Do you want to proceed,
+            or go back and edit the year?
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+          <Button variant="secondary" onClick={onEdit}>Edit Year</Button>
+          <Button onClick={onProceed}>Proceed Anyway</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const COURSE_LABEL: Record<string, string> = {
+  CE: 'CE - Civil Engineering',
+  ME: 'ME - Mechanical Engineering',
+  EC: 'EC - Electronics & Communication',
+  CS: 'CS - Computer Science',
+  EE: 'EE - Electrical Engineering',
+};
+
+interface EnrollmentPreviewProps {
+  form: StudentFormData;
+  saving: boolean;
+  errorMsg: string;
+  onConfirm: () => void;
+  onEdit: () => void;
+}
+
+function PreviewRow({ label, value, required }: { label: string; value: string | number; required?: boolean }) {
+  const display = value === '' || value === 0 || value === null || value === undefined
+    ? null
+    : String(value);
+  return (
+    <div className="grid grid-cols-2 gap-2 py-1.5 border-b border-gray-100 last:border-0">
+      <dt className="text-xs text-gray-500 font-medium flex items-center gap-1">
+        {label}
+        {required && <span className="text-red-500">*</span>}
+      </dt>
+      <dd className={`text-xs font-semibold ${display ? 'text-gray-900' : 'text-gray-300'}`}>
+        {display ?? '—'}
+      </dd>
+    </div>
+  );
+}
+
+function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: EnrollmentPreviewProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Review Enrollment Details</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Please verify all details before confirming. Fields marked <span className="text-red-500 font-bold">*</span> are mandatory.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 space-y-5 max-h-[65vh] overflow-y-auto">
+          {/* Personal Information */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Personal Information</h3>
+            <dl>
+              <PreviewRow label="Name (SSLC)" value={form.studentNameSSLC} required />
+              <PreviewRow label="Name (Aadhar)" value={form.studentNameAadhar} required />
+              <PreviewRow label="Father Name" value={form.fatherName} />
+              <PreviewRow label="Mother Name" value={form.motherName} />
+              <PreviewRow label="Date of Birth" value={form.dateOfBirth} />
+              <PreviewRow label="Gender" value={form.gender} required />
+              <PreviewRow label="Religion" value={form.religion} required />
+              <PreviewRow label="Caste" value={form.caste} />
+              <PreviewRow label="Category" value={form.category} />
+              <PreviewRow label="Annual Income" value={form.annualIncome > 0 ? `₹ ${form.annualIncome.toLocaleString()}` : ''} />
+              <PreviewRow label="Address" value={form.address} />
+            </dl>
+          </section>
+
+          {/* Contact */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Contact Details</h3>
+            <dl>
+              <PreviewRow label="Father Mobile" value={form.fatherMobile} />
+              <PreviewRow label="Student Mobile" value={form.studentMobile} />
+            </dl>
+          </section>
+
+          {/* SSLC Marks */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">SSLC Marks</h3>
+            <dl>
+              <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
+              <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
+              <PreviewRow label="Science Max" value={form.scienceMax} />
+              <PreviewRow label="Science Obtained" value={form.scienceObtained} />
+              <PreviewRow label="Maths Max" value={form.mathsMax} />
+              <PreviewRow label="Maths Obtained" value={form.mathsObtained} />
+              <PreviewRow label="Maths + Science Max Total" value={form.mathsScienceMaxTotal} />
+              <PreviewRow label="Maths + Science Obtained Total" value={form.mathsScienceObtainedTotal} />
+            </dl>
+          </section>
+
+          {/* Enrollment Details */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Enrollment Details</h3>
+            <dl>
+              <PreviewRow label="Course" value={COURSE_LABEL[form.course] ?? form.course} required />
+              <PreviewRow label="Year" value={form.year} required />
+              <PreviewRow label="Adm Type" value={form.admType} required />
+              <PreviewRow label="Adm Cat" value={form.admCat} required />
+              <PreviewRow label="Academic Year" value={form.academicYear} required />
+              <PreviewRow label="Admission Status" value={form.admissionStatus} required />
+              <PreviewRow label="Reg Number" value={form.regNumber} />
+            </dl>
+          </section>
+        </div>
+
+        {errorMsg && (
+          <div className="mx-6 mb-3 text-sm text-red-600 bg-red-50 rounded-md px-4 py-3">
+            {errorMsg}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+          <Button variant="secondary" size="lg" onClick={onEdit} disabled={saving}>
+            Edit Details
+          </Button>
+          <Button size="lg" loading={saving} onClick={onConfirm}>
+            Confirm &amp; Enroll
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function emptyForm(defaultYear?: AcademicYear): StudentFormData {
   return {
     studentNameSSLC: '',
@@ -125,6 +286,12 @@ export function EnrollStudent() {
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [editOriginalYear, setEditOriginalYear] = useState<{ year: string; academicYear: string } | null>(null);
+  const [enrollmentHistory, setEnrollmentHistory] = useState<Student[]>([]);
+  const [showYearWarning, setShowYearWarning] = useState(false);
+  const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   // Re-enroll from previous year
   const [prevQuery, setPrevQuery] = useState('');
@@ -153,10 +320,13 @@ export function EnrollStudent() {
     const trimmed = prevQuery.trim();
     if (trimmed.length < 2) {
       setPrevResults([]);
+      setPrevSearching(false);
       return;
     }
+    // Clear stale results immediately so the list doesn't freeze on old data
+    setPrevResults([]);
+    setPrevSearching(true);
     const timer = setTimeout(async () => {
-      setPrevSearching(true);
       try {
         if (prevStudentsCache.current === null) {
           const all = await getAllStudents();
@@ -202,6 +372,18 @@ export function EnrollStudent() {
           if (!formData.admType) formData.admType = 'REGULAR';
           if (!formData.admCat) formData.admCat = 'GM';
           setForm(formData);
+          setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
+          // Fetch all other enrollment records for this student (for history display + year conflict check)
+          getAllStudents().then((all) => {
+            const history = all
+              .filter(
+                (s) =>
+                  s.id !== editId &&
+                  s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase()
+              )
+              .sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+            setEnrollmentHistory(history);
+          }).catch(() => {});
         }
       })
       .catch(() => setErrorMsg('Failed to load student data'))
@@ -293,33 +475,9 @@ export function EnrollStudent() {
     setErrors({});
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSuccessMsg('');
-    setErrorMsg('');
-    if (editId) {
-      const { errors: blockingErrors } = validateStudentFormEdit(form);
-      if (Object.keys(blockingErrors).length > 0) {
-        setErrors(blockingErrors);
-        return;
-      }
-      setErrors({});
-    } else if (prevSourceStudent) {
-      // Re-enroll: only block on the critical fields (name, course, year)
-      const { errors: blockingErrors } = validateStudentFormEdit(form);
-      if (Object.keys(blockingErrors).length > 0) {
-        setErrors(blockingErrors);
-        return;
-      }
-      setErrors({});
-    } else {
-      const validationErrors = validateStudentForm(form);
-      if (Object.keys(validationErrors).length > 0) {
-        setErrors(validationErrors);
-        return;
-      }
-    }
+  async function performSave() {
     setSaving(true);
+    setErrorMsg('');
     try {
       // Duplicate guard: check if student already enrolled in the target academic year
       if (prevSourceStudent && form.academicYear) {
@@ -331,24 +489,76 @@ export function EnrollStudent() {
           setErrorMsg(
             `${form.studentNameSSLC} is already enrolled in ${form.academicYear} (Merit No: ${dup.meritNumber})`
           );
-          setSaving(false);
           return;
         }
       }
       if (editId) {
         await updateStudent(editId, form);
         setSuccessMsg('Student updated successfully!');
+        setShowPreview(false);
+        setTimeout(() => void navigate(backTo), 1500);
       } else {
         const { meritNumber } = await addStudent(form);
-        setSuccessMsg(`Student enrolled successfully! Merit Number: ${meritNumber}`);
         setForm(emptyForm(settings?.currentAcademicYear));
         setPrevSourceStudent(null);
+        setShowPreview(false);
+        setSuccessMsg(`Student enrolled successfully! Merit Number: ${meritNumber}`);
+        topRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to save student');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSuccessMsg('');
+    setErrorMsg('');
+    if (editId) {
+      // Edit mode: validate and save directly (no preview)
+      const { errors: blockingErrors } = validateStudentFormEdit(form);
+      if (Object.keys(blockingErrors).length > 0) {
+        setErrors(blockingErrors);
+        return;
+      }
+      setErrors({});
+      // Warn if the year being saved matches a previous enrollment year
+      const editConflict = enrollmentHistory.find((s) => s.year === form.year);
+      if (editConflict) {
+        setYearConflictRecord(editConflict);
+        setShowYearWarning(true);
+        return;
+      }
+      await performSave();
+    } else {
+      // New enrollment (manual or re-enroll): same mandatory fields for all paths
+      const validationErrors = validateStudentForm(form);
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        return;
+      }
+      setErrors({});
+      setShowPreview(true);
+    }
+  }
+
+  // Called by the preview "Confirm & Enroll" button — checks year conflict for re-enroll before saving
+  function handleConfirmEnroll() {
+    if (prevSourceStudent && prevStudentsCache.current) {
+      const prevRecords = prevStudentsCache.current.filter(
+        (s) => s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase()
+      );
+      const conflict = prevRecords.find((s) => s.year === form.year);
+      if (conflict) {
+        setYearConflictRecord(conflict);
+        setShowPreview(false);
+        setShowYearWarning(true);
+        return;
+      }
+    }
+    void performSave();
   }
 
   if (loadingEdit) {
@@ -360,7 +570,7 @@ export function EnrollStudent() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl" ref={topRef}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-gray-900">
           {editId ? 'Edit Student' : 'Enroll Student'}
@@ -369,6 +579,13 @@ export function EnrollStudent() {
           {backLabel}
         </Button>
       </div>
+
+      {successMsg && (
+        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-4 py-3 mb-6">{successMsg}</p>
+      )}
+      {errorMsg && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-4 py-3 mb-6">{errorMsg}</p>
+      )}
 
       {!editId && (
         <div className="bg-blue-50 rounded-lg border border-blue-200 p-5 mb-6">
@@ -653,14 +870,27 @@ export function EnrollStudent() {
               error={displayErrors['course']}
               placeholder="Select course"
             />
-            <div>
-              {prevSourceStudent && (
-                <p className="text-xs text-amber-600 font-medium mb-1">
-                  Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
-                </p>
-              )}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-700">Year</span>
+                {prevSourceStudent && (
+                  <span className="text-xs text-amber-600 font-medium">
+                    Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
+                  </span>
+                )}
+                {editId && editOriginalYear && (
+                  <span className="text-xs text-amber-600 font-medium flex items-center gap-1 flex-wrap">
+                    {enrollmentHistory.map((r) => (
+                      <span key={r.id} className="flex items-center gap-1">
+                        <span>{r.year} ({r.academicYear})</span>
+                        <span className="text-gray-400">→</span>
+                      </span>
+                    ))}
+                    <span>{editOriginalYear.year} ({editOriginalYear.academicYear})</span>
+                  </span>
+                )}
+              </div>
               <Select
-                label="Year"
                 options={YEAR_OPTIONS}
                 value={form.year}
                 onChange={handleSelectChange('year')}
@@ -728,16 +958,9 @@ export function EnrollStudent() {
           </div>
         </section>
 
-        {successMsg && (
-          <p className="text-sm text-green-700 bg-green-50 rounded-md px-4 py-3">{successMsg}</p>
-        )}
-        {errorMsg && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-md px-4 py-3">{errorMsg}</p>
-        )}
-
         <div className="flex gap-3">
           <Button type="submit" loading={saving} size="lg">
-            {editId ? 'Update Student' : 'Enroll Student'}
+            {editId ? 'Update Student' : 'Preview & Enroll'}
           </Button>
           <Button
             type="button"
@@ -749,6 +972,26 @@ export function EnrollStudent() {
           </Button>
         </div>
       </form>
+
+      {showPreview && (
+        <EnrollmentPreview
+          form={form}
+          saving={saving}
+          errorMsg={errorMsg}
+          onConfirm={handleConfirmEnroll}
+          onEdit={() => setShowPreview(false)}
+        />
+      )}
+
+      {showYearWarning && yearConflictRecord && (
+        <YearWarningModal
+          studentName={form.studentNameSSLC}
+          selectedYear={form.year}
+          conflictRecord={yearConflictRecord}
+          onProceed={() => { setShowYearWarning(false); setYearConflictRecord(null); void performSave(); }}
+          onEdit={() => { setShowYearWarning(false); setYearConflictRecord(null); }}
+        />
+      )}
     </div>
   );
 }
