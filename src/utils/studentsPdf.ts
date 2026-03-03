@@ -30,7 +30,6 @@ const COLUMNS: ColDef[] = [
   { header: 'Year',     halign: 'left',   get: (s)    => s.year              },
   { header: 'Course',   halign: 'center', get: (s)    => s.course            },
   { header: 'Reg No',   halign: 'left',   get: (s)    => s.regNumber || '—'  },
-  { header: 'Gender',   halign: 'center', get: (s)    => s.gender            },
   { header: 'Cat',      halign: 'center', get: (s)    => s.category || '—'   },
   { header: 'Adm Type', halign: 'left',   get: (s)    => s.admType           },
   { header: 'Adm Cat',  halign: 'center', get: (s)    => s.admCat            },
