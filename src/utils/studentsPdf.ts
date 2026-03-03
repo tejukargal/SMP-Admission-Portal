@@ -13,84 +13,27 @@ export interface StudentsPdfFilters {
   searchTerm: string;
 }
 
-// ── Typography constants ──────────────────────────────────────────────────────
-const FONT_SIZE  = 8.5;   // body + header row
-const PAD_H      = 6;     // left(3) + right(3) per cell in mm
-// Empirical: helvetica uppercase avg character width ≈ 0.21mm per point
-const CHAR_W     = FONT_SIZE * 0.21;
-// Bold header text is ~10% wider
-const CHAR_W_BOLD = CHAR_W * 1.1;
-
-/** Estimate minimum cell width for a string at the given char-width constant. */
-function colW(text: string, charW = CHAR_W): number {
-  return Math.ceil(text.length * charW) + PAD_H;
-}
+const FONT_SIZE = 8.5;
+const CELL_PAD  = { top: 2.8, right: 3, bottom: 2.8, left: 3 };
+const PAD_H     = CELL_PAD.left + CELL_PAD.right; // 6mm horizontal padding per cell
 
 // ── Column definitions ────────────────────────────────────────────────────────
 interface ColDef {
   header: string;
-  /** Pre-computed fixed width in mm. Undefined only for Name (computed from data). */
-  fixedWidth?: number;
   halign: 'left' | 'center' | 'right';
   get: (s: Student, i: number) => string | number;
 }
 
-// Fixed widths are the larger of header (bold) or longest possible content value.
 const COLUMNS: ColDef[] = [
-  {
-    header: 'Sl',
-    fixedWidth: Math.max(colW('Sl', CHAR_W_BOLD), colW('9999')),
-    halign: 'center',
-    get: (_s, i) => i + 1,
-  },
-  {
-    header: 'Name',
-    // fixedWidth left undefined — computed dynamically from actual data
-    halign: 'left',
-    get: (s) => s.studentNameSSLC,
-  },
-  {
-    header: 'Year',
-    fixedWidth: Math.max(colW('Year', CHAR_W_BOLD), colW('3RD YEAR')),
-    halign: 'left',
-    get: (s) => s.year,
-  },
-  {
-    header: 'Course',
-    fixedWidth: Math.max(colW('Course', CHAR_W_BOLD), colW('CS')),
-    halign: 'center',
-    get: (s) => s.course,
-  },
-  {
-    header: 'Reg No',
-    fixedWidth: Math.max(colW('Reg No', CHAR_W_BOLD), colW('CE/2024-25/999')),
-    halign: 'left',
-    get: (s) => s.regNumber || '—',
-  },
-  {
-    header: 'Gender',
-    fixedWidth: Math.max(colW('Gender', CHAR_W_BOLD), colW('GIRL')),
-    halign: 'center',
-    get: (s) => s.gender,
-  },
-  {
-    header: 'Cat',
-    fixedWidth: Math.max(colW('Cat', CHAR_W_BOLD), colW('OTHERS')),
-    halign: 'center',
-    get: (s) => s.category || '—',
-  },
-  {
-    header: 'Adm Type',
-    fixedWidth: Math.max(colW('Adm Type', CHAR_W_BOLD), colW('REPEATER')),
-    halign: 'left',
-    get: (s) => s.admType,
-  },
-  {
-    header: 'Adm Cat',
-    fixedWidth: Math.max(colW('Adm Cat', CHAR_W_BOLD), colW('OTHERS')),
-    halign: 'center',
-    get: (s) => s.admCat,
-  },
+  { header: 'Sl',       halign: 'center', get: (_s, i) => i + 1              },
+  { header: 'Name',     halign: 'left',   get: (s)    => s.studentNameSSLC   },
+  { header: 'Year',     halign: 'left',   get: (s)    => s.year              },
+  { header: 'Course',   halign: 'center', get: (s)    => s.course            },
+  { header: 'Reg No',   halign: 'left',   get: (s)    => s.regNumber || '—'  },
+  { header: 'Gender',   halign: 'center', get: (s)    => s.gender            },
+  { header: 'Cat',      halign: 'center', get: (s)    => s.category || '—'   },
+  { header: 'Adm Type', halign: 'left',   get: (s)    => s.admType           },
+  { header: 'Adm Cat',  halign: 'center', get: (s)    => s.admCat            },
 ];
 
 // ── Sort ─────────────────────────────────────────────────────────────────────
@@ -110,25 +53,43 @@ function sortStudents(students: Student[]): Student[] {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilters): void {
-  const colCount   = COLUMNS.length;
+  const colCount    = COLUMNS.length;
   const orientation: 'portrait' | 'landscape' = colCount > 9 ? 'landscape' : 'portrait';
 
-  const doc    = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
-  const pageW  = doc.internal.pageSize.getWidth();
-  const pageH  = doc.internal.pageSize.getHeight();
-  const margin = 10;
+  const doc     = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+  const pageW   = doc.internal.pageSize.getWidth();
+  const pageH   = doc.internal.pageSize.getHeight();
+  const margin  = 10;
   const usableW = pageW - margin * 2;
 
-  // Sort first — needed for Name-width calculation
   const sorted = sortStudents(students);
 
-  // ── Compute Name column width from actual data ────────────────────────────
-  const fixedTotal = COLUMNS.reduce<number>((s, c) => s + (c.fixedWidth ?? 0), 0);
-  const maxNameChars = sorted.reduce((m, s) => Math.max(m, s.studentNameSSLC.length), 0);
-  // Width needed for the longest name + a small 3mm breathing room
-  const nameNeeded  = Math.ceil(maxNameChars * CHAR_W) + PAD_H + 3;
-  // Can't exceed the space left after all fixed columns; at least 38mm
-  const nameW = Math.max(Math.min(nameNeeded, usableW - fixedTotal), 38);
+  // ── Measure every cell with jsPDF's actual text-width engine ─────────────
+  // Must set font + size before calling getTextWidth so measurements are accurate.
+  doc.setFontSize(FONT_SIZE);
+
+  const colWidths = COLUMNS.map((col) => {
+    // Header uses bold
+    doc.setFont('helvetica', 'bold');
+    let w = doc.getTextWidth(col.header);
+
+    // Body uses normal
+    doc.setFont('helvetica', 'normal');
+    for (let i = 0; i < sorted.length; i++) {
+      const cellText = String(col.get(sorted[i], i));
+      const cw = doc.getTextWidth(cellText);
+      if (cw > w) w = cw;
+    }
+
+    // Add horizontal padding + 1mm breathing room per side
+    return w + PAD_H + 2;
+  });
+
+  // If natural total exceeds usable width, scale all columns down proportionally
+  const naturalTotal = colWidths.reduce((s, w) => s + w, 0);
+  const scale        = naturalTotal > usableW ? usableW / naturalTotal : 1;
+  const finalWidths  = colWidths.map((w) => Math.floor(w * scale * 10) / 10);
+  const tableWidth   = finalWidths.reduce((s, w) => s + w, 0);
 
   // ── Line 1: bold title ────────────────────────────────────────────────────
   doc.setFontSize(13);
@@ -136,7 +97,7 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
   doc.setTextColor(15, 23, 42);
   doc.text('SMP Admissions — Student List', margin, 13);
 
-  // ── Line 2: filter chips + count  |  date (right-aligned) ────────────────
+  // ── Line 2: filter context  ·  count  |  date ────────────────────────────
   const chips: string[] = [];
   if (filters.academicYear)    chips.push(`AY ${filters.academicYear}`);
   if (filters.courseFilter)    chips.push(filters.courseFilter);
@@ -164,17 +125,13 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
   doc.setLineWidth(0.2);
   doc.line(margin, 22, pageW - margin, 22);
 
-  // ── Build table rows ──────────────────────────────────────────────────────
+  // ── Build table data ──────────────────────────────────────────────────────
   const rows    = sorted.map((s, i) => COLUMNS.map((c) => c.get(s, i)));
   const headers = [COLUMNS.map((c) => c.header)];
 
-  // ── Column styles ─────────────────────────────────────────────────────────
   const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
   COLUMNS.forEach((col, idx) => {
-    columnStyles[idx] = {
-      cellWidth: col.fixedWidth !== undefined ? col.fixedWidth : nameW,
-      halign: col.halign,
-    };
+    columnStyles[idx] = { cellWidth: finalWidths[idx], halign: col.halign };
   });
 
   autoTable(doc, {
@@ -182,13 +139,12 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
     margin: { left: margin, right: margin, top: margin, bottom: 12 },
     head: headers,
     body: rows,
-    // Table width = exact sum of columns (no padding to page edge)
-    tableWidth: fixedTotal + nameW,
+    tableWidth,
     styles: {
       fontSize: FONT_SIZE,
-      cellPadding: { top: 2.8, right: 3, bottom: 2.8, left: 3 },
+      cellPadding: CELL_PAD,
       valign: 'middle',
-      overflow: 'ellipsize',
+      overflow: 'linebreak',   // allow wrap only if scaling forced columns tight
       lineColor: [226, 232, 240],
       lineWidth: 0.15,
     },
