@@ -8,6 +8,7 @@ import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+const PAGE_SIZE = 100;
 
 const fs =
   'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
@@ -45,6 +46,7 @@ export function FeeRegister() {
   const [yearFilter, setYearFilter] = useState<Year | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [editRecord, setEditRecord] = useState<FeeRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeeRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -96,6 +98,18 @@ export function FeeRegister() {
     }
     return result;
   }, [sortedRecords, courseFilter, yearFilter, debouncedSearch]);
+
+  // Reset visible window whenever filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filteredRecords]);
+
+  const visibleRecords = useMemo(
+    () => filteredRecords.slice(0, visibleCount),
+    [filteredRecords, visibleCount]
+  );
+
+  const hasMore = visibleCount < filteredRecords.length;
 
   const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter;
 
@@ -326,7 +340,7 @@ export function FeeRegister() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {filteredRecords.map((record, idx) => {
+              {visibleRecords.map((record, idx) => {
                 const smpTotal = calcSMPTotal(record);
                 const svkTotal = calcSVKTotal(record);
                 const total = smpTotal + svkTotal;
@@ -411,6 +425,22 @@ export function FeeRegister() {
                   </tr>
                 );
               })}
+
+              {hasMore && (
+                <tr>
+                  <td
+                    colSpan={13 + SMP_FEE_HEADS.length + 3 + additionalHeadLabels.length + 1}
+                    className="px-4 py-2.5 text-center"
+                  >
+                    <button
+                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredRecords.length - visibleCount} remaining)
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
 
             {/* Totals footer */}
@@ -453,6 +483,13 @@ export function FeeRegister() {
               </tr>
             </tfoot>
           </table>
+
+          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto shrink-0">
+            Showing {Math.min(visibleCount, filteredRecords.length)} of {filteredRecords.length}
+            {filteredRecords.length < sortedRecords.length && (
+              <span className="text-gray-400"> (filtered from {sortedRecords.length} total)</span>
+            )}
+          </div>
         </div>
       )}
 

@@ -307,13 +307,9 @@ export function Dashboard() {
     });
   }
 
-  const yearLabel = academicYearFilter
-    ? `AY ${academicYearFilter}`
-    : 'All academic years';
-
-  const subLabel = loading
-    ? 'Loading…'
-    : `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''} · ${yearLabel}`;
+  const displayYear = isSearchMode
+    ? 'All Years'
+    : (academicYearFilter || 'All Years');
 
   // ── Course colour map ────────────────────────────────────────────────────
   const courseConfig: Record<Course, { bg: string; border: string; textColor: string; barFill: string }> = {
@@ -336,8 +332,21 @@ export function Dashboard() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 leading-tight">Dashboard</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{subLabel}</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h2 className="text-xl font-semibold text-gray-900 leading-tight">Dashboard</h2>
+            <span
+              className={`text-2xl font-black tracking-tight leading-tight transition-colors duration-200 ${
+                !isSearchMode && academicYearFilter ? 'text-blue-700' : 'text-gray-400'
+              }`}
+            >
+              {displayYear}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {loading
+              ? 'Loading…'
+              : `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <Button size="sm" onClick={() => void navigate('/enroll')}>
           + Enroll Student
@@ -545,7 +554,7 @@ export function Dashboard() {
                 border="border-sky-200"
                 textColor="text-sky-700"
                 barFill="bg-sky-400"
-                subText={academicYearFilter ? `Academic year ${academicYearFilter}` : 'All academic years'}
+                subText={`${stats.boys}B · ${stats.girls}G`}
               />
               <StatCard
                 label="Boys"
