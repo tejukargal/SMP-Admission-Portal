@@ -24,6 +24,7 @@ const PAGE_SIZE = 100;
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
 const fs =
   'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
@@ -54,7 +55,7 @@ export function CollectFee() {
   const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
   const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
   const [admStatusFilter, setAdmStatusFilter] = useState('');
-  const [feeStatusFilter, setFeeStatusFilter] = useState<'ALL' | 'PAID' | 'NOT_PAID'>('ALL');
+  const [feeStatusFilter, setFeeStatusFilter] = useState<'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES'>('ALL');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -112,6 +113,20 @@ export function CollectFee() {
       result = result.filter((s) => paidStudents.has(s.id));
     if (feeStatusFilter === 'NOT_PAID')
       result = result.filter((s) => !paidStudents.has(s.id));
+    if (feeStatusFilter === 'FEE_DUES') {
+      result = result.filter((s) => {
+        const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+        const paid = totalPaidByStudent.get(s.id) ?? 0;
+        return allotted !== null && paid < allotted;
+      });
+    }
+    if (feeStatusFilter === 'NO_FEE_DUES') {
+      result = result.filter((s) => {
+        const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+        const paid = totalPaidByStudent.get(s.id) ?? 0;
+        return allotted !== null && paid >= allotted;
+      });
+    }
     if (debouncedSearch) {
       const search = debouncedSearch.trim().toUpperCase();
       result = result.filter((s) => {
@@ -123,9 +138,16 @@ export function CollectFee() {
         return matchName || matchMobile;
       });
     }
-    return result;
+    // Sort: Year → Course → Name (same as Students page)
+    return result.slice().sort((a, b) => {
+      const y = (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
+      if (y !== 0) return y;
+      const c = a.course.localeCompare(b.course);
+      if (c !== 0) return c;
+      return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
+    });
   }, [
-    allStudents,
+    allStudents, allottedByKey, totalPaidByStudent,
     courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter,
     admStatusFilter, feeStatusFilter, debouncedSearch, paidStudents,
   ]);
@@ -164,8 +186,18 @@ export function CollectFee() {
     }
     const paidCount = allStudents.filter((s) => feeRecords.some((r: FeeRecord) => r.studentId === s.id)).length;
     const unpaidCount = allStudents.length - paidCount;
-    return { yearCount, courseCount, total: allStudents.length, paidCount, unpaidCount };
-  }, [allStudents, feeRecords]);
+    const duesCount = allStudents.filter((s) => {
+      const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+      const paid = totalPaidByStudent.get(s.id) ?? 0;
+      return allotted !== null && paid < allotted;
+    }).length;
+    const noDuesCount = allStudents.filter((s) => {
+      const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+      const paid = totalPaidByStudent.get(s.id) ?? 0;
+      return allotted !== null && paid >= allotted;
+    }).length;
+    return { yearCount, courseCount, total: allStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
+  }, [allStudents, feeRecords, allottedByKey, totalPaidByStudent]);
 
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
@@ -226,6 +258,36 @@ export function CollectFee() {
                   Not Paid
                 </span>
                 <AnimNum value={stats.unpaidCount} />
+              </button>
+              <button
+                onClick={() =>
+                  setFeeStatusFilter(feeStatusFilter === 'FEE_DUES' ? 'ALL' : 'FEE_DUES')
+                }
+                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
+                  feeStatusFilter === 'FEE_DUES'
+                    ? 'bg-amber-50 border-amber-300'
+                    : 'bg-white border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className={`font-medium ${feeStatusFilter === 'FEE_DUES' ? 'text-amber-700' : 'text-gray-500'}`}>
+                  Fee Dues
+                </span>
+                <AnimNum value={stats.duesCount} />
+              </button>
+              <button
+                onClick={() =>
+                  setFeeStatusFilter(feeStatusFilter === 'NO_FEE_DUES' ? 'ALL' : 'NO_FEE_DUES')
+                }
+                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
+                  feeStatusFilter === 'NO_FEE_DUES'
+                    ? 'bg-green-50 border-green-300'
+                    : 'bg-white border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span className={`font-medium ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-green-700' : 'text-gray-500'}`}>
+                  No Fee Dues
+                </span>
+                <AnimNum value={stats.noDuesCount} />
               </button>
 
               <span className="text-gray-200 text-xs select-none shrink-0">·</span>
@@ -350,16 +412,18 @@ export function CollectFee() {
           <select
             className={fs}
             value={feeStatusFilter}
-            onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID')}
+            onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
           >
             <option value="ALL">All Fee Status</option>
             <option value="PAID">Fee Paid</option>
             <option value="NOT_PAID">Fee Not Paid</option>
+            <option value="FEE_DUES">Fee Dues</option>
+            <option value="NO_FEE_DUES">No Fee Dues</option>
           </select>
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors"
+              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
             >
               Clear Filters
             </button>

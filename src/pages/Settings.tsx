@@ -1,22 +1,24 @@
-import { useState, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents } from '../services/studentService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser } from '../services/userService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
-import type { AcademicYear } from '../types';
+import type { AcademicYear, StaffUser } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee';
+type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee' | 'staff';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'fee-structure', label: 'Fee Structure' },
   { id: 'import-students', label: 'Import Students' },
   { id: 'import-fee', label: 'Import Fee Register' },
+  { id: 'staff', label: 'Staff Accounts' },
 ];
 
 const ACADEMIC_YEAR_OPTIONS = [
@@ -74,6 +76,16 @@ export function Settings() {
   const [feeResetting, setFeeResetting] = useState(false);
   const [feeResetMsg, setFeeResetMsg] = useState('');
   const [feeResetErrorMsg, setFeeResetErrorMsg] = useState('');
+
+  // Staff accounts state
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [staffCreateMsg, setStaffCreateMsg] = useState('');
+  const [staffCreateError, setStaffCreateError] = useState('');
 
   const currentValue = selectedYear || settings?.currentAcademicYear || '';
 
@@ -204,6 +216,60 @@ export function Settings() {
       setFeeResetErrorMsg(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setFeeResetting(false);
+    }
+  }
+
+  // Load staff list when staff tab is opened
+  useEffect(() => {
+    if (activeTab !== 'staff') return;
+    setStaffLoading(true);
+    setStaffError('');
+    getStaffUsers()
+      .then(setStaffUsers)
+      .catch(() => setStaffError('Failed to load staff accounts.'))
+      .finally(() => setStaffLoading(false));
+  }, [activeTab]);
+
+  async function handleCreateStaff(e: FormEvent) {
+    e.preventDefault();
+    setStaffCreateMsg('');
+    setStaffCreateError('');
+    if (!newStaffEmail.trim() || !newStaffPassword.trim()) {
+      setStaffCreateError('Email and password are required.');
+      return;
+    }
+    if (newStaffPassword.length < 6) {
+      setStaffCreateError('Password must be at least 6 characters.');
+      return;
+    }
+    setCreatingStaff(true);
+    try {
+      await createStaffUser(newStaffEmail.trim(), newStaffPassword.trim());
+      setStaffCreateMsg(`Staff account created for ${newStaffEmail.trim()}.`);
+      setNewStaffEmail('');
+      setNewStaffPassword('');
+      const updated = await getStaffUsers();
+      setStaffUsers(updated);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create staff account.';
+      setStaffCreateError(msg.includes('email-already-in-use') ? 'This email is already in use.' : msg);
+    } finally {
+      setCreatingStaff(false);
+    }
+  }
+
+  async function handleToggleStaff(uid: string, currentlyActive: boolean) {
+    try {
+      if (currentlyActive) {
+        await deactivateStaffUser(uid);
+      } else {
+        await reactivateStaffUser(uid);
+      }
+      setStaffUsers((prev) =>
+        prev.map((u) => (u.uid === uid ? { ...u, active: !currentlyActive } : u))
+      );
+    } catch {
+      setStaffError('Failed to update staff account.');
     }
   }
 
@@ -339,6 +405,100 @@ export function Settings() {
         {activeTab === 'import-fee' && (
           <div className="h-full overflow-auto">
             <ImportFeeRegister />
+          </div>
+        )}
+
+        {/* ── Staff Accounts ── */}
+        {activeTab === 'staff' && (
+          <div className="h-full overflow-auto">
+            <div className="max-w-lg space-y-5">
+
+              {/* Create staff account */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-base font-medium text-gray-800 mb-1">Create Staff Account</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Staff can enroll students, view student list, fee register, and dashboard.
+                  They cannot edit/delete students, collect fees, or access settings.
+                </p>
+                <form onSubmit={(e) => { void handleCreateStaff(e); }} className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={newStaffEmail}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffEmail(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
+                      placeholder="staff@example.com"
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={newStaffPassword}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffPassword(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
+                      placeholder="Min 6 characters"
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {staffCreateError && (
+                    <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{staffCreateError}</p>
+                  )}
+                  {staffCreateMsg && (
+                    <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2">{staffCreateMsg}</p>
+                  )}
+                  <Button type="submit" loading={creatingStaff}>
+                    Create Staff Account
+                  </Button>
+                </form>
+              </div>
+
+              {/* Staff list */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-base font-medium text-gray-800 mb-4">Staff Accounts</h3>
+                {staffLoading ? (
+                  <p className="text-sm text-gray-500">Loading...</p>
+                ) : staffError ? (
+                  <p className="text-sm text-red-600">{staffError}</p>
+                ) : staffUsers.length === 0 ? (
+                  <p className="text-sm text-gray-400">No staff accounts yet.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {staffUsers.map((u) => (
+                      <li key={u.uid} className="flex items-center justify-between py-3 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{u.email}</p>
+                          <p className="text-[10px] text-gray-400">
+                            Created {new Date(u.createdAt).toLocaleDateString('en-IN')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                              u.active
+                                ? 'bg-green-100 text-green-700 border border-green-200'
+                                : 'bg-red-50 text-red-500 border border-red-200'
+                            }`}
+                          >
+                            {u.active ? 'Active' : 'Deactivated'}
+                          </span>
+                          <button
+                            onClick={() => { void handleToggleStaff(u.uid, u.active); }}
+                            className={`rounded px-2.5 py-1 text-xs font-medium border transition-colors cursor-pointer ${
+                              u.active
+                                ? 'text-red-600 border-red-200 hover:bg-red-50'
+                                : 'text-green-700 border-green-200 hover:bg-green-50'
+                            }`}
+                          >
+                            {u.active ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

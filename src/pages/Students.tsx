@@ -6,6 +6,7 @@ import { deleteStudent } from '../services/studentService';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
+import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
 
@@ -31,6 +32,8 @@ function AnimNum({ value }: { value: number }) {
 
 export function Students() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
@@ -332,7 +335,7 @@ export function Students() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors"
+              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
             >
               Clear Filters
             </button>
@@ -375,7 +378,9 @@ export function Students() {
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Adm Cat</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Mobile</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Status</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-48">Actions</th>
+                {isAdmin && (
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-48">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -403,31 +408,33 @@ export function Students() {
                       {student.admissionStatus || '—'}
                     </span>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <div className="flex gap-1.5">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => void navigate(`/enroll?edit=${student.id}`)}
-                      >
-                        Edit
-                      </Button>
+                  {isAdmin && (
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex gap-1.5">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void navigate(`/enroll?edit=${student.id}`)}
+                        >
+                          Edit
+                        </Button>
 
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => openDeleteModal(student)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => openDeleteModal(student)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
 
               {hasMore && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-2.5 text-center">
+                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-2.5 text-center">
                     <button
                       className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}

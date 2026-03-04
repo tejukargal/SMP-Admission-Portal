@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
 import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear } from '../services/studentService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
@@ -272,6 +273,8 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
 }
 
 export function EnrollStudent() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
   const fromDashboard = searchParams.get('from') === 'dashboard';
@@ -307,6 +310,13 @@ export function EnrollStudent() {
     const { warnings } = validateStudentFormEdit(form);
     return { ...warnings, ...errors };
   }, [editId, form, errors]);
+
+  // Staff cannot access edit mode — redirect to students list
+  useEffect(() => {
+    if (editId && !isAdmin) {
+      navigate('/students', { replace: true });
+    }
+  }, [editId, isAdmin, navigate]);
 
   useEffect(() => {
     if (!editId && settings?.currentAcademicYear) {

@@ -1,15 +1,20 @@
 import { NavLink } from 'react-router-dom';
-
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/enroll', label: 'Enroll Student' },
-  { to: '/students', label: 'Students' },
-  { to: '/fees', label: 'Collect Fee' },
-  { to: '/fee-register', label: 'Fee Register' },
-  { to: '/settings', label: 'Settings' },
-];
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Sidebar() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
+  const navItems = [
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/enroll', label: 'Enroll Student' },
+    { to: '/students', label: 'Students' },
+    ...(isAdmin ? [{ to: '/fees', label: 'Collect Fee' }] : []),
+    { to: '/fee-register', label: 'Fee Register' },
+    ...(isAdmin ? [{ to: '/fee-reports', label: 'Fee Reports' }] : []),
+    ...(isAdmin ? [{ to: '/settings', label: 'Settings' }] : []),
+  ];
+
   return (
     <aside className="w-44 shrink-0 h-full bg-gray-900 text-white flex flex-col">
       <div className="px-4 py-4 border-b border-gray-700">
@@ -32,6 +37,13 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      {!isAdmin && (
+        <div className="px-4 py-3 border-t border-gray-700">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">
+            Staff Access
+          </span>
+        </div>
+      )}
     </aside>
   );
 }

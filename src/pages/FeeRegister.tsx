@@ -3,6 +3,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { deleteFeeRecord } from '../services/feeRecordService';
 import { FeeEditModal } from '../components/fee/FeeEditModal';
+import { useAuth } from '../contexts/AuthContext';
 import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 
@@ -32,14 +33,31 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function parseReceiptNum(r: string): number {
+  const n = parseInt(r, 10);
+  return isNaN(n) ? Infinity : n;
+}
+
 function sortRecords(records: FeeRecord[]): FeeRecord[] {
   return [...records].sort((a, b) => {
-    // Sort by payment date ascending (oldest first)
-    return a.date.localeCompare(b.date);
+    // 1. Date ascending (oldest first)
+    const dateCmp = a.date.localeCompare(b.date);
+    if (dateCmp !== 0) return dateCmp;
+
+    // 2. CE/ME/EC/CS share one receipt series; EE has its own — keep them grouped
+    //    within the same date (non-EE first, EE after)
+    const aIsEE = a.course === 'EE' ? 1 : 0;
+    const bIsEE = b.course === 'EE' ? 1 : 0;
+    if (aIsEE !== bIsEE) return aIsEE - bIsEE;
+
+    // 3. Receipt number ascending (numeric) within the same date + group
+    return parseReceiptNum(a.receiptNumber) - parseReceiptNum(b.receiptNumber);
   });
 }
 
 export function FeeRegister() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
   const [courseFilter, setCourseFilter] = useState<Course | ''>('');
@@ -235,7 +253,7 @@ export function FeeRegister() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors"
+              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
             >
               Clear Filters
             </button>
@@ -285,9 +303,11 @@ export function FeeRegister() {
                 <th className="px-3 py-1 text-center text-[10px] font-semibold text-green-600 uppercase tracking-wider border-r border-gray-200">
                   Grand Total
                 </th>
-                <th className="px-3 py-1 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
+                {isAdmin && (
+                  <th className="px-3 py-1 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
               {/* Column header */}
               <tr className="border-b border-gray-200">
@@ -333,9 +353,11 @@ export function FeeRegister() {
                 <th className="px-2 py-1.5 text-right font-semibold text-green-700 whitespace-nowrap w-20 border-r border-gray-200">
                   Total
                 </th>
-                <th className="px-2 py-1.5 text-center font-semibold text-gray-500 whitespace-nowrap w-20">
-                  Actions
-                </th>
+                {isAdmin && (
+                  <th className="px-2 py-1.5 text-center font-semibold text-gray-500 whitespace-nowrap w-20">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
 
@@ -404,24 +426,26 @@ export function FeeRegister() {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-2 py-1.5 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => setEditRecord(record)}
-                          className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 border border-blue-200 hover:border-blue-300 transition-colors cursor-pointer"
-                          title="Edit record"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => { setDeleteTarget(record); setDeleteError(null); }}
-                          className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors cursor-pointer"
-                          title="Delete record"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => setEditRecord(record)}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 border border-blue-200 hover:border-blue-300 transition-colors cursor-pointer"
+                            title="Edit record"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => { setDeleteTarget(record); setDeleteError(null); }}
+                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors cursor-pointer"
+                            title="Delete record"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -429,7 +453,7 @@ export function FeeRegister() {
               {hasMore && (
                 <tr>
                   <td
-                    colSpan={13 + SMP_FEE_HEADS.length + 3 + additionalHeadLabels.length + 1}
+                    colSpan={13 + SMP_FEE_HEADS.length + 3 + additionalHeadLabels.length + (isAdmin ? 2 : 1)}
                     className="px-4 py-2.5 text-center"
                   >
                     <button
@@ -479,7 +503,7 @@ export function FeeRegister() {
                 <td className="px-2 py-1.5 text-right text-green-800 whitespace-nowrap tabular-nums font-bold border-r border-gray-300">
                   ₹{totals.grandTotal.toLocaleString()}
                 </td>
-                <td />
+                {isAdmin && <td />}
               </tr>
             </tfoot>
           </table>

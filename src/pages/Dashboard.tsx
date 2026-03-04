@@ -457,7 +457,7 @@ export function Dashboard() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors whitespace-nowrap"
+              className="shrink-0 rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
             >
               Clear
             </button>

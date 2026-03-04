@@ -18,9 +18,12 @@ const CollectFee = lazy(() =>
 const FeeRegister = lazy(() =>
   import('./pages/FeeRegister').then((m) => ({ default: m.FeeRegister }))
 );
+const FeeReportsPage = lazy(() =>
+  import('./pages/FeeReportsPage').then((m) => ({ default: m.FeeReportsPage }))
+);
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
 
   if (loading) {
     return (
@@ -39,6 +42,8 @@ function AppRoutes() {
     );
   }
 
+  const isAdmin = role === 'admin';
+
   return (
     <SettingsProvider>
     <Layout>
@@ -46,9 +51,19 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/enroll" element={<EnrollStudent />} />
         <Route path="/students" element={<Students />} />
-        <Route path="/fees" element={<CollectFee />} />
+        <Route
+          path="/fees"
+          element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
+        />
         <Route path="/fee-register" element={<FeeRegister />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route
+          path="/fee-reports"
+          element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/settings"
+          element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />}
+        />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

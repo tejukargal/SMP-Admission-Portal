@@ -3,7 +3,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Button } from '../common/Button';
 
 export function Header() {
-  const { logout, user } = useAuth();
+  const { logout, user, role } = useAuth();
   const { settings } = useSettings();
 
   return (
@@ -18,9 +18,14 @@ export function Header() {
           </span>
         )}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {user?.email && (
           <span className="text-sm text-gray-500">{user.email}</span>
+        )}
+        {role === 'staff' && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 uppercase tracking-wide">
+            Staff
+          </span>
         )}
         <Button variant="secondary" size="sm" onClick={() => { void logout(); }}>
           Logout

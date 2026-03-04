@@ -1,3 +1,13 @@
+export type UserRole = 'admin' | 'staff';
+
+export interface StaffUser {
+  uid: string;
+  email: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+}
+
 export type Gender = 'BOY' | 'GIRL';
 export type Religion = 'HINDU' | 'MUSLIM' | 'CHRISTIAN' | 'JAIN' | 'BUDDHIST' | 'SIKH';
 export type Category = 'SC' | 'ST' | 'C1' | '2A' | '2B' | '3A' | '3B' | 'GM';
