@@ -202,7 +202,7 @@ export function CollectFee() {
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Header + stats chips */}
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
@@ -223,6 +223,17 @@ export function CollectFee() {
                 <span className="text-gray-400 font-medium">Total</span>
                 <AnimNum value={stats.total} />
               </div>
+
+              {/* Filtered count — right after Total so it's always visible */}
+              {hasActiveFilters && (
+                <>
+                  <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-blue-500 font-medium">Filtered</span>
+                    <AnimNum value={filteredStudents.length} />
+                  </div>
+                </>
+              )}
 
               <span className="text-gray-200 text-xs select-none shrink-0">·</span>
 
@@ -349,16 +360,6 @@ export function CollectFee() {
                 );
               })}
 
-              {/* Filtered count */}
-              {hasActiveFilters && (
-                <>
-                  <span className="text-gray-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-blue-500 font-medium">Filtered</span>
-                    <AnimNum value={filteredStudents.length} />
-                  </div>
-                </>
-              )}
             </div>
           </>
         )}
@@ -366,66 +367,66 @@ export function CollectFee() {
 
       {/* Filters */}
       <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto">
           <input
             type="text"
             placeholder="Search name / mobile…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="w-40 shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
-          <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-            <option value="">All Courses</option>
+          <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
+            <option value="">Course</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select className={fs} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-            <option value="">All Years</option>
+          <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
+            <option value="">Study Yr</option>
             <option value="1ST YEAR">1ST YEAR</option>
             <option value="2ND YEAR">2ND YEAR</option>
             <option value="3RD YEAR">3RD YEAR</option>
           </select>
-          <select className={fs} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-            <option value="">All Genders</option>
+          <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
+            <option value="">Gender</option>
             <option value="BOY">BOY</option>
             <option value="GIRL">GIRL</option>
           </select>
-          <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-            <option value="">All Adm Types</option>
+          <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
+            <option value="">Adm Type</option>
             <option value="REGULAR">REGULAR</option>
             <option value="REPEATER">REPEATER</option>
             <option value="LATERAL">LATERAL</option>
             <option value="EXTERNAL">EXTERNAL</option>
             <option value="SNQ">SNQ</option>
           </select>
-          <select className={fs} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-            <option value="">All Adm Cats</option>
+          <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
+            <option value="">Adm Cat</option>
             <option value="GM">GM</option>
             <option value="SNQ">SNQ</option>
             <option value="OTHERS">OTHERS</option>
           </select>
-          <select className={fs} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
-            <option value="">All Statuses</option>
+          <select className={`${fs} w-[80px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
+            <option value="">Status</option>
             <option value="PROVISIONAL">PROVISIONAL</option>
             <option value="CONFIRMED">CONFIRMED</option>
             <option value="CANCELLED">CANCELLED</option>
           </select>
           <select
-            className={fs}
+            className={`${fs} w-[90px] shrink-0`}
             value={feeStatusFilter}
             onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
           >
-            <option value="ALL">All Fee Status</option>
+            <option value="ALL">Fee Status</option>
             <option value="PAID">Fee Paid</option>
-            <option value="NOT_PAID">Fee Not Paid</option>
-            <option value="FEE_DUES">Fee Dues</option>
-            <option value="NO_FEE_DUES">No Fee Dues</option>
+            <option value="NOT_PAID">Not Paid</option>
+            <option value="FEE_DUES">Has Dues</option>
+            <option value="NO_FEE_DUES">No Dues</option>
           </select>
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
+              className="shrink-0 rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
             >
-              Clear Filters
+              Clear
             </button>
           )}
         </div>

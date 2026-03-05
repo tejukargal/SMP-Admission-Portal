@@ -176,7 +176,7 @@ export function FeeRegister() {
   const isLoading = settingsLoading || recordsLoading;
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Header row */}
       <div className="flex-shrink-0 flex items-center justify-between gap-3">
@@ -533,8 +533,9 @@ export function FeeRegister() {
             className="absolute inset-0 bg-black/40"
             onClick={() => { if (!deleting) setDeleteTarget(null); }}
             aria-hidden="true"
+            style={{ animation: 'backdrop-enter 0.2s ease-out' }}
           />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Delete Fee Record?</h3>
             <p className="text-xs text-gray-600 mb-1">
               <span className="font-medium">{deleteTarget.studentName}</span>

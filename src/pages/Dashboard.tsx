@@ -1,9 +1,11 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
 import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
+import { useAuth } from '../contexts/AuthContext';
+import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -135,9 +137,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 export function Dashboard() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const { students: allStudents, loading, error } = useAllStudents();
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
+  const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
 
   const {
     searchTerm,
@@ -150,7 +155,6 @@ export function Dashboard() {
     admStatusFilter,
   } = dashboardFilters;
 
-  function setSearchTerm(v: string) { setDashboardFilters({ searchTerm: v }); }
   function setAcademicYearFilter(v: AcademicYear | '') { setDashboardFilters({ academicYearFilter: v }); }
   function setCourseFilter(v: Course | '') { setDashboardFilters({ courseFilter: v }); }
   function setYearFilter(v: Year | '') { setDashboardFilters({ yearFilter: v }); }
@@ -159,11 +163,18 @@ export function Dashboard() {
   function setAdmCatFilter(v: AdmCat | '') { setDashboardFilters({ admCatFilter: v }); }
   function setAdmStatusFilter(v: string) { setDashboardFilters({ admStatusFilter: v }); }
 
-  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+  const [, startTransition] = useTransition();
+
+  // Local input state — typing only updates this (fast, no context cascade).
+  // Debounced value is written to context after 300ms idle.
+  const [inputValue, setInputValue] = useState(searchTerm);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    const t = setTimeout(() => {
+      startTransition(() => setDashboardFilters({ searchTerm: inputValue }));
+    }, 300);
     return () => clearTimeout(t);
-  }, [searchTerm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue]);
 
   // Auto-default academic year to current year once settings load
   const didAutoSet = useRef(false);
@@ -175,14 +186,25 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.currentAcademicYear]);
 
-  const isSearchMode = debouncedSearch.trim().length > 0;
+  // searchTerm in context is the debounced committed value — drives all filtering
+  const isSearchMode = searchTerm.trim().length > 0;
 
   const sortedAcademicYears = useMemo(() => {
     const years = new Set(allStudents.map((s) => s.academicYear));
     return Array.from(years).sort().reverse();
   }, [allStudents]);
 
-  // Filtered students — feed both stats cards and search results
+  // Pre-built search index: toUpperCase() only once per student, not on every query
+  const searchIndex = useMemo(() =>
+    allStudents.map((s) => ({
+      s,
+      searchStr: [s.studentNameSSLC, s.studentNameAadhar, s.regNumber, s.fatherMobile, s.studentMobile]
+        .filter(Boolean).join('|').toUpperCase(),
+    })),
+    [allStudents]
+  );
+
+  // Filtered students — feeds stats cards
   const filteredStudents = useMemo(() => {
     let result = allStudents;
     if (!isSearchMode && academicYearFilter) result = result.filter((s) => s.academicYear === academicYearFilter);
@@ -195,19 +217,13 @@ export function Dashboard() {
     return result;
   }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
-  // Search results (cross-year, all filters except academicYear)
+  // Search results — uses pre-built index, runs only when debounced searchTerm changes
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
-    const search = debouncedSearch.trim().toUpperCase();
-    let result = allStudents.filter((s) => {
-      return (
-        s.studentNameSSLC.toUpperCase().includes(search) ||
-        s.studentNameAadhar.toUpperCase().includes(search) ||
-        s.regNumber?.toUpperCase().includes(search) ||
-        s.fatherMobile?.includes(search) ||
-        s.studentMobile?.includes(search)
-      );
-    });
+    const q = searchTerm.trim().toUpperCase();
+    let result = searchIndex
+      .filter(({ searchStr }) => searchStr.includes(q))
+      .map(({ s }) => s);
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
@@ -215,7 +231,7 @@ export function Dashboard() {
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
     if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
     return result;
-  }, [isSearchMode, debouncedSearch, allStudents, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+  }, [isSearchMode, searchTerm, searchIndex, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
   interface StudentGroup {
     key: string;
@@ -280,7 +296,10 @@ export function Dashboard() {
   }, [filteredStudents]);
 
   // Year-chips stats — per-academic-year counts from active source
-  const activeSource = isSearchMode ? searchResults : filteredStudents;
+  const activeSource = useMemo(
+    () => (isSearchMode ? searchResults : filteredStudents),
+    [isSearchMode, searchResults, filteredStudents]
+  );
   const activeStats = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of activeSource) {
@@ -290,12 +309,12 @@ export function Dashboard() {
   }, [activeSource, sortedAcademicYears]);
 
   const hasActiveFilters =
-    !!searchTerm || !!academicYearFilter || !!courseFilter || !!yearFilter ||
+    !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
     !!genderFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
 
   function clearFilters() {
-    setDebouncedSearch('');
-    setDashboardFilters({
+    setInputValue('');
+    startTransition(() => setDashboardFilters({
       searchTerm: '',
       academicYearFilter: settings?.currentAcademicYear ?? '',
       courseFilter: '',
@@ -304,7 +323,7 @@ export function Dashboard() {
       admTypeFilter: '',
       admCatFilter: '',
       admStatusFilter: '',
-    });
+    }));
   }
 
   const displayYear = isSearchMode
@@ -327,6 +346,7 @@ export function Dashboard() {
   };
 
   return (
+    <>
     <div className="h-full flex flex-col gap-3">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -405,8 +425,8 @@ export function Dashboard() {
           <input
             type="text"
             placeholder="Search name / reg / mobile…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             className="w-40 shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
           <select
@@ -481,7 +501,13 @@ export function Dashboard() {
               No students found.
             </div>
           ) : (
-            studentGroups.map((group) => (
+            <>
+            {studentGroups.length > 100 && (
+              <p className="text-xs text-gray-400 px-1">
+                Showing first 100 of {studentGroups.length} matches — refine your search to narrow results.
+              </p>
+            )}
+            {studentGroups.slice(0, 100).map((group) => (
               <div key={group.key} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-baseline gap-3 flex-wrap">
                   <span className="font-semibold text-gray-900 text-sm">{group.nameSSLC}</span>
@@ -519,13 +545,24 @@ export function Dashboard() {
                           </td>
                           <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.studentMobile}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
-                            >
-                              Edit
-                            </Button>
+                            <div className="flex gap-1.5">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setFeeHistoryStudent(s)}
+                              >
+                                Fee Details
+                              </Button>
+                              {isAdmin && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -533,7 +570,8 @@ export function Dashboard() {
                   </table>
                 </div>
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
 
@@ -652,5 +690,13 @@ export function Dashboard() {
       )}
 
     </div>
+
+    {feeHistoryStudent && (
+      <FeeHistoryModal
+        student={feeHistoryStudent}
+        onClose={() => setFeeHistoryStudent(null)}
+      />
+    )}
+    </>
   );
 }

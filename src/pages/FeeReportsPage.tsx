@@ -470,46 +470,58 @@ export function FeeReportsPage() {
   }, [academicYear]);
 
   // ── Allotted maps (split SMP / SVK) ──────────────────────────────────────
-  const { smpAllottedByKey, svkAllottedByKey } = useMemo(() => {
-    const smpMap = new Map<string, number>();
-    const svkMap = new Map<string, number>();
+  // smpAllottedNoFineByKey: SMP total excluding fine (fine is dynamic per student)
+  // structureFineByKey: the static fine from the fee structure
+  const { smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey } = useMemo(() => {
+    const smpNoFineMap = new Map<string, number>();
+    const fineMap      = new Map<string, number>();
+    const svkMap       = new Map<string, number>();
     for (const s of feeStructures) {
       const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-      smpMap.set(key, SMP_FEE_HEADS.reduce((t, { key: k }) => t + s.smp[k], 0));
+      smpNoFineMap.set(key, SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : s.smp[k]), 0));
+      fineMap.set(key, s.smp.fine);
       svkMap.set(key, s.svk + s.additionalHeads.reduce((t, h) => t + h.amount, 0));
     }
-    return { smpAllottedByKey: smpMap, svkAllottedByKey: svkMap };
+    return { smpAllottedNoFineByKey: smpNoFineMap, structureFineByKey: fineMap, svkAllottedByKey: svkMap };
   }, [feeStructures]);
 
-  // ── Paid maps (split SMP / SVK) ──────────────────────────────────────────
-  const { smpPaidByStudent, svkPaidByStudent } = useMemo(() => {
-    const smpMap = new Map<string, number>();
-    const svkMap = new Map<string, number>();
+  // ── Paid maps (split SMP / SVK) + fine paid per student ──────────────────
+  const { smpPaidByStudent, svkPaidByStudent, finePaidByStudent } = useMemo(() => {
+    const smpMap  = new Map<string, number>();
+    const svkMap  = new Map<string, number>();
+    const fineMap = new Map<string, number>();
     for (const r of feeRecords) {
       const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + r.smp[key], 0);
       const svkTotal = r.svk + r.additionalPaid.reduce((t, h) => t + h.amount, 0);
-      smpMap.set(r.studentId, (smpMap.get(r.studentId) ?? 0) + smpTotal);
-      svkMap.set(r.studentId, (svkMap.get(r.studentId) ?? 0) + svkTotal);
+      smpMap.set(r.studentId,  (smpMap.get(r.studentId)  ?? 0) + smpTotal);
+      svkMap.set(r.studentId,  (svkMap.get(r.studentId)  ?? 0) + svkTotal);
+      fineMap.set(r.studentId, (fineMap.get(r.studentId) ?? 0) + r.smp.fine);
     }
-    return { smpPaidByStudent: smpMap, svkPaidByStudent: svkMap };
+    return { smpPaidByStudent: smpMap, svkPaidByStudent: svkMap, finePaidByStudent: fineMap };
   }, [feeRecords]);
 
   // ── All students as fee rows ──────────────────────────────────────────────
+  // smpAllotted uses effective fine: max(structure fine, total fine paid by student)
+  // This prevents negative balance when a student paid more fine than the structure amount.
   const allStudentRows = useMemo((): StudentFeeRow[] =>
     allStudents.map((s) => {
-      const key        = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-      const smpAllotted = smpAllottedByKey.has(key) ? smpAllottedByKey.get(key)! : null;
-      const svkAllotted = svkAllottedByKey.has(key) ? svkAllottedByKey.get(key)! : null;
-      const allotted    = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
-      const smpPaid     = smpPaidByStudent.get(s.id) ?? 0;
-      const svkPaid     = svkPaidByStudent.get(s.id) ?? 0;
-      const paid        = smpPaid + svkPaid;
-      const smpBalance  = smpAllotted !== null ? smpAllotted - smpPaid : null;
-      const svkBalance  = svkAllotted !== null ? svkAllotted - svkPaid : null;
-      const balance     = allotted    !== null ? allotted    - paid    : null;
+      const key          = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+      const smpNoFine    = smpAllottedNoFineByKey.has(key) ? smpAllottedNoFineByKey.get(key)! : null;
+      const structFine   = structureFineByKey.get(key) ?? 0;
+      const finePaid     = finePaidByStudent.get(s.id) ?? 0;
+      const effectiveFine = Math.max(structFine, finePaid);
+      const smpAllotted  = smpNoFine !== null ? smpNoFine + effectiveFine : null;
+      const svkAllotted  = svkAllottedByKey.has(key) ? svkAllottedByKey.get(key)! : null;
+      const allotted     = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
+      const smpPaid      = smpPaidByStudent.get(s.id) ?? 0;
+      const svkPaid      = svkPaidByStudent.get(s.id) ?? 0;
+      const paid         = smpPaid + svkPaid;
+      const smpBalance   = smpAllotted !== null ? smpAllotted - smpPaid : null;
+      const svkBalance   = svkAllotted !== null ? svkAllotted - svkPaid : null;
+      const balance      = allotted    !== null ? allotted    - paid    : null;
       return { student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance };
     }),
-  [allStudents, smpAllottedByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent]);
+  [allStudents, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent]);
 
   // ── Stats for chips ───────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -559,7 +571,7 @@ export function FeeReportsPage() {
   const loading = settingsLoading || studentsLoading || feeLoading;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-4" style={{ animation: 'page-enter 0.22s ease-out' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-base font-bold text-gray-900">

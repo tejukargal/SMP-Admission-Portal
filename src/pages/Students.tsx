@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { deleteStudent } from '../services/studentService';
@@ -32,6 +32,7 @@ function AnimNum({ value }: { value: number }) {
 
 export function Students() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
@@ -64,6 +65,17 @@ export function Students() {
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
   const [savingPdf, setSavingPdf] = useState(false);
+
+  // Toast for post-edit success message passed via router state
+  const [toastMsg, setToastMsg] = useState<string>(() => {
+    const state = location.state as { updatedName?: string } | null;
+    return state?.updatedName ? `${state.updatedName} updated successfully!` : '';
+  });
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = setTimeout(() => setToastMsg(''), 3500);
+    return () => clearTimeout(t);
+  }, [toastMsg]);
 
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; student: Student | null }>({
     open: false,
@@ -185,10 +197,10 @@ export function Students() {
   const isLoading = settingsLoading || loading;
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Page header + stats chips */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
+      <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
         <div className="shrink-0">
           <h2 className="text-base font-semibold text-gray-900 leading-tight">Students</h2>
           {academicYear && (
@@ -278,6 +290,23 @@ export function Students() {
               )}
             </div>
           </>
+        )}
+
+        {/* Success toast — centred in the header bar */}
+        {toastMsg && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap pointer-events-auto"
+            style={{ animation: 'toast-in 0.2s ease-out' }}
+          >
+            <span className="text-green-500 leading-none">✓</span>
+            {toastMsg}
+            <button
+              onClick={() => setToastMsg('')}
+              className="text-green-400 hover:text-green-600 leading-none ml-1"
+            >
+              ×
+            </button>
+          </div>
         )}
 
         <Button onClick={() => void navigate('/enroll')} className="ml-auto shrink-0">Enroll Student</Button>

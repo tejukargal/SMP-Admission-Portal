@@ -132,9 +132,12 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
           const cumSvk = prior.reduce((s, r) => s + r.svk, 0);
 
           // Pre-fill with remaining balance (allotted − already paid)
+          const fineExempt =
+            (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
+            (student.year === '2ND YEAR' && student.admType === 'LATERAL');
           const remaining = emptySMP();
           for (const { key } of SMP_FEE_HEADS) {
-            remaining[key] = Math.max(0, struct.smp[key] - cumSmp[key]);
+            remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, struct.smp[key] - cumSmp[key]);
           }
           setSmpNow(remaining);
           setSvkNow(Math.max(0, struct.svk - cumSvk));
@@ -157,12 +160,17 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
       .finally(() => setLoadingData(false));
   }, [academicYear, student.course, student.id, student.year, student.admType, student.admCat]);
 
+  // Fine is exempt for: 1st Year Regular/SNQ (all courses), 2nd Year Lateral (all courses).
+  const isFineExempt =
+    (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
+    (student.year === '2ND YEAR' && student.admType === 'LATERAL');
+
   // Auto-fill Fine from the year-level schedule whenever date or schedule changes.
   useEffect(() => {
-    if (!fineSchedule.length || !date) return;
+    if (!fineSchedule.length || !date || isFineExempt) return;
     const fine = lookupFine(date, fineSchedule);
     setSmpNow((prev) => ({ ...prev, fine }));
-  }, [date, fineSchedule]);
+  }, [date, fineSchedule, isFineExempt]);
 
   function handleSMPChange(key: SMPFeeHead, val: string) {
     setSmpNow((prev) => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
@@ -243,8 +251,9 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
         aria-hidden="true"
+        style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 flex flex-col">
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 flex flex-col" style={{ animation: 'modal-enter 0.25s ease-out' }}>
 
         {/* Header */}
         <div className="px-5 py-3 border-b border-gray-200 flex items-start justify-between shrink-0">

@@ -504,9 +504,7 @@ export function EnrollStudent() {
       }
       if (editId) {
         await updateStudent(editId, form);
-        setSuccessMsg('Student updated successfully!');
-        setShowPreview(false);
-        setTimeout(() => void navigate(backTo), 1500);
+        navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
         const { meritNumber } = await addStudent(form);
         setForm(emptyForm(settings?.currentAcademicYear));
@@ -580,8 +578,9 @@ export function EnrollStudent() {
   }
 
   return (
-    <div className="max-w-4xl" ref={topRef}>
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full" ref={topRef} style={{ animation: 'page-enter 0.22s ease-out' }}>
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-semibold text-gray-900">
           {editId ? 'Edit Student' : 'Enroll Student'}
         </h2>
@@ -591,18 +590,19 @@ export function EnrollStudent() {
       </div>
 
       {successMsg && (
-        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-4 py-3 mb-6">{successMsg}</p>
+        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-5">{successMsg}</p>
       )}
       {errorMsg && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-4 py-3 mb-6">{errorMsg}</p>
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">{errorMsg}</p>
       )}
 
+      {/* Re-enroll banner */}
       {!editId && (
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-5 mb-6">
-          <h3 className="text-sm font-semibold text-blue-800 mb-1">Re-enroll from Previous Year</h3>
+        <div className="bg-sky-50 rounded-lg border border-sky-200 px-5 py-4 mb-5">
+          <h3 className="text-sm font-semibold text-sky-800 mb-1">Re-enroll from Previous Year</h3>
           {prevSourceStudent ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-sm text-blue-700">
+              <p className="text-sm text-sky-700">
                 Pre-filled from:{' '}
                 <span className="font-medium">{prevSourceStudent.studentNameSSLC}</span>
                 {' '}— {prevSourceStudent.course}, {prevSourceStudent.year},{' '}
@@ -618,7 +618,7 @@ export function EnrollStudent() {
             </div>
           ) : (
             <div className="relative">
-              <p className="text-xs text-blue-600 mb-2">
+              <p className="text-xs text-sky-600 mb-2">
                 Search by name or register number to pre-fill the form with an existing student's details.
               </p>
               <input
@@ -626,22 +626,22 @@ export function EnrollStudent() {
                 value={prevQuery}
                 onChange={(e) => setPrevQuery(e.target.value)}
                 placeholder="Type name or register number..."
-                className="block w-full md:w-96 rounded-md border border-blue-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
               {prevSearching && (
-                <p className="text-xs text-blue-500 mt-1">Searching...</p>
+                <p className="text-xs text-sky-500 mt-1">Searching...</p>
               )}
               {prevQuery.trim().length >= 2 && !prevSearching && prevResults.length === 0 && (
                 <p className="text-xs text-gray-500 mt-1">No students found in previous years.</p>
               )}
               {prevResults.length > 0 && (
-                <ul className="absolute z-10 w-full md:w-96 bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
+                <ul className="absolute z-10 w-full max-w-sm bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
                   {prevResults.map((s) => (
                     <li key={s.id}>
                       <button
                         type="button"
                         onClick={() => handlePrevStudentSelect(s)}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                        className="w-full text-left px-4 py-3 hover:bg-sky-50 border-b border-gray-100 last:border-0"
                       >
                         <p className="text-sm font-medium text-gray-900">{s.studentNameSSLC}</p>
                         <p className="text-xs text-gray-500">
@@ -658,317 +658,350 @@ export function EnrollStudent() {
         </div>
       )}
 
-      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
-        {/* Personal Info */}
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">Personal Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Name as per SSLC"
-              value={form.studentNameSSLC}
-              onChange={handleTextChange('studentNameSSLC')}
-              error={displayErrors['studentNameSSLC']}
-              uppercase
-              placeholder="STUDENT NAME (SSLC)"
-            />
-            <Input
-              label="Name as per Aadhar"
-              value={form.studentNameAadhar}
-              onChange={handleTextChange('studentNameAadhar')}
-              error={displayErrors['studentNameAadhar']}
-              uppercase
-              placeholder="STUDENT NAME (AADHAR)"
-            />
-            <Input
-              label="Father Name"
-              value={form.fatherName}
-              onChange={handleTextChange('fatherName')}
-              error={displayErrors['fatherName']}
-              uppercase
-              placeholder="FATHER NAME"
-            />
-            <Input
-              label="Mother Name"
-              value={form.motherName}
-              onChange={handleTextChange('motherName')}
-              error={displayErrors['motherName']}
-              uppercase
-              placeholder="MOTHER NAME"
-            />
-            <Input
-              label="Date of Birth"
-              value={form.dateOfBirth}
-              onChange={(e) => {
-                let val = e.target.value.replace(/[^\d/]/g, '');
-                const raw = val.replace(/\//g, '');
-                if (raw.length >= 3 && !val.includes('/')) {
-                  val = raw.slice(0, 2) + '/' + raw.slice(2);
-                }
-                if (raw.length >= 5 && val.split('/').length < 3) {
-                  const parts = val.split('/');
-                  val = parts[0] + '/' + (parts[1] ?? '').slice(0, 2) + '/' + (parts[1] ?? '').slice(2) + (parts[2] ?? '');
-                }
-                if (val.length > 10) val = val.slice(0, 10);
-                handleFieldChange('dateOfBirth', val);
-              }}
-              error={displayErrors['dateOfBirth']}
-              placeholder="DD/MM/YYYY"
-              maxLength={10}
-            />
-            <Select
-              label="Gender"
-              options={GENDER_OPTIONS}
-              value={form.gender}
-              onChange={handleSelectChange('gender')}
-              error={displayErrors['gender']}
-              placeholder="Select gender"
-            />
-            <Select
-              label="Religion"
-              options={RELIGION_OPTIONS}
-              value={form.religion}
-              onChange={handleSelectChange('religion')}
-              error={displayErrors['religion']}
-              placeholder="Select religion"
-            />
-            <Input
-              label="Caste"
-              value={form.caste}
-              onChange={handleTextChange('caste')}
-              error={displayErrors['caste']}
-              uppercase
-              placeholder="CASTE"
-            />
-            <Select
-              label="Category"
-              options={CATEGORY_OPTIONS}
-              value={form.category}
-              onChange={handleSelectChange('category')}
-              error={displayErrors['category']}
-            />
-            <Input
-              label="Annual Income"
-              type="number"
-              min={0}
-              value={form.annualIncome}
-              onChange={handleNumberChange('annualIncome')}
-              error={displayErrors['annualIncome']}
-              placeholder="0"
-            />
-            <div className="md:col-span-2">
+      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+
+        {/* ── Personal Information ─────────────────────────────────────── */}
+        <section className="rounded-xl border border-blue-200 overflow-hidden shadow-sm">
+          <div className="bg-blue-100 px-6 py-2.5 border-b border-blue-200">
+            <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider">Personal Information</h3>
+          </div>
+          <div className="bg-blue-50 px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <Input
+                  label="Name as per SSLC"
+                  value={form.studentNameSSLC}
+                  onChange={handleTextChange('studentNameSSLC')}
+                  error={displayErrors['studentNameSSLC']}
+                  uppercase
+                  placeholder="STUDENT NAME (SSLC)"
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Input
+                  label="Name as per Aadhar"
+                  value={form.studentNameAadhar}
+                  onChange={handleTextChange('studentNameAadhar')}
+                  error={displayErrors['studentNameAadhar']}
+                  uppercase
+                  placeholder="STUDENT NAME (AADHAR)"
+                />
+              </div>
               <Input
-                label="Address"
-                value={form.address}
-                onChange={handleTextChange('address')}
-                error={displayErrors['address']}
+                label="Father Name"
+                value={form.fatherName}
+                onChange={handleTextChange('fatherName')}
+                error={displayErrors['fatherName']}
                 uppercase
-                placeholder="FULL ADDRESS"
+                placeholder="FATHER NAME"
               />
-            </div>
-          </div>
-        </section>
-
-        {/* Contact */}
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">Contact Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Father Mobile"
-              value={form.fatherMobile}
-              onChange={handleTextChange('fatherMobile')}
-              error={displayErrors['fatherMobile']}
-              placeholder="9XXXXXXXXX"
-              maxLength={10}
-            />
-            <Input
-              label="Student Mobile"
-              value={form.studentMobile}
-              onChange={handleTextChange('studentMobile')}
-              error={displayErrors['studentMobile']}
-              placeholder="9XXXXXXXXX"
-              maxLength={10}
-            />
-          </div>
-        </section>
-
-        {/* SSLC Marks */}
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">SSLC Marks</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="SSLC Max Total"
-              type="number"
-              min={0}
-              value={form.sslcMaxTotal}
-              onChange={handleNumberChange('sslcMaxTotal')}
-              error={displayErrors['sslcMaxTotal']}
-            />
-            <Input
-              label="SSLC Obtained Total"
-              type="number"
-              min={0}
-              value={form.sslcObtainedTotal}
-              onChange={handleNumberChange('sslcObtainedTotal')}
-              error={displayErrors['sslcObtainedTotal']}
-            />
-            <Input
-              label="Science Max"
-              type="number"
-              min={0}
-              value={form.scienceMax}
-              onChange={handleNumberChange('scienceMax')}
-              error={displayErrors['scienceMax']}
-            />
-            <Input
-              label="Science Obtained"
-              type="number"
-              min={0}
-              value={form.scienceObtained}
-              onChange={handleNumberChange('scienceObtained')}
-              error={displayErrors['scienceObtained']}
-            />
-            <Input
-              label="Maths Max"
-              type="number"
-              min={0}
-              value={form.mathsMax}
-              onChange={handleNumberChange('mathsMax')}
-              error={displayErrors['mathsMax']}
-            />
-            <Input
-              label="Maths Obtained"
-              type="number"
-              min={0}
-              value={form.mathsObtained}
-              onChange={handleNumberChange('mathsObtained')}
-              error={displayErrors['mathsObtained']}
-            />
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">
-                Maths + Science Max Total
-              </label>
-              <input
+              <Input
+                label="Mother Name"
+                value={form.motherName}
+                onChange={handleTextChange('motherName')}
+                error={displayErrors['motherName']}
+                uppercase
+                placeholder="MOTHER NAME"
+              />
+              <Input
+                label="Date of Birth"
+                value={form.dateOfBirth}
+                onChange={(e) => {
+                  let val = e.target.value.replace(/[^\d/]/g, '');
+                  const raw = val.replace(/\//g, '');
+                  if (raw.length >= 3 && !val.includes('/')) {
+                    val = raw.slice(0, 2) + '/' + raw.slice(2);
+                  }
+                  if (raw.length >= 5 && val.split('/').length < 3) {
+                    const parts = val.split('/');
+                    val = parts[0] + '/' + (parts[1] ?? '').slice(0, 2) + '/' + (parts[1] ?? '').slice(2) + (parts[2] ?? '');
+                  }
+                  if (val.length > 10) val = val.slice(0, 10);
+                  handleFieldChange('dateOfBirth', val);
+                }}
+                error={displayErrors['dateOfBirth']}
+                placeholder="DD/MM/YYYY"
+                maxLength={10}
+              />
+              <Select
+                label="Gender"
+                options={GENDER_OPTIONS}
+                value={form.gender}
+                onChange={handleSelectChange('gender')}
+                error={displayErrors['gender']}
+                placeholder="Select gender"
+              />
+              <Select
+                label="Religion"
+                options={RELIGION_OPTIONS}
+                value={form.religion}
+                onChange={handleSelectChange('religion')}
+                error={displayErrors['religion']}
+                placeholder="Select religion"
+              />
+              <Input
+                label="Caste"
+                value={form.caste}
+                onChange={handleTextChange('caste')}
+                error={displayErrors['caste']}
+                uppercase
+                placeholder="CASTE"
+              />
+              <Select
+                label="Category"
+                options={CATEGORY_OPTIONS}
+                value={form.category}
+                onChange={handleSelectChange('category')}
+                error={displayErrors['category']}
+              />
+              <Input
+                label="Annual Income (₹)"
                 type="number"
-                readOnly
-                value={form.mathsScienceMaxTotal}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                min={0}
+                value={form.annualIncome}
+                onChange={handleNumberChange('annualIncome')}
+                error={displayErrors['annualIncome']}
+                placeholder="0"
               />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">
-                Maths + Science Obtained Total
-              </label>
-              <input
-                type="number"
-                readOnly
-                value={form.mathsScienceObtainedTotal}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
-              />
+              <div className="lg:col-span-4">
+                <Input
+                  label="Address"
+                  value={form.address}
+                  onChange={handleTextChange('address')}
+                  error={displayErrors['address']}
+                  uppercase
+                  placeholder="FULL ADDRESS"
+                />
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Enrollment */}
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">Enrollment Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select
-              label="Course"
-              options={COURSE_OPTIONS}
-              value={form.course}
-              onChange={handleSelectChange('course')}
-              error={displayErrors['course']}
-              placeholder="Select course"
-            />
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-gray-700">Year</span>
-                {prevSourceStudent && (
-                  <span className="text-xs text-amber-600 font-medium">
-                    Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
-                  </span>
-                )}
-                {editId && editOriginalYear && (
-                  <span className="text-xs text-amber-600 font-medium flex items-center gap-1 flex-wrap">
-                    {enrollmentHistory.map((r) => (
-                      <span key={r.id} className="flex items-center gap-1">
-                        <span>{r.year} ({r.academicYear})</span>
-                        <span className="text-gray-400">→</span>
+        {/* ── Contact Details ──────────────────────────────────────────── */}
+        <section className="rounded-xl border border-emerald-200 overflow-hidden shadow-sm">
+          <div className="bg-emerald-100 px-6 py-2.5 border-b border-emerald-200">
+            <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider">Contact Details</h3>
+          </div>
+          <div className="bg-emerald-50 px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <Input
+                  label="Father Mobile"
+                  value={form.fatherMobile}
+                  onChange={handleTextChange('fatherMobile')}
+                  error={displayErrors['fatherMobile']}
+                  placeholder="9XXXXXXXXX"
+                  maxLength={10}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Input
+                  label="Student Mobile"
+                  value={form.studentMobile}
+                  onChange={handleTextChange('studentMobile')}
+                  error={displayErrors['studentMobile']}
+                  placeholder="9XXXXXXXXX"
+                  maxLength={10}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── SSLC Marks ───────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-amber-200 overflow-hidden shadow-sm">
+          <div className="bg-amber-100 px-6 py-2.5 border-b border-amber-200">
+            <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wider">SSLC Marks</h3>
+          </div>
+          <div className="bg-amber-50 px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <Input
+                  label="SSLC Max Total"
+                  type="number"
+                  min={0}
+                  value={form.sslcMaxTotal}
+                  onChange={handleNumberChange('sslcMaxTotal')}
+                  error={displayErrors['sslcMaxTotal']}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Input
+                  label="SSLC Obtained Total"
+                  type="number"
+                  min={0}
+                  value={form.sslcObtainedTotal}
+                  onChange={handleNumberChange('sslcObtainedTotal')}
+                  error={displayErrors['sslcObtainedTotal']}
+                />
+              </div>
+              <Input
+                label="Science Max"
+                type="number"
+                min={0}
+                value={form.scienceMax}
+                onChange={handleNumberChange('scienceMax')}
+                error={displayErrors['scienceMax']}
+              />
+              <Input
+                label="Science Obtained"
+                type="number"
+                min={0}
+                value={form.scienceObtained}
+                onChange={handleNumberChange('scienceObtained')}
+                error={displayErrors['scienceObtained']}
+              />
+              <Input
+                label="Maths Max"
+                type="number"
+                min={0}
+                value={form.mathsMax}
+                onChange={handleNumberChange('mathsMax')}
+                error={displayErrors['mathsMax']}
+              />
+              <Input
+                label="Maths Obtained"
+                type="number"
+                min={0}
+                value={form.mathsObtained}
+                onChange={handleNumberChange('mathsObtained')}
+                error={displayErrors['mathsObtained']}
+              />
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium text-gray-700 block mb-1">
+                  Maths + Science Max Total
+                </label>
+                <input
+                  type="number"
+                  readOnly
+                  value={form.mathsScienceMaxTotal}
+                  className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium text-gray-700 block mb-1">
+                  Maths + Science Obtained Total
+                </label>
+                <input
+                  type="number"
+                  readOnly
+                  value={form.mathsScienceObtainedTotal}
+                  className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Enrollment Details ───────────────────────────────────────── */}
+        <section className="rounded-xl border border-violet-200 overflow-hidden shadow-sm">
+          <div className="bg-violet-100 px-6 py-2.5 border-b border-violet-200">
+            <h3 className="text-sm font-bold text-violet-800 uppercase tracking-wider">Enrollment Details</h3>
+          </div>
+          <div className="bg-violet-50 px-6 py-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <Select
+                  label="Course"
+                  options={COURSE_OPTIONS}
+                  value={form.course}
+                  onChange={handleSelectChange('course')}
+                  error={displayErrors['course']}
+                  placeholder="Select course"
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-gray-700">Year</span>
+                    {prevSourceStudent && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
                       </span>
-                    ))}
-                    <span>{editOriginalYear.year} ({editOriginalYear.academicYear})</span>
-                  </span>
-                )}
+                    )}
+                    {editId && editOriginalYear && (
+                      <span className="text-xs text-amber-600 font-medium flex items-center gap-1 flex-wrap">
+                        {enrollmentHistory.map((r) => (
+                          <span key={r.id} className="flex items-center gap-1">
+                            <span>{r.year} ({r.academicYear})</span>
+                            <span className="text-gray-400">→</span>
+                          </span>
+                        ))}
+                        <span>{editOriginalYear.year} ({editOriginalYear.academicYear})</span>
+                      </span>
+                    )}
+                  </div>
+                  <Select
+                    options={YEAR_OPTIONS}
+                    value={form.year}
+                    onChange={handleSelectChange('year')}
+                    error={displayErrors['year']}
+                    placeholder="Select year"
+                  />
+                </div>
               </div>
               <Select
-                options={YEAR_OPTIONS}
-                value={form.year}
-                onChange={handleSelectChange('year')}
-                error={displayErrors['year']}
-                placeholder="Select year"
+                label="Adm Type"
+                options={ADM_TYPE_OPTIONS}
+                value={form.admType}
+                onChange={handleSelectChange('admType')}
+                error={displayErrors['admType']}
               />
-            </div>
-            <Select
-              label="Adm Type"
-              options={ADM_TYPE_OPTIONS}
-              value={form.admType}
-              onChange={handleSelectChange('admType')}
-              error={displayErrors['admType']}
-            />
-            <Select
-              label="Adm Cat"
-              options={ADM_CAT_OPTIONS}
-              value={form.admCat}
-              onChange={handleSelectChange('admCat')}
-              error={displayErrors['admCat']}
-            />
-            <Select
-              label="Academic Year"
-              options={ACADEMIC_YEAR_OPTIONS}
-              value={form.academicYear}
-              onChange={handleSelectChange('academicYear')}
-              error={displayErrors['academicYear']}
-              placeholder="Select academic year"
-            />
-            <Select
-              label="Admission Status"
-              options={ADMISSION_STATUS_OPTIONS}
-              value={form.admissionStatus}
-              onChange={handleSelectChange('admissionStatus')}
-              error={displayErrors['admissionStatus']}
-              placeholder="Select status"
-            />
-            <Input
-              label="Reg Number"
-              value={form.regNumber}
-              onChange={handleTextChange('regNumber')}
-              error={displayErrors['regNumber']}
-              uppercase
-              placeholder="308CE"
-            />
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">
-                Merit Number
-              </label>
-              {editId ? (
-                <input
-                  readOnly
-                  value={form.meritNumber || 'Not assigned'}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600 cursor-not-allowed font-mono tracking-wider"
-                />
-              ) : (
-                <input
-                  readOnly
-                  value=""
-                  placeholder="Auto-generated on enrollment"
-                  className="block w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed italic"
-                />
-              )}
+              <Select
+                label="Adm Cat"
+                options={ADM_CAT_OPTIONS}
+                value={form.admCat}
+                onChange={handleSelectChange('admCat')}
+                error={displayErrors['admCat']}
+              />
+              <Select
+                label="Academic Year"
+                options={ACADEMIC_YEAR_OPTIONS}
+                value={form.academicYear}
+                onChange={handleSelectChange('academicYear')}
+                error={displayErrors['academicYear']}
+                placeholder="Select academic year"
+              />
+              <Select
+                label="Admission Status"
+                options={ADMISSION_STATUS_OPTIONS}
+                value={form.admissionStatus}
+                onChange={handleSelectChange('admissionStatus')}
+                error={displayErrors['admissionStatus']}
+                placeholder="Select status"
+              />
+              <Input
+                label="Reg Number"
+                value={form.regNumber}
+                onChange={handleTextChange('regNumber')}
+                error={displayErrors['regNumber']}
+                uppercase
+                placeholder="308CE"
+              />
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">
+                  Merit Number
+                </label>
+                {editId ? (
+                  <input
+                    readOnly
+                    value={form.meritNumber || 'Not assigned'}
+                    className="block w-full rounded-md border border-violet-200 px-3 py-2 text-sm bg-violet-100/60 text-gray-600 cursor-not-allowed font-mono tracking-wider"
+                  />
+                ) : (
+                  <input
+                    readOnly
+                    value=""
+                    placeholder="Auto-generated on enrollment"
+                    className="block w-full rounded-md border border-violet-200 px-3 py-2 text-sm bg-violet-100/60 text-gray-400 cursor-not-allowed italic"
+                  />
+                )}
+              </div>
             </div>
           </div>
         </section>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 pt-1 pb-4">
           <Button type="submit" loading={saving} size="lg">
             {editId ? 'Update Student' : 'Preview & Enroll'}
           </Button>
