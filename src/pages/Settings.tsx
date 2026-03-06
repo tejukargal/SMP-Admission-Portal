@@ -9,15 +9,17 @@ import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
+import { ImportAddress } from './ImportAddress';
 import type { AcademicYear, StaffUser } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee' | 'staff';
+type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee' | 'import-address' | 'staff';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'fee-structure', label: 'Fee Structure' },
   { id: 'import-students', label: 'Import Students' },
   { id: 'import-fee', label: 'Import Fee Register' },
+  { id: 'import-address', label: 'Import Address' },
   { id: 'staff', label: 'Staff Accounts' },
 ];
 
@@ -398,6 +400,13 @@ export function Settings() {
         {activeTab === 'import-students' && (
           <div className="h-full overflow-auto">
             <ImportStudents />
+          </div>
+        )}
+
+        {/* ── Import Address ── */}
+        {activeTab === 'import-address' && (
+          <div className="h-full overflow-auto">
+            <ImportAddress />
           </div>
         )}
 

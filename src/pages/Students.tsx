@@ -8,6 +8,7 @@ import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
+import { generateAnsLetter } from '../utils/ansLetter';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
 
 const PAGE_SIZE = 100;
@@ -82,6 +83,26 @@ export function Students() {
     student: null,
   });
   const [deleting, setDeleting] = useState(false);
+
+  // ── Right-click context menu ──────────────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setContextMenu(null); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [contextMenu]);
+
+  function handleContextMenu(e: React.MouseEvent, student: Student) {
+    e.preventDefault();
+    e.stopPropagation();
+    const MENU_W = 190;
+    const MENU_H = 120;
+    const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
+    const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
+    setContextMenu({ x, y, student });
+  }
 
   // Single unfiltered fetch — all filtering done client-side
   const { students: allStudents, loading, error, refetch } = useStudents(academicYear);
@@ -197,6 +218,7 @@ export function Students() {
   const isLoading = settingsLoading || loading;
 
   return (
+    <>
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Page header + stats chips */}
@@ -414,7 +436,11 @@ export function Students() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleStudents.map((student, idx) => (
-                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={student.id}
+                  className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                  onContextMenu={(e) => handleContextMenu(e, student)}
+                >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
@@ -500,5 +526,51 @@ export function Students() {
         onCancel={closeDeleteModal}
       />
     </div>
+
+    {/* ── Context menu — rendered outside animated div to avoid transform containing-block bug ── */}
+    {contextMenu && (
+      <>
+        {/* Invisible backdrop — catches all clicks/right-clicks outside the menu */}
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
+        />
+        {/* Menu */}
+        <div
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[185px] text-sm"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100 mb-1 truncate max-w-[185px]">
+            {contextMenu.student.studentNameSSLC}
+          </div>
+          <button
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
+          >
+            <span className="text-sm leading-none">📄</span>
+            ANS Letter
+          </button>
+          <button
+            disabled
+            className="w-full text-left px-3 py-2 text-gray-300 flex items-center gap-2 cursor-not-allowed"
+          >
+            <span className="text-sm leading-none">📋</span>
+            Study Certificate
+            <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
+          </button>
+          <button
+            disabled
+            className="w-full text-left px-3 py-2 text-gray-300 flex items-center gap-2 cursor-not-allowed"
+          >
+            <span className="text-sm leading-none">📜</span>
+            Transfer Certificate
+            <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
+          </button>
+        </div>
+      </>
+    )}
+    </>
   );
 }
