@@ -157,3 +157,37 @@ export interface AppSettings {
   currentAcademicYear: AcademicYear;
   updatedAt: string;
 }
+
+// ─── Document tracking ────────────────────────────────────────────────────────
+
+export const REQUIRED_DOCS = [
+  { key: 'sslcMarksCard',          label: 'SSLC Marks Card' },
+  { key: 'transferCertificate',    label: 'Transfer Certificate' },
+  { key: 'studyCertificate',       label: 'Study Certificate' },
+  { key: 'characterConduct',       label: 'Character & Conduct Certificate' },
+  { key: 'casteCertificate',       label: 'Caste Certificate' },
+  { key: 'incomeCertificate',      label: 'Income Certificate' },
+  { key: 'physicalFitness',        label: 'Physical Fitness Certificate' },
+  { key: 'aadharCopy',             label: 'Copy of Aadhar' },
+  { key: 'eligibilityCertificate', label: 'Eligibility Certificate' },
+  { key: 'passportPhotos',         label: 'Passport Photos (5 nos.)' },
+] as const;
+
+export type DocKey = (typeof REQUIRED_DOCS)[number]['key'];
+
+export interface DocEntry {
+  submitted: boolean;
+  submittedOn: string;   // 'YYYY-MM-DD' or ''
+  returned: boolean;
+  returnedOn: string;    // 'YYYY-MM-DD' or ''
+  remarks: string;
+}
+
+export type DocRecord = Record<DocKey, DocEntry>;
+
+export interface StudentDocuments {
+  id: string;            // == studentId
+  studentId: string;
+  docs: Partial<DocRecord>;
+  updatedAt: string;
+}

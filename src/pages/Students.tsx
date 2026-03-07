@@ -9,7 +9,10 @@ import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
 import { generateAnsLetter } from '../utils/ansLetter';
-import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
+import { printStudentProfile } from '../utils/printProfile';
+import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
+import { MissingDocsModal } from '../components/documents/MissingDocsModal';
+import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const PAGE_SIZE = 100;
 
@@ -46,6 +49,7 @@ export function Students() {
     courseFilter,
     yearFilter,
     genderFilter,
+    categoryFilter,
     admTypeFilter,
     admCatFilter,
     admStatusFilter,
@@ -56,6 +60,7 @@ export function Students() {
   function setCourseFilter(v: Course | '') { setStudentsFilters({ courseFilter: v }); }
   function setYearFilter(v: Year | '') { setStudentsFilters({ yearFilter: v }); }
   function setGenderFilter(v: Gender | '') { setStudentsFilters({ genderFilter: v }); }
+  function setCategoryFilter(v: Category | '') { setStudentsFilters({ categoryFilter: v }); }
   function setAdmTypeFilter(v: AdmType | '') { setStudentsFilters({ admTypeFilter: v }); }
   function setAdmCatFilter(v: AdmCat | '') { setStudentsFilters({ admCatFilter: v }); }
   function setAdmStatusFilter(v: string) { setStudentsFilters({ admStatusFilter: v }); }
@@ -84,6 +89,9 @@ export function Students() {
   });
   const [deleting, setDeleting] = useState(false);
 
+  const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
+  const [showMissingDocs, setShowMissingDocs] = useState(false);
+
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
 
@@ -98,7 +106,7 @@ export function Students() {
     e.preventDefault();
     e.stopPropagation();
     const MENU_W = 190;
-    const MENU_H = 120;
+    const MENU_H = 190;
     const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
     const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
     setContextMenu({ x, y, student });
@@ -117,6 +125,7 @@ export function Students() {
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
+    if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
     if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
@@ -128,7 +137,8 @@ export function Students() {
           s.studentNameAadhar.toUpperCase().includes(search);
         const matchMobile =
           s.fatherMobile?.includes(search) || s.studentMobile?.includes(search);
-        return matchName || matchMobile;
+        const matchReg = s.regNumber?.toUpperCase().includes(search);
+        return matchName || matchMobile || matchReg;
       });
     }
     return result.slice().sort((a, b) => {
@@ -138,7 +148,7 @@ export function Students() {
       if (c !== 0) return c;
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
-  }, [allStudents, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter, debouncedSearch]);
+  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter, debouncedSearch]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -153,7 +163,7 @@ export function Students() {
 
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
 
   function clearFilters() {
     clearStudentsFilters();
@@ -339,7 +349,7 @@ export function Students() {
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
-            placeholder="Search name / mobile…"
+            placeholder="Search name / reg / mobile…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
@@ -362,6 +372,17 @@ export function Students() {
             <option value="">All Genders</option>
             <option value="BOY">BOY</option>
             <option value="GIRL">GIRL</option>
+          </select>
+          <select className={fs} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
+            <option value="">All Cats</option>
+            <option value="GM">GM</option>
+            <option value="SC">SC</option>
+            <option value="ST">ST</option>
+            <option value="C1">C1</option>
+            <option value="2A">2A</option>
+            <option value="2B">2B</option>
+            <option value="3A">3A</option>
+            <option value="3B">3B</option>
           </select>
           <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
             <option value="">All Adm Types</option>
@@ -389,6 +410,14 @@ export function Students() {
               className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
             >
               Clear Filters
+            </button>
+          )}
+          {!isLoading && allStudents.length > 0 && (
+            <button
+              onClick={() => setShowMissingDocs(true)}
+              className="rounded border border-purple-300 px-2 py-1.5 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 cursor-pointer transition-colors font-medium flex items-center gap-1"
+            >
+              📁 Doc Status
             </button>
           )}
           {!isLoading && filteredStudents.length > 0 && (
@@ -547,6 +576,20 @@ export function Students() {
           </div>
           <button
             className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
+          >
+            <span className="text-sm leading-none">📁</span>
+            Manage Documents
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { printStudentProfile(contextMenu.student); setContextMenu(null); }}
+          >
+            <span className="text-sm leading-none">🖨️</span>
+            Print Profile
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
             onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📄</span>
@@ -570,6 +613,21 @@ export function Students() {
           </button>
         </div>
       </>
+    )}
+
+    {docsModalStudent && (
+      <ManageDocumentsModal
+        student={docsModalStudent}
+        onClose={() => setDocsModalStudent(null)}
+      />
+    )}
+
+    {showMissingDocs && (
+      <MissingDocsModal
+        students={allStudents}
+        onManage={(student) => { setShowMissingDocs(false); setDocsModalStudent(student); }}
+        onClose={() => setShowMissingDocs(false)}
+      />
     )}
     </>
   );

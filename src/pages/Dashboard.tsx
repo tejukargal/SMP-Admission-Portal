@@ -6,7 +6,7 @@ import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
-import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
+import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -150,6 +150,7 @@ export function Dashboard() {
     courseFilter,
     yearFilter,
     genderFilter,
+    categoryFilter,
     admTypeFilter,
     admCatFilter,
     admStatusFilter,
@@ -159,6 +160,7 @@ export function Dashboard() {
   function setCourseFilter(v: Course | '') { setDashboardFilters({ courseFilter: v }); }
   function setYearFilter(v: Year | '') { setDashboardFilters({ yearFilter: v }); }
   function setGenderFilter(v: Gender | '') { setDashboardFilters({ genderFilter: v }); }
+  function setCategoryFilter(v: Category | '') { setDashboardFilters({ categoryFilter: v }); }
   function setAdmTypeFilter(v: AdmType | '') { setDashboardFilters({ admTypeFilter: v }); }
   function setAdmCatFilter(v: AdmCat | '') { setDashboardFilters({ admCatFilter: v }); }
   function setAdmStatusFilter(v: string) { setDashboardFilters({ admStatusFilter: v }); }
@@ -211,11 +213,12 @@ export function Dashboard() {
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
+    if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
     if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
     return result;
-  }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+  }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
   // Search results — uses pre-built index, runs only when debounced searchTerm changes
   const searchResults = useMemo(() => {
@@ -227,11 +230,12 @@ export function Dashboard() {
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
+    if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
     if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
     return result;
-  }, [isSearchMode, searchTerm, searchIndex, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+  }, [isSearchMode, searchTerm, searchIndex, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
   interface StudentGroup {
     key: string;
@@ -310,7 +314,7 @@ export function Dashboard() {
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
-    !!genderFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+    !!genderFilter || !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
 
   function clearFilters() {
     setInputValue('');
@@ -320,6 +324,7 @@ export function Dashboard() {
       courseFilter: '',
       yearFilter: '',
       genderFilter: '',
+      categoryFilter: '',
       admTypeFilter: '',
       admCatFilter: '',
       admStatusFilter: '',
@@ -453,6 +458,17 @@ export function Dashboard() {
             <option value="">Gender</option>
             <option value="BOY">BOY</option>
             <option value="GIRL">GIRL</option>
+          </select>
+          <select className={`${fs} w-[66px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
+            <option value="">Cat</option>
+            <option value="GM">GM</option>
+            <option value="SC">SC</option>
+            <option value="ST">ST</option>
+            <option value="C1">C1</option>
+            <option value="2A">2A</option>
+            <option value="2B">2B</option>
+            <option value="3A">3A</option>
+            <option value="3B">3B</option>
           </select>
           <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
             <option value="">Adm Type</option>

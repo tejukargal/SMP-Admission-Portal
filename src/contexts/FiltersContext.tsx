@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { Course, Year, Gender, AcademicYear, AdmType, AdmCat } from '../types';
+import type { Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const PAGE_SIZE = 100;
 
@@ -9,6 +9,7 @@ interface DashboardFilters {
   courseFilter: Course | '';
   yearFilter: Year | '';
   genderFilter: Gender | '';
+  categoryFilter: Category | '';
   admTypeFilter: AdmType | '';
   admCatFilter: AdmCat | '';
   admStatusFilter: string;
@@ -20,6 +21,7 @@ interface StudentsFilters {
   courseFilter: Course | '';
   yearFilter: Year | '';
   genderFilter: Gender | '';
+  categoryFilter: Category | '';
   admTypeFilter: AdmType | '';
   admCatFilter: AdmCat | '';
   admStatusFilter: string;
@@ -41,6 +43,7 @@ const defaultDashboard: DashboardFilters = {
   courseFilter: '',
   yearFilter: '',
   genderFilter: '',
+  categoryFilter: '',
   admTypeFilter: '',
   admCatFilter: '',
   admStatusFilter: '',
@@ -52,6 +55,7 @@ const defaultStudents: StudentsFilters = {
   courseFilter: '',
   yearFilter: '',
   genderFilter: '',
+  categoryFilter: '',
   admTypeFilter: '',
   admCatFilter: '',
   admStatusFilter: '',

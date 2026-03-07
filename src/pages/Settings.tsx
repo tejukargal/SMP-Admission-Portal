@@ -1,8 +1,9 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
-import { deleteStudentsByAcademicYear, deleteAllStudents } from '../services/studentService';
+import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear } from '../services/studentService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser } from '../services/userService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
@@ -78,6 +79,14 @@ export function Settings() {
   const [feeResetting, setFeeResetting] = useState(false);
   const [feeResetMsg, setFeeResetMsg] = useState('');
   const [feeResetErrorMsg, setFeeResetErrorMsg] = useState('');
+
+  // Document status reset modal state
+  const [docsResetOpen, setDocsResetOpen] = useState(false);
+  const [docsPasskey, setDocsPasskey] = useState('');
+  const [docsPasskeyError, setDocsPasskeyError] = useState('');
+  const [docsResetting, setDocsResetting] = useState(false);
+  const [docsResetMsg, setDocsResetMsg] = useState('');
+  const [docsResetErrorMsg, setDocsResetErrorMsg] = useState('');
 
   // Staff accounts state
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -221,6 +230,45 @@ export function Settings() {
     }
   }
 
+  function openDocsResetModal() {
+    setDocsPasskey('');
+    setDocsPasskeyError('');
+    setDocsResetMsg('');
+    setDocsResetErrorMsg('');
+    setDocsResetOpen(true);
+  }
+
+  function closeDocsResetModal() {
+    setDocsResetOpen(false);
+    setDocsPasskey('');
+    setDocsPasskeyError('');
+  }
+
+  async function handleDocsReset() {
+    if (docsPasskey !== RESET_PASSKEY) {
+      setDocsPasskeyError('Incorrect passkey. Please try again.');
+      return;
+    }
+    if (!currentValue) return;
+    setDocsPasskeyError('');
+    setDocsResetting(true);
+    try {
+      const students = await getStudentsByAcademicYear(currentValue as AcademicYear);
+      const ids = students.map((s) => s.id);
+      const count = await resetDocumentsByStudentIds(ids);
+      setDocsResetMsg(
+        count > 0
+          ? `Document records reset for ${count} student${count === 1 ? '' : 's'} in ${currentValue}.`
+          : `No students found for ${currentValue}.`
+      );
+      closeDocsResetModal();
+    } catch (err: unknown) {
+      setDocsResetErrorMsg(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setDocsResetting(false);
+    }
+  }
+
   // Load staff list when staff tab is opened
   useEffect(() => {
     if (activeTab !== 'staff') return;
@@ -343,14 +391,14 @@ export function Settings() {
                   Permanently delete student records. These actions cannot be undone.
                 </p>
 
-                {(resetMsg || fullResetMsg || feeResetMsg) && (
+                {(resetMsg || fullResetMsg || feeResetMsg || docsResetMsg) && (
                   <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2 mb-4">
-                    {resetMsg || fullResetMsg || feeResetMsg}
+                    {resetMsg || fullResetMsg || feeResetMsg || docsResetMsg}
                   </p>
                 )}
-                {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg) && (
+                {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg) && (
                   <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 mb-4">
-                    {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg}
+                    {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg}
                   </p>
                 )}
 
@@ -385,6 +433,17 @@ export function Settings() {
                       onClick={openFeeResetModal}
                     >
                       Reset Fee Register ({currentValue || '—'})
+                    </Button>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Document submission status — current year only</p>
+                    <Button
+                      variant="danger"
+                      disabled={!currentValue || loading}
+                      onClick={openDocsResetModal}
+                    >
+                      Reset Doc Status ({currentValue || '—'})
                     </Button>
                   </div>
                 </div>
@@ -605,6 +664,56 @@ export function Settings() {
               </Button>
               <Button variant="danger" onClick={() => { void handleFeeReset(); }} loading={feeResetting}>
                 Delete Fee Records
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Status Reset Passkey Modal */}
+      {docsResetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeDocsResetModal}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Reset Document Status</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This will clear{' '}
+              <span className="font-semibold text-red-600">all document submission records</span>{' '}
+              for students enrolled in{' '}
+              <span className="font-semibold">{currentValue}</span>, allowing a fresh start.
+              Student enrollment data is not affected. Enter the passkey to continue.
+            </p>
+
+            <label className="text-sm font-medium text-gray-700 block mb-1">Passkey</label>
+            <input
+              type="password"
+              value={docsPasskey}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setDocsPasskey(e.target.value);
+                setDocsPasskeyError('');
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { void handleDocsReset(); } }}
+              placeholder="Enter passkey"
+              className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm mb-1 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                docsPasskeyError ? 'border-red-500' : 'border-gray-300'
+              }`}
+              autoFocus
+            />
+            {docsPasskeyError && (
+              <p className="text-xs text-red-600 mb-3">{docsPasskeyError}</p>
+            )}
+            {!docsPasskeyError && <div className="mb-3" />}
+
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={closeDocsResetModal} disabled={docsResetting}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => { void handleDocsReset(); }} loading={docsResetting}>
+                Reset Doc Status
               </Button>
             </div>
           </div>
