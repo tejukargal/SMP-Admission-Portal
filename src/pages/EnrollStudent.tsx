@@ -7,7 +7,7 @@ import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } f
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
-import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, Religion, Category, AdmType, AdmCat } from '../types';
+import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, Religion, Category, AdmType, AdmCat, TenthBoard, PriorQualification } from '../types';
 
 const GENDER_OPTIONS = [
   { value: 'BOY', label: 'BOY' },
@@ -21,6 +21,19 @@ const RELIGION_OPTIONS = [
   { value: 'JAIN', label: 'JAIN' },
   { value: 'BUDDHIST', label: 'BUDDHIST' },
   { value: 'SIKH', label: 'SIKH' },
+];
+
+const TENTH_BOARD_OPTIONS = [
+  { value: 'SSLC',         label: 'SSLC' },
+  { value: 'CBSE',         label: 'CBSE' },
+  { value: 'ICSE',         label: 'ICSE' },
+  { value: 'OUT OF STATE', label: 'OUT OF STATE' },
+];
+
+const PRIOR_QUALIFICATION_OPTIONS = [
+  { value: 'NONE', label: 'None' },
+  { value: 'ITI',  label: 'ITI' },
+  { value: 'PUC',  label: 'PUC' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -192,6 +205,8 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
           <section>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">SSLC Marks</h3>
             <dl>
+              <PreviewRow label="10th Board" value={form.tenthBoard} />
+              <PreviewRow label="Prior Qualification" value={form.priorQualification} />
               <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
               <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
               <PreviewRow label="Science Max" value={form.scienceMax} />
@@ -249,6 +264,8 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     religion: '' as Religion,
     caste: '',
     category: 'GM' as Category,
+    tenthBoard: 'SSLC' as TenthBoard,
+    priorQualification: 'NONE' as PriorQualification,
     sslcMaxTotal: 625,
     sslcObtainedTotal: 0,
     scienceMax: 100,
@@ -295,6 +312,50 @@ export function EnrollStudent() {
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // Caste autocomplete
+  type CasteEntry = { caste: string; category: Category };
+  const casteIndexRef = useRef<CasteEntry[] | null>(null);
+  const casteSuggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [casteSuggestions, setCasteSuggestions] = useState<CasteEntry[]>([]);
+  const [casteOpen, setCasteOpen] = useState(false);
+
+  async function loadCasteIndex() {
+    if (casteIndexRef.current !== null) return;
+    const all = await getAllStudents();
+    const seen = new Set<string>();
+    const index: CasteEntry[] = [];
+    for (const s of all) {
+      const key = s.caste?.trim().toUpperCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        index.push({ caste: key, category: s.category });
+      }
+    }
+    casteIndexRef.current = index;
+  }
+
+  function handleCasteChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.toUpperCase();
+    handleFieldChange('caste', val);
+    if (casteSuggestTimer.current) clearTimeout(casteSuggestTimer.current);
+    if (!val.trim()) { setCasteSuggestions([]); setCasteOpen(false); return; }
+    casteSuggestTimer.current = setTimeout(() => {
+      const q = val.trim();
+      const index = casteIndexRef.current;
+      if (!index) { setCasteSuggestions([]); return; }
+      const matches = index.filter(item => item.caste.includes(q) && item.caste !== q).slice(0, 2);
+      setCasteSuggestions(matches);
+      setCasteOpen(matches.length > 0);
+    }, 150);
+  }
+
+  function handleCastePick(item: CasteEntry) {
+    handleFieldChange('caste', item.caste);
+    handleFieldChange('category', item.category);
+    setCasteSuggestions([]);
+    setCasteOpen(false);
+  }
 
   // Re-enroll from previous year
   const [prevQuery, setPrevQuery] = useState('');
@@ -386,11 +447,13 @@ export function EnrollStudent() {
           // Fetch all other enrollment records for this student (for history display + year conflict check)
           getAllStudents().then((all) => {
             const history = all
-              .filter(
-                (s) =>
-                  s.id !== editId &&
-                  s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase()
-              )
+              .filter((s) => {
+                if (s.id === editId) return false;
+                if (student.regNumber) {
+                  return s.regNumber?.toUpperCase() === student.regNumber.toUpperCase();
+                }
+                return s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase();
+              })
               .sort((a, b) => a.academicYear.localeCompare(b.academicYear));
             setEnrollmentHistory(history);
           }).catch(() => {});
@@ -449,9 +512,12 @@ export function EnrollStudent() {
 
   function handlePrevStudentSelect(student: Student) {
     // Find the most recent enrollment for this student across all cached previous years
-    const allRecords = (prevStudentsCache.current ?? []).filter(
-      (s) => s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase()
-    );
+    const allRecords = (prevStudentsCache.current ?? []).filter((s) => {
+      if (student.regNumber) {
+        return s.regNumber?.toUpperCase() === student.regNumber.toUpperCase();
+      }
+      return s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase();
+    });
     const latest = allRecords.sort((a, b) => {
       const yearA = parseInt(a.academicYear.split('-')[0], 10);
       const yearB = parseInt(b.academicYear.split('-')[0], 10);
@@ -492,9 +558,12 @@ export function EnrollStudent() {
       // Duplicate guard: check if student already enrolled in the target academic year
       if (prevSourceStudent && form.academicYear) {
         const existing = await getStudentsByAcademicYear(form.academicYear as AcademicYear);
-        const dup = existing.find(
-          (s) => s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase()
-        );
+        const dup = existing.find((s) => {
+          if (form.regNumber && s.regNumber) {
+            return s.regNumber.toUpperCase() === form.regNumber.toUpperCase();
+          }
+          return s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase();
+        });
         if (dup) {
           setErrorMsg(
             `${form.studentNameSSLC} is already enrolled in ${form.academicYear} (Merit No: ${dup.meritNumber})`
@@ -555,9 +624,12 @@ export function EnrollStudent() {
   // Called by the preview "Confirm & Enroll" button — checks year conflict for re-enroll before saving
   function handleConfirmEnroll() {
     if (prevSourceStudent && prevStudentsCache.current) {
-      const prevRecords = prevStudentsCache.current.filter(
-        (s) => s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase()
-      );
+      const prevRecords = prevStudentsCache.current.filter((s) => {
+        if (prevSourceStudent.regNumber) {
+          return s.regNumber?.toUpperCase() === prevSourceStudent.regNumber.toUpperCase();
+        }
+        return s.studentNameSSLC.toUpperCase() === form.studentNameSSLC.toUpperCase();
+      });
       const conflict = prevRecords.find((s) => s.year === form.year);
       if (conflict) {
         setYearConflictRecord(conflict);
@@ -621,13 +693,22 @@ export function EnrollStudent() {
               <p className="text-xs text-sky-600 mb-2">
                 Search by name or register number to pre-fill the form with an existing student's details.
               </p>
-              <input
-                type="text"
-                value={prevQuery}
-                onChange={(e) => setPrevQuery(e.target.value)}
-                placeholder="Type name or register number..."
-                className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={prevQuery}
+                  onChange={(e) => setPrevQuery(e.target.value)}
+                  placeholder="Type name or register number..."
+                  className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); setCasteSuggestions([]); setCasteOpen(false); }}
+                  className="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors"
+                >
+                  Reset Fields
+                </button>
+              </div>
               {prevSearching && (
                 <p className="text-xs text-sky-500 mt-1">Searching...</p>
               )}
@@ -739,14 +820,35 @@ export function EnrollStudent() {
                 error={displayErrors['religion']}
                 placeholder="Select religion"
               />
-              <Input
-                label="Caste"
-                value={form.caste}
-                onChange={handleTextChange('caste')}
-                error={displayErrors['caste']}
-                uppercase
-                placeholder="CASTE"
-              />
+              <div className="flex flex-col gap-1 relative">
+                <label className="text-sm font-medium text-gray-700">Caste Name</label>
+                <input
+                  type="text"
+                  value={form.caste}
+                  onChange={handleCasteChange}
+                  onFocus={() => void loadCasteIndex()}
+                  onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); setCasteOpen(false); }}
+                  placeholder="CASTE"
+                  style={{ textTransform: 'uppercase' }}
+                  className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${displayErrors['caste'] ? 'border-red-500' : 'border-gray-300'}`}
+                />
+                {displayErrors['caste'] && <p className="text-xs text-red-600">{displayErrors['caste']}</p>}
+                {casteOpen && (
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-md shadow-lg mt-0.5 overflow-hidden">
+                    {casteSuggestions.map((item) => (
+                      <button
+                        key={item.caste}
+                        type="button"
+                        onMouseDown={() => handleCastePick(item)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex justify-between items-center gap-2"
+                      >
+                        <span className="font-medium text-gray-800">{item.caste}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Select
                 label="Category"
                 options={CATEGORY_OPTIONS}
@@ -815,6 +917,22 @@ export function EnrollStudent() {
           </div>
           <div className="bg-amber-50 px-6 py-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-2">
+                <Select
+                  label="10th Board"
+                  options={TENTH_BOARD_OPTIONS}
+                  value={form.tenthBoard}
+                  onChange={handleSelectChange('tenthBoard')}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Select
+                  label="Prior Qualification"
+                  options={PRIOR_QUALIFICATION_OPTIONS}
+                  value={form.priorQualification}
+                  onChange={handleSelectChange('priorQualification')}
+                />
+              </div>
               <div className="lg:col-span-2">
                 <Input
                   label="SSLC Max Total"

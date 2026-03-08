@@ -349,105 +349,145 @@ export function Settings() {
         {/* ── General ── */}
         {activeTab === 'general' && (
           <div className="h-full overflow-auto">
-            <div className="max-w-lg">
+            <div className="max-w-xl space-y-5">
+
               {/* Academic Year */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-5">
-                <h3 className="text-base font-medium text-gray-800 mb-4">Academic Year</h3>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Academic Year</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Set the active academic year for all operations</p>
+                </div>
+                <div className="px-6 py-5">
+                  {loading ? (
+                    <p className="text-sm text-gray-500">Loading settings...</p>
+                  ) : (
+                    <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+                      <Select
+                        label="Current Academic Year"
+                        options={ACADEMIC_YEAR_OPTIONS}
+                        value={currentValue}
+                        onChange={(e) => setSelectedYear(e.target.value as AcademicYear)}
+                        placeholder="Select academic year"
+                      />
 
-                {loading ? (
-                  <p className="text-sm text-gray-500">Loading settings...</p>
-                ) : (
-                  <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
-                    <Select
-                      label="Current Academic Year"
-                      options={ACADEMIC_YEAR_OPTIONS}
-                      value={currentValue}
-                      onChange={(e) => setSelectedYear(e.target.value as AcademicYear)}
-                      placeholder="Select academic year"
-                    />
+                      {successMsg && (
+                        <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
+                          {successMsg}
+                        </p>
+                      )}
+                      {errorMsg && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                          {errorMsg}
+                        </p>
+                      )}
 
-                    {successMsg && (
-                      <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2">
-                        {successMsg}
-                      </p>
-                    )}
-                    {errorMsg && (
-                      <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">
-                        {errorMsg}
-                      </p>
-                    )}
-
-                    <Button type="submit" loading={saving} disabled={!currentValue}>
-                      Save Settings
-                    </Button>
-                  </form>
-                )}
+                      <Button type="submit" loading={saving} disabled={!currentValue}>
+                        Save Settings
+                      </Button>
+                    </form>
+                  )}
+                </div>
               </div>
 
               {/* Danger Zone */}
-              <div className="bg-white rounded-lg shadow-sm border border-red-200 p-6">
-                <h3 className="text-base font-medium text-red-700 mb-1">Danger Zone</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Permanently delete student records. These actions cannot be undone.
-                </p>
+              <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-red-100 bg-red-50/60">
+                  <h3 className="text-sm font-semibold text-red-700 uppercase tracking-wider">Danger Zone</h3>
+                  <p className="text-xs text-red-400 mt-0.5">These actions are irreversible — proceed with caution</p>
+                </div>
 
                 {(resetMsg || fullResetMsg || feeResetMsg || docsResetMsg) && (
-                  <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2 mb-4">
-                    {resetMsg || fullResetMsg || feeResetMsg || docsResetMsg}
-                  </p>
+                  <div className="px-6 pt-4">
+                    <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
+                      {resetMsg || fullResetMsg || feeResetMsg || docsResetMsg}
+                    </p>
+                  </div>
                 )}
                 {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg) && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2 mb-4">
-                    {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg}
-                  </p>
+                  <div className="px-6 pt-4">
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+                      {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg}
+                    </p>
+                  </div>
                 )}
 
-                <div className="flex flex-wrap gap-3">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Current academic year only</p>
+                <div className="divide-y divide-gray-100">
+                  {/* Year Data Reset */}
+                  <div className="flex items-center justify-between px-6 py-4 gap-6">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">Year Data Reset</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Delete all student records for <span className="font-medium text-gray-600">{currentValue || '—'}</span>
+                      </p>
+                    </div>
                     <Button
                       variant="danger"
+                      size="sm"
                       disabled={!currentValue || loading}
                       onClick={openResetModal}
+                      className="w-32 shrink-0"
                     >
-                      Year Data Reset ({currentValue || '—'})
+                      Reset {currentValue || '—'}
                     </Button>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">All academic years</p>
+                  {/* Fee Register Reset */}
+                  <div className="flex items-center justify-between px-6 py-4 gap-6">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">Reset Fee Register</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Delete fee records for <span className="font-medium text-gray-600">{currentValue || '—'}</span> — enrollment data unaffected
+                      </p>
+                    </div>
                     <Button
                       variant="danger"
-                      disabled={loading}
-                      onClick={openFullResetModal}
-                    >
-                      Full Data Reset
-                    </Button>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Fee records — current year only</p>
-                    <Button
-                      variant="danger"
+                      size="sm"
                       disabled={!currentValue || loading}
                       onClick={openFeeResetModal}
+                      className="w-32 shrink-0"
                     >
-                      Reset Fee Register ({currentValue || '—'})
+                      Reset {currentValue || '—'}
                     </Button>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Document submission status — current year only</p>
+                  {/* Document Status Reset */}
+                  <div className="flex items-center justify-between px-6 py-4 gap-6">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">Reset Document Status</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Clear document submission records for <span className="font-medium text-gray-600">{currentValue || '—'}</span>
+                      </p>
+                    </div>
                     <Button
                       variant="danger"
+                      size="sm"
                       disabled={!currentValue || loading}
                       onClick={openDocsResetModal}
+                      className="w-32 shrink-0"
                     >
-                      Reset Doc Status ({currentValue || '—'})
+                      Reset {currentValue || '—'}
+                    </Button>
+                  </div>
+
+                  {/* Full Reset — most destructive */}
+                  <div className="flex items-center justify-between px-6 py-4 gap-6 bg-red-50/40">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">Full Data Reset</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Permanently delete all student records across every academic year</p>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={loading}
+                      onClick={openFullResetModal}
+                      className="w-32 shrink-0"
+                    >
+                      Full Reset
                     </Button>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         )}

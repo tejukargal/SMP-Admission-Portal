@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
@@ -60,6 +60,27 @@ export function CollectFee() {
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
+
+  // Context menu
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number; y: number; student: Student; hasFeeRecord: boolean; isFullyPaid: boolean;
+  } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+  const closeCtx = useCallback(() => setCtxMenu(null), []);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function onDown(e: MouseEvent) {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) closeCtx();
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeCtx(); }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu, closeCtx]);
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords, loading: feeLoading, refetch: refetchFees } =
@@ -471,7 +492,14 @@ export function CollectFee() {
                 ) ?? null;
                 const isFullyPaid = allotted !== null && totalPaid >= allotted;
                 return (
-                  <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={student.id}
+                    className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, student, hasFeeRecord, isFullyPaid });
+                    }}
+                  >
                     <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
                       {student.studentNameSSLC}
@@ -576,6 +604,36 @@ export function CollectFee() {
           student={feeHistoryStudent}
           onClose={() => setFeeHistoryStudent(null)}
         />
+      )}
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[170px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+        >
+          <div className="px-3 py-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[200px]">
+            {ctxMenu.student.studentNameSSLC}
+          </div>
+          <button
+            disabled={ctxMenu.isFullyPaid}
+            className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700"
+            onClick={() => { setSelectedStudent(ctxMenu.student); closeCtx(); }}
+          >
+            <span className={`font-bold text-[10px] border rounded px-1 py-0.5 ${ctxMenu.hasFeeRecord ? 'text-amber-500 border-amber-300' : 'text-blue-500 border-blue-300'}`}>
+              {ctxMenu.isFullyPaid ? '✓' : '₹'}
+            </span>
+            {ctxMenu.isFullyPaid ? 'No Dues' : ctxMenu.hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
+          </button>
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 cursor-pointer"
+            onClick={() => { setFeeHistoryStudent(ctxMenu.student); closeCtx(); }}
+          >
+            <span className="text-gray-400 font-bold text-[10px] border border-gray-300 rounded px-1 py-0.5">≡</span>
+            Fee Details
+          </button>
+        </div>
       )}
     </div>
   );

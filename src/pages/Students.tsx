@@ -11,6 +11,7 @@ import { exportStudentsPdf } from '../utils/studentsPdf';
 import { generateAnsLetter } from '../utils/ansLetter';
 import { printStudentProfile } from '../utils/printProfile';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
+import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
@@ -91,6 +92,7 @@ export function Students() {
 
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
   const [showMissingDocs, setShowMissingDocs] = useState(false);
+  const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -128,7 +130,11 @@ export function Students() {
     if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
-    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
+    if (admStatusFilter) result = result.filter((s) =>
+      admStatusFilter === 'PENDING'
+        ? !['PROVISIONAL', 'CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+        : s.admissionStatus === admStatusFilter
+    );
     if (debouncedSearch) {
       const search = debouncedSearch.trim().toUpperCase();
       result = result.filter((s) => {
@@ -403,6 +409,7 @@ export function Students() {
             <option value="PROVISIONAL">PROVISIONAL</option>
             <option value="CONFIRMED">CONFIRMED</option>
             <option value="CANCELLED">CANCELLED</option>
+            <option value="PENDING">PENDING</option>
           </select>
           {hasActiveFilters && (
             <button
@@ -596,12 +603,11 @@ export function Students() {
             ANS Letter
           </button>
           <button
-            disabled
-            className="w-full text-left px-3 py-2 text-gray-300 flex items-center gap-2 cursor-not-allowed"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📋</span>
             Study Certificate
-            <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
           </button>
           <button
             disabled
@@ -627,6 +633,13 @@ export function Students() {
         students={allStudents}
         onManage={(student) => { setShowMissingDocs(false); setDocsModalStudent(student); }}
         onClose={() => setShowMissingDocs(false)}
+      />
+    )}
+
+    {studyCertStudent && (
+      <StudyCertificateModal
+        student={studyCertStudent}
+        onClose={() => setStudyCertStudent(null)}
       />
     )}
     </>

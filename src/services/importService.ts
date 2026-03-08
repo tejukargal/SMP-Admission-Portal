@@ -122,6 +122,8 @@ function rowToFormData(row: ImportRow): StudentFormData {
     religion: '' as Religion,
     caste: row.caste.trim().toUpperCase(),
     category: mapCategory(row.category),
+    tenthBoard: 'SSLC',
+    priorQualification: 'NONE',
     sslcMaxTotal: 625,
     sslcObtainedTotal: 0,
     scienceMax: 100,

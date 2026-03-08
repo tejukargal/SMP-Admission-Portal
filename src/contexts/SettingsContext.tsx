@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getSettings } from '../services/settingsService';
+import { getSettings, getCachedSettings } from '../services/settingsService';
 import type { AppSettings } from '../types';
 
 interface SettingsContextValue {
@@ -18,8 +18,10 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Initialise synchronously from module-level cache so pages that mount after
+  // the first load get academicYear immediately — no render-cycle waterfall.
+  const [settings, setSettings] = useState<AppSettings | null>(() => getCachedSettings());
+  const [loading, setLoading] = useState(() => getCachedSettings() === null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 

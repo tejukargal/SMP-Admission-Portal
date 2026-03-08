@@ -13,6 +13,11 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const SETTINGS_DOC_ID = 'app_settings';
 
+/** Synchronous read — returns cached value instantly if the TTL is still valid. */
+export function getCachedSettings(): AppSettings | null {
+  return cachedSettings && Date.now() - cacheTimestamp < CACHE_TTL_MS ? cachedSettings : null;
+}
+
 export async function getSettings(): Promise<AppSettings | null> {
   const now = Date.now();
   if (cachedSettings && now - cacheTimestamp < CACHE_TTL_MS) {

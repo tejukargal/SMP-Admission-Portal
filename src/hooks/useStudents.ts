@@ -14,7 +14,9 @@ export function useStudents(
   filters: StudentFilters = {}
 ): UseStudentsResult {
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start in loading state when academicYear is already available on mount
+  // so there's no false flash of empty content before the fetch begins.
+  const [loading, setLoading] = useState(() => academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 

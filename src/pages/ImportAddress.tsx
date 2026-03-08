@@ -5,7 +5,33 @@ import { importAddresses, type AddressRow, type AddressImportResult } from '../s
 
 type PageState = 'idle' | 'preview' | 'importing' | 'done';
 
-const EXPECTED_COLUMNS = ['Name', 'Reg No', 'Address', 'Academic Year'];
+// Columns required for matching rows to students
+const REQUIRED_COLUMNS = ['Name', 'Reg No', 'Academic Year'];
+
+// Convert Excel date serial number to DD/MM/YYYY string
+function excelSerialToDDMMYYYY(serial: number): string {
+  // 25569 = days between Excel epoch (1900-01-01) and Unix epoch (1970-01-01),
+  // accounting for Excel's phantom leap day bug (day 60 = Feb 29, 1900)
+  const date = new Date(Math.round((serial - 25569) * 86400000));
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const y = date.getUTCFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+// Normalise a DOB value from Excel into DD/MM/YYYY (the app's storage format)
+function parseDOB(raw: string | number | null): string {
+  if (!raw && raw !== 0) return '';
+  if (typeof raw === 'number') return excelSerialToDDMMYYYY(raw);
+  const s = String(raw).trim();
+  if (!s) return '';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;                       // already DD/MM/YYYY
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;                       // YYYY-MM-DD → DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmy) return `${dmy[1].padStart(2,'0')}/${dmy[2].padStart(2,'0')}/${dmy[3]}`; // DD-MM-YYYY
+  return s; // return as-is if unrecognised — let the user notice in preview
+}
 
 function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[] }> {
   return new Promise((resolve, reject) => {
@@ -31,15 +57,18 @@ function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[
           return keys.find((k) => k.trim().toLowerCase() === target.trim().toLowerCase());
         }
 
-        const missing = EXPECTED_COLUMNS.filter((c) => !findCol(c));
+        // Only warn about columns needed for matching
+        const missing = REQUIRED_COLUMNS.filter((c) => !findCol(c));
         if (missing.length > 0) {
-          warnings.push(`Missing columns: ${missing.join(', ')}`);
+          warnings.push(`Missing required columns: ${missing.join(', ')}`);
         }
 
-        const colName = findCol('Name') ?? '';
-        const colReg = findCol('Reg No') ?? '';
-        const colAddress = findCol('Address') ?? '';
-        const colYear = findCol('Academic Year') ?? '';
+        const colName       = findCol('Name') ?? '';
+        const colReg        = findCol('Reg No') ?? '';
+        const colAddress    = findCol('Address') ?? '';
+        const colMotherName = findCol('Mother Name') ?? '';
+        const colDOB        = findCol('DOB') ?? '';
+        const colYear       = findCol('Academic Year') ?? '';
 
         for (let i = 0; i < raw.length; i++) {
           const r = raw[i];
@@ -52,7 +81,9 @@ function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[
           rows.push({
             name,
             regNumber: regRaw.toUpperCase(),
-            address: String(r[colAddress] ?? '').trim(),
+            address: colAddress ? String(r[colAddress] ?? '').trim() : '',
+            motherName: colMotherName ? String(r[colMotherName] ?? '').trim().toUpperCase() : '',
+            dateOfBirth: colDOB ? parseDOB(r[colDOB]) : '',
             academicYear: String(r[colYear] ?? '').trim(),
           });
         }
@@ -136,8 +167,8 @@ export function ImportAddress() {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900">Import Address</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Update student address fields in bulk from an Excel file. Students are matched by
-          Register Number and Academic Year.
+          Update student Address, Mother Name, and Date of Birth in bulk from an Excel file.
+          Students are matched by Register Number and Academic Year.
         </p>
       </div>
 
@@ -172,10 +203,20 @@ export function ImportAddress() {
           )}
 
           <div className="mt-5 text-sm text-gray-500">
-            <p className="font-medium text-gray-700 mb-1">Expected columns:</p>
-            <p className="font-mono text-xs bg-gray-50 rounded p-2 leading-relaxed">
-              {EXPECTED_COLUMNS.join(' · ')}
-            </p>
+            <p className="font-medium text-gray-700 mb-1">Column reference:</p>
+            <div className="bg-gray-50 rounded p-3 space-y-1">
+              <p className="text-xs">
+                <span className="font-semibold text-gray-700">Required (for matching):</span>{' '}
+                <span className="font-mono">{REQUIRED_COLUMNS.join(' · ')}</span>
+              </p>
+              <p className="text-xs">
+                <span className="font-semibold text-gray-700">Optional (update fields):</span>{' '}
+                <span className="font-mono">Address · Mother Name · DOB</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                DOB accepted as Excel date, DD/MM/YYYY, or YYYY-MM-DD.
+              </p>
+            </div>
           </div>
         </section>
       )}
@@ -197,7 +238,7 @@ export function ImportAddress() {
               </button>
             </div>
 
-            <div className="flex items-center gap-6 mb-5">
+            <div className="flex items-center gap-6 mb-5 flex-wrap">
               <div className="text-center">
                 <p className="text-3xl font-bold text-blue-600">{rows.length}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Total Rows</p>
@@ -207,6 +248,18 @@ export function ImportAddress() {
                   {rows.filter((r) => r.address).length}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">With Address</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-gray-700">
+                  {rows.filter((r) => r.motherName).length}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">With Mother Name</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-gray-700">
+                  {rows.filter((r) => r.dateOfBirth).length}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">With DOB</p>
               </div>
             </div>
 
@@ -228,7 +281,9 @@ export function ImportAddress() {
                       <th className="pb-2 pr-4 font-medium">Name</th>
                       <th className="pb-2 pr-4 font-medium">Reg No</th>
                       <th className="pb-2 pr-4 font-medium">Academic Year</th>
-                      <th className="pb-2 font-medium">Address</th>
+                      <th className="pb-2 pr-4 font-medium">Address</th>
+                      <th className="pb-2 pr-4 font-medium">Mother Name</th>
+                      <th className="pb-2 font-medium">DOB</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -237,7 +292,9 @@ export function ImportAddress() {
                         <td className="py-1.5 pr-4 text-gray-700">{r.name}</td>
                         <td className="py-1.5 pr-4 font-mono text-gray-600">{r.regNumber}</td>
                         <td className="py-1.5 pr-4 text-gray-500">{r.academicYear}</td>
-                        <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.address || '—'}</td>
+                        <td className="py-1.5 pr-4 text-gray-500 max-w-[10rem] truncate">{r.address || '—'}</td>
+                        <td className="py-1.5 pr-4 text-gray-500">{r.motherName || '—'}</td>
+                        <td className="py-1.5 text-gray-500">{r.dateOfBirth || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -248,7 +305,7 @@ export function ImportAddress() {
 
           <div className="flex gap-3">
             <Button size="lg" onClick={() => { void handleImport(); }}>
-              Update {rows.filter((r) => r.address).length} Addresses
+              Update {rows.filter((r) => r.address || r.motherName || r.dateOfBirth).length} Records
             </Button>
             <Button size="lg" variant="secondary" onClick={handleReset}>
               Cancel
@@ -260,7 +317,7 @@ export function ImportAddress() {
       {/* Progress section */}
       {pageState === 'importing' && (
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-800 mb-4">Updating addresses...</h3>
+          <h3 className="text-base font-semibold text-gray-800 mb-4">Updating records...</h3>
 
           <p className="text-sm text-gray-600 mb-3">
             Processing {progress.current} of {progress.total}
@@ -302,7 +359,7 @@ export function ImportAddress() {
 
           {result.notFound === 0 && result.updated > 0 && (
             <p className="text-sm text-green-700 bg-green-50 rounded-md px-4 py-3 mb-4">
-              All {result.updated} addresses updated successfully.
+              All {result.updated} records updated successfully.
             </p>
           )}
 

@@ -15,6 +15,8 @@ export type Course = 'CE' | 'ME' | 'EC' | 'CS' | 'EE';
 export type Year = '1ST YEAR' | '2ND YEAR' | '3RD YEAR';
 export type AdmType = 'REGULAR' | 'REPEATER' | 'LATERAL' | 'EXTERNAL' | 'SNQ';
 export type AdmCat = 'GM' | 'SNQ' | 'OTHERS';
+export type TenthBoard = 'SSLC' | 'CBSE' | 'ICSE' | 'OUT OF STATE';
+export type PriorQualification = 'NONE' | 'ITI' | 'PUC';
 export type AcademicYear =
   | '2012-13' | '2013-14' | '2014-15' | '2015-16' | '2016-17' | '2017-18'
   | '2018-19' | '2019-20' | '2020-21' | '2021-22' | '2022-23' | '2023-24'
@@ -31,6 +33,8 @@ export interface Student {
   religion: Religion;
   caste: string;
   category: Category;
+  tenthBoard: TenthBoard;
+  priorQualification: PriorQualification;
   sslcMaxTotal: number;
   sslcObtainedTotal: number;
   scienceMax: number;

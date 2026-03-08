@@ -7,6 +7,8 @@ export interface AddressRow {
   name: string;
   regNumber: string;
   address: string;
+  motherName: string;
+  dateOfBirth: string;
   academicYear: string;
 }
 
@@ -42,12 +44,14 @@ export async function importAddresses(
   }
 
   // Match each row against the lookup map
-  const updates: { docId: string; address: string }[] = [];
+  const updates: { docId: string; address: string; motherName: string; dateOfBirth: string }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const reg = row.regNumber.trim().toUpperCase();
     const address = row.address.trim();
+    const motherName = row.motherName.trim();
+    const dateOfBirth = row.dateOfBirth.trim();
     const ay = row.academicYear.trim();
 
     if (!reg || !ay) {
@@ -55,7 +59,8 @@ export async function importAddresses(
       continue;
     }
 
-    if (!address) {
+    // Skip only if all updatable fields are blank
+    if (!address && !motherName && !dateOfBirth) {
       result.skipped++;
       continue;
     }
@@ -71,7 +76,7 @@ export async function importAddresses(
       continue;
     }
 
-    updates.push({ docId, address });
+    updates.push({ docId, address, motherName, dateOfBirth });
   }
 
   // Batch-write updates in chunks of 200
@@ -83,11 +88,12 @@ export async function importAddresses(
     const batch = writeBatch(db);
     const now = new Date().toISOString();
 
-    for (const { docId, address } of chunk) {
-      batch.update(doc(db, STUDENTS_COLLECTION, docId), {
-        address,
-        updatedAt: now,
-      });
+    for (const { docId, address, motherName, dateOfBirth } of chunk) {
+      const fields: Record<string, string> = { updatedAt: now };
+      if (address) fields.address = address;
+      if (motherName) fields.motherName = motherName;
+      if (dateOfBirth) fields.dateOfBirth = dateOfBirth;
+      batch.update(doc(db, STUDENTS_COLLECTION, docId), fields);
     }
 
     await batch.commit();

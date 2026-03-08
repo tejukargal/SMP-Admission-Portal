@@ -6,6 +6,7 @@ import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
+import { exportSummaryReport, exportCategoryReport } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -249,7 +250,7 @@ export function Dashboard() {
   const studentGroups = useMemo((): StudentGroup[] => {
     const map = new Map<string, StudentGroup>();
     for (const s of searchResults) {
-      const key = `${s.studentNameSSLC}|${s.dateOfBirth}`;
+      const key = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
       if (!map.has(key)) {
         map.set(key, { key, nameSSLC: s.studentNameSSLC, nameAadhar: s.studentNameAadhar, dob: s.dateOfBirth, gender: s.gender, records: [] });
       }
@@ -263,9 +264,11 @@ export function Dashboard() {
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const total = filteredStudents.length;
-    const boys  = filteredStudents.filter((s) => s.gender === 'BOY').length;
-    const girls = filteredStudents.filter((s) => s.gender === 'GIRL').length;
+    const confirmed = filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+
+    const total = confirmed.length;
+    const boys  = confirmed.filter((s) => s.gender === 'BOY').length;
+    const girls = confirmed.filter((s) => s.gender === 'GIRL').length;
 
     const byCourse: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
     const byYear:   Record<Year,   number> = { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 };
@@ -285,18 +288,57 @@ export function Dashboard() {
       '3RD YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
     };
 
+    // byStatus counts all filtered students (not just confirmed)
     for (const s of filteredStudents) {
-      if (s.course in byCourse) byCourse[s.course]++;
-      if (s.year   in byYear)   byYear[s.year]++;
       const status = s.admissionStatus?.trim() || 'PENDING';
       if (status in byStatus) byStatus[status]++;
       else byStatus['PENDING']++;
+    }
+
+    // Per-year-per-course breakdown for the report-style tables
+    type SCell = { regular: number; ltrl: number; snq: number; rptr: number };
+    type CCell = { gm: number; c1: number; twoA: number; twoB: number; threeA: number; threeB: number; sc: number; st: number };
+    const summaryTable: Record<string, Record<string, SCell>> = {};
+    const catTable:     Record<string, Record<string, CCell>> = {};
+    for (const yr of ['1ST YEAR', '2ND YEAR', '3RD YEAR']) {
+      summaryTable[yr] = {};
+      catTable[yr] = {};
+      for (const c of ['CE', 'ME', 'EC', 'CS', 'EE']) {
+        summaryTable[yr][c] = { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+        catTable[yr][c]     = { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0 };
+      }
+    }
+
+    for (const s of confirmed) {
+      if (s.course in byCourse) byCourse[s.course]++;
+      if (s.year   in byYear)   byYear[s.year]++;
       if (s.admType in byAdmType) byAdmType[s.admType]++;
       if (s.course in byCourseByYear && s.year in byCourseByYear[s.course]) byCourseByYear[s.course][s.year]++;
       if (s.year in byYearByCourse && s.course in byYearByCourse[s.year]) byYearByCourse[s.year][s.course]++;
+
+      if (s.year in summaryTable && s.course in summaryTable[s.year]) {
+        const sc = summaryTable[s.year][s.course];
+        if (s.admCat === 'SNQ')            sc.snq++;
+        else if (s.admType === 'LATERAL')  sc.ltrl++;
+        else if (s.admType === 'REPEATER') sc.rptr++;
+        else                               sc.regular++;
+      }
+      if (s.year in catTable && s.course in catTable[s.year]) {
+        const cc = catTable[s.year][s.course];
+        switch (s.category) {
+          case 'GM':  cc.gm++; break;
+          case 'C1':  cc.c1++; break;
+          case '2A': cc.twoA++; break;
+          case '2B': cc.twoB++; break;
+          case '3A': cc.threeA++; break;
+          case '3B': cc.threeB++; break;
+          case 'SC': cc.sc++; break;
+          case 'ST': cc.st++; break;
+        }
+      }
     }
 
-    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, byCourseByYear, byYearByCourse };
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse };
   }, [filteredStudents]);
 
   // Year-chips stats — per-academic-year counts from active source
@@ -373,9 +415,29 @@ export function Dashboard() {
               : `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
           </p>
         </div>
-        <Button size="sm" onClick={() => void navigate('/enroll')}>
-          + Enroll Student
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {!isSearchMode && academicYearFilter && !loading && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter), academicYearFilter)}
+              >
+                Summary PDF
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => exportCategoryReport(allStudents.filter((s) => s.academicYear === academicYearFilter), academicYearFilter)}
+              >
+                Category PDF
+              </Button>
+            </>
+          )}
+          <Button size="sm" onClick={() => void navigate('/enroll')}>
+            + Enroll Student
+          </Button>
+        </div>
       </div>
 
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
@@ -699,6 +761,131 @@ export function Dashboard() {
                   { label: 'SNQ',      value: stats.byAdmType['SNQ'],      dotClass: 'bg-gray-400',   barClass: 'bg-gray-400'   },
                 ]}
               />
+            </div>
+
+            {/* Report-style tables */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+              {/* Category Report table */}
+              {(() => {
+                const catRows = YEARS.flatMap((yr) => {
+                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  const sub = { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 };
+                  const courseRows = COURSES.map((course) => {
+                    const c = stats.catTable[yr]?.[course] ?? { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0 };
+                    const total = c.gm + c.c1 + c.twoA + c.twoB + c.threeA + c.threeB + c.sc + c.st;
+                    sub.gm += c.gm; sub.c1 += c.c1; sub.twoA += c.twoA; sub.twoB += c.twoB; sub.threeA += c.threeA;
+                    sub.threeB += c.threeB; sub.sc += c.sc; sub.st += c.st; sub.total += total;
+                    return { yrLabel, course, ...c, total, isSubtotal: false };
+                  });
+                  return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
+                });
+                const grand = catRows.filter((r) => r.isSubtotal).reduce(
+                  (acc, r) => ({ gm: acc.gm + r.gm, c1: acc.c1 + r.c1, twoA: acc.twoA + r.twoA, twoB: acc.twoB + r.twoB,
+                    threeA: acc.threeA + r.threeA, threeB: acc.threeB + r.threeB, sc: acc.sc + r.sc, st: acc.st + r.st, total: acc.total + r.total }),
+                  { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 }
+                );
+                const tc = 'px-2 py-1 text-right tabular-nums';
+                const tl = 'px-2 py-1 text-left';
+                return (
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-gray-100">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Category-wise Count</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] border-collapse">
+                        <thead>
+                          <tr className="bg-blue-600 text-white">
+                            {['Year','Course','GM','C1','2A','2B','3A','3B','SC','ST','Total'].map((h) => (
+                              <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap first:text-left text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {catRows.map((r, i) => r.isSubtotal ? (
+                            <tr key={i} className="bg-blue-500 text-white font-semibold">
+                              <td className={tl}>{r.yrLabel}</td>
+                              <td className={tl}>{r.course}</td>
+                              {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                            </tr>
+                          ) : (
+                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className={tl + ' text-gray-500'}>{r.yrLabel}</td>
+                              <td className={tl + ' font-medium text-gray-700'}>{r.course}</td>
+                              {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                            </tr>
+                          ))}
+                          <tr className="bg-blue-800 text-white font-bold">
+                            <td className={tl}>GRAND TOTAL</td>
+                            <td className={tl}></td>
+                            {[grand.gm, grand.c1, grand.twoA, grand.twoB, grand.threeA, grand.threeB, grand.sc, grand.st, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Summary Report table */}
+              {(() => {
+                const sumRows = YEARS.flatMap((yr) => {
+                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  const sub = { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 };
+                  const courseRows = COURSES.map((course) => {
+                    const c = stats.summaryTable[yr]?.[course] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+                    const total = c.regular + c.ltrl + c.snq + c.rptr;
+                    sub.regular += c.regular; sub.ltrl += c.ltrl; sub.snq += c.snq; sub.rptr += c.rptr; sub.total += total;
+                    return { yrLabel, course, ...c, total, isSubtotal: false };
+                  });
+                  return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
+                });
+                const grand = sumRows.filter((r) => r.isSubtotal).reduce(
+                  (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
+                  { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
+                );
+                const tc = 'px-2 py-1 text-right tabular-nums';
+                const tl = 'px-2 py-1 text-left';
+                return (
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-gray-100">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Admission Type-wise Count</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] border-collapse">
+                        <thead>
+                          <tr className="bg-blue-600 text-white">
+                            {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h) => (
+                              <th key={h} className="px-2 py-1.5 font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sumRows.map((r, i) => r.isSubtotal ? (
+                            <tr key={i} className="bg-blue-500 text-white font-semibold">
+                              <td className={tl}>{r.yrLabel}</td>
+                              <td className={tl}>{r.course}</td>
+                              {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                            </tr>
+                          ) : (
+                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className={tl + ' text-gray-500'}>{r.yrLabel}</td>
+                              <td className={tl + ' font-medium text-gray-700'}>{r.course}</td>
+                              {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                            </tr>
+                          ))}
+                          <tr className="bg-blue-800 text-white font-bold">
+                            <td className={tl}>GRAND TOTAL</td>
+                            <td className={tl}></td>
+                            {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
             </div>
 
           </div>

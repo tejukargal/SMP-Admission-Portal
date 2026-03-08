@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { deleteFeeRecord } from '../services/feeRecordService';
@@ -6,6 +6,7 @@ import { FeeEditModal } from '../components/fee/FeeEditModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
+import { generateSMPReceipt, generateSVKReceipt } from '../utils/feeReceipts';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -69,6 +70,26 @@ export function FeeRegister() {
   const [deleteTarget, setDeleteTarget] = useState<FeeRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Context menu
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; record: FeeRecord } | null>(null);
+  const ctxRef = useRef<HTMLDivElement>(null);
+
+  const closeCtx = useCallback(() => setCtxMenu(null), []);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function onDown(e: MouseEvent) {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) closeCtx();
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeCtx(); }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu, closeCtx]);
 
   // Default to current academic year once settings load
   useEffect(() => {
@@ -367,7 +388,14 @@ export function FeeRegister() {
                 const svkTotal = calcSVKTotal(record);
                 const total = smpTotal + svkTotal;
                 return (
-                  <tr key={record.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={record.id}
+                    className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, record });
+                    }}
+                  >
                     <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap">{record.studentName}</td>
                     <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.fatherName}</td>
@@ -525,6 +553,39 @@ export function FeeRegister() {
           onSaved={() => { refetch(); setEditRecord(null); }}
         />
       )}
+
+      {/* Context menu */}
+      {ctxMenu && (() => {
+        const smp = calcSMPTotal(ctxMenu.record);
+        const svk = calcSVKTotal(ctxMenu.record);
+        return (
+          <div
+            ref={ctxRef}
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[170px]"
+            style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          >
+            <div className="px-3 py-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[200px]">
+              {ctxMenu.record.studentName}
+            </div>
+            <button
+              disabled={smp === 0}
+              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700 enabled:cursor-pointer"
+              onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className="text-blue-500 font-bold text-[10px] border border-blue-300 rounded px-1 py-0.5">SMP</span>
+              SMP Receipt
+            </button>
+            <button
+              disabled={svk === 0}
+              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-purple-50 enabled:hover:text-purple-700 enabled:cursor-pointer"
+              onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className="text-purple-500 font-bold text-[10px] border border-purple-300 rounded px-1 py-0.5">SVK</span>
+              SVK Receipt
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Delete confirmation */}
       {deleteTarget && (
