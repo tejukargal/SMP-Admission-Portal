@@ -21,6 +21,9 @@ const FeeRegister = lazy(() =>
 const FeeReportsPage = lazy(() =>
   import('./pages/FeeReportsPage').then((m) => ({ default: m.FeeReportsPage }))
 );
+const ExamFee = lazy(() =>
+  import('./pages/ExamFee').then((m) => ({ default: m.ExamFee }))
+);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -56,6 +59,7 @@ function AppRoutes() {
           element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
         />
         <Route path="/fee-register" element={<FeeRegister />} />
+        <Route path="/exam-fee" element={<ExamFee />} />
         <Route
           path="/fee-reports"
           element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}

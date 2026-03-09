@@ -195,3 +195,14 @@ export interface StudentDocuments {
   docs: Partial<DocRecord>;
   updatedAt: string;
 }
+
+// ─── Exam Fee ─────────────────────────────────────────────────────────────────
+
+/** Exam fee payment status per student per academic year */
+export interface ExamFeeRecord {
+  id: string;            // `${studentId}__${academicYear}`
+  studentId: string;
+  academicYear: AcademicYear;
+  paid: boolean;
+  updatedAt: string;
+}
