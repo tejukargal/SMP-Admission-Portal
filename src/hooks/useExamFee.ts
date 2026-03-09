@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getExamFeeRecords } from '../services/examFeeService';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import type { ExamFeeRecord, AcademicYear } from '../types';
 
 interface UseExamFeeResult {
@@ -18,29 +19,30 @@ export function useExamFee(academicYear: AcademicYear | null): UseExamFeeResult 
   useEffect(() => {
     if (!academicYear) {
       setRecords([]);
+      setLoading(false);
       return;
     }
-    let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getExamFeeRecords(academicYear)
-      .then((data) => {
-        if (!cancelled) {
-          setRecords(data);
-          setLoading(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load exam fee records');
-          setLoading(false);
-        }
-      });
+    const q = query(
+      collection(db, 'examFeeRecords'),
+      where('academicYear', '==', academicYear)
+    );
 
-    return () => {
-      cancelled = true;
-    };
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ExamFeeRecord)));
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
   }, [academicYear, tick]);
 
   function refetch() {

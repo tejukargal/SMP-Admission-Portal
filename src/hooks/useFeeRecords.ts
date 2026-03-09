@@ -1,29 +1,41 @@
 import { useState, useEffect } from 'react';
-import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import type { FeeRecord, AcademicYear } from '../types';
 
 export function useFeeRecords(academicYear: AcademicYear | null) {
   const [records, setRecords] = useState<FeeRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!academicYear) {
       setRecords([]);
+      setLoading(false);
       return;
     }
-    let cancelled = false;
     setLoading(true);
     setError(null);
-    getFeeRecordsByAcademicYear(academicYear)
-      .then((data) => { if (!cancelled) setRecords(data); })
-      .catch((err: unknown) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : 'Failed to load fee records');
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+
+    const q = query(
+      collection(db, 'feeRecords'),
+      where('academicYear', '==', academicYear)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord)));
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
   }, [academicYear, tick]);
 
   function refetch() { setTick((t) => t + 1); }

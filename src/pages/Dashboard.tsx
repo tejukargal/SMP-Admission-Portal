@@ -135,6 +135,56 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── Loading gate ────────────────────────────────────────────────────────────
+function LoadingGate() {
+  return (
+    <div className="h-full flex flex-col gap-3 overflow-hidden" style={{ animation: 'page-enter 0.22s ease-out' }}>
+      {/* Ghost header */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-4">
+        <div className="flex-1 h-10 bg-white rounded-lg border border-gray-100 animate-pulse" />
+        <div className="w-28 h-8 bg-white rounded-lg border border-gray-100 animate-pulse" />
+      </div>
+      {/* Ghost year chips */}
+      <div className="flex-shrink-0 flex gap-2">
+        {[80, 96, 80, 80, 80].map((w, i) => (
+          <div key={i} className="h-7 bg-white rounded border border-gray-100 animate-pulse" style={{ width: w }} />
+        ))}
+      </div>
+      {/* Ghost filter bar */}
+      <div className="flex-shrink-0 h-9 bg-white rounded-lg border border-gray-100 animate-pulse" />
+      {/* Skeleton stat cards mirroring dashboard layout */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="space-y-5">
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-2 rounded-xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
+            <div className="rounded-xl border border-blue-200 bg-blue-50 h-24 animate-pulse" />
+            <div className="rounded-xl border border-pink-200 bg-pink-50 h-24 animate-pulse" />
+          </div>
+          <div className="space-y-2.5">
+            <div className="h-3.5 w-20 bg-gray-100 rounded animate-pulse" />
+            <div className="grid grid-cols-5 gap-3">
+              <div className="rounded-xl border border-orange-200 bg-orange-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-rose-200 bg-rose-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-violet-200 bg-violet-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-amber-200 bg-amber-50 h-20 animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            <div className="h-3.5 w-28 bg-gray-100 rounded animate-pulse" />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-teal-200 bg-teal-50 h-20 animate-pulse" />
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 h-20 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 export function Dashboard() {
   const navigate = useNavigate();
@@ -392,6 +442,8 @@ export function Dashboard() {
     '3RD YEAR': { label: '3rd Year', bg: 'bg-emerald-50', border: 'border-emerald-200', textColor: 'text-emerald-700', barFill: 'bg-emerald-400' },
   };
 
+  if (loading) return <LoadingGate />;
+
   return (
     <>
     <div className="h-full flex flex-col gap-3">
@@ -410,13 +462,11 @@ export function Dashboard() {
             </span>
           </div>
           <p className="text-xs text-gray-400 mt-0.5">
-            {loading
-              ? 'Loading…'
-              : `${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
+            {`${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {!isSearchMode && academicYearFilter && !loading && (
+          {!isSearchMode && academicYearFilter && (
             <>
               <Button
                 variant="secondary"
@@ -441,7 +491,7 @@ export function Dashboard() {
       </div>
 
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
-      {!loading && allStudents.length > 0 && (
+      {allStudents.length > 0 && (
         <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {/* Total chip */}
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
@@ -564,11 +614,7 @@ export function Dashboard() {
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-          Loading students…
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
       ) : isSearchMode ? (
 

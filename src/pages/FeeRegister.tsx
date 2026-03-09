@@ -56,6 +56,19 @@ function sortRecords(records: FeeRecord[]): FeeRecord[] {
   });
 }
 
+function LoadingGate() {
+  return (
+    <div className="h-full flex items-center justify-center" style={{ animation: 'page-enter 0.22s ease-out' }}>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-12 py-10 w-96 flex flex-col items-center text-center">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Fee Register</h2>
+        <p className="text-xs text-gray-400 mb-6">Loading fee records…</p>
+        <p className="text-sm font-medium text-gray-700">Thejaraj R</p>
+        <p className="text-[10px] text-gray-400">Developer</p>
+      </div>
+    </div>
+  );
+}
+
 export function FeeRegister() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
@@ -196,6 +209,8 @@ export function FeeRegister() {
 
   const isLoading = settingsLoading || recordsLoading;
 
+  if (isLoading) return <LoadingGate />;
+
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
@@ -283,11 +298,7 @@ export function FeeRegister() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Loading fee records…
-        </div>
-      ) : !selectedYear ? (
+      {!selectedYear ? (
         <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
           Select an academic year to view the fee register.
         </div>

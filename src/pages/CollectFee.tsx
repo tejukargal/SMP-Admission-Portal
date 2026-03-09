@@ -42,6 +42,19 @@ function AnimNum({ value }: { value: number }) {
 }
 
 
+function LoadingGate() {
+  return (
+    <div className="h-full flex items-center justify-center" style={{ animation: 'page-enter 0.22s ease-out' }}>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-12 py-10 w-96 flex flex-col items-center text-center">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Collect Fee</h2>
+        <p className="text-xs text-gray-400 mb-6">Loading student data…</p>
+        <p className="text-sm font-medium text-gray-700">Thejaraj R</p>
+        <p className="text-[10px] text-gray-400">Developer</p>
+      </div>
+    </div>
+  );
+}
+
 export function CollectFee() {
 
   const { settings, loading: settingsLoading } = useSettings();
@@ -222,6 +235,8 @@ export function CollectFee() {
 
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
+  if (isLoading) return <LoadingGate />;
+
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
@@ -234,7 +249,7 @@ export function CollectFee() {
           )}
         </div>
 
-        {!isLoading && stats && (
+        {stats && (
           <>
             <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
@@ -454,11 +469,7 @@ export function CollectFee() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Loading students…
-        </div>
-      ) : !academicYear ? (
+      {!academicYear ? (
         <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
           Please configure an academic year in Settings first.
         </div>
@@ -543,7 +554,7 @@ export function CollectFee() {
                           variant="secondary"
                           size="sm"
                           disabled
-                          className="bg-green-50 text-green-700 border-green-200 disabled:opacity-100"
+                          className="w-24 bg-green-50 text-green-700 border-green-200 disabled:opacity-100"
                         >
                           No Dues
                         </Button>
@@ -552,7 +563,7 @@ export function CollectFee() {
                           variant="primary"
                           size="sm"
                           onClick={() => setSelectedStudent(student)}
-                          className={hasFeeRecord ? 'bg-amber-500 hover:bg-amber-600 border-transparent' : ''}
+                          className={`w-24 ${hasFeeRecord ? 'bg-amber-500 hover:bg-amber-600 border-transparent' : ''}`}
                         >
                           {hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
                         </Button>

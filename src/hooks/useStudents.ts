@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getStudentsByAcademicYear, type StudentFilters } from '../services/studentService';
+import { collection, query, where, orderBy, onSnapshot, type QueryConstraint } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import type { StudentFilters } from '../services/studentService';
 import type { Student, AcademicYear } from '../types';
 
 interface UseStudentsResult {
@@ -14,41 +16,44 @@ export function useStudents(
   filters: StudentFilters = {}
 ): UseStudentsResult {
   const [students, setStudents] = useState<Student[]>([]);
-  // Start in loading state when academicYear is already available on mount
-  // so there's no false flash of empty content before the fetch begins.
   const [loading, setLoading] = useState(() => academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  // Destructure so individual scalars (not object identity) are dep-array values
   const { course, year, gender } = filters;
 
   useEffect(() => {
     if (!academicYear) {
       setStudents([]);
+      setLoading(false);
       return;
     }
-    let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getStudentsByAcademicYear(academicYear, { course, year, gender })
-      .then((list) => {
-        if (!cancelled) {
-          setStudents(list);
-          setLoading(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load students');
-          setLoading(false);
-        }
-      });
+    const constraints: QueryConstraint[] = [
+      where('academicYear', '==', academicYear),
+    ];
+    if (course) constraints.push(where('course', '==', course));
+    if (year)   constraints.push(where('year',   '==', year));
+    if (gender) constraints.push(where('gender', '==', gender));
+    constraints.push(orderBy('createdAt', 'desc'));
 
-    return () => {
-      cancelled = true;
-    };
+    const q = query(collection(db, 'students'), ...constraints);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student)));
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message);
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
   }, [academicYear, course, year, gender, tick]);
 
   function refetch() {

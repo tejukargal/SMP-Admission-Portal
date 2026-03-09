@@ -25,7 +25,7 @@ function AnimNum({ value }: { value: number }) {
   );
 }
 
-const PASSKEY = 'smpexam@anni';
+const PASSKEY = 'annismp';
 
 function PasskeyGate({ onUnlock }: { onUnlock: () => void }) {
   const [input, setInput] = useState('');
