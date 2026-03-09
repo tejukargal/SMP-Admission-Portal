@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useExamFee } from '../hooks/useExamFee';
 import { saveExamFeeRecords } from '../services/examFeeService';
 import { exportExamFeePdf } from '../utils/examFeePdf';
+import { exportFeeStatsPdf } from '../utils/feeStatsPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -114,6 +115,14 @@ export function ExamFee() {
   const [saveToast, setSaveToast] = useState('');
   const [savingPdf, setSavingPdf] = useState(false);
 
+  // Context menu + uncheck-warning state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; studentId: string } | null>(null);
+  const [warnStudentId, setWarnStudentId] = useState<string | null>(null);
+  const [unchecking, setUnchecking] = useState(false);
+
+  // Fee stats modal
+  const [showStats, setShowStats] = useState(false);
+
   useEffect(() => {
     if (!saveToast) return;
     const t = setTimeout(() => setSaveToast(''), 3000);
@@ -175,7 +184,33 @@ export function ExamFee() {
   }
 
   function togglePaid(studentId: string) {
+    // Prevent unchecking a student that has been saved as paid — only right-click can do that
+    const isSavedPaid = savedMap[studentId] === true;
+    const isCurrentlyPaid = paidMap[studentId] ?? false;
+    if (isSavedPaid && isCurrentlyPaid) return;
     setPaidMap((prev) => ({ ...prev, [studentId]: !(prev[studentId] ?? false) }));
+  }
+
+  function handleRowContextMenu(e: React.MouseEvent, studentId: string) {
+    const isSavedPaid = savedMap[studentId] === true && (paidMap[studentId] ?? false);
+    if (!isSavedPaid) return;
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, studentId });
+  }
+
+  async function handleUncheckConfirm() {
+    if (!warnStudentId || !academicYear) return;
+    setUnchecking(true);
+    try {
+      await saveExamFeeRecords([{ studentId: warnStudentId, academicYear, paid: false }]);
+      setPaidMap((prev) => ({ ...prev, [warnStudentId]: false }));
+      setSavedMap((prev) => ({ ...prev, [warnStudentId]: false }));
+      setWarnStudentId(null);
+    } catch (err) {
+      console.error('Uncheck error:', err);
+    } finally {
+      setUnchecking(false);
+    }
   }
 
   // Debounced search
@@ -235,6 +270,39 @@ export function ExamFee() {
     return { yearCount, courseCount, total: allStudents.length, paidCount, unpaidCount: allStudents.length - paidCount };
   }, [allStudents, paidMap]);
 
+  // Year × course fee statistics matrix (always from unfiltered data)
+  const feeStats = useMemo(() => {
+    type CellStat = { paid: number; unpaid: number; total: number };
+    const empty = (): CellStat => ({ paid: 0, unpaid: 0, total: 0 });
+
+    const matrix: Record<string, Record<string, CellStat>> = {};
+    const yearTotals: Record<string, CellStat> = {};
+    const courseTotals: Record<string, CellStat> = {};
+    const grandTotal: CellStat = empty();
+
+    for (const yr of YEARS)    { matrix[yr] = {}; yearTotals[yr] = empty(); for (const c of COURSES) matrix[yr][c] = empty(); }
+    for (const c of COURSES)   { courseTotals[c] = empty(); }
+
+    for (const s of allStudents) {
+      if (!matrix[s.year] || !matrix[s.year][s.course]) continue;
+      const isPaid = paidMap[s.id] ?? false;
+      const key = isPaid ? 'paid' : 'unpaid';
+      matrix[s.year][s.course][key]++;
+      matrix[s.year][s.course].total++;
+      yearTotals[s.year][key]++;
+      yearTotals[s.year].total++;
+      courseTotals[s.course][key]++;
+      courseTotals[s.course].total++;
+      grandTotal[key]++;
+      grandTotal.total++;
+    }
+    return { matrix, yearTotals, courseTotals, grandTotal };
+  }, [allStudents, paidMap]);
+
+  function handlePrintStats() {
+    exportFeeStatsPdf({ ...feeStats, academicYear });
+  }
+
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
     !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter || paidFilter !== 'all';
@@ -250,19 +318,6 @@ export function ExamFee() {
     setAdmCatFilter('');
     setAdmStatusFilter('');
     setPaidFilter('all');
-  }
-
-  // Select-all for currently filtered rows
-  const allFilteredPaid = filteredStudents.length > 0 && filteredStudents.every((s) => paidMap[s.id] ?? false);
-  const someFilteredPaid = filteredStudents.some((s) => paidMap[s.id] ?? false);
-
-  function toggleSelectAll() {
-    const markAs = !allFilteredPaid;
-    setPaidMap((prev) => {
-      const next = { ...prev };
-      for (const s of filteredStudents) next[s.id] = markAs;
-      return next;
-    });
   }
 
   const isLoading = settingsLoading || studentsLoading || examFeeLoading;
@@ -511,6 +566,14 @@ export function ExamFee() {
               {savingPdf ? 'Generating…' : 'Save PDF'}
             </button>
           )}
+          {!isLoading && allStudents.length > 0 && (
+            <button
+              onClick={() => setShowStats(true)}
+              className="rounded border border-indigo-300 px-2 py-1.5 text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer transition-colors font-medium"
+            >
+              Fee Stats
+            </button>
+          )}
         </div>
       </div>
 
@@ -531,20 +594,8 @@ export function ExamFee() {
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredPaid}
-                      ref={(el) => { if (el) el.indeterminate = !allFilteredPaid && someFilteredPaid; }}
-                      onChange={toggleSelectAll}
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 cursor-pointer focus:ring-blue-500"
-                      title="Toggle all filtered"
-                    />
-                    <span>Paid</span>
-                  </div>
-                </th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Name (SSLC)</th>
+                <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">Paid</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-52">Name (SSLC)</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Year</th>
@@ -557,35 +608,44 @@ export function ExamFee() {
             <tbody className="divide-y divide-gray-100">
               {filteredStudents.map((student: Student, idx) => {
                 const isPaid = paidMap[student.id] ?? false;
+                const isSavedPaid = savedMap[student.id] === true;
                 const isSavedDifferent = (savedMap[student.id] ?? false) !== isPaid;
+                // A saved-paid row is locked: row click does nothing; right-click shows uncheck menu
+                const isLocked = isSavedPaid && isPaid;
                 return (
                   <tr
                     key={student.id}
-                    className={`transition-colors cursor-pointer select-none ${
+                    className={`transition-colors select-none ${
                       isPaid
-                        ? 'bg-green-50 hover:bg-green-100'
+                        ? isLocked
+                          ? 'bg-green-50 hover:bg-green-100 cursor-default'
+                          : 'bg-green-50 hover:bg-green-100 cursor-pointer'
                         : isSavedDifferent
-                        ? 'bg-orange-50 hover:bg-orange-100'
-                        : 'hover:bg-gray-50'
+                        ? 'bg-orange-50 hover:bg-orange-100 cursor-pointer'
+                        : 'hover:bg-gray-50 cursor-pointer'
                     }`}
-                    onClick={() => togglePaid(student.id)}
+                    onClick={() => !isLocked && togglePaid(student.id)}
+                    onContextMenu={(e) => handleRowContextMenu(e, student.id)}
                   >
                     <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-3 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isPaid}
-                        onChange={() => togglePaid(student.id)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 cursor-pointer focus:ring-blue-500"
+                        readOnly={isLocked}
+                        onChange={isLocked ? undefined : () => togglePaid(student.id)}
+                        className={`w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${isLocked ? 'cursor-default pointer-events-none' : 'cursor-pointer'}`}
                       />
                     </td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      {student.studentNameSSLC}
-                      {isSavedDifferent && (
-                        <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-400 align-middle" title="Unsaved change" />
-                      )}
+                    <td className="px-3 py-2 font-medium text-gray-900 w-52 max-w-[208px]">
+                      <div className="truncate" title={student.studentNameSSLC}>
+                        {student.studentNameSSLC}
+                        {isSavedDifferent && (
+                          <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-400 align-middle" title="Unsaved change" />
+                        )}
+                      </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
+                    <td className="px-3 py-2 text-[13px] font-bold text-gray-700 whitespace-nowrap tracking-wide">{student.regNumber || '—'}</td>
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.year}</td>
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.gender}</td>
@@ -620,6 +680,202 @@ export function ExamFee() {
             {isDirty && (
               <span className="text-orange-500 font-medium">Unsaved changes — click Save Changes to persist</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Right-click context menu for saved-paid rows */}
+      {contextMenu && (
+        <>
+          {/* Invisible backdrop to dismiss on outside click */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
+          />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-44"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors cursor-pointer flex items-center gap-2"
+              onClick={() => {
+                setContextMenu(null);
+                setWarnStudentId(contextMenu.studentId);
+              }}
+            >
+              <span>✕</span>
+              <span>Mark as Unpaid</span>
+            </button>
+            <button
+              className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+              onClick={() => setContextMenu(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Fee Statistics modal */}
+      {showStats && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            className="bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col w-full max-w-2xl"
+            style={{ maxHeight: '90vh', animation: 'page-enter 0.18s ease-out' }}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Exam Fee Statistics</h3>
+                {academicYear && <p className="text-[11px] text-gray-400 mt-0.5">{academicYear}</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintStats}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  Print PDF
+                </button>
+                <button
+                  onClick={() => setShowStats(false)}
+                  className="rounded-md p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Stats table */}
+            <div className="overflow-auto p-4">
+              <table className="text-xs border-collapse w-full">
+                <thead>
+                  <tr className="bg-blue-700 text-white">
+                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap rounded-tl-md">Year</th>
+                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Status</th>
+                    {COURSES.map((c) => (
+                      <th key={c} className="px-3 py-2 text-center font-semibold whitespace-nowrap">{c}</th>
+                    ))}
+                    <th className="px-3 py-2 text-center font-semibold whitespace-nowrap rounded-tr-md">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {YEARS.map((yr) => {
+                    const yearLabel = yr === '1ST YEAR' ? '1st Year' : yr === '2ND YEAR' ? '2nd Year' : '3rd Year';
+                    const yt = feeStats.yearTotals[yr];
+                    return (
+                      <Fragment key={yr}>
+                        {/* Paid row */}
+                        <tr className="bg-green-50/60">
+                          <td rowSpan={3} className="px-3 py-2 font-semibold text-gray-800 align-middle border-r border-gray-200 whitespace-nowrap">
+                            {yearLabel}
+                          </td>
+                          <td className="px-3 py-1.5 text-green-700 font-medium whitespace-nowrap border-r border-gray-100">Paid</td>
+                          {COURSES.map((c) => (
+                            <td key={c} className="px-3 py-1.5 text-green-700 font-semibold text-center whitespace-nowrap">
+                              {feeStats.matrix[yr][c].paid}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-green-700 font-bold text-center whitespace-nowrap border-l border-gray-200">{yt.paid}</td>
+                        </tr>
+                        {/* Unpaid row */}
+                        <tr className="bg-red-50/40">
+                          <td className="px-3 py-1.5 text-red-600 font-medium whitespace-nowrap border-r border-gray-100">Unpaid</td>
+                          {COURSES.map((c) => (
+                            <td key={c} className="px-3 py-1.5 text-red-600 font-semibold text-center whitespace-nowrap">
+                              {feeStats.matrix[yr][c].unpaid}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-red-600 font-bold text-center whitespace-nowrap border-l border-gray-200">{yt.unpaid}</td>
+                        </tr>
+                        {/* Total row */}
+                        <tr className="border-b-2 border-gray-300">
+                          <td className="px-3 py-1.5 text-gray-500 font-medium whitespace-nowrap border-r border-gray-100">Total</td>
+                          {COURSES.map((c) => (
+                            <td key={c} className="px-3 py-1.5 text-gray-800 font-bold text-center whitespace-nowrap">
+                              {feeStats.matrix[yr][c].total}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-gray-800 font-bold text-center whitespace-nowrap border-l border-gray-200">{yt.total}</td>
+                        </tr>
+                      </Fragment>
+                    );
+                  })}
+
+                  {/* Grand total block */}
+                  <tr className="bg-green-50/60">
+                    <td rowSpan={3} className="px-3 py-2 font-bold text-gray-900 align-middle border-r border-gray-200 whitespace-nowrap bg-gray-100">
+                      Grand Total
+                    </td>
+                    <td className="px-3 py-1.5 text-green-700 font-medium whitespace-nowrap border-r border-gray-100 bg-gray-100">Paid</td>
+                    {COURSES.map((c) => (
+                      <td key={c} className="px-3 py-1.5 text-green-700 font-bold text-center whitespace-nowrap bg-gray-100">
+                        {feeStats.courseTotals[c].paid}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1.5 text-green-700 font-bold text-center whitespace-nowrap border-l border-gray-200 bg-gray-100">{feeStats.grandTotal.paid}</td>
+                  </tr>
+                  <tr className="bg-red-50/40">
+                    <td className="px-3 py-1.5 text-red-600 font-medium whitespace-nowrap border-r border-gray-100 bg-gray-100">Unpaid</td>
+                    {COURSES.map((c) => (
+                      <td key={c} className="px-3 py-1.5 text-red-600 font-bold text-center whitespace-nowrap bg-gray-100">
+                        {feeStats.courseTotals[c].unpaid}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1.5 text-red-600 font-bold text-center whitespace-nowrap border-l border-gray-200 bg-gray-100">{feeStats.grandTotal.unpaid}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-1.5 text-gray-500 font-medium whitespace-nowrap border-r border-gray-100 bg-gray-100">Total</td>
+                    {COURSES.map((c) => (
+                      <td key={c} className="px-3 py-1.5 text-gray-900 font-bold text-center whitespace-nowrap bg-gray-100">
+                        {feeStats.courseTotals[c].total}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1.5 text-gray-900 font-bold text-center whitespace-nowrap border-l border-gray-200 bg-gray-100">{feeStats.grandTotal.total}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Legend */}
+            <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-4 text-[11px] text-gray-500 shrink-0">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300 inline-block" />Paid</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block" />Unpaid</span>
+              <span className="ml-auto text-gray-400">Based on current fee status (including unsaved changes)</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warning dialog for unchecking a saved paid status */}
+      {warnStudentId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-xl px-6 py-5 w-80 flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold text-gray-900">Mark as Unpaid?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                This student's exam fee has already been <span className="font-medium text-green-700">saved as paid</span>. Marking it as unpaid will immediately update Firestore. This action cannot be undone without re-checking.
+              </p>
+            </div>
+            <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              Are you sure you want to proceed?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setWarnStudentId(null)}
+                disabled={unchecking}
+                className="rounded-md px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleUncheckConfirm()}
+                disabled={unchecking}
+                className="rounded-md px-3 py-1.5 text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {unchecking ? 'Saving…' : 'Yes, Mark as Unpaid'}
+              </button>
+            </div>
           </div>
         </div>
       )}

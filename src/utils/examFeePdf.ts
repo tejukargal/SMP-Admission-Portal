@@ -37,8 +37,7 @@ const COLUMNS: ColDef[] = [
   { header: 'Year',            halign: 'left',   get: (s)            => s.year                              },
   { header: 'Adm Type',        halign: 'left',   get: (s)            => s.admType || '—'                    },
   { header: 'Adm Cat',         halign: 'center', get: (s)            => s.admCat || '—'                     },
-  { header: 'Cat',             halign: 'center', get: (s)            => s.category || '—'                   },
-  { header: 'Exam Fee Status', halign: 'center', get: (_s, _i, paid) => paid ? 'PAID' : 'UNPAID'            },
+  { header: 'Status',          halign: 'center', get: (_s, _i, paid) => paid ? 'PAID' : 'UNPAID'            },
 ];
 
 export function exportExamFeePdf(
@@ -46,8 +45,8 @@ export function exportExamFeePdf(
   paidMap: Record<string, boolean>,
   filters: ExamFeePdfFilters,
 ): void {
-  const margin     = 10;
-  const PORTRAIT_W = 210 - margin * 2;  // 190mm
+  const margin    = 10;
+  const PORTRAIT_W = 210 - margin * 2;  // 190mm usable in A4 portrait
 
   // Students are already sorted by the page, but re-sort for safety
   const sorted = [...students].sort((a, b) => {
@@ -58,7 +57,7 @@ export function exportExamFeePdf(
     return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
   });
 
-  // Always portrait — measure fixed columns, Name gets the remainder
+  // Portrait — measure fixed columns, Name gets the remainder
   const NAME_IDX   = COLUMNS.findIndex((c) => c.header === 'Name');
   const measureDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   measureDoc.setFontSize(FONT_SIZE);
@@ -159,7 +158,7 @@ export function exportExamFeePdf(
     columnStyles,
     // Colour the Exam Fee Status cell green (PAID) or red (UNPAID)
     didParseCell: (data) => {
-      const STATUS_IDX = COLUMNS.findIndex((c) => c.header === 'Exam Fee Status');
+      const STATUS_IDX = COLUMNS.findIndex((c) => c.header === 'Status');
       if (data.section === 'body' && data.column.index === STATUS_IDX) {
         const isPaid = data.cell.raw === 'PAID';
         data.cell.styles.textColor = isPaid ? [21, 128, 61] : [185, 28, 28];
