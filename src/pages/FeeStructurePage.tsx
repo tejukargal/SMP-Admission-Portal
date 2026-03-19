@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSettings } from '../hooks/useSettings';
-import { getFeeStructure, saveFeeStructure, getAllFeeStructures, deleteAllFeeStructures } from '../services/feeStructureService';
+import { getFeeStructure, saveFeeStructure, getAllFeeStructures, deleteAllFeeStructures, applyAdditionalHeadsToYear } from '../services/feeStructureService';
 import { getFineSchedule, saveFineSchedule } from '../services/fineScheduleService';
+import { exportFeeStructurePDF, exportFeeStructureExcel } from '../utils/feeStructureExport';
 import { Button } from '../components/common/Button';
 import { FeeStructureImportModal } from '../components/fee/FeeStructureImportModal';
 import type {
@@ -69,6 +70,12 @@ export function FeeStructurePage() {
   const [showImport, setShowImport] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+
+  // ── Apply-to-all additional heads dialog ──────────────────────────────────
+  const [showApplyToAllDialog, setShowApplyToAllDialog] = useState(false);
+  const [applyToAllCount, setApplyToAllCount] = useState(0);
+  const [applyToAllSaving, setApplyToAllSaving] = useState(false);
 
   // ── Saved structures list ─────────────────────────────────────────────────
   const [allStructures, setAllStructures] = useState<FeeStructure[]>([]);
@@ -247,12 +254,27 @@ export function FeeStructurePage() {
     }
   }
 
-  async function handleSave() {
+  function handleExport(format: 'pdf' | 'excel') {
+    const exportYear = selectedYear || settings?.currentAcademicYear;
+    if (!exportYear) return;
+    const yearStructures = allStructures.filter((s) => s.academicYear === exportYear);
+    if (yearStructures.length === 0) return;
+    setExporting(format);
+    try {
+      if (format === 'pdf') exportFeeStructurePDF(yearStructures, exportYear);
+      else exportFeeStructureExcel(yearStructures, exportYear);
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleSave(applyToAll?: boolean) {
     if (!allSelected) return;
     setSaving(true);
     setSaveSuccess(false);
     setError(null);
     try {
+      const validAdditional = additionalHeads.filter((h) => h.label.trim() !== '');
       await saveFeeStructure({
         academicYear: selectedYear as AcademicYear,
         course: selectedCourse as Course,
@@ -261,16 +283,58 @@ export function FeeStructurePage() {
         admCat: selectedAdmCat as AdmCat,
         smp: smpAmounts,
         svk: svkAmount,
-        additionalHeads: additionalHeads.filter((h) => h.label.trim() !== ''),
+        additionalHeads: validAdditional,
       });
       setIsExisting(true);
-      setSaveSuccess(true);
       setListTick((t) => t + 1);
+
+      // If applying to all, skip dialog
+      if (applyToAll) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
+
+      // Check if there are other structures in the same year to offer "apply to all"
+      if (validAdditional.length > 0) {
+        const currentDocId = `${selectedYear}__${selectedCourse}__${selectedStudyYear}__${selectedAdmType}__${selectedAdmCat}`;
+        const othersInYear = allStructures.filter(
+          (s) => s.academicYear === selectedYear && s.id !== currentDocId
+        );
+        if (othersInYear.length > 0) {
+          setApplyToAllCount(othersInYear.length);
+          setShowApplyToAllDialog(true);
+          return;
+        }
+      }
+
+      setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleApplyToAll() {
+    setApplyToAllSaving(true);
+    try {
+      const validAdditional = additionalHeads.filter((h) => h.label.trim() !== '');
+      const currentDocId = `${selectedYear}__${selectedCourse}__${selectedStudyYear}__${selectedAdmType}__${selectedAdmCat}`;
+      await applyAdditionalHeadsToYear(
+        selectedYear as AcademicYear,
+        validAdditional,
+        currentDocId
+      );
+      setListTick((t) => t + 1);
+      setShowApplyToAllDialog(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to apply to all structures');
+    } finally {
+      setApplyToAllSaving(false);
     }
   }
 
@@ -309,16 +373,47 @@ export function FeeStructurePage() {
             Configure allotted fee amounts per academic year / course / year / adm type / adm category
           </p>
         </div>
-        <button
-          onClick={() => setShowImport(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors shadow-sm"
-        >
-          <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          Import from Excel
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Export PDF */}
+          <button
+            onClick={() => handleExport('pdf')}
+            disabled={exporting !== null || allStructures.filter(s => s.academicYear === (selectedYear || settings?.currentAcademicYear)).length === 0}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Export fee structure as PDF (notice board)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+          </button>
+
+          {/* Export Excel */}
+          <button
+            onClick={() => handleExport('excel')}
+            disabled={exporting !== null || allStructures.filter(s => s.academicYear === (selectedYear || settings?.currentAcademicYear)).length === 0}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-green-700 cursor-pointer transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Export fee structure as Excel spreadsheet"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
+          </button>
+
+          {/* Import from Excel */}
+          <button
+            onClick={() => setShowImport(true)}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors shadow-sm"
+          >
+            <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import from Excel
+          </button>
+        </div>
       </div>
 
       {/* Selectors */}
@@ -671,6 +766,35 @@ export function FeeStructurePage() {
             )}
             {error && <span className="text-xs text-red-600">{error}</span>}
           </div>
+
+          {/* Apply-to-all additional heads confirmation */}
+          {showApplyToAllDialog && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-green-800">
+                Apply additional fee heads to all structures in {selectedYear}?
+              </p>
+              <p className="text-[11px] text-green-700">
+                {applyToAllCount} other saved structure{applyToAllCount > 1 ? 's' : ''} in {selectedYear} will have
+                their additional fee heads replaced with the ones you just set.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={() => void handleApplyToAll()}
+                  disabled={applyToAllSaving}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md bg-green-600 text-white hover:bg-green-700 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {applyToAllSaving ? 'Applying…' : `Apply to all ${applyToAllCount} structure${applyToAllCount > 1 ? 's' : ''}`}
+                </button>
+                <button
+                  onClick={() => { setShowApplyToAllDialog(false); setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 3000); }}
+                  disabled={applyToAllSaving}
+                  className="px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  This structure only
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

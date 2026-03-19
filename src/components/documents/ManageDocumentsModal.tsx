@@ -32,6 +32,8 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  function markDirty() { setSaved(false); }
+
   function toggleSubmitted(key: DocKey) {
     if (!docs) return;
     const entry = docs[key];
@@ -46,11 +48,13 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
         returnedOn: submitted ? entry.returnedOn : '',
       },
     });
+    markDirty();
   }
 
   function setSubmittedOn(key: DocKey, date: string) {
     if (!docs) return;
     setDocs({ ...docs, [key]: { ...docs[key], submittedOn: date } });
+    markDirty();
   }
 
   function toggleReturned(key: DocKey) {
@@ -65,16 +69,19 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
         returnedOn: returned ? (entry.returnedOn || todayStr()) : '',
       },
     });
+    markDirty();
   }
 
   function setReturnedOn(key: DocKey, date: string) {
     if (!docs) return;
     setDocs({ ...docs, [key]: { ...docs[key], returnedOn: date } });
+    markDirty();
   }
 
   function setRemarks(key: DocKey, remarks: string) {
     if (!docs) return;
     setDocs({ ...docs, [key]: { ...docs[key], remarks } });
+    markDirty();
   }
 
   async function handleSave() {
@@ -265,8 +272,6 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
           <div className="text-xs">
             {saveError ? (
               <span className="text-red-600">{saveError}</span>
-            ) : saved ? (
-              <span className="text-green-600 font-medium">✓ Saved successfully</span>
             ) : (
               <span className="text-gray-400">Green = submitted · Blue = returned to student</span>
             )}
@@ -288,13 +293,23 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
             )}
             <button
               onClick={() => void handleSave()}
-              disabled={saving || loading || !docs}
+              disabled={saving || saved || loading || !docs}
               className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </div>
+
+        {/* ── Success toast ── */}
+        {saved && (
+          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-gray-900 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-lg pointer-events-none">
+            <svg className="w-4 h-4 text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            Documents saved successfully
+          </div>
+        )}
       </div>
     </div>
   );

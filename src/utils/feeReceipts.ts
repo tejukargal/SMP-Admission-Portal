@@ -527,7 +527,7 @@ export function generateAdditionalReceipt(record: FeeRecord): void {
 
 function buildSVKCopy(record: FeeRecord, copyLabel: string): string {
   const date     = formatDate(record.date);
-  const svkTotal = record.svk + record.additionalPaid.reduce((s, h) => s + h.amount, 0);
+  const svkTotal = record.svk;
   const words    = numToWords(svkTotal);
 
   return `<div class="copy">

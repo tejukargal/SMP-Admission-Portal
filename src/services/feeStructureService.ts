@@ -3,6 +3,7 @@ import { db } from '../config/firebase';
 import type {
   FeeStructure,
   FeeStructureFormData,
+  FeeAdditionalHead,
   AcademicYear,
   Course,
   Year,
@@ -64,6 +65,31 @@ export async function deleteAllFeeStructures(): Promise<void> {
     snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
+}
+
+/**
+ * Applies the given additionalHeads to every fee structure in the specified academic year.
+ * Optionally skips one doc (the one just saved) to avoid a redundant write.
+ */
+export async function applyAdditionalHeadsToYear(
+  academicYear: AcademicYear,
+  additionalHeads: FeeAdditionalHead[],
+  skipDocId?: string
+): Promise<number> {
+  const q = query(collection(db, COL), where('academicYear', '==', academicYear));
+  const snap = await getDocs(q);
+  const docs = snap.docs.filter((d) => d.id !== skipDocId);
+  if (docs.length === 0) return 0;
+  const now = new Date().toISOString();
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + BATCH_SIZE).forEach((d) => {
+      batch.update(d.ref, { additionalHeads, updatedAt: now });
+    });
+    await batch.commit();
+  }
+  return docs.length;
 }
 
 export async function getFeeStructure(
