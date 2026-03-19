@@ -180,14 +180,20 @@ export function FeeHistoryModal({ student, onClose }: Props) {
               const allotted = structure ? calcAllotted(structure, records) : null;
               const fine = structure ? calcEffectiveFine(structure, records) : 0;
               const due = allotted !== null ? allotted - totalPaid : null;
-              const svkAllotted = structure
-                ? structure.svk + structure.additionalHeads.reduce((t, h) => t + h.amount, 0)
+              const svkBaseAllotted = structure ? structure.svk : 0;
+              const additionalAllotted = structure
+                ? structure.additionalHeads.reduce((t, h) => t + h.amount, 0)
                 : 0;
-              const smpAllotted = allotted !== null ? allotted - svkAllotted : 0;
+              const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
               const smpPaid = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
-              const svkPaid = totalPaid - smpPaid;
+              const svkBasePaid = records.reduce((s, r) => s + r.svk, 0);
+              const additionalPaidTotal = records.reduce(
+                (s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0),
+                0
+              );
               const smpDue = smpAllotted - smpPaid;
-              const svkDue = svkAllotted - svkPaid;
+              const svkDue = svkBaseAllotted - svkBasePaid;
+              const additionalDue = additionalAllotted - additionalPaidTotal;
 
               return (
                 <div key={academicYear} className="border border-gray-200 rounded-lg overflow-hidden">
@@ -209,7 +215,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                               ₹{allotted.toLocaleString()}
                             </span>
                             <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpAllotted.toLocaleString()} | SVK ₹{svkAllotted.toLocaleString()})
+                              (SMP ₹{smpAllotted.toLocaleString()} | SVK ₹{svkBaseAllotted.toLocaleString()} | Addl ₹{additionalAllotted.toLocaleString()})
                             </span>
                           </span>
                           <span>
@@ -218,7 +224,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                               ₹{totalPaid.toLocaleString()}
                             </span>
                             <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpPaid.toLocaleString()} | SVK ₹{svkPaid.toLocaleString()})
+                              (SMP ₹{smpPaid.toLocaleString()} | SVK ₹{svkBasePaid.toLocaleString()} | Addl ₹{additionalPaidTotal.toLocaleString()})
                             </span>
                           </span>
                           <span>
@@ -231,7 +237,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                               ₹{due!.toLocaleString()}
                             </span>
                             <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpDue.toLocaleString()} | SVK ₹{svkDue.toLocaleString()})
+                              (SMP ₹{smpDue.toLocaleString()} | SVK ₹{svkDue.toLocaleString()} | Addl ₹{additionalDue.toLocaleString()})
                             </span>
                           </span>
                         </>
@@ -266,6 +272,9 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                             SVK Rpt
                           </th>
                           <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
+                            Addl Rpt
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
                             Mode
                           </th>
                           <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
@@ -278,26 +287,32 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                             SVK (₹)
                           </th>
                           <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
+                            Addl (₹)
+                          </th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
                             Total (₹)
                           </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {records.map((r) => {
-                          const smpTotal = sumSMPRecord(r.smp);
-                          const svkTotal =
-                            r.svk + r.additionalPaid.reduce((s, h) => s + h.amount, 0);
-                          const total = smpTotal + svkTotal;
+                          const rowSmpTotal = sumSMPRecord(r.smp);
+                          const rowSvkBase = r.svk;
+                          const rowAddlTotal = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+                          const rowTotal = rowSmpTotal + rowSvkBase + rowAddlTotal;
                           return (
                             <tr key={r.id} className="hover:bg-gray-50">
                               <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">
-                                {r.date}
+                                {r.date.split('-').reverse().join('-')}
                               </td>
                               <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
                                 {r.receiptNumber || '—'}
                               </td>
                               <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
                                 {r.svkReceiptNumber || '—'}
+                              </td>
+                              <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                                {r.additionalReceiptNumber || '—'}
                               </td>
                               <td className="px-3 py-1.5 whitespace-nowrap">
                                 <span
@@ -314,13 +329,16 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                                 {r.remarks || '—'}
                               </td>
                               <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
-                                {smpTotal.toLocaleString()}
+                                {rowSmpTotal.toLocaleString()}
                               </td>
                               <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
-                                {svkTotal.toLocaleString()}
+                                {rowSvkBase.toLocaleString()}
+                              </td>
+                              <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
+                                {rowAddlTotal > 0 ? rowAddlTotal.toLocaleString() : '—'}
                               </td>
                               <td className="px-3 py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">
-                                {total.toLocaleString()}
+                                {rowTotal.toLocaleString()}
                               </td>
                             </tr>
                           );
@@ -329,26 +347,19 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                       <tfoot className="border-t border-gray-200 bg-gray-50">
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={6}
                             className="px-3 py-1.5 text-xs font-semibold text-gray-600"
                           >
                             {records.length} receipt{records.length > 1 ? 's' : ''}
                           </td>
                           <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
-                            {records
-                              .reduce((s, r) => s + sumSMPRecord(r.smp), 0)
-                              .toLocaleString()}
+                            {records.reduce((s, r) => s + sumSMPRecord(r.smp), 0).toLocaleString()}
                           </td>
                           <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
-                            {records
-                              .reduce(
-                                (s, r) =>
-                                  s +
-                                  r.svk +
-                                  r.additionalPaid.reduce((a, h) => a + h.amount, 0),
-                                0
-                              )
-                              .toLocaleString()}
+                            {records.reduce((s, r) => s + r.svk, 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
+                            {records.reduce((s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0), 0).toLocaleString()}
                           </td>
                           <td className="px-3 py-1.5 text-right text-xs font-semibold text-green-700">
                             ₹{totalPaid.toLocaleString()}
@@ -388,26 +399,25 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                         })}
                         {/* SVK */}
                         {(() => {
-                          const svkAllotted = structure.svk;
-                          const svkPaid = records.reduce((s, r) => s + r.svk, 0);
-                          const svkDue = svkAllotted - svkPaid;
-                          if (svkAllotted === 0) return null;
+                          const svkAmt = structure.svk;
+                          const svkPd = records.reduce((s, r) => s + r.svk, 0);
+                          const svkDueAmt = svkAmt - svkPd;
+                          if (svkAmt === 0) return null;
                           return (
                             <span key="svk">
                               <span className="text-gray-500">SVK: </span>
-                              <span
-                                className={
-                                  svkDue > 0
-                                    ? 'font-medium text-red-600'
-                                    : 'font-medium text-green-600'
-                                }
-                              >
-                                ₹{svkDue.toLocaleString()}
+                              <span className={svkDueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
+                                ₹{svkDueAmt.toLocaleString()}
                               </span>
                             </span>
                           );
                         })()}
-                        {/* Additional SVK heads */}
+                        {/* Additional Fee heads */}
+                        {structure.additionalHeads.length > 0 && (
+                          <span className="w-full text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            Additional:
+                          </span>
+                        )}
                         {structure.additionalHeads.map((h) => {
                           const paidAmt = records.reduce(
                             (s, r) =>

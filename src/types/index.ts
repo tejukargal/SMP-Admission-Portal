@@ -128,13 +128,14 @@ export interface FeeRecord {
   admType: AdmType;
   academicYear: AcademicYear;
   date: string;             // date of payment (ISO)
-  receiptNumber: string;    // SMP Rpt
-  svkReceiptNumber: string; // SVK Rpt (e.g. "SVK DVP 1")
+  receiptNumber: string;          // SMP Rpt
+  svkReceiptNumber: string;       // SVK Rpt (e.g. "SVK DVP 1")
+  additionalReceiptNumber: string; // Additional Fee Rpt (e.g. "0001")
   paymentMode: PaymentMode;
   remarks: string;
   smp: SMPHeads;            // paid amounts per SMP head
-  svk: number;              // SVK paid
-  additionalPaid: FeeAdditionalHead[];  // additional SVK heads paid
+  svk: number;              // SVK base paid
+  additionalPaid: FeeAdditionalHead[];  // additional fee heads paid
   createdAt: string;
   updatedAt: string;
 }

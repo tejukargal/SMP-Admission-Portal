@@ -293,8 +293,8 @@ export function FeeStructurePage() {
   }
 
   const smpTotal = sum(SMP_FEE_HEADS.map(({ key }) => smpAmounts[key]));
-  const svkTotal = svkAmount + sum(additionalHeads.map((h) => h.amount));
-  const grandTotal = smpTotal + svkTotal;
+  const additionalTotal = sum(additionalHeads.map((h) => h.amount));
+  const grandTotal = smpTotal + svkAmount + additionalTotal;
 
   const showForm = allSelected && !loadingStructure;
 
@@ -553,33 +553,43 @@ export function FeeStructurePage() {
               <h3 className="text-sm font-semibold text-gray-800">SVK Fee — Management</h3>
               <span className="text-xs text-gray-500">
                 Total:{' '}
-                <span className="font-semibold text-gray-800">₹{svkTotal.toLocaleString()}</span>
+                <span className="font-semibold text-gray-800">₹{svkAmount.toLocaleString()}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="w-24 text-xs text-gray-600 text-right shrink-0">SVK</label>
+              <div className="relative w-40">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={svkAmount === 0 ? '' : svkAmount}
+                  onChange={(e) => {
+                    setSvkAmount(Math.max(0, parseInt(e.target.value) || 0));
+                    setSaveSuccess(false);
+                  }}
+                  placeholder="0"
+                  className="w-full rounded border border-gray-300 pl-6 pr-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Fee */}
+          <div className="bg-white rounded-lg border border-green-200 shadow-sm px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Additional Fee</h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">Red Cross, App Fee, etc. — gets a separate receipt number.</p>
+              </div>
+              <span className="text-xs text-gray-500">
+                Total:{' '}
+                <span className="font-semibold text-gray-800">₹{additionalTotal.toLocaleString()}</span>
               </span>
             </div>
             <div className="space-y-2">
-
-              {/* Fixed SVK head */}
-              <div className="flex items-center gap-3">
-                <label className="w-24 text-xs text-gray-600 text-right shrink-0">SVK</label>
-                <div className="relative w-40">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                    ₹
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={svkAmount === 0 ? '' : svkAmount}
-                    onChange={(e) => {
-                      setSvkAmount(Math.max(0, parseInt(e.target.value) || 0));
-                      setSaveSuccess(false);
-                    }}
-                    placeholder="0"
-                    className="w-full rounded border border-gray-300 pl-6 pr-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Additional heads */}
               {additionalHeads.map((h, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <input
@@ -587,7 +597,7 @@ export function FeeStructurePage() {
                     value={h.label}
                     onChange={(e) => updateAdditionalHead(idx, 'label', e.target.value)}
                     placeholder="Head name (e.g. Red Cross)"
-                    className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                   />
                   <div className="relative w-32">
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
@@ -599,7 +609,7 @@ export function FeeStructurePage() {
                       value={h.amount === 0 ? '' : h.amount}
                       onChange={(e) => updateAdditionalHead(idx, 'amount', e.target.value)}
                       placeholder="0"
-                      className="w-full rounded border border-gray-300 pl-6 pr-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full rounded border border-gray-300 pl-6 pr-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
                   <button
@@ -611,10 +621,12 @@ export function FeeStructurePage() {
                   </button>
                 </div>
               ))}
-
+              {additionalHeads.length === 0 && (
+                <p className="text-xs text-gray-400">No additional heads yet.</p>
+              )}
               <button
                 onClick={addAdditionalHead}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer hover:underline"
+                className="text-xs text-green-600 hover:text-green-800 font-medium cursor-pointer hover:underline"
               >
                 + Add head (Red Cross, App Fee, etc.)
               </button>
@@ -630,7 +642,11 @@ export function FeeStructurePage() {
               </span>
               <span>
                 <span className="text-gray-500">SVK Total: </span>
-                <span className="font-semibold text-gray-800">₹{svkTotal.toLocaleString()}</span>
+                <span className="font-semibold text-gray-800">₹{svkAmount.toLocaleString()}</span>
+              </span>
+              <span>
+                <span className="text-gray-500">Additional Total: </span>
+                <span className="font-semibold text-gray-800">₹{additionalTotal.toLocaleString()}</span>
               </span>
               <span>
                 <span className="text-gray-500">Grand Total: </span>
@@ -720,8 +736,9 @@ export function FeeStructurePage() {
               structuresByYear.map(({ academicYear, structures }) => {
                 const smpHeadSum = (s: FeeStructure) =>
                   SMP_FEE_HEADS.reduce((t, { key }) => t + s.smp[key], 0);
-                const svkSum = (s: FeeStructure) =>
-                  s.svk + s.additionalHeads.reduce((t, h) => t + h.amount, 0);
+                const svkSum = (s: FeeStructure) => s.svk;
+                const addlSum = (s: FeeStructure) =>
+                  s.additionalHeads.reduce((t, h) => t + h.amount, 0);
 
                 return (
                   <div key={academicYear}>
@@ -737,7 +754,7 @@ export function FeeStructurePage() {
 
                     {/* Structures in this year */}
                     {structures.map((s) => {
-                      const grand = smpHeadSum(s) + svkSum(s);
+                      const grand = smpHeadSum(s) + svkSum(s) + addlSum(s);
                       const isActive =
                         selectedYear === s.academicYear &&
                         selectedCourse === s.course &&
@@ -766,7 +783,7 @@ export function FeeStructurePage() {
                             {s.year} · {s.admType} · {s.admCat}
                           </div>
                           <div className="text-[10px] text-gray-400 mt-0.5">
-                            SMP ₹{smpHeadSum(s).toLocaleString()} · SVK ₹{svkSum(s).toLocaleString()}
+                            SMP ₹{smpHeadSum(s).toLocaleString()} · SVK ₹{svkSum(s).toLocaleString()} · Addl ₹{addlSum(s).toLocaleString()}
                           </div>
                         </button>
                       );

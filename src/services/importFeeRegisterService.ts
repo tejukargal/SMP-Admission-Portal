@@ -200,6 +200,7 @@ export async function importFeeRegister(
       date,
       receiptNumber,
       svkReceiptNumber: '',
+      additionalReceiptNumber: '',
       paymentMode: 'CASH',
       remarks: '',
       smp: {

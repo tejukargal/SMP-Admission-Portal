@@ -36,6 +36,7 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
   const [date, setDate] = useState(record.date);
   const [receiptNo, setReceiptNo] = useState(record.receiptNumber);
   const [svkReceiptNo, setSvkReceiptNo] = useState(record.svkReceiptNumber ?? '');
+  const [additionalReceiptNo, setAdditionalReceiptNo] = useState(record.additionalReceiptNumber ?? '');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(record.paymentMode);
   const [remarks, setRemarks] = useState(record.remarks ?? '');
 
@@ -55,8 +56,8 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
   }
 
   const smpTotal = sumSMP(smp);
-  const svkTotal = svk + sumArr(additionalPaid);
-  const grandTotal = smpTotal + svkTotal;
+  const additionalTotal = sumArr(additionalPaid);
+  const grandTotal = smpTotal + svk + additionalTotal;
 
   async function handleSave() {
     if (!date) return;
@@ -78,6 +79,7 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
           date,
           receiptNumber: receiptNo,
           svkReceiptNumber: svkReceiptNo,
+          additionalReceiptNumber: additionalReceiptNo,
           paymentMode,
           remarks,
           smp,
@@ -203,12 +205,8 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
             <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">
-                    Head
-                  </th>
-                  <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-28">
-                    Amount (₹)
-                  </th>
+                  <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">Head</th>
+                  <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-28">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -225,32 +223,55 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
                     />
                   </td>
                 </tr>
-                {additionalPaid.map((h, idx) => (
-                  <tr key={h.label} className="hover:bg-gray-50">
-                    <td className="px-3 py-1 text-gray-700">{h.label}</td>
-                    <td className="px-2 py-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={h.amount === 0 ? '' : h.amount}
-                        onChange={(e) => handleAdditionalChange(idx, e.target.value)}
-                        className={ni}
-                        placeholder="0"
-                      />
-                    </td>
-                  </tr>
-                ))}
               </tbody>
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200 font-semibold text-gray-800">
                   <td className="px-3 py-1.5">Total SVK</td>
-                  <td className="px-3 py-1.5 text-right text-blue-700">
-                    {svkTotal.toLocaleString()}
-                  </td>
+                  <td className="px-3 py-1.5 text-right text-blue-700">{svk.toLocaleString()}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
+
+          {/* Additional Fee table */}
+          {additionalPaid.length > 0 && (
+            <div>
+              <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Additional Fee
+              </div>
+              <table className="w-full text-xs border border-green-200 rounded overflow-hidden">
+                <thead className="bg-green-50">
+                  <tr>
+                    <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200">Head</th>
+                    <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200 w-28">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {additionalPaid.map((h, idx) => (
+                    <tr key={h.label} className="hover:bg-green-50">
+                      <td className="px-3 py-1 text-gray-700">{h.label}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="number"
+                          min="0"
+                          value={h.amount === 0 ? '' : h.amount}
+                          onChange={(e) => handleAdditionalChange(idx, e.target.value)}
+                          className={ni}
+                          placeholder="0"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-green-50 border-t border-green-200 font-semibold text-gray-800">
+                    <td className="px-3 py-1.5">Total Additional</td>
+                    <td className="px-3 py-1.5 text-right text-green-700">{additionalTotal.toLocaleString()}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
 
           {/* Grand total */}
           <div className="rounded bg-gray-50 border border-gray-200 px-4 py-2.5 text-xs flex flex-wrap gap-x-6 gap-y-1">
@@ -260,8 +281,14 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
             </span>
             <span>
               <span className="text-gray-500">SVK: </span>
-              <span className="font-semibold text-gray-800">₹{svkTotal.toLocaleString()}</span>
+              <span className="font-semibold text-gray-800">₹{svk.toLocaleString()}</span>
             </span>
+            {additionalTotal > 0 && (
+              <span>
+                <span className="text-gray-500">Additional: </span>
+                <span className="font-semibold text-gray-800">₹{additionalTotal.toLocaleString()}</span>
+              </span>
+            )}
             <span>
               <span className="text-gray-500">Grand Total: </span>
               <span className="font-semibold text-blue-700">₹{grandTotal.toLocaleString()}</span>
@@ -303,6 +330,18 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
                 value={svkReceiptNo}
                 onChange={(e) => setSvkReceiptNo(e.target.value)}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Additional Fee Receipt No
+              </label>
+              <input
+                type="text"
+                value={additionalReceiptNo}
+                onChange={(e) => setAdditionalReceiptNo(e.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
               />
             </div>
 

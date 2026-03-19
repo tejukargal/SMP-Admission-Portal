@@ -6,7 +6,7 @@ import { FeeEditModal } from '../components/fee/FeeEditModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
-import { generateSMPReceipt, generateSVKReceipt } from '../utils/feeReceipts';
+import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } from '../utils/feeReceipts';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -568,7 +568,8 @@ export function FeeRegister() {
       {/* Context menu */}
       {ctxMenu && (() => {
         const smp = calcSMPTotal(ctxMenu.record);
-        const svk = calcSVKTotal(ctxMenu.record);
+        const svk = ctxMenu.record.svk;
+        const addl = ctxMenu.record.additionalPaid.reduce((s, h) => s + h.amount, 0);
         return (
           <div
             ref={ctxRef}
@@ -593,6 +594,14 @@ export function FeeRegister() {
             >
               <span className="text-purple-500 font-bold text-[10px] border border-purple-300 rounded px-1 py-0.5">SVK</span>
               SVK Receipt
+            </button>
+            <button
+              disabled={addl === 0}
+              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-green-50 enabled:hover:text-green-700 enabled:cursor-pointer"
+              onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className="text-green-600 font-bold text-[10px] border border-green-300 rounded px-1 py-0.5">ADDL</span>
+              Additional Receipt
             </button>
           </div>
         );

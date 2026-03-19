@@ -372,6 +372,157 @@ export function generateSMPReceipt(record: FeeRecord): void {
   openHtml(html);
 }
 
+// ── Additional Fee: one copy HTML fragment ────────────────────────────────────
+
+function buildAdditionalCopy(record: FeeRecord, copyLabel: string): string {
+  const date  = formatDate(record.date);
+  const items = record.additionalPaid.filter((h) => h.amount > 0);
+  const total = items.reduce((s, h) => s + h.amount, 0);
+  const words = numToWords(total);
+
+  const itemRows = items.map((h, i) => `<tr>
+        <td class="col-part"><span class="rn">${i + 1}</span>${esc(h.label)}<span class="dots"> ....</span></td>
+        <td class="col-amt">${h.amount}</td>
+        <td class="col-rem"></td>
+      </tr>`).join('');
+
+  return `<div class="copy">
+    <div class="copy-tag">${copyLabel}</div>
+
+    <div class="hdr">
+      <div class="inst">SANJAY&nbsp;&nbsp;MEMORIAL&nbsp;&nbsp;POLYTECHNIC</div>
+      <div class="addr">Ikkeri Road,&nbsp;&nbsp;SAGAR &ndash; 577401</div>
+      <div class="rbox-wrap"><span class="rbox">ADDITIONAL FEE RECEIPT</span></div>
+    </div>
+
+    <div class="meta">
+      <span class="meta-no">No.&nbsp;&nbsp;<span class="rno">${esc(record.additionalReceiptNumber || '\u2014')}</span></span>
+      <span class="meta-date">Date<span class="date-dl">&nbsp;<span class="bval">${esc(date)}</span>&nbsp;</span></span>
+    </div>
+
+    <div class="field-row name-field">
+      <span class="field-lbl">Name</span><span class="name-dl">&nbsp;<span class="bval">${esc(record.studentName)}</span>&nbsp;</span>
+    </div>
+
+    <div class="field-row class-field">
+      <span class="cls-group"><span class="field-lbl">Class</span><span class="class-dl">&nbsp;<span class="bval">${esc(record.year)}</span>&nbsp;</span></span>
+      <span class="cls-group"><span class="field-lbl">Section</span><span class="sec-dl">&nbsp;<span class="bval">${esc(record.course)}&nbsp;(${esc(record.admCat === 'SNQ' ? 'SNQ' : record.admType)})</span>&nbsp;</span></span>
+    </div>
+
+    <table class="fee-table">
+      <thead>
+        <tr>
+          <th class="col-part">PARTICULARS</th>
+          <th class="col-amt">AMOUNT</th>
+          <th class="col-rem">REMARKS</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td class="col-part total-lbl">TOTAL Rs. &hellip;&hellip;</td>
+          <td class="col-amt total-val">${total > 0 ? total : ''}</td>
+          <td class="col-rem"></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="flex-spacer"></div>
+
+    <div class="words-row">
+      <span class="field-lbl">Rupees (in words)</span><span class="words-dl">&nbsp;<span class="wval">${esc(words)}</span>&nbsp;</span>
+    </div>
+    <div class="words-row words-line2"><span class="words-ul">&nbsp;</span></div>
+
+    <div class="sig-space"></div>
+    <div class="sig">Receiving Clerk</div>
+  </div>`;
+}
+
+// ── Additional Fee Receipt: A4 landscape, 2 copies side by side ───────────────
+
+export function generateAdditionalReceipt(record: FeeRecord): void {
+  const studentCopy = buildAdditionalCopy(record, 'STUDENT COPY');
+  const officeCopy  = buildAdditionalCopy(record, 'OFFICE COPY');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Additional Fee Receipt \u2013 ${esc(record.studentName)}</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  html, body { margin: 0; padding: 0; width: 297mm; height: 210mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; color: #000; background: #fff; }
+  .sheet { width: 297mm; height: 210mm; display: flex; flex-direction: row; }
+  .copy { width: 148.5mm; height: 210mm; padding: 4mm 5.5mm 3mm; display: flex; flex-direction: column; overflow: hidden; }
+  .copy:first-child { border-right: 1.2pt dashed #999; }
+  .copy-tag { font-size: 6.5pt; font-weight: bold; letter-spacing: 1pt; color: #666; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; border-bottom: 0.4pt solid #ccc; padding-bottom: 1.5pt; margin-bottom: 2pt; flex-shrink: 0; }
+  .hdr { text-align: center; flex-shrink: 0; margin-bottom: 1pt; }
+  .inst { font-size: 14.5pt; font-weight: bold; letter-spacing: 1pt; line-height: 1.2; }
+  .addr { font-size: 8.5pt; margin-top: 1pt; letter-spacing: 0.3pt; }
+  .rbox-wrap { margin-top: 2pt; }
+  .rbox { display: inline-block; border: 2pt solid #000; padding: 1pt 10pt; font-size: 9.5pt; font-weight: bold; letter-spacing: 1.5pt; }
+  .meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 9pt; margin: 3pt 0 1.5pt; flex-shrink: 0; }
+  .rno { font-size: 15pt; font-weight: bold; color: #006600; }
+  .field-row { font-size: 9pt; flex-shrink: 0; display: flex; align-items: baseline; }
+  .field-lbl { flex-shrink: 0; }
+  .name-field { margin: 1.5pt 0; }
+  .class-field { margin: 1.5pt 0 2.5pt; }
+  .date-dl { display: inline-block; border-bottom: 0.7pt dotted #444; min-width: 55pt; vertical-align: bottom; padding: 0 2pt; }
+  .name-dl { flex: 1; border-bottom: 0.7pt dotted #444; vertical-align: bottom; padding: 0 2pt; }
+  .cls-group { flex: 1; display: flex; align-items: baseline; min-width: 0; }
+  .class-dl, .sec-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; min-width: 0; }
+  .bval { font-weight: bold; font-size: 10.5pt; }
+
+  /* ── Fee table — uses border-collapse so column borders are continuous ── */
+  .fee-table { width: 100%; border-collapse: collapse; flex-shrink: 0; font-size: 8.5pt; margin-top: 2pt; }
+  .fee-table thead tr { border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
+  .fee-table th { font-weight: bold; font-size: 8pt; text-align: center; padding: 2.5pt 3pt; }
+  .fee-table td { padding: 3pt 4pt; vertical-align: middle; font-weight: normal; }
+  .fee-table tfoot .total-row { border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
+  /* Column separators via border-left/right on the AMOUNT column — spans all rows */
+  .col-amt { width: 46pt; text-align: right; border-left: 0.8pt solid #000; border-right: 0.8pt solid #000; }
+  .col-rem { width: 48pt; }
+  .col-part { /* flexible remaining width */ }
+  .rn { display: inline-block; min-width: 14pt; }
+  .dots { color: #444; }
+  .total-lbl { text-align: right; font-weight: bold; font-size: 9pt; }
+  .total-val { font-weight: bold; font-size: 9pt; text-align: right; }
+
+  /* Push words/sig to bottom */
+  .flex-spacer { flex: 1; }
+
+  .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; }
+  .words-line2 { margin-top: 2pt; }
+  .words-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; vertical-align: bottom; }
+  .words-ul { display: block; border-bottom: 0.7pt dotted #444; width: 100%; min-height: 9pt; }
+  .wval { font-weight: bold; font-size: 10.5pt; }
+  .sig-space { flex-shrink: 0; height: 20pt; }
+  .sig { text-align: right; flex-shrink: 0; font-style: italic; font-weight: bold; font-size: 10pt; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  ${studentCopy}
+  ${officeCopy}
+</div>
+<script>
+  window.onload = function () {
+    window.print();
+    window.addEventListener('afterprint', function () { window.close(); });
+  };
+</script>
+</body>
+</html>`;
+
+  openHtml(html);
+}
+
 // ── SVK: one copy HTML fragment ───────────────────────────────────────────────
 
 function buildSVKCopy(record: FeeRecord, copyLabel: string): string {

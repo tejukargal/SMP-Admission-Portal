@@ -122,6 +122,23 @@ export async function getNextReceiptNumber(academicYear: AcademicYear): Promise<
   return String(max + 1).padStart(padLen, '0');
 }
 
+/**
+ * Returns the next Additional Fee receipt number for a given academic year.
+ * Format: 4-digit zero-padded (e.g. "0001", "0002", ...).
+ */
+export async function getNextAdditionalReceiptNumber(academicYear: AcademicYear): Promise<string> {
+  const records = await getFeeRecordsByAcademicYear(academicYear);
+  let max = 0;
+  for (const r of records) {
+    const rpt = r.additionalReceiptNumber ?? '';
+    if (rpt) {
+      const n = parseInt(rpt, 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  }
+  return String(max + 1).padStart(4, '0');
+}
+
 const SVK_RPT_PREFIX = 'SVK DVP ';
 
 /**

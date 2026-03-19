@@ -5,6 +5,7 @@ import {
   saveFeeRecord,
   getNextReceiptNumber,
   getNextSvkReceiptNumber,
+  getNextAdditionalReceiptNumber,
 } from '../../services/feeRecordService';
 import { getFineSchedule } from '../../services/fineScheduleService';
 import { Button } from '../common/Button';
@@ -74,6 +75,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const [date, setDate] = useState(today());
   const [receiptNo, setReceiptNo] = useState('');
   const [svkReceiptNo, setSvkReceiptNo] = useState('');
+  const [additionalReceiptNo, setAdditionalReceiptNo] = useState('');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH');
   const [fineSchedule, setFineSchedule] = useState<FinePeriod[]>([]);
   const [remarks, setRemarks] = useState('');
@@ -114,13 +116,15 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
       getFeeRecordsByStudent(student.id, academicYear),
       getNextReceiptNumber(academicYear),
       getNextSvkReceiptNumber(academicYear),
+      getNextAdditionalReceiptNumber(academicYear),
       getFineSchedule(academicYear),
     ])
-      .then(([struct, prior, nextRpt, nextSvkRpt, schedule]) => {
+      .then(([struct, prior, nextRpt, nextSvkRpt, nextAddlRpt, schedule]) => {
         setStructure(struct);
         setPriorPayments(prior);
         setReceiptNo(nextRpt);
         setSvkReceiptNo(nextSvkRpt);
+        setAdditionalReceiptNo(nextAddlRpt);
         setFineSchedule(schedule);
 
         if (struct) {
@@ -194,17 +198,19 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const smpAllotted = structure
     ? sumSMP(structure.smp) - structure.smp.fine + effectiveFineAllotted
     : 0;
-  const svkAllotted = structure ? structure.svk + sumArr(structure.additionalHeads) : 0;
-  const grandAllotted = smpAllotted + svkAllotted;
+  const svkAllotted = structure ? structure.svk : 0;
+  const additionalAllotted = structure ? sumArr(structure.additionalHeads) : 0;
+  const grandAllotted = smpAllotted + svkAllotted + additionalAllotted;
 
   const smpPreviousTotal = sumSMP(cumulativeSmp);
-  const svkPreviousTotal =
-    cumulativeSvk + [...cumulativeAdditional.values()].reduce((s, v) => s + v, 0);
-  const totalPrevious = smpPreviousTotal + svkPreviousTotal;
+  const svkPreviousTotal = cumulativeSvk;
+  const additionalPreviousTotal = [...cumulativeAdditional.values()].reduce((s, v) => s + v, 0);
+  const totalPrevious = smpPreviousTotal + svkPreviousTotal + additionalPreviousTotal;
 
   const smpNowTotal = sumSMP(smpNow);
-  const svkNowTotal = svkNow + sumArr(additionalNow);
-  const grandNow = smpNowTotal + svkNowTotal;
+  const svkNowTotal = svkNow;
+  const additionalNowTotal = sumArr(additionalNow);
+  const grandNow = smpNowTotal + svkNowTotal + additionalNowTotal;
 
   const grandTotal = totalPrevious + grandNow;
   const balance = grandAllotted - grandTotal;
@@ -228,6 +234,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         date,
         receiptNumber: smpNowTotal > 0 ? receiptNo : '',
         svkReceiptNumber: svkNowTotal > 0 ? svkReceiptNo : '',
+        additionalReceiptNumber: additionalNowTotal > 0 ? additionalReceiptNo : '',
         paymentMode,
         remarks,
         smp: smpNow,
@@ -414,16 +421,10 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                 <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">
-                        Head
-                      </th>
-                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-24">
-                        Allotted (₹)
-                      </th>
+                      <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">Head</th>
+                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-24">Allotted (₹)</th>
                       {isUpdate && (
-                        <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-gray-200 w-24">
-                          Paid so far (₹)
-                        </th>
+                        <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-gray-200 w-24">Paid so far (₹)</th>
                       )}
                       <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-28">
                         {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
@@ -446,40 +447,12 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                           type="number"
                           min="0"
                           value={svkNow === 0 ? '' : svkNow}
-                          onChange={(e) =>
-                            setSvkNow(Math.max(0, parseInt(e.target.value) || 0))
-                          }
+                          onChange={(e) => setSvkNow(Math.max(0, parseInt(e.target.value) || 0))}
                           className={ni}
                           placeholder="0"
                         />
                       </td>
                     </tr>
-                    {additionalNow.map((h, idx) => (
-                      <tr key={h.label} className="hover:bg-gray-50">
-                        <td className="px-3 py-1 text-gray-700">{h.label}</td>
-                        <td className="px-3 py-1 text-right text-gray-500">
-                          {(
-                            structure?.additionalHeads.find((ah) => ah.label === h.label)
-                              ?.amount ?? 0
-                          ).toLocaleString()}
-                        </td>
-                        {isUpdate && (
-                          <td className="px-3 py-1 text-right text-gray-400">
-                            {(cumulativeAdditional.get(h.label) ?? 0).toLocaleString()}
-                          </td>
-                        )}
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0"
-                            value={h.amount === 0 ? '' : h.amount}
-                            onChange={(e) => handleAdditionalChange(idx, e.target.value)}
-                            className={ni}
-                            placeholder="0"
-                          />
-                        </td>
-                      </tr>
-                    ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200 font-semibold text-gray-800">
@@ -497,6 +470,71 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                   </tfoot>
                 </table>
               </div>
+
+              {/* Additional Fee table */}
+              {additionalNow.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Additional Fee
+                  </div>
+                  <table className="w-full text-xs border border-green-200 rounded overflow-hidden">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200">Head</th>
+                        <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200 w-24">Allotted (₹)</th>
+                        {isUpdate && (
+                          <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-green-200 w-24">Paid so far (₹)</th>
+                        )}
+                        <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200 w-28">
+                          {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {additionalNow.map((h, idx) => (
+                        <tr key={h.label} className="hover:bg-green-50">
+                          <td className="px-3 py-1 text-gray-700">{h.label}</td>
+                          <td className="px-3 py-1 text-right text-gray-500">
+                            {(
+                              structure?.additionalHeads.find((ah) => ah.label === h.label)
+                                ?.amount ?? 0
+                            ).toLocaleString()}
+                          </td>
+                          {isUpdate && (
+                            <td className="px-3 py-1 text-right text-gray-400">
+                              {(cumulativeAdditional.get(h.label) ?? 0).toLocaleString()}
+                            </td>
+                          )}
+                          <td className="px-2 py-1">
+                            <input
+                              type="number"
+                              min="0"
+                              value={h.amount === 0 ? '' : h.amount}
+                              onChange={(e) => handleAdditionalChange(idx, e.target.value)}
+                              className={ni}
+                              placeholder="0"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-green-50 border-t border-green-200 font-semibold text-gray-800">
+                        <td className="px-3 py-1.5">Total Additional</td>
+                        <td className="px-3 py-1.5 text-right">{additionalAllotted.toLocaleString()}</td>
+                        {isUpdate && (
+                          <td className="px-3 py-1.5 text-right text-gray-500">
+                            {additionalPreviousTotal.toLocaleString()}
+                          </td>
+                        )}
+                        <td className="px-3 py-1.5 text-right text-green-700">
+                          {additionalNowTotal.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
 
               {/* Grand total summary */}
               <div className="rounded bg-gray-50 border border-gray-200 px-4 py-2.5 text-xs flex flex-wrap gap-x-6 gap-y-1">
@@ -582,6 +620,21 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       onChange={(e) => setSvkReceiptNo(e.target.value)}
                       placeholder="Auto-incremented, editable"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    />
+                  </div>
+                )}
+
+                {additionalNowTotal > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Additional Fee Receipt No
+                    </label>
+                    <input
+                      type="text"
+                      value={additionalReceiptNo}
+                      onChange={(e) => setAdditionalReceiptNo(e.target.value)}
+                      placeholder="Auto-incremented, editable"
+                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
                 )}
