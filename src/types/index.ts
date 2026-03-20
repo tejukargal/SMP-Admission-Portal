@@ -6,6 +6,7 @@ export interface StaffUser {
   role: UserRole;
   active: boolean;
   createdAt: string;
+  defaultAcademicYear?: AcademicYear;
 }
 
 export type Gender = 'BOY' | 'GIRL';

@@ -9,19 +9,26 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteField,
   collection,
   getDocs,
   query,
   where,
 } from 'firebase/firestore';
 import { firebaseConfig, db } from '../config/firebase';
-import type { StaffUser, UserRole } from '../types';
+import type { StaffUser, UserRole, AcademicYear } from '../types';
 
-export async function getUserRole(uid: string): Promise<{ role: UserRole; active: boolean } | null> {
+export async function getUserRole(
+  uid: string
+): Promise<{ role: UserRole; active: boolean; defaultAcademicYear?: AcademicYear } | null> {
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return null;
   const data = snap.data();
-  return { role: data.role as UserRole, active: data.active !== false };
+  return {
+    role: data.role as UserRole,
+    active: data.active !== false,
+    defaultAcademicYear: data.defaultAcademicYear as AcademicYear | undefined,
+  };
 }
 
 export async function createOrUpdateUserDoc(
@@ -68,4 +75,14 @@ export async function deactivateStaffUser(uid: string): Promise<void> {
 
 export async function reactivateStaffUser(uid: string): Promise<void> {
   await updateDoc(doc(db, 'users', uid), { active: true });
+}
+
+/** Set (or clear) the locked-in academic year for a staff account. */
+export async function setStaffDefaultYear(
+  uid: string,
+  academicYear: AcademicYear | ''
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    defaultAcademicYear: academicYear || deleteField(),
+  });
 }

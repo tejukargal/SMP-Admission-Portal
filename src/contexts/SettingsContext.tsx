@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { getSettings, getCachedSettings } from '../services/settingsService';
+import { useAuth } from './AuthContext';
 import type { AppSettings } from '../types';
 
 interface SettingsContextValue {
@@ -18,6 +19,8 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const { staffDefaultYear } = useAuth();
+
   // Initialise synchronously from module-level cache so pages that mount after
   // the first load get academicYear immediately — no render-cycle waterfall.
   const [settings, setSettings] = useState<AppSettings | null>(() => getCachedSettings());
@@ -55,8 +58,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setTick((t) => t + 1);
   }
 
+  // If this is a staff user with a locked default year, override the global
+  // academic year so every page they visit uses their assigned year instead.
+  const effectiveSettings: AppSettings | null =
+    settings && staffDefaultYear
+      ? { ...settings, currentAcademicYear: staffDefaultYear }
+      : settings;
+
   return (
-    <SettingsContext.Provider value={{ settings, loading, error, refetch }}>
+    <SettingsContext.Provider value={{ settings: effectiveSettings, loading, error, refetch }}>
       {children}
     </SettingsContext.Provider>
   );

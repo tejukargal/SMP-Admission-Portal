@@ -4,7 +4,7 @@ import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear } from '../services/studentService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
-import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser } from '../services/userService';
+import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear } from '../services/userService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
@@ -92,6 +92,7 @@ export function Settings() {
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState('');
+  const [savingYearFor, setSavingYearFor] = useState<string | null>(null);
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
   const [creatingStaff, setCreatingStaff] = useState(false);
@@ -320,6 +321,24 @@ export function Settings() {
       );
     } catch {
       setStaffError('Failed to update staff account.');
+    }
+  }
+
+  async function handleSetDefaultYear(uid: string, year: string) {
+    setSavingYearFor(uid);
+    try {
+      await setStaffDefaultYear(uid, year as AcademicYear | '');
+      setStaffUsers((prev) =>
+        prev.map((u) =>
+          u.uid === uid
+            ? { ...u, defaultAcademicYear: year ? (year as AcademicYear) : undefined }
+            : u
+        )
+      );
+    } catch {
+      setStaffError('Failed to update default year.');
+    } finally {
+      setSavingYearFor(null);
     }
   }
 
@@ -583,6 +602,23 @@ export function Settings() {
                           <p className="text-[10px] text-gray-400">
                             Created {new Date(u.createdAt).toLocaleDateString('en-IN')}
                           </p>
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <span className="text-[10px] text-gray-400 shrink-0">Default year:</span>
+                            <select
+                              value={u.defaultAcademicYear ?? ''}
+                              onChange={(e) => { void handleSetDefaultYear(u.uid, e.target.value); }}
+                              disabled={savingYearFor === u.uid}
+                              className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer disabled:opacity-50"
+                            >
+                              <option value="">Not set (follows global)</option>
+                              {ACADEMIC_YEAR_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            {savingYearFor === u.uid && (
+                              <span className="text-[10px] text-gray-400">Saving…</span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span
