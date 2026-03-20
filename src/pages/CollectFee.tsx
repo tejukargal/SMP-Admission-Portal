@@ -15,7 +15,6 @@ import type {
   AcademicYear,
   AdmType,
   AdmCat,
-  FeeRecord,
   FeeStructure,
 } from '../types';
 import { SMP_FEE_HEADS } from '../types';
@@ -218,7 +217,7 @@ export function CollectFee() {
       yearCount[s.year] = (yearCount[s.year] ?? 0) + 1;
       courseCount[s.course] = (courseCount[s.course] ?? 0) + 1;
     }
-    const paidCount = allStudents.filter((s) => feeRecords.some((r: FeeRecord) => r.studentId === s.id)).length;
+    const paidCount = allStudents.filter((s) => paidStudents.has(s.id)).length;
     const unpaidCount = allStudents.length - paidCount;
     const duesCount = allStudents.filter((s) => {
       const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;

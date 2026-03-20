@@ -9,7 +9,7 @@ import type { AppSettings, AcademicYear } from '../types';
 
 let cachedSettings: AppSettings | null = null;
 let cacheTimestamp = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
 const SETTINGS_DOC_ID = 'app_settings';
 

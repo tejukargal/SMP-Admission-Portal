@@ -13,6 +13,10 @@ import type {
 
 const COL = 'feeStructure';
 
+// In-memory cache: academicYear → { data, timestamp }
+const feeStructureCache = new Map<string, { data: FeeStructure[]; ts: number }>();
+const FEE_STRUCTURE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 function structureDocId(
   academicYear: AcademicYear,
   course: Course,
@@ -38,6 +42,7 @@ export async function saveFeeStructure(data: FeeStructureFormData): Promise<void
     ? (snap.data() as Pick<FeeStructure, 'createdAt'>).createdAt
     : now;
   await setDoc(ref, { ...data, createdAt, updatedAt: now });
+  feeStructureCache.delete(data.academicYear);
 }
 
 /** All saved fee structures across every academic year. */
@@ -46,13 +51,19 @@ export async function getAllFeeStructures(): Promise<FeeStructure[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeStructure));
 }
 
-/** All fee structures for a specific academic year. */
+/** All fee structures for a specific academic year. Results are cached for 10 minutes. */
 export async function getFeeStructuresByAcademicYear(
   academicYear: AcademicYear
 ): Promise<FeeStructure[]> {
+  const cached = feeStructureCache.get(academicYear);
+  if (cached && Date.now() - cached.ts < FEE_STRUCTURE_CACHE_TTL) {
+    return cached.data;
+  }
   const q = query(collection(db, COL), where('academicYear', '==', academicYear));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeStructure));
+  const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeStructure));
+  feeStructureCache.set(academicYear, { data, ts: Date.now() });
+  return data;
 }
 
 /** Delete every document in the feeStructure collection. Uses batched writes (max 500 per batch). */
@@ -89,6 +100,7 @@ export async function applyAdditionalHeadsToYear(
     });
     await batch.commit();
   }
+  feeStructureCache.delete(academicYear);
   return docs.length;
 }
 

@@ -324,7 +324,7 @@ export function Settings() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Tab bar */}
       <div className="flex-shrink-0 flex gap-1 border-b border-gray-200 mb-4">
@@ -348,11 +348,11 @@ export function Settings() {
 
         {/* ── General ── */}
         {activeTab === 'general' && (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <div className="max-w-xl space-y-5">
 
               {/* Academic Year */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200" style={{ animation: 'page-enter 0.2s ease-out both' }}>
                 <div className="px-6 py-4 border-b border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Academic Year</h3>
                   <p className="text-xs text-gray-400 mt-0.5">Set the active academic year for all operations</p>
@@ -390,7 +390,7 @@ export function Settings() {
               </div>
 
               {/* Danger Zone */}
-              <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+              <div className="bg-white rounded-lg border border-red-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out 0.07s both' }}>
                 <div className="px-6 py-4 border-b border-red-100 bg-red-50/60">
                   <h3 className="text-sm font-semibold text-red-700 uppercase tracking-wider">Danger Zone</h3>
                   <p className="text-xs text-red-400 mt-0.5">These actions are irreversible — proceed with caution</p>
@@ -493,36 +493,40 @@ export function Settings() {
         )}
 
         {/* ── Fee Structure ── */}
-        {activeTab === 'fee-structure' && <FeeStructurePage />}
+        {activeTab === 'fee-structure' && (
+          <div className="h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
+            <FeeStructurePage />
+          </div>
+        )}
 
         {/* ── Import Students ── */}
         {activeTab === 'import-students' && (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <ImportStudents />
           </div>
         )}
 
         {/* ── Import Address ── */}
         {activeTab === 'import-address' && (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <ImportAddress />
           </div>
         )}
 
         {/* ── Import Fee Register ── */}
         {activeTab === 'import-fee' && (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <ImportFeeRegister />
           </div>
         )}
 
         {/* ── Staff Accounts ── */}
         {activeTab === 'staff' && (
-          <div className="h-full overflow-auto">
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <div className="max-w-lg space-y-5">
 
               {/* Create staff account */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
                 <h3 className="text-base font-medium text-gray-800 mb-1">Create Staff Account</h3>
                 <p className="text-sm text-gray-500 mb-4">
                   Staff can enroll students, view student list, fee register, and dashboard.
@@ -562,7 +566,7 @@ export function Settings() {
               </div>
 
               {/* Staff list */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out 0.07s both' }}>
                 <h3 className="text-base font-medium text-gray-800 mb-4">Staff Accounts</h3>
                 {staffLoading ? (
                   <p className="text-sm text-gray-500">Loading...</p>

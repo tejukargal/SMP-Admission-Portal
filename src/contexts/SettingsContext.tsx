@@ -27,7 +27,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Only show loading if there is no fresh cached value — avoids a
+    // brief loading flash on every navigation when settings are already cached.
+    if (!getCachedSettings()) setLoading(true);
     setError(null);
 
     getSettings()
