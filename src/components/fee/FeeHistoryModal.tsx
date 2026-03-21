@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { getAllFeeRecordsByRegNumber, getAllFeeRecordsByStudent } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
-import type { Student, FeeRecord, FeeStructure, AcademicYear } from '../../types';
+import { getFeeOverride } from '../../services/feeOverrideService';
+import type { Student, FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 
 interface YearData {
   academicYear: AcademicYear;
   records: FeeRecord[];
   structure: FeeStructure | null;
+  override: StudentFeeOverride | null;
 }
 
 function sumSMPRecord(smp: FeeRecord['smp']): number {
@@ -18,18 +20,36 @@ function calcRecordTotal(r: FeeRecord): number {
   return sumSMPRecord(r.smp) + r.svk + r.additionalPaid.reduce((s, h) => s + h.amount, 0);
 }
 
-function calcEffectiveFine(s: FeeStructure, records: FeeRecord[]): number {
+/** Effective fine = max(allotted fine, total fine paid) — prevents negative balance. */
+function calcEffectiveFine(smpFineAllotted: number, records: FeeRecord[]): number {
   const finePaid = records.reduce((sum, r) => sum + r.smp.fine, 0);
-  return Math.max(s.smp.fine, finePaid);
+  return Math.max(smpFineAllotted, finePaid);
 }
 
-function calcAllotted(s: FeeStructure, records: FeeRecord[]): number {
-  const effectiveFine = calcEffectiveFine(s, records);
+/** Total allotted for a year given the effective SMP/SVK/additional values. */
+function calcAllotted(
+  smpValues: SMPHeads,
+  svk: number,
+  additionalHeads: FeeAdditionalHead[],
+  records: FeeRecord[],
+): number {
+  const effectiveFine = calcEffectiveFine(smpValues.fine, records);
   const smpTotal = SMP_FEE_HEADS.reduce(
-    (t, { key }) => t + (key === 'fine' ? effectiveFine : s.smp[key]),
-    0
+    (t, { key }) => t + (key === 'fine' ? effectiveFine : smpValues[key]),
+    0,
   );
-  return smpTotal + s.svk + s.additionalHeads.reduce((t, h) => t + h.amount, 0);
+  return smpTotal + svk + additionalHeads.reduce((t, h) => t + h.amount, 0);
+}
+
+/** Returns the effective allotted source values for a year (override > structure). */
+function effectiveValues(yd: YearData): { smp: SMPHeads; svk: number; additional: FeeAdditionalHead[] } | null {
+  if (yd.override) {
+    return { smp: yd.override.smp, svk: yd.override.svk, additional: yd.override.additionalHeads };
+  }
+  if (yd.structure) {
+    return { smp: yd.structure.smp, svk: yd.structure.svk, additional: yd.structure.additionalHeads };
+  }
+  return null;
 }
 
 interface Props {
@@ -59,11 +79,13 @@ export function FeeHistoryModal({ student, onClose }: Props) {
         const data: YearData[] = await Promise.all(
           [...grouped.entries()].map(async ([ay, recs]) => {
             const first = recs[0];
-            const structure =
-              (await getFeeStructure(ay, first.course, first.year, first.admType, first.admCat)) ??
-              (await getFeeStructure(ay, first.course, first.year, student.admType, student.admCat));
+            const [structure, override] = await Promise.all([
+              (getFeeStructure(ay, first.course, first.year, first.admType, first.admCat) ??
+               getFeeStructure(ay, first.course, first.year, student.admType, student.admCat)),
+              getFeeOverride(student.id, ay),
+            ]);
             const sorted = [...recs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-            return { academicYear: ay, records: sorted, structure };
+            return { academicYear: ay, records: sorted, structure: structure ?? null, override };
           })
         );
 
@@ -76,17 +98,17 @@ export function FeeHistoryModal({ student, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [student.id]);
 
-  const overallAllotted = yearData.reduce(
-    (s, { structure, records }) => s + (structure ? calcAllotted(structure, records) : 0),
-    0
-  );
-  const overallFine = yearData.reduce(
-    (s, { structure, records }) => s + (structure ? calcEffectiveFine(structure, records) : 0),
-    0
-  );
+  const overallAllotted = yearData.reduce((s, yd) => {
+    const ev = effectiveValues(yd);
+    return s + (ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : 0);
+  }, 0);
+  const overallFine = yearData.reduce((s, yd) => {
+    const ev = effectiveValues(yd);
+    return s + (ev ? calcEffectiveFine(ev.smp.fine, yd.records) : 0);
+  }, 0);
   const overallPaid = yearData.reduce(
     (s, { records }) => s + records.reduce((rs, r) => rs + calcRecordTotal(r), 0),
-    0
+    0,
   );
   const overallDue = overallAllotted - overallPaid;
 
@@ -101,17 +123,19 @@ export function FeeHistoryModal({ student, onClose }: Props) {
             <h3 className="text-sm font-semibold text-gray-900 shrink-0">Fee History</h3>
             {!loading && !error && yearData.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                {yearData.map(({ academicYear, records, structure }) => {
-                  const paid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
-                  const allotted = structure ? calcAllotted(structure, records) : null;
+                {yearData.map((yd) => {
+                  const ev = effectiveValues(yd);
+                  const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
+                  const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : null;
                   const due = allotted !== null ? allotted - paid : null;
                   const noDues = due !== null && due <= 0;
                   return (
                     <span
-                      key={academicYear}
+                      key={yd.academicYear}
                       className={`text-xs font-bold ${noDues ? 'text-green-600' : 'text-red-500'}`}
                     >
-                      {academicYear}: {noDues ? 'No Dues' : `Dues ₹${due !== null ? due.toLocaleString() : '—'}`}
+                      {yd.academicYear}: {noDues ? 'No Dues' : `Dues ₹${due !== null ? due.toLocaleString() : '—'}`}
+                      {yd.override && <span className="ml-1 text-[10px] font-normal text-amber-600">(custom)</span>}
                     </span>
                   );
                 })}
@@ -175,21 +199,21 @@ export function FeeHistoryModal({ student, onClose }: Props) {
               No fee records found for this student.
             </div>
           ) : (
-            yearData.map(({ academicYear, records, structure }) => {
+            yearData.map((yd) => {
+              const { academicYear, records, structure, override } = yd;
+              const ev = effectiveValues(yd);
               const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
-              const allotted = structure ? calcAllotted(structure, records) : null;
-              const fine = structure ? calcEffectiveFine(structure, records) : 0;
+              const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, records) : null;
+              const fine = ev ? calcEffectiveFine(ev.smp.fine, records) : 0;
               const due = allotted !== null ? allotted - totalPaid : null;
-              const svkBaseAllotted = structure ? structure.svk : 0;
-              const additionalAllotted = structure
-                ? structure.additionalHeads.reduce((t, h) => t + h.amount, 0)
-                : 0;
+              const svkBaseAllotted = ev?.svk ?? 0;
+              const additionalAllotted = ev ? ev.additional.reduce((t, h) => t + h.amount, 0) : 0;
               const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
               const smpPaid = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
               const svkBasePaid = records.reduce((s, r) => s + r.svk, 0);
               const additionalPaidTotal = records.reduce(
                 (s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0),
-                0
+                0,
               );
               const smpDue = smpAllotted - smpPaid;
               const svkDue = svkBaseAllotted - svkBasePaid;
@@ -206,6 +230,11 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                     <span className="text-xs text-gray-500">
                       {records[0].course} · {records[0].year} · {records[0].admType} · {records[0].admCat}
                     </span>
+                    {override && (
+                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                        Custom Allotted Fee
+                      </span>
+                    )}
                     <div className="ml-auto flex gap-4 text-xs">
                       {allotted !== null ? (
                         <>
@@ -262,36 +291,16 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            Date
-                          </th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            SMP Rpt
-                          </th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            SVK Rpt
-                          </th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            Addl Rpt
-                          </th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            Mode
-                          </th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">
-                            Remarks
-                          </th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                            SMP (₹)
-                          </th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                            SVK (₹)
-                          </th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                            Addl (₹)
-                          </th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                            Total (₹)
-                          </th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Date</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">SMP Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">SVK Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Addl Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Mode</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Remarks</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">SMP (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">SVK (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">Addl (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">Total (₹)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -346,10 +355,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                       </tbody>
                       <tfoot className="border-t border-gray-200 bg-gray-50">
                         <tr>
-                          <td
-                            colSpan={6}
-                            className="px-3 py-1.5 text-xs font-semibold text-gray-600"
-                          >
+                          <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-gray-600">
                             {records.length} receipt{records.length > 1 ? 's' : ''}
                           </td>
                           <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
@@ -369,40 +375,35 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                     </table>
                   </div>
 
-                  {/* Pending dues breakdown (when structure exists) */}
-                  {structure && (
+                  {/* Pending dues breakdown */}
+                  {ev && (
                     <div className="border-t border-gray-200 px-3 py-2 bg-gray-50">
                       <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                         Pending Dues Breakdown
+                        {override && !structure && (
+                          <span className="ml-1 normal-case text-amber-600">(using custom allotted fee)</span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        {/* SMP heads with due > 0 */}
+                        {/* SMP heads */}
                         {SMP_FEE_HEADS.map(({ key, label }) => {
-                          const allottedAmt = key === 'fine' ? fine : structure.smp[key];
+                          const allottedAmt = key === 'fine' ? fine : ev.smp[key];
                           const paidAmt = records.reduce((s, r) => s + r.smp[key], 0);
                           const dueAmt = allottedAmt - paidAmt;
                           if (allottedAmt === 0) return null;
                           return (
                             <span key={key}>
                               <span className="text-gray-500">{label}: </span>
-                              <span
-                                className={
-                                  dueAmt > 0
-                                    ? 'font-medium text-red-600'
-                                    : 'font-medium text-green-600'
-                                }
-                              >
+                              <span className={dueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
                                 ₹{dueAmt.toLocaleString()}
                               </span>
                             </span>
                           );
                         })}
                         {/* SVK */}
-                        {(() => {
-                          const svkAmt = structure.svk;
+                        {ev.svk > 0 && (() => {
                           const svkPd = records.reduce((s, r) => s + r.svk, 0);
-                          const svkDueAmt = svkAmt - svkPd;
-                          if (svkAmt === 0) return null;
+                          const svkDueAmt = ev.svk - svkPd;
                           return (
                             <span key="svk">
                               <span className="text-gray-500">SVK: </span>
@@ -412,31 +413,23 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                             </span>
                           );
                         })()}
-                        {/* Additional Fee heads */}
-                        {structure.additionalHeads.length > 0 && (
+                        {/* Additional heads */}
+                        {ev.additional.length > 0 && (
                           <span className="w-full text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                             Additional:
                           </span>
                         )}
-                        {structure.additionalHeads.map((h) => {
+                        {ev.additional.map((h) => {
                           const paidAmt = records.reduce(
-                            (s, r) =>
-                              s +
-                              (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
-                            0
+                            (s, r) => s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
+                            0,
                           );
                           const dueAmt = h.amount - paidAmt;
                           if (h.amount === 0) return null;
                           return (
                             <span key={h.label}>
                               <span className="text-gray-500">{h.label}: </span>
-                              <span
-                                className={
-                                  dueAmt > 0
-                                    ? 'font-medium text-red-600'
-                                    : 'font-medium text-green-600'
-                                }
-                              >
+                              <span className={dueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
                                 ₹{dueAmt.toLocaleString()}
                               </span>
                             </span>

@@ -145,6 +145,17 @@ export type PaymentMode = 'CASH' | 'UPI';
 
 export type FeeRecordFormData = Omit<FeeRecord, 'id' | 'createdAt' | 'updatedAt'>;
 
+/** Per-student override of allotted fee amounts (for special cases like out-of-state, special permission). */
+export interface StudentFeeOverride {
+  id: string;                       // `${studentId}__${academicYear}`
+  studentId: string;
+  academicYear: AcademicYear;
+  smp: SMPHeads;                    // overridden allotted amounts per SMP head
+  svk: number;                      // overridden SVK base allotted
+  additionalHeads: FeeAdditionalHead[];  // same labels as structure, custom amounts
+  updatedAt: string;
+}
+
 export const ACADEMIC_YEARS: AcademicYear[] = [
   '2012-13', '2013-14', '2014-15', '2015-16', '2016-17', '2017-18',
   '2018-19', '2019-20', '2020-21', '2021-22', '2022-23', '2023-24',

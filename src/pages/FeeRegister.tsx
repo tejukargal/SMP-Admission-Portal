@@ -1,16 +1,20 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { deleteFeeRecord } from '../services/feeRecordService';
 import { FeeEditModal } from '../components/fee/FeeEditModal';
 import { useAuth } from '../contexts/AuthContext';
-import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead } from '../types';
+import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead, AdmType, AdmCat, PaymentMode } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } from '../utils/feeReceipts';
 import { PageSpinner } from '../components/common/PageSpinner';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
+const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI'];
 const PAGE_SIZE = 100;
 
 const fs =
@@ -57,6 +61,48 @@ function sortRecords(records: FeeRecord[]): FeeRecord[] {
   });
 }
 
+function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[], academicYear: string): void {
+  const smpHeaders = SMP_FEE_HEADS.map(({ label }) => label);
+  const headers = [
+    '#', 'Name', 'Father Name', 'Year', 'Course', 'Reg No',
+    'Adm Cat', 'Adm Type', 'Date', 'SMP Rpt', 'SVK Rpt', 'Mode', 'Remarks',
+    ...smpHeaders, 'SMP Total',
+    'SVK', ...additionalHeadLabels, 'SVK Total',
+    'Grand Total',
+  ];
+
+  const dataRows = records.map((r, idx) => {
+    const smpTotal = calcSMPTotal(r);
+    const svkTotal = calcSVKTotal(r);
+    return [
+      idx + 1,
+      r.studentName,
+      r.fatherName,
+      r.year,
+      r.course,
+      r.regNumber || '',
+      r.admCat,
+      r.admType,
+      formatDate(r.date),
+      r.receiptNumber || '',
+      r.svkReceiptNumber || '',
+      r.paymentMode,
+      r.remarks || '',
+      ...(SMP_FEE_HEADS as { key: SMPFeeHead }[]).map(({ key }) => r.smp[key] || 0),
+      smpTotal,
+      r.svk || 0,
+      ...additionalHeadLabels.map((label) => r.additionalPaid.find((h) => h.label === label)?.amount ?? 0),
+      svkTotal,
+      smpTotal + svkTotal,
+    ];
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Fee Register');
+  XLSX.writeFile(wb, `Fee_Register_${academicYear}.xlsx`);
+}
+
 function LoadingGate() {
   return <PageSpinner />;
 }
@@ -68,6 +114,9 @@ export function FeeRegister() {
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
   const [courseFilter, setCourseFilter] = useState<Course | ''>('');
   const [yearFilter, setYearFilter] = useState<Year | ''>('');
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
+  const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
+  const [paymentModeFilter, setPaymentModeFilter] = useState<PaymentMode | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -128,8 +177,11 @@ export function FeeRegister() {
   // Apply filters
   const filteredRecords = useMemo(() => {
     let result = sortedRecords;
-    if (courseFilter) result = result.filter((r) => r.course === courseFilter);
-    if (yearFilter)   result = result.filter((r) => r.year === yearFilter);
+    if (courseFilter)       result = result.filter((r) => r.course       === courseFilter);
+    if (yearFilter)         result = result.filter((r) => r.year         === yearFilter);
+    if (admTypeFilter)      result = result.filter((r) => r.admType      === admTypeFilter);
+    if (admCatFilter)       result = result.filter((r) => r.admCat       === admCatFilter);
+    if (paymentModeFilter)  result = result.filter((r) => r.paymentMode  === paymentModeFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.trim().toUpperCase();
       result = result.filter(
@@ -141,7 +193,7 @@ export function FeeRegister() {
       );
     }
     return result;
-  }, [sortedRecords, courseFilter, yearFilter, debouncedSearch]);
+  }, [sortedRecords, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, debouncedSearch]);
 
   // Reset visible window whenever filters change
   useEffect(() => {
@@ -155,12 +207,15 @@ export function FeeRegister() {
 
   const hasMore = visibleCount < filteredRecords.length;
 
-  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter;
+  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter;
 
   function clearFilters() {
     setSearchTerm('');
     setCourseFilter('');
     setYearFilter('');
+    setAdmTypeFilter('');
+    setAdmCatFilter('');
+    setPaymentModeFilter('');
   }
 
   async function handleDelete() {
@@ -215,7 +270,7 @@ export function FeeRegister() {
           )}
         </div>
 
-        {/* Summary chips */}
+        {/* Summary chips + export */}
         {!isLoading && sortedRecords.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2.5 py-1 text-xs shadow-sm whitespace-nowrap">
@@ -233,6 +288,13 @@ export function FeeRegister() {
                 ₹{totals.grandTotal.toLocaleString()}
               </span>
             </div>
+            <button
+              onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear)}
+              disabled={filteredRecords.length === 0}
+              className="rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-sm"
+            >
+              Export Excel
+            </button>
           </div>
         )}
       </div>
@@ -276,6 +338,30 @@ export function FeeRegister() {
           >
             <option value="">All Years</option>
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select
+            className={fs}
+            value={admTypeFilter}
+            onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}
+          >
+            <option value="">All Adm Types</option>
+            {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select
+            className={fs}
+            value={admCatFilter}
+            onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}
+          >
+            <option value="">All Adm Cats</option>
+            {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select
+            className={fs}
+            value={paymentModeFilter}
+            onChange={(e) => setPaymentModeFilter(e.target.value as PaymentMode | '')}
+          >
+            <option value="">All Modes</option>
+            {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
 
           {hasActiveFilters && (

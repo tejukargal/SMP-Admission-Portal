@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
+import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
@@ -89,6 +90,7 @@ export function CollectFee() {
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords, loading: feeLoading, refetch: refetchFees } =
     useFeeRecords(academicYear);
+  const { overrides: feeOverrides } = useFeeOverrides(academicYear);
 
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
 
@@ -102,7 +104,7 @@ export function CollectFee() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Map: "${course}__${year}__${admType}__${admCat}" → allotted grand total
+  // Map: "${course}__${year}__${admType}__${admCat}" → allotted grand total (structure fallback)
   const allottedByKey = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of feeStructures) {
@@ -112,6 +114,27 @@ export function CollectFee() {
     }
     return map;
   }, [feeStructures]);
+
+  // Map: studentId → override allotted total (takes precedence over structure)
+  const overrideTotalByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const o of feeOverrides) {
+      const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + o.smp[key], 0);
+      const svkTotal = o.svk + o.additionalHeads.reduce((t, h) => t + h.amount, 0);
+      map.set(o.studentId, smpTotal + svkTotal);
+    }
+    return map;
+  }, [feeOverrides]);
+
+  /** Returns the effective allotted total for a student (override > structure). */
+  const getAllotted = useCallback(
+    (s: { id: string; course: string; year: string; admType: string; admCat: string }): number | null => {
+      if (overrideTotalByStudent.has(s.id)) return overrideTotalByStudent.get(s.id)!;
+      const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+      return allottedByKey.has(key) ? allottedByKey.get(key)! : null;
+    },
+    [overrideTotalByStudent, allottedByKey],
+  );
 
   // Aggregate: per-student whether they have payments + total paid amount
   const { paidStudents, totalPaidByStudent } = useMemo(() => {
@@ -140,14 +163,14 @@ export function CollectFee() {
       result = result.filter((s) => !paidStudents.has(s.id));
     if (feeStatusFilter === 'FEE_DUES') {
       result = result.filter((s) => {
-        const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+        const allotted = getAllotted(s);
         const paid = totalPaidByStudent.get(s.id) ?? 0;
         return allotted !== null && paid < allotted;
       });
     }
     if (feeStatusFilter === 'NO_FEE_DUES') {
       result = result.filter((s) => {
-        const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+        const allotted = getAllotted(s);
         const paid = totalPaidByStudent.get(s.id) ?? 0;
         return allotted !== null && paid >= allotted;
       });
@@ -172,7 +195,7 @@ export function CollectFee() {
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
   }, [
-    allStudents, allottedByKey, totalPaidByStudent,
+    allStudents, allottedByKey, overrideTotalByStudent, totalPaidByStudent,
     courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter,
     admStatusFilter, feeStatusFilter, debouncedSearch, paidStudents,
   ]);
@@ -212,17 +235,17 @@ export function CollectFee() {
     const paidCount = allStudents.filter((s) => paidStudents.has(s.id)).length;
     const unpaidCount = allStudents.length - paidCount;
     const duesCount = allStudents.filter((s) => {
-      const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+      const allotted = getAllotted(s);
       const paid = totalPaidByStudent.get(s.id) ?? 0;
       return allotted !== null && paid < allotted;
     }).length;
     const noDuesCount = allStudents.filter((s) => {
-      const allotted = allottedByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+      const allotted = getAllotted(s);
       const paid = totalPaidByStudent.get(s.id) ?? 0;
       return allotted !== null && paid >= allotted;
     }).length;
     return { yearCount, courseCount, total: allStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
-  }, [allStudents, feeRecords, allottedByKey, totalPaidByStudent]);
+  }, [allStudents, feeRecords, allottedByKey, overrideTotalByStudent, totalPaidByStudent]);
 
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
@@ -489,9 +512,7 @@ export function CollectFee() {
               {visibleStudents.map((student, idx) => {
                 const hasFeeRecord = paidStudents.has(student.id);
                 const totalPaid = totalPaidByStudent.get(student.id) ?? 0;
-                const allotted = allottedByKey.get(
-                  `${student.course}__${student.year}__${student.admType}__${student.admCat}`
-                ) ?? null;
+                const allotted = getAllotted(student);
                 const isFullyPaid = allotted !== null && totalPaid >= allotted;
                 return (
                   <tr

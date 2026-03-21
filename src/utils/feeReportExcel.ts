@@ -110,12 +110,22 @@ export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): v
 
 // ── 2. Fee List ────────────────────────────────────────────────────────────────
 export function exportFeeListExcel(rows: StudentFeeRow[], academicYear: string): void {
+  const tSmpA = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
+  const tSvkA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
+  const tSmpP = rows.reduce((s, r) => s + r.smpPaid, 0);
+  const tSvkP = rows.reduce((s, r) => s + r.svkPaid, 0);
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Fee List`],
     [`Academic Year: ${academicYear}`],
     [],
     FEE_DETAIL_HEADER,
     ...rows.map(feeDetailRow),
+    [
+      'TOTAL', '', '', '', '',
+      tSmpA, tSvkA, tSmpA + tSvkA,
+      tSmpP, tSvkP, tSmpP + tSvkP,
+      tSmpA - tSmpP, tSvkA - tSvkP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
+    ],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);
@@ -127,12 +137,22 @@ export function exportFeeListExcel(rows: StudentFeeRow[], academicYear: string):
 // ── 3. Dues Report ─────────────────────────────────────────────────────────────
 export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): void {
   const dueRows = rows.filter((r) => r.balance !== null && r.balance > 0);
+  const tSmpA = dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
+  const tSvkA = dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
+  const tSmpP = dueRows.reduce((s, r) => s + r.smpPaid, 0);
+  const tSvkP = dueRows.reduce((s, r) => s + r.svkPaid, 0);
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Dues Report`],
     [`Academic Year: ${academicYear}  |  ${dueRows.length} students with outstanding balance`],
     [],
     FEE_DETAIL_HEADER,
     ...dueRows.map(feeDetailRow),
+    [
+      'TOTAL', '', '', '', '',
+      tSmpA, tSvkA, tSmpA + tSvkA,
+      tSmpP, tSvkP, tSmpP + tSvkP,
+      tSmpA - tSmpP, tSvkA - tSvkP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
+    ],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);

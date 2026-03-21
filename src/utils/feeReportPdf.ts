@@ -311,6 +311,16 @@ export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): voi
 // ── 2. Fee List ───────────────────────────────────────────────────────────────
 export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): void {
   const BLUE: [number, number, number] = [30, 64, 175];
+  const tSmpA = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
+  const tSvkA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
+  const tSmpP = rows.reduce((s, r) => s + r.smpPaid, 0);
+  const tSvkP = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const totalRow: (string | number)[] = [
+    '', 'TOTAL', '', '', '',
+    num(tSmpA), num(tSvkA), num(tSmpA + tSvkA),
+    num(tSmpP), num(tSvkP), num(tSmpP + tSvkP),
+    num(tSmpA - tSmpP), num(tSvkA - tSvkP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
+  ];
   const doc = buildDoc(
     'SMP Admissions \u2014 Fee List',
     `Academic Year: ${academicYear}  |  ${rows.length} students`,
@@ -320,11 +330,17 @@ export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): v
     startY: 23,
     margin: { left: MARGIN, right: MARGIN },
     head: [FEE_HEAD1, FEE_HEAD2],
-    body: rows.map(feeRow),
+    body: [...rows.map(feeRow), totalRow],
     styles: BASE,
     headStyles: head(BLUE),
     alternateRowStyles: NO_BAND,
     columnStyles: FEE_COLS,
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === rows.length) {
+        (data.cell.styles as { fontStyle: string; fillColor: number[] }).fontStyle = 'bold';
+        (data.cell.styles as { fontStyle: string; fillColor: number[] }).fillColor = [240, 242, 246];
+      }
+    },
     didDrawPage: (data) => {
       if (data.pageNumber > 1) {
         const d = data.doc as jsPDF;
@@ -343,6 +359,16 @@ export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): v
 export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void {
   const dueRows = rows.filter((r) => r.balance !== null && r.balance > 0);
   const RED: [number, number, number] = [185, 28, 28];
+  const tSmpA = dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
+  const tSvkA = dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
+  const tSmpP = dueRows.reduce((s, r) => s + r.smpPaid, 0);
+  const tSvkP = dueRows.reduce((s, r) => s + r.svkPaid, 0);
+  const totalRow: (string | number)[] = [
+    '', 'TOTAL', '', '', '',
+    num(tSmpA), num(tSvkA), num(tSmpA + tSvkA),
+    num(tSmpP), num(tSvkP), num(tSmpP + tSvkP),
+    num(tSmpA - tSmpP), num(tSvkA - tSvkP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
+  ];
   const doc = buildDoc(
     'SMP Admissions \u2014 Dues Report',
     `Academic Year: ${academicYear}  |  ${dueRows.length} students with outstanding balance`,
@@ -352,11 +378,17 @@ export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void
     startY: 23,
     margin: { left: MARGIN, right: MARGIN },
     head: [FEE_HEAD1, FEE_HEAD2],
-    body: dueRows.map(feeRow),
+    body: [...dueRows.map(feeRow), totalRow],
     styles: BASE,
     headStyles: head(RED),
     alternateRowStyles: NO_BAND,
     columnStyles: FEE_COLS,
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === dueRows.length) {
+        (data.cell.styles as { fontStyle: string; fillColor: number[] }).fontStyle = 'bold';
+        (data.cell.styles as { fontStyle: string; fillColor: number[] }).fillColor = [253, 242, 242];
+      }
+    },
     didDrawPage: (data) => footer(doc, data.pageNumber),
   });
 

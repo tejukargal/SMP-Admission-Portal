@@ -7,6 +7,7 @@ import {
   getNextSvkReceiptNumber,
   getNextAdditionalReceiptNumber,
 } from '../../services/feeRecordService';
+import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
 import { getFineSchedule } from '../../services/fineScheduleService';
 import { Button } from '../common/Button';
 import type {
@@ -19,6 +20,7 @@ import type {
   FeeAdditionalHead,
   FinePeriod,
   PaymentMode,
+  StudentFeeOverride,
 } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 
@@ -67,6 +69,15 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // ── Per-student allotted fee override ────────────────────────────────────
+  const [loadedOverride, setLoadedOverride] = useState<StudentFeeOverride | null>(null);
+  const [editingAllotted, setEditingAllotted] = useState(false);
+  const [overrideSmp, setOverrideSmp] = useState<SMPHeads>(emptySMP());
+  const [overrideSvk, setOverrideSvk] = useState(0);
+  const [overrideAdditional, setOverrideAdditional] = useState<FeeAdditionalHead[]>([]);
+  const [savingOverride, setSavingOverride] = useState(false);
+  const [overrideSaveError, setOverrideSaveError] = useState<string | null>(null);
 
   /** Amounts being collected in THIS payment session */
   const [smpNow, setSmpNow] = useState<SMPHeads>(emptySMP());
@@ -118,16 +129,23 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
       getNextSvkReceiptNumber(academicYear),
       getNextAdditionalReceiptNumber(academicYear),
       getFineSchedule(academicYear),
+      getFeeOverride(student.id, academicYear),
     ])
-      .then(([struct, prior, nextRpt, nextSvkRpt, nextAddlRpt, schedule]) => {
+      .then(([struct, prior, nextRpt, nextSvkRpt, nextAddlRpt, schedule, override]) => {
         setStructure(struct);
         setPriorPayments(prior);
         setReceiptNo(nextRpt);
         setSvkReceiptNo(nextSvkRpt);
         setAdditionalReceiptNo(nextAddlRpt);
         setFineSchedule(schedule);
+        setLoadedOverride(override);
 
-        if (struct) {
+        // Effective allotted: override takes precedence over structure
+        const effSmp = override ? override.smp : struct?.smp;
+        const effSvk = override ? override.svk : struct?.svk;
+        const effAdditional = override ? override.additionalHeads : struct?.additionalHeads;
+
+        if (effSmp !== undefined) {
           // Compute cumulative from prior payments
           const cumSmp = emptySMP();
           for (const r of prior) {
@@ -141,12 +159,12 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
             (student.year === '2ND YEAR' && student.admType === 'LATERAL');
           const remaining = emptySMP();
           for (const { key } of SMP_FEE_HEADS) {
-            remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, struct.smp[key] - cumSmp[key]);
+            remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, effSmp[key] - cumSmp[key]);
           }
           setSmpNow(remaining);
-          setSvkNow(Math.max(0, struct.svk - cumSvk));
+          setSvkNow(Math.max(0, (effSvk ?? 0) - cumSvk));
           setAdditionalNow(
-            struct.additionalHeads.map((h) => {
+            (effAdditional ?? []).map((h) => {
               const prevPaid = prior.reduce(
                 (s, r) =>
                   s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
@@ -156,7 +174,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
             })
           );
         }
-        // If no structure: everything stays 0
+        // If neither structure nor override: everything stays 0
       })
       .catch((err: unknown) => {
         setLoadError(err instanceof Error ? err.message : 'Failed to load fee data');
@@ -170,11 +188,13 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
     (student.year === '2ND YEAR' && student.admType === 'LATERAL');
 
   // Auto-fill Fine from the year-level schedule whenever date or schedule changes.
+  // Skip when a custom override specifies its own fine — the override is authoritative.
   useEffect(() => {
     if (!fineSchedule.length || !date || isFineExempt) return;
+    if (loadedOverride !== undefined && loadedOverride !== null) return;
     const fine = lookupFine(date, fineSchedule);
     setSmpNow((prev) => ({ ...prev, fine }));
-  }, [date, fineSchedule, isFineExempt]);
+  }, [date, fineSchedule, isFineExempt, loadedOverride]);
 
   function handleSMPChange(key: SMPFeeHead, val: string) {
     setSmpNow((prev) => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
@@ -188,18 +208,75 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
     );
   }
 
+  // ── Override allotted handlers ────────────────────────────────────────────
+  function startEditAllotted() {
+    const src = loadedOverride ?? (structure
+      ? { smp: structure.smp, svk: structure.svk, additionalHeads: structure.additionalHeads }
+      : null);
+    if (!src) return;
+    setOverrideSmp({ ...src.smp });
+    setOverrideSvk(src.svk);
+    setOverrideAdditional(src.additionalHeads.map((h) => ({ ...h })));
+    setOverrideSaveError(null);
+    setEditingAllotted(true);
+  }
+
+  function cancelEditAllotted() {
+    setEditingAllotted(false);
+    setOverrideSaveError(null);
+  }
+
+  async function handleSaveOverride() {
+    setSavingOverride(true);
+    setOverrideSaveError(null);
+    try {
+      await saveFeeOverride({
+        studentId: student.id,
+        academicYear,
+        smp: overrideSmp,
+        svk: overrideSvk,
+        additionalHeads: overrideAdditional,
+      });
+      const saved: StudentFeeOverride = {
+        id: `${student.id}__${academicYear}`,
+        studentId: student.id,
+        academicYear,
+        smp: overrideSmp,
+        svk: overrideSvk,
+        additionalHeads: overrideAdditional,
+        updatedAt: new Date().toISOString(),
+      };
+      setLoadedOverride(saved);
+      setEditingAllotted(false);
+    } catch (err: unknown) {
+      setOverrideSaveError(err instanceof Error ? err.message : 'Failed to save allotted override');
+    } finally {
+      setSavingOverride(false);
+    }
+  }
+
+  // ── Effective allotted: override > structure ───────────────────────────────
+  const effSmpValues: SMPHeads = editingAllotted
+    ? overrideSmp
+    : (loadedOverride?.smp ?? structure?.smp ?? emptySMP());
+  const effSvkValue: number = editingAllotted
+    ? overrideSvk
+    : (loadedOverride?.svk ?? structure?.svk ?? 0);
+  const effAdditionalHeads: FeeAdditionalHead[] = editingAllotted
+    ? overrideAdditional
+    : (loadedOverride?.additionalHeads ?? structure?.additionalHeads ?? []);
+
   // ── Derived totals ────────────────────────────────────────────────────────
   // Fine is dynamic — the effective allotted fine is whatever has been paid in
   // total (prior + now), so fine payments never produce a negative balance.
   const totalFinePaid = cumulativeSmp.fine + smpNow.fine;
-  const effectiveFineAllotted = structure
-    ? Math.max(structure.smp.fine, totalFinePaid)
+  const hasAllotted = !!(structure || loadedOverride);
+  const effectiveFineAllotted = hasAllotted ? Math.max(effSmpValues.fine, totalFinePaid) : 0;
+  const smpAllotted = hasAllotted
+    ? sumSMP(effSmpValues) - effSmpValues.fine + effectiveFineAllotted
     : 0;
-  const smpAllotted = structure
-    ? sumSMP(structure.smp) - structure.smp.fine + effectiveFineAllotted
-    : 0;
-  const svkAllotted = structure ? structure.svk : 0;
-  const additionalAllotted = structure ? sumArr(structure.additionalHeads) : 0;
+  const svkAllotted = effSvkValue;
+  const additionalAllotted = sumArr(effAdditionalHeads);
   const grandAllotted = smpAllotted + svkAllotted + additionalAllotted;
 
   const smpPreviousTotal = sumSMP(cumulativeSmp);
@@ -290,7 +367,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
           </button>
         </div>
 
-        {/* Student info */}
+        {/* Student info + override indicator */}
         <div className="px-5 py-2 bg-gray-50 border-b border-gray-200 text-xs shrink-0">
           <div className="flex flex-wrap gap-x-5 gap-y-0.5">
             <span>
@@ -322,6 +399,36 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               <span className="text-gray-700">{student.admType}</span>
             </span>
           </div>
+
+          {/* Override allotted controls */}
+          {!loadingData && !loadError && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              {loadedOverride && !editingAllotted && (
+                <span className="inline-flex items-center gap-1 rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                  ✎ Custom allotted fee active
+                </span>
+              )}
+              {!editingAllotted && (structure || loadedOverride) && (
+                <button
+                  onClick={startEditAllotted}
+                  className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  {loadedOverride ? 'Edit Custom Allotted' : 'Override Allotted Fee'}
+                </button>
+              )}
+              {editingAllotted && (
+                <>
+                  <span className="text-[10px] font-semibold text-amber-700">Editing allotted fee — save separately below</span>
+                  <button
+                    onClick={cancelEditAllotted}
+                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Body */}
@@ -336,14 +443,14 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
             </div>
           ) : (
             <div className="space-y-5">
-              {!structure && (
+              {!structure && !loadedOverride && (
                 <div className="rounded bg-yellow-50 border border-yellow-200 px-3 py-2 text-xs text-yellow-800">
                   No fee structure configured for{' '}
                   <strong>
                     {student.course} / {student.year} / {student.admType} / {student.admCat}
                   </strong>{' '}
                   — <strong>{academicYear}</strong>. Set it up in the{' '}
-                  <strong>Fee Structure</strong> page first.
+                  <strong>Fee Structure</strong> page first, or use <strong>Override Allotted Fee</strong> above.
                 </div>
               )}
 
@@ -373,10 +480,23 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {SMP_FEE_HEADS.map(({ key, label }) => (
-                      <tr key={key} className="hover:bg-gray-50">
+                      <tr key={key} className={editingAllotted ? 'bg-amber-50' : 'hover:bg-gray-50'}>
                         <td className="px-3 py-1 text-gray-700">{label}</td>
-                        <td className="px-3 py-1 text-right text-gray-500">
-                          {structure ? structure.smp[key].toLocaleString() : '—'}
+                        <td className="px-2 py-1">
+                          {editingAllotted ? (
+                            <input
+                              type="number"
+                              min="0"
+                              value={overrideSmp[key] === 0 ? '' : overrideSmp[key]}
+                              onChange={(e) => setOverrideSmp((prev) => ({ ...prev, [key]: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                              placeholder="0"
+                            />
+                          ) : (
+                            <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
+                              {hasAllotted ? effSmpValues[key].toLocaleString() : '—'}
+                            </span>
+                          )}
                         </td>
                         {isUpdate && (
                           <td className="px-3 py-1 text-right text-gray-400">
@@ -432,10 +552,23 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    <tr className="hover:bg-gray-50">
+                    <tr className={editingAllotted ? 'bg-amber-50' : 'hover:bg-gray-50'}>
                       <td className="px-3 py-1 text-gray-700">SVK</td>
-                      <td className="px-3 py-1 text-right text-gray-500">
-                        {structure ? structure.svk.toLocaleString() : '—'}
+                      <td className="px-2 py-1">
+                        {editingAllotted ? (
+                          <input
+                            type="number"
+                            min="0"
+                            value={overrideSvk === 0 ? '' : overrideSvk}
+                            onChange={(e) => setOverrideSvk(Math.max(0, parseInt(e.target.value) || 0))}
+                            className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                            placeholder="0"
+                          />
+                        ) : (
+                          <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
+                            {hasAllotted ? effSvkValue.toLocaleString() : '—'}
+                          </span>
+                        )}
                       </td>
                       {isUpdate && (
                         <td className="px-3 py-1 text-right text-gray-400">
@@ -472,7 +605,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               </div>
 
               {/* Additional Fee table */}
-              {additionalNow.length > 0 && (
+              {(additionalNow.length > 0 || (editingAllotted && effAdditionalHeads.length > 0)) && (
                 <div>
                   <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
                     Additional Fee
@@ -491,32 +624,54 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {additionalNow.map((h, idx) => (
-                        <tr key={h.label} className="hover:bg-green-50">
-                          <td className="px-3 py-1 text-gray-700">{h.label}</td>
-                          <td className="px-3 py-1 text-right text-gray-500">
-                            {(
-                              structure?.additionalHeads.find((ah) => ah.label === h.label)
-                                ?.amount ?? 0
-                            ).toLocaleString()}
-                          </td>
-                          {isUpdate && (
-                            <td className="px-3 py-1 text-right text-gray-400">
-                              {(cumulativeAdditional.get(h.label) ?? 0).toLocaleString()}
+                      {effAdditionalHeads.map((ah, idx) => {
+                        const nowEntry = additionalNow.find((h) => h.label === ah.label);
+                        const nowIdx = additionalNow.findIndex((h) => h.label === ah.label);
+                        return (
+                          <tr key={ah.label} className={editingAllotted ? 'bg-amber-50' : 'hover:bg-green-50'}>
+                            <td className="px-3 py-1 text-gray-700">{ah.label}</td>
+                            <td className="px-2 py-1">
+                              {editingAllotted ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={overrideAdditional[idx]?.amount === 0 ? '' : overrideAdditional[idx]?.amount ?? ''}
+                                  onChange={(e) => setOverrideAdditional((prev) =>
+                                    prev.map((h, i) =>
+                                      i === idx ? { ...h, amount: Math.max(0, parseInt(e.target.value) || 0) } : h
+                                    )
+                                  )}
+                                  className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                                  placeholder="0"
+                                />
+                              ) : (
+                                <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
+                                  {ah.amount.toLocaleString()}
+                                </span>
+                              )}
                             </td>
-                          )}
-                          <td className="px-2 py-1">
-                            <input
-                              type="number"
-                              min="0"
-                              value={h.amount === 0 ? '' : h.amount}
-                              onChange={(e) => handleAdditionalChange(idx, e.target.value)}
-                              className={ni}
-                              placeholder="0"
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                            {isUpdate && (
+                              <td className="px-3 py-1 text-right text-gray-400">
+                                {(cumulativeAdditional.get(ah.label) ?? 0).toLocaleString()}
+                              </td>
+                            )}
+                            <td className="px-2 py-1">
+                              {nowIdx !== -1 ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={nowEntry!.amount === 0 ? '' : nowEntry!.amount}
+                                  onChange={(e) => handleAdditionalChange(nowIdx, e.target.value)}
+                                  className={ni}
+                                  placeholder="0"
+                                />
+                              ) : (
+                                <span className="block text-right pr-2 text-gray-300 text-xs">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="bg-green-50 border-t border-green-200 font-semibold text-gray-800">
@@ -533,6 +688,36 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       </tr>
                     </tfoot>
                   </table>
+                </div>
+              )}
+
+              {/* Save override button (only shown while editing allotted) */}
+              {editingAllotted && (
+                <div className="rounded bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="text-xs text-amber-800">
+                    <strong>Editing custom allotted fee.</strong> These values override the fee structure for this student only.
+                    Save before collecting payment.
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={cancelEditAllotted}
+                      className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void handleSaveOverride()}
+                      disabled={savingOverride}
+                      className="rounded border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs text-white font-medium hover:bg-amber-600 cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {savingOverride ? 'Saving…' : 'Save Custom Allotted'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {overrideSaveError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                  {overrideSaveError}
                 </div>
               )}
 

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
+import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
 import {
@@ -291,6 +292,13 @@ function StatisticsTab({ rows, academicYear }: { rows: StudentFeeRow[]; academic
 
 // ── Tab: Fee List ─────────────────────────────────────────────────────────────
 function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
+  const totals = useMemo(() => ({
+    smpAllt: rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
+    svkAllt: rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
+    smpPaid: rows.reduce((s, r) => s + r.smpPaid, 0),
+    svkPaid: rows.reduce((s, r) => s + r.svkPaid, 0),
+  }), [rows]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -306,6 +314,23 @@ function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYea
               <tr><td colSpan={14} className="px-3 py-6 text-center text-xs text-gray-400">No students match the current filters.</td></tr>
             )}
           </tbody>
+          {rows.length > 0 && (
+            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+              <tr>
+                <td className="px-2 py-2 text-center text-gray-400">—</td>
+                <td className="px-2 py-2" colSpan={4}>Total — {rows.length} student{rows.length !== 1 ? 's' : ''}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right text-green-700 border-l border-gray-200">{fmt(totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600 border-l border-gray-200">{fmt(totals.smpAllt - totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -315,6 +340,13 @@ function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYea
 // ── Tab: Dues Report ──────────────────────────────────────────────────────────
 function DuesTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
   const dueRows = useMemo(() => rows.filter((r) => r.balance !== null && r.balance > 0), [rows]);
+  const totals = useMemo(() => ({
+    smpAllt: dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
+    svkAllt: dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
+    smpPaid: dueRows.reduce((s, r) => s + r.smpPaid, 0),
+    svkPaid: dueRows.reduce((s, r) => s + r.svkPaid, 0),
+  }), [dueRows]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -330,6 +362,23 @@ function DuesTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: 
               <tr><td colSpan={14} className="px-3 py-6 text-center text-xs text-gray-400">No students with outstanding balance.</td></tr>
             )}
           </tbody>
+          {dueRows.length > 0 && (
+            <tfoot className="bg-red-50 font-bold border-t-2 border-red-200 text-[10px]">
+              <tr>
+                <td className="px-2 py-2 text-center text-gray-400">—</td>
+                <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
+                <td className="px-2 py-2 text-right border-l border-red-200">{fmt(totals.smpAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right text-green-700 border-l border-red-200">{fmt(totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600 border-l border-red-200">{fmt(totals.smpAllt - totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -462,12 +511,19 @@ export function FeeReportsPage() {
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords,   loading: feeLoading       } = useFeeRecords(academicYear);
+  const { overrides: feeOverrides, loading: overridesLoading } = useFeeOverrides(academicYear);
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
 
   useEffect(() => {
     if (!academicYear) { setFeeStructures([]); return; }
     getFeeStructuresByAcademicYear(academicYear).then(setFeeStructures).catch(() => {});
   }, [academicYear]);
+
+  // Map: studentId → override (for O(1) lookup per student)
+  const overrideByStudent = useMemo(
+    () => new Map(feeOverrides.map((o) => [o.studentId, o])),
+    [feeOverrides],
+  );
 
   // ── Allotted maps (split SMP / SVK) ──────────────────────────────────────
   // smpAllottedNoFineByKey: SMP total excluding fine (fine is dynamic per student)
@@ -501,27 +557,42 @@ export function FeeReportsPage() {
   }, [feeRecords]);
 
   // ── All students as fee rows ──────────────────────────────────────────────
-  // smpAllotted uses effective fine: max(structure fine, total fine paid by student)
-  // This prevents negative balance when a student paid more fine than the structure amount.
+  // Override takes precedence over structure per student.
+  // Fine allotted: max(base fine, total fine paid) so fine payments never produce negative balance.
   const allStudentRows = useMemo((): StudentFeeRow[] =>
     allStudents.map((s) => {
-      const key          = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-      const smpNoFine    = smpAllottedNoFineByKey.has(key) ? smpAllottedNoFineByKey.get(key)! : null;
-      const structFine   = structureFineByKey.get(key) ?? 0;
-      const finePaid     = finePaidByStudent.get(s.id) ?? 0;
-      const effectiveFine = Math.max(structFine, finePaid);
-      const smpAllotted  = smpNoFine !== null ? smpNoFine + effectiveFine : null;
-      const svkAllotted  = svkAllottedByKey.has(key) ? svkAllottedByKey.get(key)! : null;
-      const allotted     = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
-      const smpPaid      = smpPaidByStudent.get(s.id) ?? 0;
-      const svkPaid      = svkPaidByStudent.get(s.id) ?? 0;
-      const paid         = smpPaid + svkPaid;
-      const smpBalance   = smpAllotted !== null ? smpAllotted - smpPaid : null;
-      const svkBalance   = svkAllotted !== null ? svkAllotted - svkPaid : null;
-      const balance      = allotted    !== null ? allotted    - paid    : null;
+      const override = overrideByStudent.get(s.id);
+      const key      = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+      const finePaid = finePaidByStudent.get(s.id) ?? 0;
+
+      let smpAllotted: number | null;
+      let svkAllotted: number | null;
+
+      if (override) {
+        // Per-student override: sum all SMP heads (fine uses effective logic)
+        const baseFine  = override.smp.fine;
+        const effFine   = Math.max(baseFine, finePaid);
+        const smpNoFine = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : override.smp[k]), 0);
+        smpAllotted = smpNoFine + effFine;
+        svkAllotted = override.svk + override.additionalHeads.reduce((t, h) => t + h.amount, 0);
+      } else {
+        const smpNoFine  = smpAllottedNoFineByKey.has(key) ? smpAllottedNoFineByKey.get(key)! : null;
+        const structFine = structureFineByKey.get(key) ?? 0;
+        const effFine    = Math.max(structFine, finePaid);
+        smpAllotted = smpNoFine !== null ? smpNoFine + effFine : null;
+        svkAllotted = svkAllottedByKey.has(key) ? svkAllottedByKey.get(key)! : null;
+      }
+
+      const allotted   = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
+      const smpPaid    = smpPaidByStudent.get(s.id) ?? 0;
+      const svkPaid    = svkPaidByStudent.get(s.id) ?? 0;
+      const paid       = smpPaid + svkPaid;
+      const smpBalance = smpAllotted !== null ? smpAllotted - smpPaid : null;
+      const svkBalance = svkAllotted !== null ? svkAllotted - svkPaid : null;
+      const balance    = allotted    !== null ? allotted    - paid    : null;
       return { student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance };
     }),
-  [allStudents, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent]);
+  [allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent]);
 
   // ── Stats for chips ───────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -568,7 +639,7 @@ export function FeeReportsPage() {
     setFeeStatusFilter('ALL');
   }
 
-  const loading = settingsLoading || studentsLoading || feeLoading;
+  const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading;
 
   return (
     <div className="p-4 space-y-4" style={{ animation: 'page-enter 0.22s ease-out' }}>
