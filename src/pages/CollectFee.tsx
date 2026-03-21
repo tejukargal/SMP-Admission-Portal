@@ -18,6 +18,7 @@ import type {
   FeeStructure,
 } from '../types';
 import { SMP_FEE_HEADS } from '../types';
+import { PageSpinner } from '../components/common/PageSpinner';
 
 const PAGE_SIZE = 100;
 
@@ -42,16 +43,7 @@ function AnimNum({ value }: { value: number }) {
 
 
 function LoadingGate() {
-  return (
-    <div className="h-full flex items-center justify-center" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-12 py-10 w-96 flex flex-col items-center text-center">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Collect Fee</h2>
-        <p className="text-xs text-gray-400 mb-6">Loading student data…</p>
-        <p className="text-sm font-medium text-gray-700">Thejaraj R</p>
-        <p className="text-[10px] text-gray-400">Developer</p>
-      </div>
-    </div>
-  );
+  return <PageSpinner />;
 }
 
 export function CollectFee() {

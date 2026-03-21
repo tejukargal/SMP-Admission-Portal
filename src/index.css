@@ -25,3 +25,46 @@
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
+
+@keyframes l19 {
+  100% { transform: rotate(1turn); }
+}
+
+.page-loader {
+  width: 50px;
+  aspect-ratio: 1;
+  display: grid;
+  color: #2563eb;
+  background: radial-gradient(farthest-side, currentColor calc(100% - 6px), #0000 calc(100% - 5px) 0);
+  -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 13px), #000 calc(100% - 12px));
+  border-radius: 50%;
+  animation: l19 2s infinite linear;
+}
+
+.page-loader::before,
+.page-loader::after {
+  content: "";
+  grid-area: 1/1;
+  background:
+    linear-gradient(currentColor 0 0) center,
+    linear-gradient(currentColor 0 0) center;
+  background-size: 100% 10px, 10px 100%;
+  background-repeat: no-repeat;
+}
+
+.page-loader::after {
+  transform: rotate(45deg);
+}
+
+@keyframes dot-blink {
+  0%, 20%  { opacity: 0; }
+  50%      { opacity: 1; }
+  100%     { opacity: 0; }
+}
+
+.connecting-dots span {
+  animation: dot-blink 1.4s infinite;
+}
+.connecting-dots span:nth-child(1) { animation-delay: 0s; }
+.connecting-dots span:nth-child(2) { animation-delay: 0.2s; }
+.connecting-dots span:nth-child(3) { animation-delay: 0.4s; }

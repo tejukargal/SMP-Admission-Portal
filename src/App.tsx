@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FiltersProvider } from './contexts/FiltersContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { Layout } from './components/layout/Layout';
+import { PageSpinner } from './components/common/PageSpinner';
 
 const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
@@ -29,11 +30,7 @@ function AppRoutes() {
   const { user, role, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
+    return <PageSpinner fullScreen />;
   }
 
   if (!user) {
@@ -81,13 +78,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <FiltersProvider>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-              <p className="text-gray-500">Loading...</p>
-            </div>
-          }
-        >
+        <Suspense fallback={<PageSpinner fullScreen />}>
           <AppRoutes />
         </Suspense>
         </FiltersProvider>

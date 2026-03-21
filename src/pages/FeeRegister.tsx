@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } from '../utils/feeReceipts';
+import { PageSpinner } from '../components/common/PageSpinner';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -57,16 +58,7 @@ function sortRecords(records: FeeRecord[]): FeeRecord[] {
 }
 
 function LoadingGate() {
-  return (
-    <div className="h-full flex items-center justify-center" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm px-12 py-10 w-96 flex flex-col items-center text-center">
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Fee Register</h2>
-        <p className="text-xs text-gray-400 mb-6">Loading fee records…</p>
-        <p className="text-sm font-medium text-gray-700">Thejaraj R</p>
-        <p className="text-[10px] text-gray-400">Developer</p>
-      </div>
-    </div>
-  );
+  return <PageSpinner />;
 }
 
 export function FeeRegister() {
