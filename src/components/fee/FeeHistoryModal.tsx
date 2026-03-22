@@ -82,7 +82,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
             const [structure, override] = await Promise.all([
               (getFeeStructure(ay, first.course, first.year, first.admType, first.admCat) ??
                getFeeStructure(ay, first.course, first.year, student.admType, student.admCat)),
-              getFeeOverride(student.id, ay),
+              getFeeOverride(first.studentId, ay),
             ]);
             const sorted = [...recs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             return { academicYear: ay, records: sorted, structure: structure ?? null, override };
@@ -324,15 +324,36 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                                 {r.additionalReceiptNumber || '—'}
                               </td>
                               <td className="px-3 py-1.5 whitespace-nowrap">
-                                <span
-                                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                    r.paymentMode === 'CASH'
-                                      ? 'bg-amber-50 text-amber-700'
-                                      : 'bg-purple-50 text-purple-700'
-                                  }`}
-                                >
-                                  {r.paymentMode}
-                                </span>
+                                {(() => {
+                                  const rowSmpAmt = sumSMPRecord(r.smp);
+                                  const rowSvkAmt = r.svk;
+                                  const rowAddlAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+                                  const hasPerSection = r.smpPaymentMode !== undefined || r.svkPaymentMode !== undefined || r.additionalPaymentMode !== undefined;
+                                  const badge = (mode: typeof r.paymentMode) => (
+                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${mode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>
+                                      {mode}
+                                    </span>
+                                  );
+                                  if (!hasPerSection) return badge(r.paymentMode);
+                                  const smpMode = r.smpPaymentMode ?? r.paymentMode;
+                                  const svkMode = r.svkPaymentMode ?? r.paymentMode;
+                                  const addlMode = r.additionalPaymentMode ?? r.paymentMode;
+                                  const activeModes = [
+                                    ...(rowSmpAmt > 0 ? [smpMode] : []),
+                                    ...(rowSvkAmt > 0 ? [svkMode] : []),
+                                    ...(rowAddlAmt > 0 ? [addlMode] : []),
+                                  ];
+                                  if (activeModes.length > 0 && activeModes.every((m) => m === activeModes[0])) {
+                                    return badge(activeModes[0]);
+                                  }
+                                  return (
+                                    <div className="flex flex-col gap-0.5">
+                                      {rowSmpAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${smpMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>SMP:{smpMode}</span>}
+                                      {rowSvkAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${svkMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>SVK:{svkMode}</span>}
+                                      {rowAddlAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${addlMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>Addl:{addlMode}</span>}
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-3 py-1.5 text-gray-500 max-w-[8rem] truncate">
                                 {r.remarks || '—'}

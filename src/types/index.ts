@@ -132,7 +132,10 @@ export interface FeeRecord {
   receiptNumber: string;          // SMP Rpt
   svkReceiptNumber: string;       // SVK Rpt (e.g. "SVK DVP 1")
   additionalReceiptNumber: string; // Additional Fee Rpt (e.g. "0001")
-  paymentMode: PaymentMode;
+  paymentMode: PaymentMode;         // primary mode (backward compat; equals SMP mode if SMP was paid)
+  smpPaymentMode?: PaymentMode;     // payment mode for SMP component
+  svkPaymentMode?: PaymentMode;     // payment mode for SVK component
+  additionalPaymentMode?: PaymentMode; // payment mode for Additional Fee component
   remarks: string;
   smp: SMPHeads;            // paid amounts per SMP head
   svk: number;              // SVK base paid

@@ -87,7 +87,9 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const [receiptNo, setReceiptNo] = useState('');
   const [svkReceiptNo, setSvkReceiptNo] = useState('');
   const [additionalReceiptNo, setAdditionalReceiptNo] = useState('');
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH');
+  const [smpPaymentMode, setSmpPaymentMode] = useState<PaymentMode>('CASH');
+  const [svkPaymentMode, setSvkPaymentMode] = useState<PaymentMode>('CASH');
+  const [additionalPaymentMode, setAdditionalPaymentMode] = useState<PaymentMode>('CASH');
   const [fineSchedule, setFineSchedule] = useState<FinePeriod[]>([]);
   const [remarks, setRemarks] = useState('');
 
@@ -312,7 +314,11 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         receiptNumber: smpNowTotal > 0 ? receiptNo : '',
         svkReceiptNumber: svkNowTotal > 0 ? svkReceiptNo : '',
         additionalReceiptNumber: additionalNowTotal > 0 ? additionalReceiptNo : '',
-        paymentMode,
+        // Primary paymentMode = SMP mode if SMP paid, else SVK, else Additional (backward compat)
+        paymentMode: smpNowTotal > 0 ? smpPaymentMode : svkNowTotal > 0 ? svkPaymentMode : additionalPaymentMode,
+        ...(smpNowTotal > 0 ? { smpPaymentMode } : {}),
+        ...(svkNowTotal > 0 ? { svkPaymentMode } : {}),
+        ...(additionalNowTotal > 0 ? { additionalPaymentMode } : {}),
         remarks,
         smp: smpNow,
         svk: svkNow,
@@ -791,6 +797,22 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       placeholder="Auto-incremented, editable"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     />
+                    <div className="mt-1.5 flex items-center gap-3">
+                      <span className="text-[10px] font-medium text-gray-500">SMP Mode:</span>
+                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
+                          <input
+                            type="radio"
+                            name="smpPaymentMode"
+                            value={mode}
+                            checked={smpPaymentMode === mode}
+                            onChange={() => setSmpPaymentMode(mode)}
+                            className="accent-blue-600"
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -806,6 +828,22 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       placeholder="Auto-incremented, editable"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
                     />
+                    <div className="mt-1.5 flex items-center gap-3">
+                      <span className="text-[10px] font-medium text-gray-500">SVK Mode:</span>
+                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
+                          <input
+                            type="radio"
+                            name="svkPaymentMode"
+                            value={mode}
+                            checked={svkPaymentMode === mode}
+                            onChange={() => setSvkPaymentMode(mode)}
+                            className="accent-purple-600"
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -821,32 +859,24 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       placeholder="Auto-incremented, editable"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
                     />
+                    <div className="mt-1.5 flex items-center gap-3">
+                      <span className="text-[10px] font-medium text-gray-500">Addl Mode:</span>
+                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
+                          <input
+                            type="radio"
+                            name="additionalPaymentMode"
+                            value={mode}
+                            checked={additionalPaymentMode === mode}
+                            onChange={() => setAdditionalPaymentMode(mode)}
+                            className="accent-green-600"
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Payment Mode <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-3 mt-1">
-                    {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                      <label
-                        key={mode}
-                        className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700"
-                      >
-                        <input
-                          type="radio"
-                          name="paymentMode"
-                          value={mode}
-                          checked={paymentMode === mode}
-                          onChange={() => setPaymentMode(mode)}
-                          className="accent-blue-600"
-                        />
-                        {mode}
-                      </label>
-                    ))}
-                  </div>
-                </div>
 
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-700 mb-1">
