@@ -9,7 +9,9 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { FeeRecord, FeeRecordFormData, AcademicYear } from '../types';
+import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmType, AdmCat, SMPFeeHead } from '../types';
+import { SMP_FEE_HEADS } from '../types';
+import { getFeeStructure } from './feeStructureService';
 
 const COL = 'feeRecords';
 
@@ -161,4 +163,78 @@ export async function getNextSvkReceiptNumber(academicYear: AcademicYear): Promi
     }
   }
   return `${SVK_RPT_PREFIX}${String(max + 1).padStart(padLen, '0')}`;
+}
+
+/**
+ * When a student's Adm Cat is changed (e.g. GM → SNQ), adjusts existing fee
+ * records for that student in the given academic year:
+ *  - Zeros out any SMP heads that are 0 in the new fee structure but were > 0
+ *    in the old one (e.g. Tuition for SNQ students).
+ *  - Updates the `admCat` field on each record so FeeHistoryModal picks up the
+ *    correct fee structure for display.
+ *  - Appends an auto-generated remark describing what was changed.
+ *
+ * All updates are committed in a single batch write.
+ */
+export async function applyAdmCatFeeAdjustment(
+  studentId: string,
+  academicYear: AcademicYear,
+  course: Course,
+  year: Year,
+  admType: AdmType,
+  oldAdmCat: AdmCat,
+  newAdmCat: AdmCat,
+): Promise<void> {
+  const [oldStructure, newStructure] = await Promise.all([
+    getFeeStructure(academicYear, course, year, admType, oldAdmCat),
+    getFeeStructure(academicYear, course, year, admType, newAdmCat),
+  ]);
+
+  const records = await getFeeRecordsByStudent(studentId, academicYear);
+  if (records.length === 0) return;
+
+  // Heads where the new structure has 0 (i.e. the student no longer owes anything).
+  const headsToZero = new Set<SMPFeeHead>(
+    newStructure
+      ? (Object.entries(newStructure.smp) as [SMPFeeHead, number][])
+          .filter(([key, newAmt]) => newAmt === 0 && (oldStructure?.smp[key] ?? 0) > 0)
+          .map(([key]) => key)
+      : []
+  );
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  for (const record of records) {
+    const updatedSmp = { ...record.smp };
+    const adjustments: string[] = [];
+
+    for (const key of headsToZero) {
+      if (updatedSmp[key] > 0) {
+        const paidAmt = updatedSmp[key];
+        updatedSmp[key] = 0;
+        const label = SMP_FEE_HEADS.find((h) => h.key === key)?.label ?? key;
+        adjustments.push(`${label} ₹${paidAmt}→₹0`);
+      }
+    }
+
+    const catNote = `Cat changed ${oldAdmCat}→${newAdmCat}`;
+    const changeDetail =
+      adjustments.length > 0
+        ? `${catNote}; ${adjustments.join(', ')} (auto-adjusted)`
+        : catNote;
+
+    const updatedRemarks = record.remarks
+      ? `${record.remarks}; ${changeDetail}`
+      : changeDetail;
+
+    batch.update(doc(db, COL, record.id), {
+      admCat: newAdmCat,
+      smp: updatedSmp,
+      remarks: updatedRemarks,
+      updatedAt: now,
+    });
+  }
+
+  await batch.commit();
 }

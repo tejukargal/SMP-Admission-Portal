@@ -558,7 +558,9 @@ export function Students() {
         message={
           <>
             Are you sure you want to delete{' '}
-            <strong>{deleteModal.student?.studentNameSSLC}</strong>? This action cannot be undone.
+            <strong>{deleteModal.student?.studentNameSSLC}</strong>? This will also permanently
+            delete all their fee records, fee overrides, and document tracking. This action cannot
+            be undone.
           </>
         }
         confirmLabel="Delete"

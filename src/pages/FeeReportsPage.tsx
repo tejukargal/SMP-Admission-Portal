@@ -5,6 +5,7 @@ import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
+import * as XLSX from 'xlsx';
 import {
   exportStatsPdf, exportFeeListPdf, exportDuesPdf,
   exportCourseYearPdf, exportConsolidatedPdf,
@@ -17,7 +18,7 @@ import {
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -30,11 +31,12 @@ const fs =
   'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'statistics',   label: 'Statistics'        },
-  { id: 'fee-list',     label: 'Fee List'           },
-  { id: 'dues',         label: 'Dues Report'        },
-  { id: 'course-year',  label: 'Course & Year Wise' },
-  { id: 'consolidated', label: 'Consolidated'       },
+  { id: 'statistics',         label: 'Statistics'          },
+  { id: 'fee-list',           label: 'Fee List'             },
+  { id: 'dues',               label: 'Dues Report'          },
+  { id: 'course-year',        label: 'Course & Year Wise'   },
+  { id: 'consolidated',       label: 'Consolidated'         },
+  { id: 'daily-collections',  label: 'Daily Collections'    },
 ];
 
 function fmt(n: number): string {
@@ -497,6 +499,510 @@ function ConsolidatedTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]
   );
 }
 
+// ── Tab: Daily Collections ────────────────────────────────────────────────────
+interface DayEntry {
+  dateKey: string;
+  dateLabel: string;
+  receiptCount: number;
+  studentCount: number;
+  smpCash: number; svkCash: number; addCash: number; cashTotal: number;
+  smpUpi: number;  svkUpi: number;  addUpi: number;  upiTotal: number;
+  dayTotal: number;
+}
+
+function formatDayLabel(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function buildDailyCollections(records: FeeRecord[]): DayEntry[] {
+  const map = new Map<string, DayEntry>();
+  const studentSets = new Map<string, Set<string>>();
+  for (const r of records) {
+    const dateKey = r.date.slice(0, 10);
+    if (!map.has(dateKey)) {
+      map.set(dateKey, {
+        dateKey,
+        dateLabel: formatDayLabel(dateKey),
+        receiptCount: 0,
+        studentCount: 0,
+        smpCash: 0, svkCash: 0, addCash: 0, cashTotal: 0,
+        smpUpi: 0,  svkUpi: 0,  addUpi: 0,  upiTotal: 0,
+        dayTotal: 0,
+      });
+      studentSets.set(dateKey, new Set());
+    }
+    const e = map.get(dateKey)!;
+    e.receiptCount++;
+    studentSets.get(dateKey)!.add(r.studentId);
+
+    const smpAmt = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
+    const svkAmt = r.svk;
+    const addAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+
+    const smpMode = r.smpPaymentMode ?? r.paymentMode;
+    const svkMode = r.svkPaymentMode ?? r.paymentMode;
+    const addMode = r.additionalPaymentMode ?? r.paymentMode;
+
+    if (smpMode === 'CASH') { e.smpCash += smpAmt; } else { e.smpUpi += smpAmt; }
+    if (svkMode === 'CASH') { e.svkCash += svkAmt; } else { e.svkUpi += svkAmt; }
+    if (addMode === 'CASH') { e.addCash += addAmt; } else { e.addUpi += addAmt; }
+
+    e.cashTotal = e.smpCash + e.svkCash + e.addCash;
+    e.upiTotal  = e.smpUpi  + e.svkUpi  + e.addUpi;
+    e.dayTotal  = e.cashTotal + e.upiTotal;
+  }
+  for (const [dateKey, e] of map) {
+    e.studentCount = studentSets.get(dateKey)!.size;
+  }
+  return Array.from(map.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
+function exportDailyCollectionsExcel(entries: DayEntry[], academicYear: string): void {
+  const header = [
+    'Date', 'Receipts', 'Students',
+    'SMP (Cash)', 'SVK (Cash)', 'Additional (Cash)', 'Total Cash',
+    'SMP (UPI)',  'SVK (UPI)',  'Additional (UPI)',  'Total UPI',
+    'Day Total',
+  ];
+  const dataRows = entries.map((e) => [
+    e.dateLabel, e.receiptCount, e.studentCount,
+    e.smpCash || null, e.svkCash || null, e.addCash || null, e.cashTotal || null,
+    e.smpUpi  || null, e.svkUpi  || null, e.addUpi  || null, e.upiTotal  || null,
+    e.dayTotal,
+  ]);
+  const tot = entries.reduce(
+    (a, e) => ({
+      receiptCount: a.receiptCount + e.receiptCount,
+      smpCash: a.smpCash + e.smpCash, svkCash: a.svkCash + e.svkCash, addCash: a.addCash + e.addCash,
+      cashTotal: a.cashTotal + e.cashTotal,
+      smpUpi: a.smpUpi + e.smpUpi,   svkUpi: a.svkUpi + e.svkUpi,   addUpi: a.addUpi + e.addUpi,
+      upiTotal: a.upiTotal + e.upiTotal,
+      dayTotal: a.dayTotal + e.dayTotal,
+    }),
+    { receiptCount: 0, smpCash: 0, svkCash: 0, addCash: 0, cashTotal: 0, smpUpi: 0, svkUpi: 0, addUpi: 0, upiTotal: 0, dayTotal: 0 },
+  );
+  const totRow = [
+    'TOTAL', tot.receiptCount, '',
+    tot.smpCash || null, tot.svkCash || null, tot.addCash || null, tot.cashTotal,
+    tot.smpUpi  || null, tot.svkUpi  || null, tot.addUpi  || null, tot.upiTotal,
+    tot.dayTotal,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Daily Collections');
+  XLSX.writeFile(wb, `Daily_Collections_${academicYear}.xlsx`);
+}
+
+// ── Day Breakdown Excel export ────────────────────────────────────────────────
+function exportDayBreakdownExcel(day: DayEntry, cashRecs: FeeRecord[], upiRecs: FeeRecord[]): void {
+  const header = ['Sl', 'Student Name', 'Reg No', 'Course', 'Year', 'SMP Rpt', 'SVK Rpt', 'Add Rpt', 'SMP', 'SVK', 'Additional', 'Total'];
+
+  const makeRows = (recs: FeeRecord[], isCash: boolean) =>
+    recs.map((r, i) => {
+      const s      = getRecordSplit(r);
+      const smpAmt = isCash ? s.smpCash : s.smpUpi;
+      const svkAmt = isCash ? s.svkCash : s.svkUpi;
+      const addAmt = isCash ? s.addCash : s.addUpi;
+      return [i + 1, r.studentName, r.regNumber || '', r.course, r.year,
+        r.receiptNumber || '', r.svkReceiptNumber || '', r.additionalReceiptNumber || '',
+        smpAmt || null, svkAmt || null, addAmt || null, smpAmt + svkAmt + addAmt];
+    });
+
+  const makeTotRow = (recs: FeeRecord[], isCash: boolean) => {
+    const t = recs.reduce((a, r) => {
+      const s = getRecordSplit(r);
+      return { smp: a.smp + (isCash ? s.smpCash : s.smpUpi), svk: a.svk + (isCash ? s.svkCash : s.svkUpi), add: a.add + (isCash ? s.addCash : s.addUpi) };
+    }, { smp: 0, svk: 0, add: 0 });
+    return ['TOTAL', '', '', '', '', '', '', '', t.smp || null, t.svk || null, t.add || null, t.smp + t.svk + t.add];
+  };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...makeRows(cashRecs, true),  makeTotRow(cashRecs, true)]),  'Cash Payments');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...makeRows(upiRecs,  false), makeTotRow(upiRecs,  false)]), 'UPI Payments');
+  XLSX.writeFile(wb, `Collections_${day.dateKey}_${day.dateLabel.replace(/ /g, '_')}.xlsx`);
+}
+
+// ── Day Breakdown Modal ────────────────────────────────────────────────────────
+function getRecordSplit(r: FeeRecord) {
+  const smpAmt = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
+  const svkAmt = r.svk;
+  const addAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+  const smpMode = r.smpPaymentMode ?? r.paymentMode;
+  const svkMode = r.svkPaymentMode ?? r.paymentMode;
+  const addMode = r.additionalPaymentMode ?? r.paymentMode;
+  return {
+    smpCash: smpMode === 'CASH' ? smpAmt : 0,
+    smpUpi:  smpMode === 'UPI'  ? smpAmt : 0,
+    svkCash: svkMode === 'CASH' ? svkAmt : 0,
+    svkUpi:  svkMode === 'UPI'  ? svkAmt : 0,
+    addCash: addMode === 'CASH' ? addAmt : 0,
+    addUpi:  addMode === 'UPI'  ? addAmt : 0,
+  };
+}
+
+function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: FeeRecord[]; onClose: () => void }) {
+  const dayRecords = useMemo(
+    () =>
+      records
+        .filter((r) => r.date.slice(0, 10) === day.dateKey)
+        .sort((a, b) => (parseInt(a.receiptNumber, 10) || 0) - (parseInt(b.receiptNumber, 10) || 0)),
+    [records, day.dateKey],
+  );
+
+  const cashRecords = useMemo(
+    () => dayRecords.filter((r) => { const s = getRecordSplit(r); return (s.smpCash + s.svkCash + s.addCash) > 0; }),
+    [dayRecords],
+  );
+  const upiRecords = useMemo(
+    () => dayRecords.filter((r) => { const s = getRecordSplit(r); return (s.smpUpi + s.svkUpi + s.addUpi) > 0; }),
+    [dayRecords],
+  );
+
+  const cashTot = useMemo(() => cashRecords.reduce(
+    (a, r) => { const s = getRecordSplit(r); return { smp: a.smp + s.smpCash, svk: a.svk + s.svkCash, add: a.add + s.addCash }; },
+    { smp: 0, svk: 0, add: 0 },
+  ), [cashRecords]);
+
+  const upiTot = useMemo(() => upiRecords.reduce(
+    (a, r) => { const s = getRecordSplit(r); return { smp: a.smp + s.smpUpi, svk: a.svk + s.svkUpi, add: a.add + s.addUpi }; },
+    { smp: 0, svk: 0, add: 0 },
+  ), [upiRecords]);
+
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) { if (ev.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  function PaymentSection({
+    sectionRecords,
+    mode,
+    totals,
+  }: {
+    sectionRecords: FeeRecord[];
+    mode: 'CASH' | 'UPI';
+    totals: { smp: number; svk: number; add: number };
+  }) {
+    const isCash  = mode === 'CASH';
+    const hdrCls  = isCash ? 'bg-emerald-700' : 'bg-blue-700';
+    const totBg   = isCash ? 'bg-emerald-50'  : 'bg-blue-50';
+    const totClr  = isCash ? 'text-green-700' : 'text-blue-700';
+    const grand   = totals.smp + totals.svk + totals.add;
+    const cell    = 'px-2 py-1.5 text-right text-[10px]';
+    const hCell   = 'px-2 py-1.5 text-right font-semibold';
+
+    if (sectionRecords.length === 0) {
+      return (
+        <div className={`rounded border px-4 py-3 text-xs text-gray-400 ${isCash ? 'border-emerald-200 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/30'}`}>
+          No {mode} payments on this day.
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-auto max-h-[186px] rounded-lg border border-gray-200">
+        <table className="w-full text-[10px]">
+          <thead className={`sticky top-0 z-10 ${hdrCls} text-white`}>
+            <tr>
+              <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
+              <th className="px-2 py-1.5 text-left font-semibold min-w-[130px]">Student Name</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Reg No</th>
+              <th className="px-2 py-1.5 text-center font-semibold">Yr / Course</th>
+              <th className="px-2 py-1.5 text-left font-semibold border-l border-white/30">SMP Rpt</th>
+              <th className="px-2 py-1.5 text-left font-semibold">SVK Rpt</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Add Rpt</th>
+              <th className={`${hCell} border-l border-white/30`}>SMP</th>
+              <th className={hCell}>SVK</th>
+              <th className={hCell}>Add</th>
+              <th className={`${hCell} border-l border-white/30`}>{isCash ? 'Cash Total' : 'UPI Total'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sectionRecords.map((r, i) => {
+              const s       = getRecordSplit(r);
+              const smpAmt  = isCash ? s.smpCash : s.smpUpi;
+              const svkAmt  = isCash ? s.svkCash : s.svkUpi;
+              const addAmt  = isCash ? s.addCash : s.addUpi;
+              const rowTot  = smpAmt + svkAmt + addAmt;
+              const yShort  = r.year.split(' ')[0];
+              return (
+                <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                  <td className="px-2 py-1.5 font-medium truncate max-w-[160px]">{r.studentName}</td>
+                  <td className="px-2 py-1.5 text-gray-500">{r.regNumber || '—'}</td>
+                  <td className="px-2 py-1.5 text-center text-gray-500">{yShort} / {r.course}</td>
+                  <td className="px-2 py-1.5 border-l border-gray-100 font-mono">{r.receiptNumber || '—'}</td>
+                  <td className="px-2 py-1.5 text-gray-500 font-mono">{r.svkReceiptNumber || '—'}</td>
+                  <td className="px-2 py-1.5 text-gray-500 font-mono">{r.additionalReceiptNumber || '—'}</td>
+                  <td className={`${cell} border-l border-gray-100`}>{smpAmt > 0 ? fmt(smpAmt) : '—'}</td>
+                  <td className={cell}>{svkAmt > 0 ? fmt(svkAmt) : '—'}</td>
+                  <td className={cell}>{addAmt > 0 ? fmt(addAmt) : '—'}</td>
+                  <td className={`${cell} font-bold border-l border-gray-100`}>{fmt(rowTot)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className={`sticky bottom-0 z-10 ${totBg} font-bold border-t-2 border-gray-300 text-[10px]`}>
+            <tr>
+              <td className="px-2 py-2 text-center text-gray-400">—</td>
+              <td className="px-2 py-2" colSpan={6}>
+                {sectionRecords.length} payment{sectionRecords.length !== 1 ? 's' : ''}
+              </td>
+              <td className={`px-2 py-2 text-right ${totClr} border-l border-gray-200`}>{fmt(totals.smp)}</td>
+              <td className={`px-2 py-2 text-right ${totClr}`}>{fmt(totals.svk)}</td>
+              <td className={`px-2 py-2 text-right ${totClr}`}>{fmt(totals.add)}</td>
+              <td className={`px-2 py-2 text-right ${totClr} border-l border-gray-200`}>{fmt(grand)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Daily Collections — {day.dateLabel}</h2>
+            <p className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-3">
+              <span>{day.receiptCount} receipt{day.receiptCount !== 1 ? 's' : ''}</span>
+              <span>·</span>
+              <span>{day.studentCount} student{day.studentCount !== 1 ? 's' : ''}</span>
+              <span>·</span>
+              <span className="text-green-700 font-semibold">Cash: {fmt(day.cashTotal)}</span>
+              <span>·</span>
+              <span className="text-blue-700 font-semibold">UPI: {fmt(day.upiTotal)}</span>
+              <span>·</span>
+              <span className="font-semibold">Total: {fmt(day.dayTotal)}</span>
+            </p>
+          </div>
+          <div className="ml-4 flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => exportDayBreakdownExcel(day, cashRecords, upiRecords)}
+              className="px-3 py-1.5 rounded border border-gray-300 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+            >
+              Excel
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-700 text-base font-bold leading-none transition-colors"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-5">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                Cash Payments
+              </span>
+              <span className="text-[10px] text-gray-400">
+                {cashRecords.length} receipt{cashRecords.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                {fmt(cashTot.smp + cashTot.svk + cashTot.add)} total
+              </span>
+            </div>
+            <PaymentSection sectionRecords={cashRecords} mode="CASH" totals={cashTot} />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+                UPI Payments
+              </span>
+              <span className="text-[10px] text-gray-400">
+                {upiRecords.length} receipt{upiRecords.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                {fmt(upiTot.smp + upiTot.svk + upiTot.add)} total
+              </span>
+            </div>
+            <PaymentSection sectionRecords={upiRecords} mode="UPI" totals={upiTot} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DailyCollectionsTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+  const [dateFrom,    setDateFrom]    = useState('');
+  const [dateTo,      setDateTo]      = useState('');
+  const [modeFilter,  setModeFilter]  = useState<'ALL' | 'CASH' | 'UPI'>('ALL');
+  const [selectedDay, setSelectedDay] = useState<DayEntry | null>(null);
+
+  const allDays = useMemo(() => buildDailyCollections(feeRecords), [feeRecords]);
+
+  const filteredDays = useMemo(() => {
+    let days = allDays;
+    if (dateFrom)              days = days.filter((e) => e.dateKey >= dateFrom);
+    if (dateTo)                days = days.filter((e) => e.dateKey <= dateTo);
+    if (modeFilter === 'CASH') days = days.filter((e) => e.cashTotal > 0);
+    if (modeFilter === 'UPI')  days = days.filter((e) => e.upiTotal  > 0);
+    return days;
+  }, [allDays, dateFrom, dateTo, modeFilter]);
+
+  const totals = useMemo(
+    () =>
+      filteredDays.reduce(
+        (a, e) => ({
+          receiptCount: a.receiptCount + e.receiptCount,
+          studentCount: a.studentCount + e.studentCount,
+          cashTotal:    a.cashTotal    + e.cashTotal,
+          upiTotal:     a.upiTotal     + e.upiTotal,
+          dayTotal:     a.dayTotal     + e.dayTotal,
+        }),
+        { receiptCount: 0, studentCount: 0, cashTotal: 0, upiTotal: 0, dayTotal: 0 },
+      ),
+    [filteredDays],
+  );
+
+  const hasFilter = !!dateFrom || !!dateTo || modeFilter !== 'ALL';
+
+  return (
+    <div className="space-y-4">
+      {selectedDay && (
+        <DayBreakdownModal
+          day={selectedDay}
+          records={feeRecords}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Cash',  value: fmt(totals.cashTotal),    color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200',  sub: 'To deposit in bank'  },
+          { label: 'Total UPI',   value: fmt(totals.upiTotal),     color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   sub: 'To verify with bank' },
+          { label: 'Grand Total', value: fmt(totals.dayTotal),     color: 'text-gray-900',   bg: 'bg-gray-50',   border: 'border-gray-200',   sub: 'Cash + UPI'          },
+          { label: 'Receipts',    value: totals.receiptCount,      color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', sub: 'Payments in range'   },
+        ].map((c) => (
+          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{c.label}</p>
+            <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-gray-500 font-medium">From</span>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
+        <span className="text-xs text-gray-500 font-medium">To</span>
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} />
+        <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value as 'ALL' | 'CASH' | 'UPI')} className={fs}>
+          <option value="ALL">All Modes</option>
+          <option value="CASH">Cash Only</option>
+          <option value="UPI">UPI Only</option>
+        </select>
+        {hasFilter && (
+          <button
+            onClick={() => { setDateFrom(''); setDateTo(''); setModeFilter('ALL'); }}
+            className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+        <div className="ml-auto">
+          <Button variant="secondary" size="sm" onClick={() => exportDailyCollectionsExcel(filteredDays, academicYear)}>
+            Excel
+          </Button>
+        </div>
+      </div>
+
+      {/* Hint */}
+      {filteredDays.length > 0 && (
+        <p className="text-[10px] text-gray-400">Click any row to view a detailed breakup of that day's collections.</p>
+      )}
+
+      {/* Day-wise summary table — 13 columns */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <table className="w-full text-[10px]">
+          <thead className="bg-emerald-700 text-white">
+            <tr>
+              <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+              <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Date</th>
+              <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Receipts</th>
+              <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Cash</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30" rowSpan={2}>Day Total</th>
+            </tr>
+            <tr>
+              <th className="px-2 py-1 text-right font-semibold border-l border-white/30">SMP</th>
+              <th className="px-2 py-1 text-right font-semibold">SVK</th>
+              <th className="px-2 py-1 text-right font-semibold">Add</th>
+              <th className="px-2 py-1 text-right font-semibold bg-emerald-600">Total</th>
+              <th className="px-2 py-1 text-right font-semibold border-l border-white/30">SMP</th>
+              <th className="px-2 py-1 text-right font-semibold">SVK</th>
+              <th className="px-2 py-1 text-right font-semibold">Add</th>
+              <th className="px-2 py-1 text-right font-semibold bg-blue-600">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDays.map((e, i) => (
+              <tr
+                key={e.dateKey}
+                onClick={() => setSelectedDay(e)}
+                className={`cursor-pointer transition-colors hover:bg-emerald-50 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+              >
+                <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                <td className="px-2 py-1.5 font-medium text-emerald-700 underline-offset-2 hover:underline">{e.dateLabel}</td>
+                <td className="px-2 py-1.5 text-center text-gray-600">{e.receiptCount}</td>
+                <td className="px-2 py-1.5 text-center text-gray-600">{e.studentCount}</td>
+                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-green-800">{e.smpCash > 0 ? fmt(e.smpCash) : '—'}</td>
+                <td className="px-2 py-1.5 text-right text-green-800">{e.svkCash > 0 ? fmt(e.svkCash) : '—'}</td>
+                <td className="px-2 py-1.5 text-right text-green-800">{e.addCash > 0 ? fmt(e.addCash) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-semibold text-green-700 bg-green-50">{e.cashTotal > 0 ? fmt(e.cashTotal) : '—'}</td>
+                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-blue-800">{e.smpUpi > 0 ? fmt(e.smpUpi) : '—'}</td>
+                <td className="px-2 py-1.5 text-right text-blue-800">{e.svkUpi > 0 ? fmt(e.svkUpi) : '—'}</td>
+                <td className="px-2 py-1.5 text-right text-blue-800">{e.addUpi > 0 ? fmt(e.addUpi) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-semibold text-blue-700 bg-blue-50">{e.upiTotal > 0 ? fmt(e.upiTotal) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.dayTotal)}</td>
+              </tr>
+            ))}
+            {filteredDays.length === 0 && (
+              <tr>
+                <td colSpan={13} className="px-3 py-6 text-center text-xs text-gray-400">
+                  No collections found for the selected filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {filteredDays.length > 0 && (
+            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+              <tr>
+                <td className="px-2 py-2 text-center text-gray-400">—</td>
+                <td className="px-2 py-2">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
+                <td className="px-2 py-2 text-center">{totals.receiptCount}</td>
+                <td className="px-2 py-2 text-center">{totals.studentCount}</td>
+                <td className="px-2 py-2 border-l border-gray-200"></td>
+                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2 text-right font-bold text-green-700">{fmt(totals.cashTotal)}</td>
+                <td className="px-2 py-2 border-l border-gray-200"></td>
+                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2 text-right font-bold text-blue-700">{fmt(totals.upiTotal)}</td>
+                <td className="px-2 py-2 text-right font-bold border-l border-gray-200">{fmt(totals.dayTotal)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export function FeeReportsPage() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -724,11 +1230,12 @@ export function FeeReportsPage() {
         <p className="text-sm text-gray-400 py-8 text-center">No academic year configured.</p>
       ) : (
         <div>
-          {activeTab === 'statistics'   && <StatisticsTab  rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'fee-list'     && <FeeListTab     rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'dues'         && <DuesTab        rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'course-year'  && <CourseYearTab  rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'consolidated' && <ConsolidatedTab feeRecords={filteredFeeRecords} academicYear={academicYear} />}
+          {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}            academicYear={academicYear} />}
+          {activeTab === 'fee-list'          && <FeeListTab          rows={filteredRows}            academicYear={academicYear} />}
+          {activeTab === 'dues'              && <DuesTab             rows={filteredRows}            academicYear={academicYear} />}
+          {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}            academicYear={academicYear} />}
+          {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords} academicYear={academicYear} />}
+          {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}         academicYear={academicYear} />}
         </div>
       )}
     </div>

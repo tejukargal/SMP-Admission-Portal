@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent 
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
-import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear } from '../services/studentService';
+import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber } from '../services/studentService';
+import { applyAdmCatFeeAdjustment } from '../services/feeRecordService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
@@ -308,6 +309,7 @@ export function EnrollStudent() {
   const [errorMsg, setErrorMsg] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [editOriginalYear, setEditOriginalYear] = useState<{ year: string; academicYear: string } | null>(null);
+  const [editOriginalAdmCat, setEditOriginalAdmCat] = useState<AdmCat | null>(null);
   const [enrollmentHistory, setEnrollmentHistory] = useState<Student[]>([]);
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
@@ -385,6 +387,42 @@ export function EnrollStudent() {
     }
   }, [settings, editId]);
 
+  // Auto-preview unique default reg number for new enrollments.
+  // Runs whenever course / year / academicYear change.
+  // Skipped in edit mode or when using the "re-enroll from previous year" flow
+  // (the previous student's reg number is preserved in those cases).
+  // Only overwrites the field when it is empty, holds the old default (e.g. "308CE"),
+  // or already shows a previous auto-preview — any manually typed custom value is kept.
+  useEffect(() => {
+    if (editId) return;
+    if (prevSourceStudent) return; // re-enroll: preserve previous reg number
+    const { course, year, academicYear } = form;
+    if (!course || !year || !academicYear) return;
+
+    const isAutoFillable =
+      !form.regNumber ||
+      form.regNumber === `308${course}` ||
+      /^\d(CE|ME|EC|CS|EE)308\d{5}$/.test(form.regNumber);
+    if (!isAutoFillable) return;
+
+    let cancelled = false;
+    peekNextDefaultRegNumber(academicYear as import('../types').AcademicYear, course as import('../types').Course, year as import('../types').Year)
+      .then((preview) => {
+        if (cancelled) return;
+        setForm((prev) => {
+          const stillAutoFillable =
+            !prev.regNumber ||
+            prev.regNumber === `308${prev.course}` ||
+            /^\d(CE|ME|EC|CS|EE)308\d{5}$/.test(prev.regNumber);
+          if (!stillAutoFillable) return prev;
+          return { ...prev, regNumber: preview };
+        });
+      })
+      .catch(() => {}); // network errors are silently ignored; regNumber stays as-is
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.course, form.year, form.academicYear, editId, prevSourceStudent]);
+
   // Debounced search across previous-year students
   useEffect(() => {
     if (editId) return;
@@ -444,6 +482,7 @@ export function EnrollStudent() {
           if (!formData.admCat) formData.admCat = 'GM';
           setForm(formData);
           setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
+          setEditOriginalAdmCat(formData.admCat ?? null);
           // Fetch all other enrollment records for this student (for history display + year conflict check)
           getAllStudents().then((all) => {
             const history = all
@@ -479,13 +518,7 @@ export function EnrollStudent() {
       if (['scienceObtained', 'mathsObtained'].includes(field as string)) {
         updated.mathsScienceObtainedTotal = newScienceObtained + newMathsObtained;
       }
-      // Auto-fill regNumber when course changes (only if empty or was previously auto-filled)
-      if (field === 'course' && value) {
-        const prevAutoFill = prev.course ? `308${prev.course}` : '';
-        if (!prev.regNumber || prev.regNumber === prevAutoFill) {
-          updated.regNumber = `308${value}`;
-        }
-      }
+      // regNumber auto-preview is handled by a dedicated useEffect
       return updated;
     });
 
@@ -573,13 +606,25 @@ export function EnrollStudent() {
       }
       if (editId) {
         await updateStudent(editId, form);
+        // If Adm Cat changed, adjust existing fee records to reflect new structure
+        if (editOriginalAdmCat && form.admCat !== editOriginalAdmCat) {
+          await applyAdmCatFeeAdjustment(
+            editId,
+            form.academicYear,
+            form.course,
+            form.year,
+            form.admType,
+            editOriginalAdmCat,
+            form.admCat,
+          );
+        }
         navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
-        const { meritNumber } = await addStudent(form);
+        const { meritNumber, regNumber } = await addStudent(form);
         setForm(emptyForm(settings?.currentAcademicYear));
         setPrevSourceStudent(null);
         setShowPreview(false);
-        setSuccessMsg(`Student enrolled successfully! Merit Number: ${meritNumber}`);
+        setSuccessMsg(`Student enrolled successfully! Merit No: ${meritNumber} · Reg No: ${regNumber}`);
         topRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (err: unknown) {
@@ -1094,7 +1139,7 @@ export function EnrollStudent() {
                 onChange={handleTextChange('regNumber')}
                 error={displayErrors['regNumber']}
                 uppercase
-                placeholder="308CE"
+                placeholder="Auto-assigned if blank"
               />
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">

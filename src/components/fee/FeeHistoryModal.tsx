@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAllFeeRecordsByRegNumber, getAllFeeRecordsByStudent } from '../../services/feeRecordService';
+import { getAllFeeRecordsByStudent } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
 import type { Student, FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead } from '../../types';
@@ -63,12 +63,12 @@ export function FeeHistoryModal({ student, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetch = student.regNumber
-      ? getAllFeeRecordsByRegNumber(student.regNumber)
-      : getAllFeeRecordsByStudent(student.id);
-
-    fetch
+    // Query strictly by studentId so that records from other students (same default
+    // regNumber auto-fill, or orphaned records from deleted re-enrollments) never bleed
+    // into this student's history.
+    getAllFeeRecordsByStudent(student.id)
       .then(async (records) => {
+
         const grouped = new Map<AcademicYear, FeeRecord[]>();
         for (const r of records) {
           const list = grouped.get(r.academicYear) ?? [];
@@ -79,11 +79,9 @@ export function FeeHistoryModal({ student, onClose }: Props) {
         const data: YearData[] = await Promise.all(
           [...grouped.entries()].map(async ([ay, recs]) => {
             const first = recs[0];
-            const [structure, override] = await Promise.all([
-              (getFeeStructure(ay, first.course, first.year, first.admType, first.admCat) ??
-               getFeeStructure(ay, first.course, first.year, student.admType, student.admCat)),
-              getFeeOverride(first.studentId, ay),
-            ]);
+            const structure = await getFeeStructure(ay, first.course, first.year, first.admType, first.admCat)
+              ?? await getFeeStructure(ay, first.course, first.year, student.admType, student.admCat);
+            const override = await getFeeOverride(first.studentId, ay);
             const sorted = [...recs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             return { academicYear: ay, records: sorted, structure: structure ?? null, override };
           })
