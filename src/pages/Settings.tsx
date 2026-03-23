@@ -3,6 +3,7 @@ import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear } from '../services/studentService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear } from '../services/userService';
 import { Select } from '../components/common/Select';
@@ -87,6 +88,14 @@ export function Settings() {
   const [docsResetting, setDocsResetting] = useState(false);
   const [docsResetMsg, setDocsResetMsg] = useState('');
   const [docsResetErrorMsg, setDocsResetErrorMsg] = useState('');
+
+  // Fee structure reset modal state
+  const [feeStructureResetOpen, setFeeStructureResetOpen] = useState(false);
+  const [feeStructurePasskey, setFeeStructurePasskey] = useState('');
+  const [feeStructurePasskeyError, setFeeStructurePasskeyError] = useState('');
+  const [feeStructureResetting, setFeeStructureResetting] = useState(false);
+  const [feeStructureResetMsg, setFeeStructureResetMsg] = useState('');
+  const [feeStructureResetErrorMsg, setFeeStructureResetErrorMsg] = useState('');
 
   // Staff accounts state
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -270,6 +279,43 @@ export function Settings() {
     }
   }
 
+  function openFeeStructureResetModal() {
+    setFeeStructurePasskey('');
+    setFeeStructurePasskeyError('');
+    setFeeStructureResetMsg('');
+    setFeeStructureResetErrorMsg('');
+    setFeeStructureResetOpen(true);
+  }
+
+  function closeFeeStructureResetModal() {
+    setFeeStructureResetOpen(false);
+    setFeeStructurePasskey('');
+    setFeeStructurePasskeyError('');
+  }
+
+  async function handleFeeStructureReset() {
+    if (feeStructurePasskey !== RESET_PASSKEY) {
+      setFeeStructurePasskeyError('Incorrect passkey. Please try again.');
+      return;
+    }
+    if (!currentValue) return;
+    setFeeStructurePasskeyError('');
+    setFeeStructureResetting(true);
+    try {
+      const count = await deleteFeeStructuresByAcademicYear(currentValue as AcademicYear);
+      setFeeStructureResetMsg(
+        count > 0
+          ? `Fee structure reset — ${count} entr${count === 1 ? 'y' : 'ies'} deleted for ${currentValue}.`
+          : `No fee structure entries found for ${currentValue}.`
+      );
+      closeFeeStructureResetModal();
+    } catch (err: unknown) {
+      setFeeStructureResetErrorMsg(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setFeeStructureResetting(false);
+    }
+  }
+
   // Load staff list when staff tab is opened
   useEffect(() => {
     if (activeTab !== 'staff') return;
@@ -415,17 +461,17 @@ export function Settings() {
                   <p className="text-xs text-red-400 mt-0.5">These actions are irreversible — proceed with caution</p>
                 </div>
 
-                {(resetMsg || fullResetMsg || feeResetMsg || docsResetMsg) && (
+                {(resetMsg || fullResetMsg || feeResetMsg || docsResetMsg || feeStructureResetMsg) && (
                   <div className="px-6 pt-4">
                     <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
-                      {resetMsg || fullResetMsg || feeResetMsg || docsResetMsg}
+                      {resetMsg || fullResetMsg || feeResetMsg || docsResetMsg || feeStructureResetMsg}
                     </p>
                   </div>
                 )}
-                {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg) && (
+                {(resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg || feeStructureResetErrorMsg) && (
                   <div className="px-6 pt-4">
                     <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-                      {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg}
+                      {resetErrorMsg || fullResetErrorMsg || feeResetErrorMsg || docsResetErrorMsg || feeStructureResetErrorMsg}
                     </p>
                   </div>
                 )}
@@ -482,6 +528,25 @@ export function Settings() {
                       size="sm"
                       disabled={!currentValue || loading}
                       onClick={openDocsResetModal}
+                      className="w-32 shrink-0"
+                    >
+                      Reset {currentValue || '—'}
+                    </Button>
+                  </div>
+
+                  {/* Fee Structure Reset */}
+                  <div className="flex items-center justify-between px-6 py-4 gap-6">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800">Reset Fee Structure</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Delete all fee structure entries for <span className="font-medium text-gray-600">{currentValue || '—'}</span> — fee records and students unaffected
+                      </p>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={!currentValue || loading}
+                      onClick={openFeeStructureResetModal}
                       className="w-32 shrink-0"
                     >
                       Reset {currentValue || '—'}
@@ -794,6 +859,55 @@ export function Settings() {
               </Button>
               <Button variant="danger" onClick={() => { void handleDocsReset(); }} loading={docsResetting}>
                 Reset Doc Status
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Structure Reset Passkey Modal */}
+      {feeStructureResetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeFeeStructureResetModal}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Reset Fee Structure</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This will permanently delete{' '}
+              <span className="font-semibold text-red-600">all fee structure entries</span> for{' '}
+              <span className="font-semibold">{currentValue}</span>. Fee records and student
+              enrollment data are not affected. Enter the passkey to continue.
+            </p>
+
+            <label className="text-sm font-medium text-gray-700 block mb-1">Passkey</label>
+            <input
+              type="password"
+              value={feeStructurePasskey}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setFeeStructurePasskey(e.target.value);
+                setFeeStructurePasskeyError('');
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { void handleFeeStructureReset(); } }}
+              placeholder="Enter passkey"
+              className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm mb-1 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                feeStructurePasskeyError ? 'border-red-500' : 'border-gray-300'
+              }`}
+              autoFocus
+            />
+            {feeStructurePasskeyError && (
+              <p className="text-xs text-red-600 mb-3">{feeStructurePasskeyError}</p>
+            )}
+            {!feeStructurePasskeyError && <div className="mb-3" />}
+
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={closeFeeStructureResetModal} disabled={feeStructureResetting}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => { void handleFeeStructureReset(); }} loading={feeStructureResetting}>
+                Reset Fee Structure
               </Button>
             </div>
           </div>

@@ -78,6 +78,23 @@ export async function deleteAllFeeStructures(): Promise<void> {
   }
 }
 
+/** Delete all fee structures for a specific academic year. Returns the count deleted. */
+export async function deleteFeeStructuresByAcademicYear(
+  academicYear: AcademicYear
+): Promise<number> {
+  const q = query(collection(db, COL), where('academicYear', '==', academicYear));
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  feeStructureCache.delete(academicYear);
+  return snap.docs.length;
+}
+
 /**
  * Applies the given additionalHeads to every fee structure in the specified academic year.
  * Optionally skips one doc (the one just saved) to avoid a redundant write.
