@@ -208,8 +208,36 @@ export function FeeHistoryModal({ student, onClose }: Props) {
         {/* Body */}
         <div className="px-5 py-4 overflow-y-auto space-y-4" style={{ maxHeight: '65vh' }}>
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-sm text-gray-500">
-              Loading fee history…
+            <div className="space-y-4">
+              {Array.from({ length: 2 }).map((_, yi) => (
+                <div key={yi} className="border border-gray-200 rounded-lg overflow-hidden">
+                  {/* Year header skeleton */}
+                  <div className="bg-blue-50 border-b border-blue-100 px-3 py-2 flex items-center gap-4">
+                    <div className="skeleton h-3.5 w-20 rounded" />
+                    <div className="skeleton h-3 w-32 rounded" />
+                    <div className="ml-auto flex gap-6">
+                      <div className="skeleton h-3 w-28 rounded" />
+                      <div className="skeleton h-3 w-24 rounded" />
+                      <div className="skeleton h-3 w-20 rounded" />
+                    </div>
+                  </div>
+                  {/* Payment rows skeleton */}
+                  <div className="border border-gray-100 rounded overflow-hidden mx-3 my-3">
+                    <div className="bg-gray-50 px-3 py-1.5 flex gap-3 border-b border-gray-200">
+                      {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
+                        <div key={j} className={`skeleton h-2.5 ${w} rounded`} />
+                      ))}
+                    </div>
+                    {Array.from({ length: 2 + yi }).map((_, i) => (
+                      <div key={i} className="px-3 py-2 flex gap-3 border-b border-gray-100 last:border-0">
+                        {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
+                          <div key={j} className={`skeleton h-3 ${w} rounded`} />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="flex items-center justify-center py-10 text-sm text-red-500">

@@ -77,11 +77,12 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
   const fsBtn = 'px-3 py-1.5 text-xs border border-gray-200 rounded bg-white text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}
+      style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
       <div className="absolute inset-0 bg-black/40" />
       <div
         className="relative bg-white rounded-xl shadow-2xl flex flex-col"
-        style={{ width: '900px', maxWidth: '100%', maxHeight: '90vh' }}
+        style={{ width: '900px', maxWidth: '100%', height: '82vh', animation: 'modal-enter 0.22s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -135,9 +136,39 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
         {/* ── Table ── */}
         <div className="flex-1 overflow-auto min-h-0">
           {loading ? (
-            <div className="flex items-center justify-center h-48 text-sm text-gray-400">
-              Loading document records…
-            </div>
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 w-8">#</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Student</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-28">Course / Year</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-24">Submitted</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Pending Documents</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-20"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-4" /></td>
+                    <td className="px-3 py-2.5">
+                      <div className="skeleton h-3 mb-1.5" style={{ width: `${50 + (i % 3) * 15}%` }} />
+                      <div className="skeleton h-2.5 w-16" />
+                    </td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-16" /></td>
+                    <td className="px-3 py-2.5 text-center"><div className="skeleton h-5 w-12 mx-auto rounded-full" /></td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex gap-1">
+                        {Array.from({ length: 2 + (i % 3) }).map((_, j) => (
+                          <div key={j} className="skeleton h-4 w-16 rounded" />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-14" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : loadError ? (
             <div className="flex items-center justify-center h-48 text-sm text-red-500">{loadError}</div>
           ) : enriched.length === 0 ? (

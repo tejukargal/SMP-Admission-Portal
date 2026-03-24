@@ -440,8 +440,38 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         {/* Body */}
         <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight: '60vh' }}>
           {loadingData ? (
-            <div className="flex items-center justify-center py-10 text-sm text-gray-500">
-              Loading fee data…
+            <div className="space-y-5">
+              {/* SMP table skeleton */}
+              <div>
+                <div className="skeleton h-3 w-36 mb-3 rounded" />
+                <div className="border border-gray-200 rounded overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 flex gap-4 border-b border-gray-200">
+                    <div className="skeleton h-3 flex-1" />
+                    <div className="skeleton h-3 w-20" />
+                    <div className="skeleton h-3 w-24" />
+                  </div>
+                  {Array.from({ length: 14 }).map((_, i) => (
+                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-gray-100 last:border-0">
+                      <div className="skeleton h-3 flex-1" style={{ width: `${45 + (i % 4) * 10}%` }} />
+                      <div className="skeleton h-3 w-20" />
+                      <div className="skeleton h-6 w-24 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* SVK skeleton */}
+              <div>
+                <div className="skeleton h-3 w-28 mb-3 rounded" />
+                <div className="border border-gray-200 rounded overflow-hidden">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-gray-100 last:border-0">
+                      <div className="skeleton h-3 flex-1" />
+                      <div className="skeleton h-3 w-20" />
+                      <div className="skeleton h-6 w-24 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : loadError ? (
             <div className="flex items-center justify-center py-10 text-sm text-red-500">

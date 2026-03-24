@@ -104,11 +104,12 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const total = REQUIRED_DOCS.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}
+      style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
       <div className="absolute inset-0 bg-black/40" />
       <div
         className="relative bg-white rounded-xl shadow-2xl flex flex-col"
-        style={{ width: '780px', maxWidth: '100%', maxHeight: '90vh' }}
+        style={{ width: '780px', maxWidth: '100%', height: '82vh', animation: 'modal-enter 0.22s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
@@ -158,9 +159,32 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
         {/* ── Body ── */}
         <div className="flex-1 overflow-auto min-h-0">
           {loading ? (
-            <div className="flex items-center justify-center h-48 text-sm text-gray-400">
-              Loading document records…
-            </div>
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-500 w-7">#</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Document</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-24">Submitted</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-32">Sub. Date</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-gray-600 w-24">Returned</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-32">Ret. Date</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Remarks</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {Array.from({ length: REQUIRED_DOCS.length }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2.5 text-center"><div className="skeleton h-3 w-4 mx-auto" /></td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3" style={{ width: `${60 + (i % 4) * 10}%` }} /></td>
+                    <td className="px-3 py-2.5 text-center"><div className="skeleton h-4 w-4 mx-auto rounded" /></td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-20" /></td>
+                    <td className="px-3 py-2.5 text-center"><div className="skeleton h-4 w-4 mx-auto rounded" /></td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-20" /></td>
+                    <td className="px-3 py-2.5"><div className="skeleton h-3 w-3/4" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : error ? (
             <div className="flex items-center justify-center h-48 text-sm text-red-500">{error}</div>
           ) : docs ? (
