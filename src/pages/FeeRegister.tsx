@@ -118,6 +118,7 @@ export function FeeRegister() {
   const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
   const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
   const [paymentModeFilter, setPaymentModeFilter] = useState<PaymentMode | ''>('');
+  const [dateFilter, setDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -154,6 +155,11 @@ export function FeeRegister() {
     }
   }, [settings, selectedYear]);
 
+  // Reset date filter when academic year changes
+  useEffect(() => {
+    setDateFilter('');
+  }, [selectedYear]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
     return () => clearTimeout(t);
@@ -164,6 +170,13 @@ export function FeeRegister() {
 
   // Sort: oldest date first, then by receipt number
   const sortedRecords = useMemo(() => sortRecords(rawRecords), [rawRecords]);
+
+  // Unique dates for date filter dropdown (descending)
+  const uniqueDates = useMemo(() => {
+    const dates = new Set<string>();
+    for (const r of sortedRecords) if (r.date) dates.add(r.date.slice(0, 10));
+    return [...dates].sort((a, b) => b.localeCompare(a));
+  }, [sortedRecords]);
 
   // Collect all unique additional head labels across all records (for dynamic columns)
   const additionalHeadLabels = useMemo(() => {
@@ -184,6 +197,7 @@ export function FeeRegister() {
     if (admTypeFilter)      result = result.filter((r) => r.admType      === admTypeFilter);
     if (admCatFilter)       result = result.filter((r) => r.admCat       === admCatFilter);
     if (paymentModeFilter)  result = result.filter((r) => r.paymentMode  === paymentModeFilter);
+    if (dateFilter)         result = result.filter((r) => r.date.slice(0, 10) === dateFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.trim().toUpperCase();
       result = result.filter(
@@ -195,7 +209,7 @@ export function FeeRegister() {
       );
     }
     return result;
-  }, [sortedRecords, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, debouncedSearch]);
+  }, [sortedRecords, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, dateFilter, debouncedSearch]);
 
   // Reset visible window whenever filters change
   useEffect(() => {
@@ -209,7 +223,7 @@ export function FeeRegister() {
 
   const hasMore = visibleCount < filteredRecords.length;
 
-  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter;
+  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter || !!dateFilter;
 
   function clearFilters() {
     setSearchTerm('');
@@ -218,6 +232,7 @@ export function FeeRegister() {
     setAdmTypeFilter('');
     setAdmCatFilter('');
     setPaymentModeFilter('');
+    setDateFilter('');
   }
 
   async function handleDelete() {
@@ -364,6 +379,16 @@ export function FeeRegister() {
           >
             <option value="">All Modes</option>
             {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select
+            className={fs}
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          >
+            <option value="">All Dates</option>
+            {uniqueDates.map((d) => (
+              <option key={d} value={d}>{formatDate(d)}</option>
+            ))}
           </select>
 
           {hasActiveFilters && (
