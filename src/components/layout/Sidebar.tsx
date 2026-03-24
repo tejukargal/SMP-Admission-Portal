@@ -11,7 +11,6 @@ export function Sidebar() {
     { to: '/students', label: 'Students' },
     ...(isAdmin ? [{ to: '/fees', label: 'Collect Fee' }] : []),
     { to: '/fee-register', label: 'Fee Register' },
-    { to: '/exam-fee', label: 'Exam Fee' },
     ...(isAdmin ? [{ to: '/fee-reports', label: 'Fee Reports' }] : []),
     ...(isAdmin ? [{ to: '/settings', label: 'Settings' }] : []),
   ];

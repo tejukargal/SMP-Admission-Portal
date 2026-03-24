@@ -9,16 +9,18 @@ import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUse
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
+import { ExamFee } from './ExamFee';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
 import type { AcademicYear, StaffUser } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'import-students' | 'import-fee' | 'import-address' | 'staff';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'fee-structure', label: 'Fee Structure' },
+  { id: 'exam-fee', label: 'Exam Fee' },
   { id: 'import-students', label: 'Import Students' },
   { id: 'import-fee', label: 'Import Fee Register' },
   { id: 'import-address', label: 'Import Address' },
@@ -580,6 +582,13 @@ export function Settings() {
         {activeTab === 'fee-structure' && (
           <div className="h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <FeeStructurePage />
+          </div>
+        )}
+
+        {/* ── Exam Fee ── */}
+        {activeTab === 'exam-fee' && (
+          <div className="h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
+            <ExamFee />
           </div>
         )}
 
