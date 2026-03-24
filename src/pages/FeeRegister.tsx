@@ -4,6 +4,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { deleteFeeRecord } from '../services/feeRecordService';
 import { FeeEditModal } from '../components/fee/FeeEditModal';
+import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead, AdmType, AdmCat, PaymentMode } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
@@ -121,6 +122,7 @@ export function FeeRegister() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [editRecord, setEditRecord] = useState<FeeRecord | null>(null);
+  const [historyRecord, setHistoryRecord] = useState<FeeRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeeRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -158,7 +160,7 @@ export function FeeRegister() {
   }, [searchTerm]);
 
   const academicYear = selectedYear || null;
-  const { records: rawRecords, loading: recordsLoading, refetch } = useFeeRecords(academicYear as AcademicYear | null);
+  const { records: rawRecords, loading: recordsLoading, refetch } = useFeeRecords(academicYear as AcademicYear | null, { mode: 'by-date' });
 
   // Sort: oldest date first, then by receipt number
   const sortedRecords = useMemo(() => sortRecords(rawRecords), [rawRecords]);
@@ -486,7 +488,14 @@ export function FeeRegister() {
                     }}
                   >
                     <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap">{record.studentName}</td>
+                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap">
+                      {record.studentName}
+                      {record.academicYear !== selectedYear && (
+                        <span className="ml-1.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 align-middle">
+                          PY {record.academicYear}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.fatherName}</td>
                     <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.year}</td>
                     <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.course}</td>
@@ -643,6 +652,23 @@ export function FeeRegister() {
         />
       )}
 
+      {/* Fee history modal */}
+      {historyRecord && (
+        <FeeHistoryModal
+          student={{
+            id: historyRecord.studentId,
+            regNumber: historyRecord.regNumber,
+            studentNameSSLC: historyRecord.studentName,
+            fatherName: historyRecord.fatherName,
+            course: historyRecord.course,
+            year: historyRecord.year,
+            admType: historyRecord.admType,
+            admCat: historyRecord.admCat,
+          }}
+          onClose={() => setHistoryRecord(null)}
+        />
+      )}
+
       {/* Context menu */}
       {ctxMenu && (() => {
         const smp = calcSMPTotal(ctxMenu.record);
@@ -680,6 +706,14 @@ export function FeeRegister() {
             >
               <span className="text-green-600 font-bold text-[10px] border border-green-300 rounded px-1 py-0.5">ADDL</span>
               Additional Receipt
+            </button>
+            <div className="border-t border-gray-100 my-1" />
+            <button
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 cursor-pointer"
+              onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
+            >
+              <span className="text-gray-400 font-bold text-[10px] border border-gray-300 rounded px-1 py-0.5">≡</span>
+              Fee Details
             </button>
           </div>
         );

@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
-import { getAllFeeRecordsByStudent } from '../../services/feeRecordService';
+import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
-import type { Student, FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead } from '../../types';
+import type { FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
+
+/** Minimal student fields required by FeeHistoryModal — satisfied by both Student and a FeeRecord-derived object. */
+export interface FeeHistoryStudentInfo {
+  id: string;
+  regNumber: string;
+  studentNameSSLC: string;
+  fatherName: string;
+  course: string;
+  year: string;
+  admType: string;
+  admCat: string;
+}
 
 interface YearData {
   academicYear: AcademicYear;
@@ -53,7 +65,7 @@ function effectiveValues(yd: YearData): { smp: SMPHeads; svk: number; additional
 }
 
 interface Props {
-  student: Student;
+  student: FeeHistoryStudentInfo;
   onClose: () => void;
 }
 
@@ -63,10 +75,21 @@ export function FeeHistoryModal({ student, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Query strictly by studentId so that records from other students (same default
-    // regNumber auto-fill, or orphaned records from deleted re-enrollments) never bleed
-    // into this student's history.
-    getAllFeeRecordsByStudent(student.id)
+    // Query by both studentId and regNumber to capture records across all academic years.
+    // A student re-enrolled in a new year gets a new document ID, so previous-year fee
+    // records (saved with the old studentId) are only reachable via regNumber.
+    // Results are merged and deduplicated by record ID.
+    Promise.all([
+      getAllFeeRecordsByStudent(student.id),
+      student.regNumber ? getAllFeeRecordsByRegNumber(student.regNumber) : Promise.resolve([] as import('../../types').FeeRecord[]),
+    ]).then(([byId, byReg]) => {
+      const seen = new Set<string>();
+      const merged: import('../../types').FeeRecord[] = [];
+      for (const r of [...byId, ...byReg]) {
+        if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+      }
+      return merged;
+    })
       .then(async (records) => {
 
         const grouped = new Map<AcademicYear, FeeRecord[]>();
@@ -80,7 +103,7 @@ export function FeeHistoryModal({ student, onClose }: Props) {
           [...grouped.entries()].map(async ([ay, recs]) => {
             const first = recs[0];
             const structure = await getFeeStructure(ay, first.course, first.year, first.admType, first.admCat)
-              ?? await getFeeStructure(ay, first.course, first.year, student.admType, student.admCat);
+              ?? await getFeeStructure(ay, first.course, first.year, student.admType as AdmType, student.admCat as AdmCat);
             const override = await getFeeOverride(first.studentId, ay);
             const sorted = [...recs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             return { academicYear: ay, records: sorted, structure: structure ?? null, override };
