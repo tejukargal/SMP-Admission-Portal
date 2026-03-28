@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import type { StudentFeeRow } from './feeReportPdf';
+import type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportPdf';
 
 const FEE_DETAIL_HEADER = [
   'Sl', 'Name', 'Reg No', 'Course', 'Year',
@@ -244,4 +244,32 @@ export function exportConsolidatedExcel(feeRecords: FeeRecord[], academicYear: s
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Consolidated');
   XLSX.writeFile(wb, `consolidated-fee-${academicYear}.xlsx`);
+}
+
+// ── 6. Datewise Headwise ────────────────────────────────────────────────────
+export function exportDatewiseHeadwiseExcel(entries: DatewiseHeadwiseEntry[], academicYear: string): void {
+  const grandHeads = {} as Record<SMPFeeHead, number>;
+  for (const { key } of SMP_FEE_HEADS) grandHeads[key] = 0;
+  for (const e of entries) {
+    for (const { key } of SMP_FEE_HEADS) grandHeads[key] += e.heads[key];
+  }
+  const grandTotal = SMP_FEE_HEADS.reduce((s, { key }) => s + grandHeads[key], 0);
+
+  const data: (string | number | null)[][] = [
+    ['SMP Admissions \u2014 Datewise Consolidated Headwise Fee Statement'],
+    [`Academic Year: ${academicYear}`],
+    [],
+    ['Date', ...SMP_FEE_HEADS.map(({ label }) => label), 'Total'],
+    ...entries.map((e) => [
+      e.dateLabel,
+      ...SMP_FEE_HEADS.map(({ key }) => e.heads[key] || null),
+      e.total,
+    ]),
+    ['TOTAL', ...SMP_FEE_HEADS.map(({ key }) => grandHeads[key] || null), grandTotal],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datewise Headwise');
+  XLSX.writeFile(wb, `datewise-headwise-${academicYear}.xlsx`);
 }

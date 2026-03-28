@@ -502,3 +502,97 @@ export function exportConsolidatedPdf(feeRecords: FeeRecord[], academicYear: str
 
   doc.save(`consolidated-fee-${academicYear}.pdf`);
 }
+
+// ── 6. Datewise Consolidated Headwise ─────────────────────────────────────────
+
+function formatDayLabelLocal(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
+}
+
+export interface DatewiseHeadwiseEntry {
+  dateKey: string;
+  dateLabel: string;
+  heads: Record<SMPFeeHead, number>;
+  total: number;
+}
+
+export function buildDatewiseHeadwise(records: FeeRecord[]): DatewiseHeadwiseEntry[] {
+  const map = new Map<string, DatewiseHeadwiseEntry>();
+  for (const r of records) {
+    const dateKey = r.date.slice(0, 10);
+    if (!map.has(dateKey)) {
+      const heads = {} as Record<SMPFeeHead, number>;
+      for (const { key } of SMP_FEE_HEADS) heads[key] = 0;
+      map.set(dateKey, { dateKey, dateLabel: formatDayLabelLocal(dateKey), heads, total: 0 });
+    }
+    const e = map.get(dateKey)!;
+    for (const { key } of SMP_FEE_HEADS) e.heads[key] += r.smp[key];
+    e.total = SMP_FEE_HEADS.reduce((s, { key }) => s + e.heads[key], 0);
+  }
+  return Array.from(map.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
+export function exportDatewiseHeadwisePdf(entries: DatewiseHeadwiseEntry[], academicYear: string): void {
+  const TEAL: [number, number, number] = [13, 148, 136];
+  const F6 = 6.5;
+  const P6 = { top: 1.5, right: 2, bottom: 1.5, left: 2 };
+
+  const grandHeads = {} as Record<SMPFeeHead, number>;
+  for (const { key } of SMP_FEE_HEADS) grandHeads[key] = 0;
+  for (const e of entries) {
+    for (const { key } of SMP_FEE_HEADS) grandHeads[key] += e.heads[key];
+  }
+  const grandTotal = SMP_FEE_HEADS.reduce((s, { key }) => s + grandHeads[key], 0);
+
+  const doc = buildDoc(
+    'SMP Admissions \u2014 Datewise Consolidated Headwise Fee Statement',
+    `Academic Year: ${academicYear}  |  ${entries.length} day${entries.length !== 1 ? 's' : ''}`,
+  );
+
+  // Layout: Date(22) + 14 × 17 + Total(17) = 277 mm (full landscape usable width)
+  const colStyles: Record<number, object> = { 0: { cellWidth: 22 } };
+  for (let i = 0; i < SMP_FEE_HEADS.length; i++) {
+    colStyles[i + 1] = { cellWidth: 17, halign: 'right' };
+  }
+  colStyles[SMP_FEE_HEADS.length + 1] = { cellWidth: 17, halign: 'right' };
+
+  const tableHead = ['Date', ...SMP_FEE_HEADS.map(({ label }) => label), 'Total'];
+
+  const body: (string | number)[][] = [
+    ...entries.map((e) => [
+      e.dateLabel,
+      ...SMP_FEE_HEADS.map(({ key }) => e.heads[key] > 0 ? num(e.heads[key]) : '\u2014'),
+      num(e.total),
+    ]),
+    ['TOTAL', ...SMP_FEE_HEADS.map(({ key }) => num(grandHeads[key])), num(grandTotal)],
+  ];
+
+  autoTable(doc, {
+    startY: 23,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [tableHead],
+    body,
+    styles: {
+      font: 'helvetica', fontStyle: 'normal', fontSize: F6,
+      cellPadding: P6, lineColor: [200, 205, 210], lineWidth: 0.18,
+      textColor: [20, 20, 20], overflow: 'ellipsize',
+    },
+    headStyles: {
+      font: 'helvetica', fontStyle: 'bold', fontSize: F6,
+      cellPadding: P6, fillColor: TEAL, textColor: [255, 255, 255],
+      lineColor: TEAL, lineWidth: 0, overflow: 'ellipsize',
+    },
+    alternateRowStyles: NO_BAND,
+    columnStyles: colStyles,
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === entries.length) {
+        (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
+      }
+    },
+    didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+
+  doc.save(`datewise-headwise-${academicYear}.pdf`);
+}

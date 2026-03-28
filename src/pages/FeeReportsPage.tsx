@@ -9,16 +9,18 @@ import * as XLSX from 'xlsx';
 import {
   exportStatsPdf, exportFeeListPdf, exportDuesPdf,
   exportCourseYearPdf, exportConsolidatedPdf,
+  buildDatewiseHeadwise, exportDatewiseHeadwisePdf,
 } from '../utils/feeReportPdf';
-import type { StudentFeeRow } from '../utils/feeReportPdf';
+import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportPdf';
 import {
   exportStatsExcel, exportFeeListExcel, exportDuesExcel,
   exportCourseYearExcel, exportConsolidatedExcel,
+  exportDatewiseHeadwiseExcel,
 } from '../utils/feeReportExcel';
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'datewise-headwise';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -37,6 +39,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'course-year',        label: 'Course & Year Wise'   },
   { id: 'consolidated',       label: 'Consolidated'         },
   { id: 'daily-collections',  label: 'Daily Collections'    },
+  { id: 'datewise-headwise',  label: 'Datewise Headwise'    },
 ];
 
 function fmt(n: number): string {
@@ -1003,6 +1006,88 @@ function DailyCollectionsTab({ feeRecords, academicYear }: { feeRecords: FeeReco
   );
 }
 
+// ── Tab: Datewise Consolidated Headwise ───────────────────────────────────────
+function DatewiseHeadwiseTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+  const entries: DatewiseHeadwiseEntry[] = useMemo(() => buildDatewiseHeadwise(feeRecords), [feeRecords]);
+
+  const grandHeads = useMemo(() => {
+    const totals = {} as Record<string, number>;
+    for (const { key } of SMP_FEE_HEADS) totals[key] = 0;
+    for (const e of entries) {
+      for (const { key } of SMP_FEE_HEADS) totals[key] += e.heads[key];
+    }
+    return totals;
+  }, [entries]);
+
+  const grandTotal = useMemo(
+    () => SMP_FEE_HEADS.reduce((s, { key }) => s + grandHeads[key], 0),
+    [grandHeads],
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</p>
+          {grandTotal > 0 && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-700">
+              Total: {fmt(grandTotal)}
+            </span>
+          )}
+        </div>
+        <ExportBar
+          onPdf={() => exportDatewiseHeadwisePdf(entries, academicYear)}
+          onExcel={() => exportDatewiseHeadwiseExcel(entries, academicYear)}
+        />
+      </div>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <table className="w-full text-[10px] whitespace-nowrap">
+          <thead className="bg-teal-700 text-white">
+            <tr>
+              <th className="px-2 py-1.5 text-left font-semibold">Date</th>
+              {SMP_FEE_HEADS.map(({ key, label }) => (
+                <th key={key} className="px-2 py-1.5 text-right font-semibold">{label}</th>
+              ))}
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => (
+              <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="px-2 py-1.5 font-medium text-teal-700">{e.dateLabel}</td>
+                {SMP_FEE_HEADS.map(({ key }) => (
+                  <td key={key} className="px-2 py-1.5 text-right">
+                    {e.heads[key] > 0 ? fmt(e.heads[key]) : '—'}
+                  </td>
+                ))}
+                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.total)}</td>
+              </tr>
+            ))}
+            {entries.length === 0 && (
+              <tr>
+                <td colSpan={SMP_FEE_HEADS.length + 2} className="px-3 py-6 text-center text-xs text-gray-400">
+                  No fee records found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {entries.length > 0 && (
+            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+              <tr>
+                <td className="px-2 py-2">Total</td>
+                {SMP_FEE_HEADS.map(({ key }) => (
+                  <td key={key} className="px-2 py-2 text-right">{fmt(grandHeads[key])}</td>
+                ))}
+                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(grandTotal)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export function FeeReportsPage() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -1236,6 +1321,7 @@ export function FeeReportsPage() {
           {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}            academicYear={academicYear} />}
           {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords} academicYear={academicYear} />}
           {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}         academicYear={academicYear} />}
+          {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords} academicYear={academicYear} />}
         </div>
       )}
     </div>
