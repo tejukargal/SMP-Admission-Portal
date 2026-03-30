@@ -87,6 +87,23 @@ export function validateStudentFormEdit(data: StudentFormData): EditValidationRe
   if (Number(data.mathsObtained) > Number(data.mathsMax))
     warnings['mathsObtained'] = 'Obtained cannot exceed maximum';
 
+  // Address sub-fields — warn when address is filled but sub-fields are empty
+  if (String(data.address ?? '').trim()) {
+    if (!String(data.town ?? '').trim()) warnings['town'] = 'Required when address is filled';
+    if (!String(data.taluk ?? '').trim()) warnings['taluk'] = 'Required when address is filled';
+    if (!String(data.district ?? '').trim()) warnings['district'] = 'Required when address is filled';
+  }
+
+  // Prior qualification percentage
+  if (data.priorQualification === 'PUC') {
+    const pct = Number(data.pucPercentage);
+    if (!pct || pct <= 0 || pct > 100) warnings['pucPercentage'] = 'Enter a valid PUC percentage (0–100)';
+  }
+  if (data.priorQualification === 'ITI') {
+    const pct = Number(data.itiPercentage);
+    if (!pct || pct <= 0 || pct > 100) warnings['itiPercentage'] = 'Enter a valid ITI percentage (0–100)';
+  }
+
   return { errors, warnings };
 }
 
@@ -164,6 +181,23 @@ export function validateStudentForm(data: StudentFormData): ValidationErrors {
   }
   if (Number(data.mathsObtained) > Number(data.mathsMax)) {
     errors['mathsObtained'] = 'Obtained cannot exceed maximum';
+  }
+
+  // Address sub-fields — required when address is filled
+  if (String(data.address ?? '').trim()) {
+    if (!String(data.town ?? '').trim()) errors['town'] = 'Required when address is filled';
+    if (!String(data.taluk ?? '').trim()) errors['taluk'] = 'Required when address is filled';
+    if (!String(data.district ?? '').trim()) errors['district'] = 'Required when address is filled';
+  }
+
+  // Prior qualification percentage
+  if (data.priorQualification === 'PUC') {
+    const pct = Number(data.pucPercentage);
+    if (!pct || pct <= 0 || pct > 100) errors['pucPercentage'] = 'Enter a valid PUC percentage (0–100)';
+  }
+  if (data.priorQualification === 'ITI') {
+    const pct = Number(data.itiPercentage);
+    if (!pct || pct <= 0 || pct > 100) errors['itiPercentage'] = 'Enter a valid ITI percentage (0–100)';
   }
 
   return errors;

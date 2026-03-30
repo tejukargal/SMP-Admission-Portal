@@ -8,6 +8,7 @@ import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } f
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
+import { KARNATAKA_TALUKS, KARNATAKA_TALUK_DISTRICT } from '../data/karnatakaLocations';
 import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, Religion, Category, AdmType, AdmCat, TenthBoard, PriorQualification } from '../types';
 
 const GENDER_OPTIONS = [
@@ -189,7 +190,6 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
               <PreviewRow label="Caste" value={form.caste} />
               <PreviewRow label="Category" value={form.category} />
               <PreviewRow label="Annual Income" value={form.annualIncome > 0 ? `₹ ${form.annualIncome.toLocaleString()}` : ''} />
-              <PreviewRow label="Address" value={form.address} />
             </dl>
           </section>
 
@@ -199,6 +199,10 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
             <dl>
               <PreviewRow label="Father Mobile" value={form.fatherMobile} />
               <PreviewRow label="Student Mobile" value={form.studentMobile} />
+              <PreviewRow label="Address" value={form.address} />
+              <PreviewRow label="Town / City" value={form.town} />
+              <PreviewRow label="Taluk" value={form.taluk} />
+              <PreviewRow label="District" value={form.district} />
             </dl>
           </section>
 
@@ -208,8 +212,18 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
             <dl>
               <PreviewRow label="10th Board" value={form.tenthBoard} />
               <PreviewRow label="Prior Qualification" value={form.priorQualification} />
+              {form.priorQualification === 'PUC' && (
+                <PreviewRow label="PUC Percentage" value={form.pucPercentage ? `${form.pucPercentage}%` : ''} />
+              )}
+              {form.priorQualification === 'ITI' && (
+                <PreviewRow label="ITI Percentage" value={form.itiPercentage ? `${form.itiPercentage}%` : ''} />
+              )}
               <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
               <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
+              <PreviewRow
+                label="SSLC Percentage"
+                value={form.sslcMaxTotal > 0 ? `${((form.sslcObtainedTotal / form.sslcMaxTotal) * 100).toFixed(2)}%` : ''}
+              />
               <PreviewRow label="Science Max" value={form.scienceMax} />
               <PreviewRow label="Science Obtained" value={form.scienceObtained} />
               <PreviewRow label="Maths Max" value={form.mathsMax} />
@@ -277,6 +291,11 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     mathsScienceObtainedTotal: 0,
     annualIncome: 0,
     address: '',
+    town: '',
+    taluk: '',
+    district: '',
+    pucPercentage: 0,
+    itiPercentage: 0,
     fatherMobile: '',
     studentMobile: '',
     course: '' as Course,
@@ -322,6 +341,13 @@ export function EnrollStudent() {
   const casteSuggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [casteSuggestions, setCasteSuggestions] = useState<CasteEntry[]>([]);
   const [casteOpen, setCasteOpen] = useState(false);
+  const [casteHighlight, setCasteHighlight] = useState(-1);
+
+  // Taluk autocomplete
+  const talukSuggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [talukSuggestions, setTalukSuggestions] = useState<string[]>([]);
+  const [talukOpen, setTalukOpen] = useState(false);
+  const [talukHighlight, setTalukHighlight] = useState(-1);
 
   async function loadCasteIndex() {
     if (casteIndexRef.current !== null) return;
@@ -341,6 +367,7 @@ export function EnrollStudent() {
   function handleCasteChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value.toUpperCase();
     handleFieldChange('caste', val);
+    setCasteHighlight(-1);
     if (casteSuggestTimer.current) clearTimeout(casteSuggestTimer.current);
     if (!val.trim()) { setCasteSuggestions([]); setCasteOpen(false); return; }
     casteSuggestTimer.current = setTimeout(() => {
@@ -358,6 +385,68 @@ export function EnrollStudent() {
     handleFieldChange('category', item.category);
     setCasteSuggestions([]);
     setCasteOpen(false);
+    setCasteHighlight(-1);
+  }
+
+  function handleCasteKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!casteOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setCasteHighlight(h => Math.min(h + 1, casteSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCasteHighlight(h => Math.max(h - 1, 0));
+    } else if (e.key === 'Tab' || e.key === 'Enter') {
+      const idx = casteHighlight >= 0 ? casteHighlight : 0;
+      if (casteSuggestions[idx]) {
+        e.preventDefault();
+        handleCastePick(casteSuggestions[idx]);
+      }
+    } else if (e.key === 'Escape') {
+      setCasteOpen(false);
+    }
+  }
+
+  function handleTalukChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.toUpperCase();
+    handleFieldChange('taluk', val);
+    setTalukHighlight(-1);
+    if (talukSuggestTimer.current) clearTimeout(talukSuggestTimer.current);
+    if (!val.trim()) { setTalukSuggestions([]); setTalukOpen(false); return; }
+    talukSuggestTimer.current = setTimeout(() => {
+      const q = val.trim();
+      const matches = KARNATAKA_TALUKS.filter(t => t.startsWith(q) && t !== q).slice(0, 8);
+      setTalukSuggestions(matches);
+      setTalukOpen(matches.length > 0);
+    }, 100);
+  }
+
+  function handleTalukPick(taluk: string) {
+    handleFieldChange('taluk', taluk);
+    const district = KARNATAKA_TALUK_DISTRICT[taluk] ?? '';
+    handleFieldChange('district', district);
+    setTalukSuggestions([]);
+    setTalukOpen(false);
+    setTalukHighlight(-1);
+  }
+
+  function handleTalukKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!talukOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setTalukHighlight(h => Math.min(h + 1, talukSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setTalukHighlight(h => Math.max(h - 1, 0));
+    } else if (e.key === 'Tab' || e.key === 'Enter') {
+      const idx = talukHighlight >= 0 ? talukHighlight : 0;
+      if (talukSuggestions[idx]) {
+        e.preventDefault();
+        handleTalukPick(talukSuggestions[idx]);
+      }
+    } else if (e.key === 'Escape') {
+      setTalukOpen(false);
+    }
   }
 
   // Re-enroll from previous year
@@ -827,11 +916,11 @@ export function EnrollStudent() {
       <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
 
         {/* ── Personal Information ─────────────────────────────────────── */}
-        <section className="rounded-xl border border-blue-200 overflow-hidden shadow-sm">
-          <div className="bg-blue-100 px-6 py-2.5 border-b border-blue-200">
+        <section className="rounded-xl border border-blue-200 shadow-sm">
+          <div className="bg-blue-100 px-6 py-2.5 border-b border-blue-200 rounded-t-xl">
             <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider">Personal Information</h3>
           </div>
-          <div className="bg-blue-50 px-6 py-5">
+          <div className="bg-blue-50 px-6 py-5 rounded-b-xl">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <Input
@@ -911,8 +1000,9 @@ export function EnrollStudent() {
                   type="text"
                   value={form.caste}
                   onChange={handleCasteChange}
+                  onKeyDown={handleCasteKeyDown}
                   onFocus={() => void loadCasteIndex()}
-                  onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); setCasteOpen(false); }}
+                  onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); setCasteOpen(false); setCasteHighlight(-1); }}
                   placeholder="CASTE"
                   style={{ textTransform: 'uppercase' }}
                   className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${displayErrors['caste'] ? 'border-red-500' : 'border-gray-300'}`}
@@ -920,14 +1010,14 @@ export function EnrollStudent() {
                 {displayErrors['caste'] && <p className="text-xs text-red-600">{displayErrors['caste']}</p>}
                 {casteOpen && (
                   <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-md shadow-lg mt-0.5 overflow-hidden">
-                    {casteSuggestions.map((item) => (
+                    {casteSuggestions.map((item, idx) => (
                       <button
                         key={item.caste}
                         type="button"
                         onMouseDown={() => handleCastePick(item)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex justify-between items-center gap-2"
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === casteHighlight ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 text-gray-800'}`}
                       >
-                        <span className="font-medium text-gray-800">{item.caste}</span>
+                        <span className="font-medium">{item.caste}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
                       </button>
                     ))}
@@ -950,26 +1040,16 @@ export function EnrollStudent() {
                 error={displayErrors['annualIncome']}
                 placeholder="0"
               />
-              <div className="lg:col-span-4">
-                <Input
-                  label="Address"
-                  value={form.address}
-                  onChange={handleTextChange('address')}
-                  error={displayErrors['address']}
-                  uppercase
-                  placeholder="FULL ADDRESS"
-                />
-              </div>
             </div>
           </div>
         </section>
 
         {/* ── Contact Details ──────────────────────────────────────────── */}
-        <section className="rounded-xl border border-emerald-200 overflow-hidden shadow-sm">
-          <div className="bg-emerald-100 px-6 py-2.5 border-b border-emerald-200">
+        <section className="rounded-xl border border-emerald-200 shadow-sm">
+          <div className="bg-emerald-100 px-6 py-2.5 border-b border-emerald-200 rounded-t-xl">
             <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider">Contact Details</h3>
           </div>
-          <div className="bg-emerald-50 px-6 py-5">
+          <div className="bg-emerald-50 px-6 py-5 rounded-b-xl">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <Input
@@ -991,6 +1071,63 @@ export function EnrollStudent() {
                   maxLength={10}
                 />
               </div>
+              <div className="lg:col-span-4">
+                <Input
+                  label="Address"
+                  value={form.address}
+                  onChange={handleTextChange('address')}
+                  error={displayErrors['address']}
+                  uppercase
+                  placeholder="DOOR NO. / STREET / LOCALITY"
+                />
+              </div>
+              <Input
+                label={`Town / City${form.address.trim() ? ' *' : ''}`}
+                value={form.town}
+                onChange={handleTextChange('town')}
+                error={displayErrors['town']}
+                uppercase
+                placeholder="TOWN / CITY"
+              />
+              <div className="flex flex-col gap-1 relative">
+                <label className="text-sm font-medium text-gray-700">
+                  {`Taluk${form.address.trim() ? ' *' : ''}`}
+                </label>
+                <input
+                  type="text"
+                  value={form.taluk}
+                  onChange={handleTalukChange}
+                  onKeyDown={handleTalukKeyDown}
+                  onBlur={() => { talukSuggestTimer.current && clearTimeout(talukSuggestTimer.current); setTalukOpen(false); setTalukHighlight(-1); }}
+                  placeholder="TALUK"
+                  style={{ textTransform: 'uppercase' }}
+                  className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${displayErrors['taluk'] ? 'border-red-500' : 'border-gray-300'}`}
+                />
+                {displayErrors['taluk'] && <p className="text-xs text-red-600">{displayErrors['taluk']}</p>}
+                {talukOpen && (
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-md shadow-lg mt-0.5 overflow-hidden">
+                    {talukSuggestions.map((taluk, idx) => (
+                      <button
+                        key={taluk}
+                        type="button"
+                        onMouseDown={() => handleTalukPick(taluk)}
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === talukHighlight ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50 text-gray-800'}`}
+                      >
+                        <span className="font-medium">{taluk}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{KARNATAKA_TALUK_DISTRICT[taluk]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Input
+                label={`District${form.address.trim() ? ' *' : ''}`}
+                value={form.district}
+                onChange={handleTextChange('district')}
+                error={displayErrors['district']}
+                uppercase
+                placeholder="AUTO-FILLED FROM TALUK"
+              />
             </div>
           </div>
         </section>
@@ -1018,6 +1155,36 @@ export function EnrollStudent() {
                   onChange={handleSelectChange('priorQualification')}
                 />
               </div>
+              {form.priorQualification === 'PUC' && (
+                <div className="lg:col-span-2">
+                  <Input
+                    label="PUC Percentage (%)"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    value={form.pucPercentage || ''}
+                    onChange={handleNumberChange('pucPercentage')}
+                    error={displayErrors['pucPercentage']}
+                    placeholder="e.g. 78.50"
+                  />
+                </div>
+              )}
+              {form.priorQualification === 'ITI' && (
+                <div className="lg:col-span-2">
+                  <Input
+                    label="ITI Percentage (%)"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    value={form.itiPercentage || ''}
+                    onChange={handleNumberChange('itiPercentage')}
+                    error={displayErrors['itiPercentage']}
+                    placeholder="e.g. 82.00"
+                  />
+                </div>
+              )}
               <div className="lg:col-span-2">
                 <Input
                   label="SSLC Max Total"
@@ -1038,6 +1205,19 @@ export function EnrollStudent() {
                   error={displayErrors['sslcObtainedTotal']}
                 />
               </div>
+              <div className="lg:col-span-2">
+                <label className="text-sm font-medium text-gray-700 block mb-1">SSLC Percentage</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={
+                    form.sslcMaxTotal > 0
+                      ? `${((form.sslcObtainedTotal / form.sslcMaxTotal) * 100).toFixed(2)}%`
+                      : '—'
+                  }
+                  className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
+                />
+              </div>
               <Input
                 label="Science Max"
                 type="number"
@@ -1045,6 +1225,9 @@ export function EnrollStudent() {
                 value={form.scienceMax}
                 onChange={handleNumberChange('scienceMax')}
                 error={displayErrors['scienceMax']}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 text-gray-400 cursor-default select-none"
               />
               <Input
                 label="Science Obtained"
@@ -1061,6 +1244,9 @@ export function EnrollStudent() {
                 value={form.mathsMax}
                 onChange={handleNumberChange('mathsMax')}
                 error={displayErrors['mathsMax']}
+                readOnly
+                tabIndex={-1}
+                className="bg-gray-100 text-gray-400 cursor-default select-none"
               />
               <Input
                 label="Maths Obtained"

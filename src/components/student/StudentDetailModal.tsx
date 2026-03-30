@@ -109,6 +109,9 @@ function ProfileTab({ student: s }: { student: Student }) {
           <div className="col-span-2 sm:col-span-3">
             <Field label="Address" value={s.address} />
           </div>
+          <Field label="Town / City" value={s.town} />
+          <Field label="Taluk" value={s.taluk} />
+          <Field label="District" value={s.district} />
         </dl>
       </section>
 

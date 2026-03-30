@@ -46,6 +46,11 @@ export interface Student {
   mathsScienceObtainedTotal: number;
   annualIncome: number;
   address: string;
+  town: string;
+  taluk: string;
+  district: string;
+  pucPercentage: number;
+  itiPercentage: number;
   fatherMobile: string;
   studentMobile: string;
   course: Course;
