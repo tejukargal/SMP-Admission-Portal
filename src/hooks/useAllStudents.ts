@@ -10,20 +10,27 @@ interface UseAllStudentsResult {
   refetch: () => void;
 }
 
+// Module-level cache — survives component unmount/remount (navigation).
+// Dashboard returns instantly without a skeleton flash on every visit.
+let _studentCache: Student[] | null = null;
+
 export function useAllStudents(): UseAllStudentsResult {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState<Student[]>(() => _studentCache ?? []);
+  const [loading, setLoading] = useState(_studentCache === null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
+    // Only show the loading skeleton when there is truly no data yet.
+    // On return visits the cache is populated, so loading stays false.
+    if (_studentCache === null) setLoading(true);
     setError(null);
 
     const unsubscribe = onSnapshot(
       collection(db, 'students'),
       (snap) => {
-        setStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student)));
+        _studentCache = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+        setStudents(_studentCache);
         setLoading(false);
       },
       (err) => {
@@ -36,6 +43,7 @@ export function useAllStudents(): UseAllStudentsResult {
   }, [tick]);
 
   function refetch() {
+    _studentCache = null; // force reload on next mount
     setTick((t) => t + 1);
   }
 

@@ -446,7 +446,7 @@ export function Dashboard() {
 
   return (
     <>
-    <div className="h-full flex flex-col gap-3">
+    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-start justify-between gap-4">
