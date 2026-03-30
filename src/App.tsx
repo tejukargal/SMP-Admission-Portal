@@ -22,6 +22,9 @@ const FeeRegister = lazy(() =>
 const FeeReportsPage = lazy(() =>
   import('./pages/FeeReportsPage').then((m) => ({ default: m.FeeReportsPage }))
 );
+const Messaging = lazy(() =>
+  import('./pages/Messaging').then((m) => ({ default: m.Messaging }))
+);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -56,6 +59,10 @@ function AppRoutes() {
         <Route
           path="/fee-reports"
           element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}
+        />
+        <Route
+          path="/messaging"
+          element={isAdmin ? <Messaging /> : <Navigate to="/dashboard" replace />}
         />
         <Route
           path="/settings"

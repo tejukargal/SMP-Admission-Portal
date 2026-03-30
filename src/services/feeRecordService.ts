@@ -166,6 +166,43 @@ export async function getNextSvkReceiptNumber(academicYear: AcademicYear): Promi
 }
 
 /**
+ * When a student's course or year is changed, updates all existing fee records
+ * for that student in the given academic year to reflect the new values and
+ * appends an auto-generated remark describing the change.
+ *
+ * All updates are committed in a single batch write.
+ */
+export async function applyCourseYearUpdate(
+  studentId: string,
+  academicYear: AcademicYear,
+  oldCourse: Course,
+  oldYear: Year,
+  newCourse: Course,
+  newYear: Year,
+): Promise<void> {
+  const records = await getFeeRecordsByStudent(studentId, academicYear);
+  if (records.length === 0) return;
+
+  const now = new Date().toISOString();
+  const changeNote = `Course/Year changed: ${oldCourse} ${oldYear} → ${newCourse} ${newYear}`;
+  const batch = writeBatch(db);
+
+  for (const record of records) {
+    const updatedRemarks = record.remarks
+      ? `${record.remarks}; ${changeNote}`
+      : changeNote;
+    batch.update(doc(db, COL, record.id), {
+      course: newCourse,
+      year: newYear,
+      remarks: updatedRemarks,
+      updatedAt: now,
+    });
+  }
+
+  await batch.commit();
+}
+
+/**
  * When a student's Adm Cat is changed (e.g. GM → SNQ), adjusts existing fee
  * records for that student in the given academic year:
  *  - Zeros out any SMP heads that are 0 in the new fee structure but were > 0

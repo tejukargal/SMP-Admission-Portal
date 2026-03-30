@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
 import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber } from '../services/studentService';
-import { applyAdmCatFeeAdjustment } from '../services/feeRecordService';
+import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/feeRecordService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
@@ -310,6 +310,7 @@ export function EnrollStudent() {
   const [showPreview, setShowPreview] = useState(false);
   const [editOriginalYear, setEditOriginalYear] = useState<{ year: string; academicYear: string } | null>(null);
   const [editOriginalAdmCat, setEditOriginalAdmCat] = useState<AdmCat | null>(null);
+  const [editOriginalCourse, setEditOriginalCourse] = useState<string | null>(null);
   const [enrollmentHistory, setEnrollmentHistory] = useState<Student[]>([]);
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
@@ -360,6 +361,7 @@ export function EnrollStudent() {
   }
 
   // Re-enroll from previous year
+  const [reEnrollOpen, setReEnrollOpen] = useState(false);
   const [prevQuery, setPrevQuery] = useState('');
   const [prevResults, setPrevResults] = useState<Student[]>([]);
   const [prevSearching, setPrevSearching] = useState(false);
@@ -483,6 +485,7 @@ export function EnrollStudent() {
           setForm(formData);
           setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
           setEditOriginalAdmCat(formData.admCat ?? null);
+          setEditOriginalCourse(formData.course ?? null);
           // Fetch all other enrollment records for this student (for history display + year conflict check)
           getAllStudents().then((all) => {
             const history = all
@@ -606,6 +609,20 @@ export function EnrollStudent() {
       }
       if (editId) {
         await updateStudent(editId, form);
+        // If course or year changed, update existing fee records to carry the new values
+        if (
+          editOriginalCourse !== null &&
+          (form.course !== editOriginalCourse || form.year !== editOriginalYear?.year)
+        ) {
+          await applyCourseYearUpdate(
+            editId,
+            form.academicYear,
+            editOriginalCourse as import('../types').Course,
+            editOriginalYear!.year as import('../types').Year,
+            form.course,
+            form.year,
+          );
+        }
         // If Adm Cat changed, adjust existing fee records to reflect new structure
         if (editOriginalAdmCat && form.admCat !== editOriginalAdmCat) {
           await applyAdmCatFeeAdjustment(
@@ -715,69 +732,92 @@ export function EnrollStudent() {
 
       {/* Re-enroll banner */}
       {!editId && (
-        <div className="bg-sky-50 rounded-lg border border-sky-200 px-5 py-4 mb-5">
-          <h3 className="text-sm font-semibold text-sky-800 mb-1">Re-enroll from Previous Year</h3>
-          {prevSourceStudent ? (
-            <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-sm text-sky-700">
-                Pre-filled from:{' '}
-                <span className="font-medium">{prevSourceStudent.studentNameSSLC}</span>
-                {' '}— {prevSourceStudent.course}, {prevSourceStudent.year},{' '}
-                {prevSourceStudent.academicYear}
-              </p>
-              <button
-                type="button"
-                onClick={handleClearPrevStudent}
-                className="text-xs text-red-600 hover:text-red-800 underline"
-              >
-                Clear &amp; start fresh
-              </button>
-            </div>
-          ) : (
-            <div className="relative">
-              <p className="text-xs text-sky-600 mb-2">
-                Search by name or register number to pre-fill the form with an existing student's details.
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={prevQuery}
-                  onChange={(e) => setPrevQuery(e.target.value)}
-                  placeholder="Type name or register number..."
-                  className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); setCasteSuggestions([]); setCasteOpen(false); }}
-                  className="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors"
-                >
-                  Reset Fields
-                </button>
-              </div>
-              {prevSearching && (
-                <p className="text-xs text-sky-500 mt-1">Searching...</p>
+        <div className="bg-sky-50 rounded-lg border border-sky-200 mb-5">
+          <button
+            type="button"
+            onClick={() => setReEnrollOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-5 py-3 text-left"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-sky-800">Re-enroll from Previous Year</span>
+              {prevSourceStudent && (
+                <span className="text-xs text-sky-600 font-normal">
+                  — {prevSourceStudent.studentNameSSLC}
+                </span>
               )}
-              {prevQuery.trim().length >= 2 && !prevSearching && prevResults.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">No students found in previous years.</p>
-              )}
-              {prevResults.length > 0 && (
-                <ul className="absolute z-10 w-full max-w-sm bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
-                  {prevResults.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => handlePrevStudentSelect(s)}
-                        className="w-full text-left px-4 py-3 hover:bg-sky-50 border-b border-gray-100 last:border-0"
-                      >
-                        <p className="text-sm font-medium text-gray-900">{s.studentNameSSLC}</p>
-                        <p className="text-xs text-gray-500">
-                          {s.course} · {s.year} · {s.academicYear}
-                          {s.regNumber ? ` · ${s.regNumber}` : ''}
-                        </p>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+            </span>
+            <svg
+              className={`w-4 h-4 text-sky-600 transition-transform duration-200 ${reEnrollOpen || !!prevSourceStudent ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {(reEnrollOpen || !!prevSourceStudent) && (
+            <div className="px-5 pb-4 border-t border-sky-200">
+              {prevSourceStudent ? (
+                <div className="flex items-center gap-3 flex-wrap pt-3">
+                  <p className="text-sm text-sky-700">
+                    Pre-filled from:{' '}
+                    <span className="font-medium">{prevSourceStudent.studentNameSSLC}</span>
+                    {' '}— {prevSourceStudent.course}, {prevSourceStudent.year},{' '}
+                    {prevSourceStudent.academicYear}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleClearPrevStudent}
+                    className="text-xs text-red-600 hover:text-red-800 underline"
+                  >
+                    Clear &amp; start fresh
+                  </button>
+                </div>
+              ) : (
+                <div className="relative pt-3">
+                  <p className="text-xs text-sky-600 mb-2">
+                    Search by name or register number to pre-fill the form with an existing student's details.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={prevQuery}
+                      onChange={(e) => setPrevQuery(e.target.value)}
+                      placeholder="Type name or register number..."
+                      className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); setCasteSuggestions([]); setCasteOpen(false); }}
+                      className="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors"
+                    >
+                      Reset Fields
+                    </button>
+                  </div>
+                  {prevSearching && (
+                    <p className="text-xs text-sky-500 mt-1">Searching...</p>
+                  )}
+                  {prevQuery.trim().length >= 2 && !prevSearching && prevResults.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">No students found in previous years.</p>
+                  )}
+                  {prevResults.length > 0 && (
+                    <ul className="absolute z-10 w-full max-w-sm bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
+                      {prevResults.map((s) => (
+                        <li key={s.id}>
+                          <button
+                            type="button"
+                            onClick={() => handlePrevStudentSelect(s)}
+                            className="w-full text-left px-4 py-3 hover:bg-sky-50 border-b border-gray-100 last:border-0"
+                          >
+                            <p className="text-sm font-medium text-gray-900">{s.studentNameSSLC}</p>
+                            <p className="text-xs text-gray-500">
+                              {s.course} · {s.year} · {s.academicYear}
+                              {s.regNumber ? ` · ${s.regNumber}` : ''}
+                            </p>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           )}

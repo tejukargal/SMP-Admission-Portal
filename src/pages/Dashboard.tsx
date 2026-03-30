@@ -5,7 +5,7 @@ import { useSettings } from '../hooks/useSettings';
 import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
-import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
+import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { exportSummaryReport, exportCategoryReport } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
@@ -675,7 +675,7 @@ export function Dashboard() {
                                 size="sm"
                                 onClick={() => setFeeHistoryStudent(s)}
                               >
-                                Fee Details
+                                View Details
                               </Button>
                               {isAdmin && (
                                 <Button
@@ -941,7 +941,7 @@ export function Dashboard() {
     </div>
 
     {feeHistoryStudent && (
-      <FeeHistoryModal
+      <StudentDetailModal
         student={feeHistoryStudent}
         onClose={() => setFeeHistoryStudent(null)}
       />

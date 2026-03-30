@@ -99,11 +99,36 @@ export function FeeHistoryModal({ student, onClose }: Props) {
           grouped.set(r.academicYear, list);
         }
 
+        // Determine the most recent academic year across all records so we can
+        // use the student's current course/year for that year's fee structure
+        // lookup. This handles the case where a student's course/year was
+        // changed after they had already made payments — all prior records
+        // still carry the old course/year, so without this the allotted fee
+        // structure would never update.  For older academic years we keep the
+        // recorded values because they were accurate at the time of payment.
+        const latestAY = [...grouped.keys()].sort().at(-1);
+
         const data: YearData[] = await Promise.all(
           [...grouped.entries()].map(async ([ay, recs]) => {
             const first = recs[0];
-            const structure = await getFeeStructure(ay, first.course, first.year, first.admType, first.admCat)
-              ?? await getFeeStructure(ay, first.course, first.year, student.admType as AdmType, student.admCat as AdmCat);
+            const isLatest = ay === latestAY;
+            // Always resolve the fee structure using the values stored on the
+            // fee records themselves (course/year/admType/admCat at time of
+            // payment).  We deliberately do NOT use student.year here — that
+            // field reflects the student's CURRENT year-of-study (e.g. 3RD YEAR
+            // in 2026-27) which is wrong for historical year groups (e.g. 2025-26
+            // records that correctly carry 2ND YEAR).  Fee records are kept in
+            // sync by applyCourseYearUpdate / applyAdmCatFeeAdjustment whenever
+            // the student's details change mid-year.
+            const structure =
+              await getFeeStructure(ay, first.course, first.year, first.admType, first.admCat)
+              // For the latest year only: if admType/admCat was changed very
+              // recently and the fee-record update hasn't propagated, fall back
+              // to the student's current admType/admCat (keeping course/year
+              // from the record so we never cross year boundaries).
+              ?? (isLatest
+                ? await getFeeStructure(ay, first.course, first.year, student.admType as AdmType, student.admCat as AdmCat)
+                : null);
             const override = await getFeeOverride(first.studentId, ay);
             const sorted = [...recs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             return { academicYear: ay, records: sorted, structure: structure ?? null, override };

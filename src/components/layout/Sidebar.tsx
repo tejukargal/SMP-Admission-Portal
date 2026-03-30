@@ -12,6 +12,7 @@ export function Sidebar() {
     ...(isAdmin ? [{ to: '/fees', label: 'Collect Fee' }] : []),
     { to: '/fee-register', label: 'Fee Register' },
     ...(isAdmin ? [{ to: '/fee-reports', label: 'Fee Reports' }] : []),
+    ...(isAdmin ? [{ to: '/messaging', label: 'Messaging' }] : []),
     ...(isAdmin ? [{ to: '/settings', label: 'Settings' }] : []),
   ];
 

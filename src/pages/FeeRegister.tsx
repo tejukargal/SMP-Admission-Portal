@@ -421,7 +421,7 @@ export function FeeRegister() {
               <tr className="border-b border-gray-200">
                 <th
                   colSpan={13}
-                  className="px-3 py-1 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200"
+                  className="px-3 py-1 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200 sticky left-0 z-20 bg-gray-50"
                 >
                   Student Info
                 </th>
@@ -449,8 +449,8 @@ export function FeeRegister() {
               {/* Column header */}
               <tr className="border-b border-gray-200">
                 {/* Student Info */}
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Name</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-8 sticky left-0 z-20 bg-gray-50">#</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-8 z-20 bg-gray-50 border-r border-gray-200">Name</th>
                 <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Father Name</th>
                 <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Year</th>
                 <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-12">Course</th>
@@ -506,14 +506,14 @@ export function FeeRegister() {
                 return (
                   <tr
                     key={record.id}
-                    className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                    className="group hover:bg-gray-50 transition-colors cursor-context-menu"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, record });
                     }}
                   >
-                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap sticky left-0 z-[1] bg-white group-hover:bg-gray-50 transition-colors">{idx + 1}</td>
+                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap sticky left-8 z-[1] bg-white group-hover:bg-gray-50 transition-colors border-r border-gray-200">
                       {record.studentName}
                       {record.academicYear !== selectedYear && (
                         <span className="ml-1.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 align-middle">
@@ -621,7 +621,7 @@ export function FeeRegister() {
             {/* Totals footer */}
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-gray-100 border-t-2 border-gray-300 font-semibold text-gray-800">
-                <td className="px-2 py-1.5 text-gray-500 text-[10px] uppercase tracking-wide" colSpan={13}>
+                <td className="px-2 py-1.5 text-gray-500 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-gray-100" colSpan={13}>
                   Totals ({filteredRecords.length} records)
                 </td>
 

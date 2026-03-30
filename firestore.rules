@@ -8,7 +8,7 @@ service cloud.firestore {
         request.auth.uid == userId ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true)
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false)
       );
       // A user with no doc yet (original admin, first login) can create their own doc
       allow create: if request.auth != null && request.auth.uid == userId
@@ -17,7 +17,7 @@ service cloud.firestore {
       allow write: if request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
     }
     match /settings/{settingId} {
       allow read, write: if request.auth != null;
@@ -63,6 +63,23 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null
         && request.resource.data.keys().hasAll(['studentId', 'academicYear', 'smp', 'svk']);
+    }
+    match /adminConfig/{docId} {
+      // Only active admins can read/write (stores API keys etc.)
+      // active != false handles docs created before the active field was added
+      allow read, write: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
+    }
+    match /smsLogs/{logId} {
+      allow read: if request.auth != null;
+      // Writes come from Cloud Function (Admin SDK bypasses rules);
+      // rule below prevents direct browser writes from non-admins.
+      allow write: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
     }
   }
 }

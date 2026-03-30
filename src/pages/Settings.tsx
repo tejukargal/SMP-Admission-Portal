@@ -6,6 +6,7 @@ import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear } from '../services/userService';
+import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
@@ -15,7 +16,7 @@ import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
 import type { AcademicYear, StaffUser } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff' | 'messaging';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -25,6 +26,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'import-fee', label: 'Import Fee Register' },
   { id: 'import-address', label: 'Import Address' },
   { id: 'staff', label: 'Staff Accounts' },
+  { id: 'messaging', label: 'Messaging' },
 ];
 
 const ACADEMIC_YEAR_OPTIONS = [
@@ -98,6 +100,14 @@ export function Settings() {
   const [feeStructureResetting, setFeeStructureResetting] = useState(false);
   const [feeStructureResetMsg, setFeeStructureResetMsg] = useState('');
   const [feeStructureResetErrorMsg, setFeeStructureResetErrorMsg] = useState('');
+
+  // Messaging config state
+  const [msgApiKey, setMsgApiKey] = useState('');
+  const [msgSenderId, setMsgSenderId] = useState('');
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [msgSaving, setMsgSaving] = useState(false);
+  const [msgSaveMsg, setMsgSaveMsg] = useState('');
+  const [msgSaveError, setMsgSaveError] = useState('');
 
   // Staff accounts state
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -318,6 +328,18 @@ export function Settings() {
     }
   }
 
+  // Load messaging config when messaging tab is opened
+  useEffect(() => {
+    if (activeTab !== 'messaging') return;
+    setMsgLoading(true);
+    getMessagingConfig()
+      .then((cfg) => {
+        if (cfg) { setMsgApiKey(cfg.fast2smsApiKey); setMsgSenderId(cfg.senderId); }
+      })
+      .catch(() => {})
+      .finally(() => setMsgLoading(false));
+  }, [activeTab]);
+
   // Load staff list when staff tab is opened
   useEffect(() => {
     if (activeTab !== 'staff') return;
@@ -387,6 +409,22 @@ export function Settings() {
       setStaffError('Failed to update default year.');
     } finally {
       setSavingYearFor(null);
+    }
+  }
+
+  async function handleSaveMessaging(e: FormEvent) {
+    e.preventDefault();
+    setMsgSaveMsg('');
+    setMsgSaveError('');
+    if (!msgApiKey.trim()) { setMsgSaveError('API key is required.'); return; }
+    setMsgSaving(true);
+    try {
+      await saveMessagingConfig({ fast2smsApiKey: msgApiKey.trim(), senderId: msgSenderId.trim() || 'SMPCLG' });
+      setMsgSaveMsg('Messaging settings saved.');
+    } catch (err: unknown) {
+      setMsgSaveError(err instanceof Error ? err.message : 'Failed to save.');
+    } finally {
+      setMsgSaving(false);
     }
   }
 
@@ -610,6 +648,61 @@ export function Settings() {
         {activeTab === 'import-fee' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <ImportFeeRegister />
+          </div>
+        )}
+
+        {/* ── Messaging ── */}
+        {activeTab === 'messaging' && (
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
+            <div className="max-w-md space-y-5">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+                <h3 className="text-base font-medium text-gray-800 mb-1">Fast2SMS Configuration</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  These credentials are used by the Bulk SMS feature to send messages via Fast2SMS.
+                  Your API key is stored securely in Firestore and never exposed to students.
+                </p>
+                {msgLoading ? (
+                  <p className="text-sm text-gray-400">Loading…</p>
+                ) : (
+                  <form onSubmit={(e) => { void handleSaveMessaging(e); }} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fast2SMS API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={msgApiKey}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgApiKey(e.target.value); setMsgSaveMsg(''); setMsgSaveError(''); }}
+                        placeholder="Paste your Fast2SMS API key"
+                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sender ID <span className="text-gray-400 font-normal">(optional, default: SMPCLG)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={msgSenderId}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgSenderId(e.target.value.toUpperCase()); setMsgSaveMsg(''); setMsgSaveError(''); }}
+                        placeholder="SMPCLG"
+                        maxLength={11}
+                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    {msgSaveError && (
+                      <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{msgSaveError}</p>
+                    )}
+                    {msgSaveMsg && (
+                      <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">{msgSaveMsg}</p>
+                    )}
+                    <Button type="submit" loading={msgSaving}>
+                      Save Messaging Settings
+                    </Button>
+                  </form>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
