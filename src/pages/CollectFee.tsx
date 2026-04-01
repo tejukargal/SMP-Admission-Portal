@@ -562,23 +562,26 @@ export function CollectFee() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {isFullyPaid ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
+                        <button
                           disabled
-                          className="w-24 bg-green-50 text-green-700 border-green-200 disabled:opacity-100"
+                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-green-600 text-white border-green-600 cursor-default opacity-100"
                         >
-                          No Dues
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          size="sm"
+                          ✓ No Dues
+                        </button>
+                      ) : hasFeeRecord ? (
+                        <button
                           onClick={() => setSelectedStudent(student)}
-                          className={`w-24 ${hasFeeRecord ? 'bg-amber-500 hover:bg-amber-600 border-transparent' : ''}`}
+                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-amber-500 hover:bg-amber-600 text-white border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 cursor-pointer"
                         >
-                          {hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
-                        </Button>
+                          Collect Dues
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedStudent(student)}
+                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-blue-600 hover:bg-blue-700 text-white border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
+                        >
+                          Collect Fee
+                        </button>
                       )}
                     </td>
                   </tr>

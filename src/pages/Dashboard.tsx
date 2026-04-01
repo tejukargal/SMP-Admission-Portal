@@ -47,15 +47,40 @@ interface StatCardProps {
   subText?: string;
   breakdown?: { label: string; value: number }[];
   className?: string;
+  /** Renders the card label as a coloured pill badge instead of muted gray text */
+  highlightLabel?: boolean;
+  /** Renders breakdown labels as coloured pill badges instead of muted gray text */
+  highlightBreakdown?: boolean;
+  /** Large watermark text rendered in the card background */
+  watermark?: string;
+  /** Makes the card clickable */
+  onClick?: () => void;
 }
 
-function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '' }: StatCardProps) {
+function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick }: StatCardProps) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className={`rounded-xl border ${border} ${bg} p-4 flex flex-col gap-1.5 ${className}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 truncate leading-tight">
-        {label}
-      </p>
+    <div
+      onClick={onClick}
+      className={`rounded-xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer hover:shadow-md hover:brightness-[0.97] transition-all duration-150' : ''}`}
+    >
+      {watermark && (
+        <span
+          aria-hidden="true"
+          className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${textColor} opacity-[0.07]`}
+        >
+          {watermark}
+        </span>
+      )}
+      {highlightLabel ? (
+        <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${border} bg-white/70 ${textColor}`}>
+          {label}
+        </span>
+      ) : (
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 truncate leading-tight">
+          {label}
+        </p>
+      )}
       <p className={`text-3xl font-bold leading-none ${textColor}`}>
         <AnimNum value={value} />
       </p>
@@ -68,10 +93,16 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
             />
           </div>
           {breakdown ? (
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
+            <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
               {breakdown.map((b) => (
                 <span key={b.label} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
-                  <span className="text-gray-400 font-medium">{b.label}</span>
+                  {highlightBreakdown ? (
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${border} bg-white/70 ${textColor}`}>
+                      {b.label}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 font-medium">{b.label}</span>
+                  )}
                   <span className="font-bold text-gray-600">{b.value}</span>
                 </span>
               ))}
@@ -127,7 +158,17 @@ function BreakdownPanel({ title, items, total }: { title: string; items: Breakdo
 }
 
 // ─── Section label ───────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, accent }: { children: React.ReactNode; accent?: { bar: string; text: string } }) {
+  if (accent) {
+    return (
+      <div className="flex items-center gap-2.5 mb-2.5">
+        <span className={`w-1 h-5 rounded-full shrink-0 ${accent.bar}`} />
+        <p className={`text-sm font-extrabold uppercase tracking-widest ${accent.text}`}>
+          {children}
+        </p>
+      </div>
+    );
+  }
   return (
     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
       {children}
@@ -194,6 +235,8 @@ export function Dashboard() {
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
+  const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
+  const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
 
   const {
     searchTerm,
@@ -332,6 +375,15 @@ export function Dashboard() {
       CS: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
       EE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
     };
+
+    // 1st Year pending seats: Regular quota (60) and SNQ quota (3) per course
+    const firstYearSeats: Record<Course, { regularConfirmed: number; snqConfirmed: number }> = {
+      CE: { regularConfirmed: 0, snqConfirmed: 0 },
+      ME: { regularConfirmed: 0, snqConfirmed: 0 },
+      EC: { regularConfirmed: 0, snqConfirmed: 0 },
+      CS: { regularConfirmed: 0, snqConfirmed: 0 },
+      EE: { regularConfirmed: 0, snqConfirmed: 0 },
+    };
     const byYearByCourse: Record<Year, Record<Course, number>> = {
       '1ST YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
       '2ND YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
@@ -366,6 +418,14 @@ export function Dashboard() {
       if (s.course in byCourseByYear && s.year in byCourseByYear[s.course]) byCourseByYear[s.course][s.year]++;
       if (s.year in byYearByCourse && s.course in byYearByCourse[s.year]) byYearByCourse[s.year][s.course]++;
 
+      if (s.year === '1ST YEAR' && s.course in firstYearSeats) {
+        if (s.admType === 'REGULAR' && s.admCat === 'GM') {
+          firstYearSeats[s.course as Course].regularConfirmed++;
+        } else if (s.admCat === 'SNQ') {
+          firstYearSeats[s.course as Course].snqConfirmed++;
+        }
+      }
+
       if (s.year in summaryTable && s.course in summaryTable[s.year]) {
         const sc = summaryTable[s.year][s.course];
         if (s.admCat === 'SNQ')            sc.snq++;
@@ -388,7 +448,7 @@ export function Dashboard() {
       }
     }
 
-    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse };
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats };
   }, [filteredStudents]);
 
   // Year-chips stats — per-academic-year counts from active source
@@ -740,7 +800,7 @@ export function Dashboard() {
 
             {/* By Course */}
             <div>
-              <SectionLabel>By Course</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-indigo-500', text: 'text-indigo-700' }}>By Course</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -755,6 +815,9 @@ export function Dashboard() {
                       textColor={c.textColor}
                       barFill={c.barFill}
                       breakdown={YEARS.map((yr, i) => ({ label: `${i + 1}Y`, value: stats.byCourseByYear[course][yr] }))}
+                      highlightLabel
+                      watermark={course}
+                      onClick={() => setCourseModalCourse(course)}
                     />
                   );
                 })}
@@ -763,10 +826,11 @@ export function Dashboard() {
 
             {/* By Year of Study */}
             <div>
-              <SectionLabel>By Year of Study</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-teal-500', text: 'text-teal-700' }}>By Year of Study</SectionLabel>
               <div className="grid grid-cols-3 gap-3">
                 {YEARS.map((year) => {
                   const y = yearConfig[year];
+                  const wm = year === '1ST YEAR' ? '1st' : year === '2ND YEAR' ? '2nd' : '3rd';
                   return (
                     <StatCard
                       key={year}
@@ -778,7 +842,56 @@ export function Dashboard() {
                       textColor={y.textColor}
                       barFill={y.barFill}
                       breakdown={COURSES.map((course) => ({ label: course, value: stats.byYearByCourse[year][course] }))}
+                      highlightBreakdown
+                      watermark={wm}
+                      onClick={() => setYearModalYear(year)}
                     />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 1st Year Pending Seats */}
+            <div>
+              <SectionLabel accent={{ bar: 'bg-orange-500', text: 'text-orange-700' }}>1st Year — Pending Seats</SectionLabel>
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                {COURSES.map((course) => {
+                  const c = courseConfig[course];
+                  const { regularConfirmed, snqConfirmed } = stats.firstYearSeats[course];
+                  const regularPending = Math.max(0, 60 - regularConfirmed);
+                  const snqPending = Math.max(0, 3 - snqConfirmed);
+                  const regularFillPct = Math.min(100, Math.round((regularConfirmed / 60) * 100));
+                  return (
+                    <div key={course} className={`rounded-xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`}>
+                      <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
+                      <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor}`}>{course}</span>
+                      {/* Regular seats */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-end justify-between">
+                          <span className="text-[10px] text-gray-400 font-medium">Regular</span>
+                          <span className={`text-2xl font-bold leading-none tabular-nums ${regularPending === 0 ? 'text-green-600' : c.textColor}`}>
+                            <AnimNum value={regularPending} />
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${c.barFill} transition-all duration-700 ease-out`}
+                            style={{ width: `${regularFillPct}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 tabular-nums">{regularConfirmed} / 60 filled</p>
+                      </div>
+                      {/* SNQ seats */}
+                      <div className="pt-1.5 border-t border-white/50 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-medium">SNQ</span>
+                          <p className="text-[10px] text-gray-400 tabular-nums">{snqConfirmed} / 3 filled</p>
+                        </div>
+                        <span className={`text-lg font-bold tabular-nums ${snqPending === 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                          <AnimNum value={snqPending} />
+                        </span>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -946,6 +1059,185 @@ export function Dashboard() {
         onClose={() => setFeeHistoryStudent(null)}
       />
     )}
+
+    {/* Course Admission Type modal */}
+    {courseModalCourse && (() => {
+      const c = courseConfig[courseModalCourse];
+      const rows = YEARS.map((yr) => {
+        const cell = stats.summaryTable[yr]?.[courseModalCourse] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+        const total = cell.regular + cell.ltrl + cell.snq + cell.rptr;
+        const yrLabel = yr === '1ST YEAR' ? '1st Year' : yr === '2ND YEAR' ? '2nd Year' : '3rd Year';
+        return { yrLabel, ...cell, total };
+      });
+      const grand = rows.reduce(
+        (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
+        { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
+      );
+      const cols: { key: keyof typeof grand; label: string }[] = [
+        { key: 'regular', label: 'Regular' },
+        { key: 'ltrl',    label: 'Lateral' },
+        { key: 'snq',     label: 'SNQ'     },
+        { key: 'rptr',    label: 'Repeater'},
+        { key: 'total',   label: 'Total'   },
+      ];
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => setCourseModalCourse(null)} aria-hidden="true" />
+          <div className={`relative rounded-2xl border-2 ${c.border} ${c.bg} shadow-2xl w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
+
+            {/* Header */}
+            <div className={`px-5 py-3.5 flex items-center justify-between border-b ${c.border} relative overflow-hidden`}>
+              <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>
+                {courseModalCourse}
+              </span>
+              <div className="flex items-center gap-2.5">
+                <span className={`px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border ${c.border} bg-white/70 ${c.textColor}`}>
+                  {courseModalCourse}
+                </span>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admission Type-wise Count</p>
+              </div>
+              <button
+                onClick={() => setCourseModalCourse(null)}
+                className="relative z-10 rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="p-4">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className={`${c.bg}`}>
+                    <th className={`px-3 py-2 text-left font-semibold ${c.textColor} border-b-2 ${c.border}`}>Year</th>
+                    {cols.map(({ key, label }) => (
+                      <th key={key} className={`px-3 py-2 text-right font-semibold ${key === 'total' ? c.textColor : 'text-gray-500'} border-b-2 ${c.border} ${key === 'total' ? 'border-l-2' : ''}`}>
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={row.yrLabel} className={`${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} hover:bg-white/80 transition-colors`}>
+                      <td className={`px-3 py-2.5 font-semibold text-gray-700 border-b ${c.border}/40`}>{row.yrLabel}</td>
+                      {cols.map(({ key }) => (
+                        <td key={key} className={`px-3 py-2.5 text-right tabular-nums border-b ${c.border}/40 ${key === 'total' ? `font-bold ${c.textColor} border-l-2 ${c.border}` : 'text-gray-700'}`}>
+                          {row[key] > 0 ? row[key] : <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className={`${c.bg} border-t-2 ${c.border}`}>
+                    <td className={`px-3 py-2.5 font-bold ${c.textColor} text-xs uppercase tracking-wide`}>Total</td>
+                    {cols.map(({ key }) => (
+                      <td key={key} className={`px-3 py-2.5 text-right tabular-nums font-bold ${c.textColor} text-sm ${key === 'total' ? `border-l-2 ${c.border}` : ''}`}>
+                        {grand[key]}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+          </div>
+        </div>
+      );
+    })()}
+    {/* Year Admission Type modal */}
+    {yearModalYear && (() => {
+      const y = yearConfig[yearModalYear];
+      const wm = yearModalYear === '1ST YEAR' ? '1st' : yearModalYear === '2ND YEAR' ? '2nd' : '3rd';
+      const rows = COURSES.map((course) => {
+        const cell = stats.summaryTable[yearModalYear]?.[course] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+        const total = cell.regular + cell.ltrl + cell.snq + cell.rptr;
+        return { course, ...cell, total };
+      });
+      const grand = rows.reduce(
+        (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
+        { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
+      );
+      const cols: { key: keyof typeof grand; label: string }[] = [
+        { key: 'regular', label: 'Regular'  },
+        { key: 'ltrl',    label: 'Lateral'  },
+        { key: 'snq',     label: 'SNQ'      },
+        { key: 'rptr',    label: 'Repeater' },
+        { key: 'total',   label: 'Total'    },
+      ];
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => setYearModalYear(null)} aria-hidden="true" />
+          <div className={`relative rounded-2xl border-2 ${y.border} ${y.bg} shadow-2xl w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
+
+            {/* Header */}
+            <div className={`px-5 py-3.5 flex items-center justify-between border-b ${y.border} relative overflow-hidden`}>
+              <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${y.textColor} opacity-[0.07]`}>
+                {wm}
+              </span>
+              <div className="flex items-center gap-2.5">
+                <span className={`px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border ${y.border} bg-white/70 ${y.textColor}`}>
+                  {y.label}
+                </span>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admission Type-wise Count</p>
+              </div>
+              <button
+                onClick={() => setYearModalYear(null)}
+                className="relative z-10 rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="p-4">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th className={`px-3 py-2 text-left font-semibold ${y.textColor} border-b-2 ${y.border}`}>Course</th>
+                    {cols.map(({ key, label }) => (
+                      <th key={key} className={`px-3 py-2 text-right font-semibold ${key === 'total' ? y.textColor : 'text-gray-500'} border-b-2 ${y.border} ${key === 'total' ? `border-l-2 ${y.border}` : ''}`}>
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={row.course} className={`${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} hover:bg-white/80 transition-colors`}>
+                      <td className={`px-3 py-2.5 font-semibold text-gray-700 border-b ${y.border}/40`}>
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${y.border} bg-white/70 ${y.textColor}`}>
+                          {row.course}
+                        </span>
+                      </td>
+                      {cols.map(({ key }) => (
+                        <td key={key} className={`px-3 py-2.5 text-right tabular-nums border-b ${y.border}/40 ${key === 'total' ? `font-bold ${y.textColor} border-l-2 ${y.border}` : 'text-gray-700'}`}>
+                          {row[key] > 0 ? row[key] : <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className={`${y.bg} border-t-2 ${y.border}`}>
+                    <td className={`px-3 py-2.5 font-bold ${y.textColor} text-xs uppercase tracking-wide`}>Total</td>
+                    {cols.map(({ key }) => (
+                      <td key={key} className={`px-3 py-2.5 text-right tabular-nums font-bold ${y.textColor} text-sm ${key === 'total' ? `border-l-2 ${y.border}` : ''}`}>
+                        {grand[key]}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+          </div>
+        </div>
+      );
+    })()}
     </>
   );
 }
