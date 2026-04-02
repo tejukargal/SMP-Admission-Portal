@@ -15,7 +15,7 @@ import { ExamFee } from './ExamFee';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
-import type { AcademicYear, StaffUser } from '../types';
+import type { AcademicYear, StaffUser, Student } from '../types';
 
 type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff' | 'messaging';
 
