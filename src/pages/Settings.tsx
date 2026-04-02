@@ -1,7 +1,8 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
-import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear } from '../services/studentService';
+import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear, getAllStudents } from '../services/studentService';
+import { clearTcHistory, type TCRecord } from '../services/tcService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
@@ -100,6 +101,15 @@ export function Settings() {
   const [feeStructureResetting, setFeeStructureResetting] = useState(false);
   const [feeStructureResetMsg, setFeeStructureResetMsg] = useState('');
   const [feeStructureResetErrorMsg, setFeeStructureResetErrorMsg] = useState('');
+
+  // TC history management state
+  const [tcQuery,       setTcQuery]       = useState('');
+  const [tcStudents,    setTcStudents]     = useState<(Student & { tcHistory?: TCRecord[] })[] | null>(null);
+  const [tcFetching,    setTcFetching]     = useState(false);
+  const [tcConfirmId,   setTcConfirmId]    = useState<string | null>(null);
+  const [tcClearingId,  setTcClearingId]   = useState<string | null>(null);
+  const [tcClearMsg,    setTcClearMsg]     = useState('');
+  const [tcClearError,  setTcClearError]   = useState('');
 
   // Messaging config state
   const [msgApiKey, setMsgApiKey] = useState('');
@@ -412,6 +422,46 @@ export function Settings() {
     }
   }
 
+  // Fetch all students once on first TC search
+  useEffect(() => {
+    if (!tcQuery.trim() || tcStudents !== null || tcFetching) return;
+    setTcFetching(true);
+    getAllStudents()
+      .then((list) => setTcStudents(list as (Student & { tcHistory?: TCRecord[] })[]))
+      .catch(() => setTcStudents([]))
+      .finally(() => setTcFetching(false));
+  }, [tcQuery, tcStudents, tcFetching]);
+
+  const tcQueryLower = tcQuery.toLowerCase().trim();
+  const tcResults: (Student & { tcHistory?: TCRecord[] })[] =
+    tcStudents && tcQueryLower.length >= 2
+      ? tcStudents
+          .filter((s) =>
+            s.studentNameSSLC.toLowerCase().includes(tcQueryLower) ||
+            s.regNumber.toLowerCase().includes(tcQueryLower) ||
+            s.fatherName.toLowerCase().includes(tcQueryLower)
+          )
+          .slice(0, 12)
+      : [];
+
+  async function handleClearTcHistory(student: Student & { tcHistory?: TCRecord[] }) {
+    setTcClearingId(student.id);
+    setTcClearMsg('');
+    setTcClearError('');
+    try {
+      await clearTcHistory(student.id);
+      setTcStudents((prev) =>
+        prev?.map((s) => s.id === student.id ? { ...s, tcHistory: [] } : s) ?? null
+      );
+      setTcConfirmId(null);
+      setTcClearMsg(`TC history cleared for ${student.studentNameSSLC}.`);
+    } catch (err: unknown) {
+      setTcClearError(err instanceof Error ? err.message : 'Failed to clear TC history.');
+    } finally {
+      setTcClearingId(null);
+    }
+  }
+
   async function handleSaveMessaging(e: FormEvent) {
     e.preventDefault();
     setMsgSaveMsg('');
@@ -490,6 +540,120 @@ export function Settings() {
                         Save Settings
                       </Button>
                     </form>
+                  )}
+                </div>
+              </div>
+
+              {/* TC History Management */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out 0.05s both' }}>
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">TC History Management</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Search a student and clear their transfer certificate issuance history</p>
+                </div>
+                <div className="px-6 py-5 space-y-3">
+                  {/* Search input */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={tcQuery}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        setTcQuery(e.target.value);
+                        setTcClearMsg('');
+                        setTcClearError('');
+                        setTcConfirmId(null);
+                      }}
+                      placeholder="Search by name, register number or father name…"
+                      className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-8"
+                    />
+                    {tcFetching && (
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Feedback messages */}
+                  {tcClearMsg && (
+                    <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded px-3 py-2">{tcClearMsg}</p>
+                  )}
+                  {tcClearError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{tcClearError}</p>
+                  )}
+
+                  {/* Results */}
+                  {tcQueryLower.length >= 2 && !tcFetching && tcResults.length === 0 && tcStudents !== null && (
+                    <p className="text-xs text-gray-400 text-center py-3">No students found for "{tcQuery}".</p>
+                  )}
+
+                  {tcResults.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
+                      {tcResults.map((s) => {
+                        const tcCount = s.tcHistory?.length ?? 0;
+                        const isConfirming = tcConfirmId === s.id;
+                        const isClearing   = tcClearingId === s.id;
+                        return (
+                          <div key={s.id} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              {/* Student info */}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{s.studentNameSSLC}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {s.regNumber || '—'} · {s.course} · {s.year} · {s.academicYear}
+                                </p>
+                                <p className="text-xs text-gray-400">Father: {s.fatherName}</p>
+                              </div>
+                              {/* TC count + action */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                  tcCount === 0
+                                    ? 'bg-gray-100 text-gray-400'
+                                    : tcCount === 1
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {tcCount === 0 ? 'No TCs' : `${tcCount} TC${tcCount > 1 ? 's' : ''}`}
+                                </span>
+                                {!isConfirming && (
+                                  <button
+                                    disabled={tcCount === 0 || isClearing}
+                                    onClick={() => { setTcConfirmId(s.id); setTcClearMsg(''); setTcClearError(''); }}
+                                    className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Inline confirm row */}
+                            {isConfirming && (
+                              <div className="mt-2.5 flex items-center gap-2 bg-red-50 border border-red-100 rounded px-3 py-2">
+                                <p className="text-xs text-red-700 flex-1">
+                                  Clear {tcCount} TC record{tcCount > 1 ? 's' : ''} for <strong>{s.studentNameSSLC}</strong>? This cannot be undone.
+                                </p>
+                                <button
+                                  onClick={() => setTcConfirmId(null)}
+                                  className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  disabled={isClearing}
+                                  onClick={() => { void handleClearTcHistory(s); }}
+                                  className="text-xs px-2.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
+                                >
+                                  {isClearing ? 'Clearing…' : 'Yes, Clear'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {tcQueryLower.length < 2 && (
+                    <p className="text-xs text-gray-400">Type at least 2 characters to search.</p>
                   )}
                 </div>
               </div>

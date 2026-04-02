@@ -12,6 +12,7 @@ import { generateAnsLetter } from '../utils/ansLetter';
 import { printStudentProfile } from '../utils/printProfile';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
+import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
@@ -98,6 +99,7 @@ export function Students() {
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
   const [showMissingDocs, setShowMissingDocs] = useState(false);
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
+  const [tcStudent, setTcStudent] = useState<Student | null>(null);
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -617,12 +619,11 @@ export function Students() {
             Study Certificate
           </button>
           <button
-            disabled
-            className="w-full text-left px-3 py-2 text-gray-300 flex items-center gap-2 cursor-not-allowed"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📜</span>
             Transfer Certificate
-            <span className="ml-auto text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">Soon</span>
           </button>
         </div>
       </>
@@ -647,6 +648,13 @@ export function Students() {
       <StudyCertificateModal
         student={studyCertStudent}
         onClose={() => setStudyCertStudent(null)}
+      />
+    )}
+
+    {tcStudent && (
+      <TransferCertificateModal
+        student={tcStudent}
+        onClose={() => setTcStudent(null)}
       />
     )}
     </>

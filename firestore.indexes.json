@@ -99,7 +99,7 @@
         { "fieldPath": "studentId", "order": "ASCENDING" },
         { "fieldPath": "academicYear", "order": "ASCENDING" }
       ]
-    }
+    },
   ],
   "fieldOverrides": []
 }
