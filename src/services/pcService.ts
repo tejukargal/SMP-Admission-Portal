@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, deleteField } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export interface PCRecord {
@@ -26,6 +26,11 @@ export async function savePcRecord(
   await updateDoc(doc(db, 'students', studentId), {
     pcHistory: arrayUnion(record),
   });
+}
+
+/** Remove all PC history from a student document. */
+export async function clearPcHistory(studentId: string): Promise<void> {
+  await updateDoc(doc(db, 'students', studentId), { pcHistory: deleteField() });
 }
 
 /** Read PC history from the student document, sorted newest-first. */

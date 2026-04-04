@@ -3,6 +3,7 @@ import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber } from '../../se
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
 import { getTcRecordsByStudent, type TCRecord } from '../../services/tcService';
+import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import type {
   Student, FeeRecord, FeeStructure, AcademicYear,
@@ -707,9 +708,97 @@ function TcHistoryTab({ records, loading }: { records: TCRecord[]; loading: bool
   );
 }
 
+// ─── PC History tab ───────────────────────────────────────────────────────────
+
+function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="px-6 py-5 space-y-2">
+        {[1, 2].map((i) => (
+          <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="px-6 py-14 flex flex-col items-center gap-2 text-center">
+        <div className="text-2xl text-gray-200">🎓</div>
+        <p className="text-sm font-medium text-gray-400">No provisional certificates issued yet</p>
+        <p className="text-xs text-gray-300">Once a PC is generated for this student it will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-5 space-y-4">
+      {/* Summary chip */}
+      <div className="flex items-center gap-2">
+        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+          records.length > 1 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+        }`}>
+          {records.length} PC{records.length > 1 ? 's' : ''} issued
+          {records.some((r) => r.isDuplicate) ? ' (includes duplicate copies)' : ''}
+        </span>
+      </div>
+
+      {/* Records table */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              {['Exam Period', 'Reg. Number', 'Result Class', 'Date of Issue', 'Issued On', 'Type'].map((h, i) => (
+                <th
+                  key={h}
+                  className={`px-3 py-2 font-semibold text-gray-500 whitespace-nowrap ${i >= 4 ? 'text-right' : 'text-left'}`}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {records.map((r) => (
+              <tr key={r.id} className="hover:bg-gray-50">
+                <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{r.examPeriod}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.regNumber || '—'}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.resultClass}</td>
+                <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.dateOfIssue}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 whitespace-nowrap">
+                  {new Date(r.issuedAt).toLocaleDateString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })}
+                </td>
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  {r.isDuplicate ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                      Duplicate
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">
+                      Original
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {records.length > 1 && (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          ⚠ Multiple PCs have been issued for this student. Any further PC must be a <strong>Duplicate Copy</strong>.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'documents' | 'fee' | 'tc';
+type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc';
 
 interface Props {
   student: Student;
@@ -732,6 +821,11 @@ export function StudentDetailModal({ student, onClose }: Props) {
   const [tcRecords,   setTcRecords]   = useState<TCRecord[]>([]);
   const [tcLoading,   setTcLoading]   = useState(false);
   const [tcLoaded,    setTcLoaded]    = useState(false);
+
+  // PC history state — lazy-loaded on first visit to pc tab
+  const [pcRecords,   setPcRecords]   = useState<PCRecord[]>([]);
+  const [pcLoading,   setPcLoading]   = useState(false);
+  const [pcLoaded,    setPcLoaded]    = useState(false);
 
   // Lazy-load fee history when fee tab first activated
   useEffect(() => {
@@ -795,6 +889,17 @@ export function StudentDetailModal({ student, onClose }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, tcLoaded]);
 
+  // Lazy-load PC history when pc tab first activated
+  useEffect(() => {
+    if (activeTab !== 'pc' || pcLoaded) return;
+    setPcLoading(true);
+    getPcRecordsByStudent(student.id)
+      .then((records) => setPcRecords(records))
+      .catch(() => { /* non-fatal */ })
+      .finally(() => { setPcLoading(false); setPcLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pcLoaded]);
+
   // Escape to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -822,6 +927,7 @@ export function StudentDetailModal({ student, onClose }: Props) {
     { id: 'documents', label: 'Documents' },
     { id: 'fee',       label: 'Fee History' },
     { id: 'tc',        label: 'TC History' },
+    { id: 'pc',        label: 'PC History' },
   ];
 
   return (
@@ -901,6 +1007,9 @@ export function StudentDetailModal({ student, onClose }: Props) {
           )}
           {activeTab === 'tc' && (
             <TcHistoryTab records={tcRecords} loading={tcLoading} />
+          )}
+          {activeTab === 'pc' && (
+            <PcHistoryTab records={pcRecords} loading={pcLoading} />
           )}
         </div>
 

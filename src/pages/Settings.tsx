@@ -3,6 +3,7 @@ import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear, getAllStudents } from '../services/studentService';
 import { clearTcHistory, type TCRecord } from '../services/tcService';
+import { clearPcHistory, type PCRecord } from '../services/pcService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
@@ -102,14 +103,16 @@ export function Settings() {
   const [feeStructureResetMsg, setFeeStructureResetMsg] = useState('');
   const [feeStructureResetErrorMsg, setFeeStructureResetErrorMsg] = useState('');
 
-  // TC history management state
+  // Certificate history management state (TC + PC share one search + student list)
   const [tcQuery,       setTcQuery]       = useState('');
-  const [tcStudents,    setTcStudents]     = useState<(Student & { tcHistory?: TCRecord[] })[] | null>(null);
+  const [tcStudents,    setTcStudents]     = useState<(Student & { tcHistory?: TCRecord[]; pcHistory?: PCRecord[] })[] | null>(null);
   const [tcFetching,    setTcFetching]     = useState(false);
   const [tcConfirmId,   setTcConfirmId]    = useState<string | null>(null);
   const [tcClearingId,  setTcClearingId]   = useState<string | null>(null);
   const [tcClearMsg,    setTcClearMsg]     = useState('');
   const [tcClearError,  setTcClearError]   = useState('');
+  const [pcConfirmId,   setPcConfirmId]    = useState<string | null>(null);
+  const [pcClearingId,  setPcClearingId]   = useState<string | null>(null);
 
   // Messaging config state
   const [msgApiKey, setMsgApiKey] = useState('');
@@ -427,13 +430,13 @@ export function Settings() {
     if (!tcQuery.trim() || tcStudents !== null || tcFetching) return;
     setTcFetching(true);
     getAllStudents()
-      .then((list) => setTcStudents(list as (Student & { tcHistory?: TCRecord[] })[]))
+      .then((list) => setTcStudents(list as (Student & { tcHistory?: TCRecord[]; pcHistory?: PCRecord[] })[]))
       .catch(() => setTcStudents([]))
       .finally(() => setTcFetching(false));
   }, [tcQuery, tcStudents, tcFetching]);
 
   const tcQueryLower = tcQuery.toLowerCase().trim();
-  const tcResults: (Student & { tcHistory?: TCRecord[] })[] =
+  const tcResults: (Student & { tcHistory?: TCRecord[]; pcHistory?: PCRecord[] })[] =
     tcStudents && tcQueryLower.length >= 2
       ? tcStudents
           .filter((s) =>
@@ -444,7 +447,7 @@ export function Settings() {
           .slice(0, 12)
       : [];
 
-  async function handleClearTcHistory(student: Student & { tcHistory?: TCRecord[] }) {
+  async function handleClearTcHistory(student: Student & { tcHistory?: TCRecord[]; pcHistory?: PCRecord[] }) {
     setTcClearingId(student.id);
     setTcClearMsg('');
     setTcClearError('');
@@ -459,6 +462,24 @@ export function Settings() {
       setTcClearError(err instanceof Error ? err.message : 'Failed to clear TC history.');
     } finally {
       setTcClearingId(null);
+    }
+  }
+
+  async function handleClearPcHistory(student: Student & { tcHistory?: TCRecord[]; pcHistory?: PCRecord[] }) {
+    setPcClearingId(student.id);
+    setTcClearMsg('');
+    setTcClearError('');
+    try {
+      await clearPcHistory(student.id);
+      setTcStudents((prev) =>
+        prev?.map((s) => s.id === student.id ? { ...s, pcHistory: [] } : s) ?? null
+      );
+      setPcConfirmId(null);
+      setTcClearMsg(`PC history cleared for ${student.studentNameSSLC}.`);
+    } catch (err: unknown) {
+      setTcClearError(err instanceof Error ? err.message : 'Failed to clear PC history.');
+    } finally {
+      setPcClearingId(null);
     }
   }
 
@@ -544,11 +565,11 @@ export function Settings() {
                 </div>
               </div>
 
-              {/* TC History Management */}
+              {/* Certificate History Management */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out 0.05s both' }}>
                 <div className="px-6 py-4 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">TC History Management</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Search a student and clear their transfer certificate issuance history</p>
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Certificate History Management</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Search a student and clear their Transfer Certificate or Provisional Certificate issuance history</p>
                 </div>
                 <div className="px-6 py-5 space-y-3">
                   {/* Search input */}
@@ -588,9 +609,12 @@ export function Settings() {
                   {tcResults.length > 0 && (
                     <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
                       {tcResults.map((s) => {
-                        const tcCount = s.tcHistory?.length ?? 0;
-                        const isConfirming = tcConfirmId === s.id;
-                        const isClearing   = tcClearingId === s.id;
+                        const tcCount      = s.tcHistory?.length ?? 0;
+                        const pcCount      = s.pcHistory?.length ?? 0;
+                        const isTcConfirming = tcConfirmId === s.id;
+                        const isPcConfirming = pcConfirmId === s.id;
+                        const isTcClearing   = tcClearingId === s.id;
+                        const isPcClearing   = pcClearingId === s.id;
                         return (
                           <div key={s.id} className="px-4 py-3">
                             <div className="flex items-start justify-between gap-3">
@@ -602,31 +626,51 @@ export function Settings() {
                                 </p>
                                 <p className="text-xs text-gray-400">Father: {s.fatherName}</p>
                               </div>
-                              {/* TC count + action */}
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                  tcCount === 0
-                                    ? 'bg-gray-100 text-gray-400'
-                                    : tcCount === 1
-                                    ? 'bg-blue-100 text-blue-700'
+                              {/* Badges + actions */}
+                              <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+                                {/* TC row */}
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                    tcCount === 0 ? 'bg-gray-100 text-gray-400'
+                                    : tcCount === 1 ? 'bg-blue-100 text-blue-700'
                                     : 'bg-amber-100 text-amber-700'
-                                }`}>
-                                  {tcCount === 0 ? 'No TCs' : `${tcCount} TC${tcCount > 1 ? 's' : ''}`}
-                                </span>
-                                {!isConfirming && (
-                                  <button
-                                    disabled={tcCount === 0 || isClearing}
-                                    onClick={() => { setTcConfirmId(s.id); setTcClearMsg(''); setTcClearError(''); }}
-                                    className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                  >
-                                    Clear
-                                  </button>
-                                )}
+                                  }`}>
+                                    {tcCount === 0 ? 'No TCs' : `${tcCount} TC${tcCount > 1 ? 's' : ''}`}
+                                  </span>
+                                  {!isTcConfirming && !isPcConfirming && (
+                                    <button
+                                      disabled={tcCount === 0 || isTcClearing}
+                                      onClick={() => { setTcConfirmId(s.id); setPcConfirmId(null); setTcClearMsg(''); setTcClearError(''); }}
+                                      className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                      Clear TC
+                                    </button>
+                                  )}
+                                </div>
+                                {/* PC row */}
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                    pcCount === 0 ? 'bg-gray-100 text-gray-400'
+                                    : pcCount === 1 ? 'bg-green-100 text-green-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {pcCount === 0 ? 'No PCs' : `${pcCount} PC${pcCount > 1 ? 's' : ''}`}
+                                  </span>
+                                  {!isTcConfirming && !isPcConfirming && (
+                                    <button
+                                      disabled={pcCount === 0 || isPcClearing}
+                                      onClick={() => { setPcConfirmId(s.id); setTcConfirmId(null); setTcClearMsg(''); setTcClearError(''); }}
+                                      className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                      Clear PC
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
-                            {/* Inline confirm row */}
-                            {isConfirming && (
+                            {/* TC confirm row */}
+                            {isTcConfirming && (
                               <div className="mt-2.5 flex items-center gap-2 bg-red-50 border border-red-100 rounded px-3 py-2">
                                 <p className="text-xs text-red-700 flex-1">
                                   Clear {tcCount} TC record{tcCount > 1 ? 's' : ''} for <strong>{s.studentNameSSLC}</strong>? This cannot be undone.
@@ -638,11 +682,33 @@ export function Settings() {
                                   Cancel
                                 </button>
                                 <button
-                                  disabled={isClearing}
+                                  disabled={isTcClearing}
                                   onClick={() => { void handleClearTcHistory(s); }}
                                   className="text-xs px-2.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
                                 >
-                                  {isClearing ? 'Clearing…' : 'Yes, Clear'}
+                                  {isTcClearing ? 'Clearing…' : 'Yes, Clear'}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* PC confirm row */}
+                            {isPcConfirming && (
+                              <div className="mt-2.5 flex items-center gap-2 bg-red-50 border border-red-100 rounded px-3 py-2">
+                                <p className="text-xs text-red-700 flex-1">
+                                  Clear {pcCount} PC record{pcCount > 1 ? 's' : ''} for <strong>{s.studentNameSSLC}</strong>? This cannot be undone.
+                                </p>
+                                <button
+                                  onClick={() => setPcConfirmId(null)}
+                                  className="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  disabled={isPcClearing}
+                                  onClick={() => { void handleClearPcHistory(s); }}
+                                  className="text-xs px-2.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
+                                >
+                                  {isPcClearing ? 'Clearing…' : 'Yes, Clear'}
                                 </button>
                               </div>
                             )}
