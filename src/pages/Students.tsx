@@ -13,6 +13,7 @@ import { printStudentProfile } from '../utils/printProfile';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
+import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
@@ -100,6 +101,7 @@ export function Students() {
   const [showMissingDocs, setShowMissingDocs] = useState(false);
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
+  const [pcStudent, setPcStudent] = useState<Student | null>(null);
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -625,6 +627,15 @@ export function Students() {
             <span className="text-sm leading-none">📜</span>
             Transfer Certificate
           </button>
+          {contextMenu.student.year === '3RD YEAR' && (
+            <button
+              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+              onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="text-sm leading-none">🎓</span>
+              Provisional Certificate
+            </button>
+          )}
         </div>
       </>
     )}
@@ -655,6 +666,13 @@ export function Students() {
       <TransferCertificateModal
         student={tcStudent}
         onClose={() => setTcStudent(null)}
+      />
+    )}
+
+    {pcStudent && (
+      <ProvisionalCertificateModal
+        student={pcStudent}
+        onClose={() => setPcStudent(null)}
       />
     )}
     </>

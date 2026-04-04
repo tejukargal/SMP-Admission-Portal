@@ -181,7 +181,7 @@ function buildTC(student: Student, data: TCFormData): string {
 
   /* ── Title section ── */
   .tc-title-wrap {
-    padding: 7pt 14pt 5pt;
+    padding: 14pt 14pt 24pt;
     border-bottom: 0.75pt solid #000;
   }
   .tc-title {
@@ -224,7 +224,7 @@ function buildTC(student: Student, data: TCFormData): string {
   }
   .footer-date {
     font-size: 10.5pt;
-    margin-bottom: 28pt;
+    margin-bottom: 48pt;
   }
   .footer-sigs {
     display: flex;
@@ -246,7 +246,7 @@ function buildTC(student: Student, data: TCFormData): string {
   <div class="header">
     <div class="logo-col">
       <img class="header-logo" src="${INSTITUTE_LOGO_B64}" alt="Institute Crest" />
-      <div class="inst-code">pINST CODE : 308</div>
+      <div class="inst-code">INST CODE : 308</div>
     </div>
     <div class="header-center">
       <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
