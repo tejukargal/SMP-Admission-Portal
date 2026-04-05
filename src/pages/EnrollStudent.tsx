@@ -243,6 +243,7 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
               <PreviewRow label="Adm Cat" value={form.admCat} required />
               <PreviewRow label="Academic Year" value={form.academicYear} required />
               <PreviewRow label="Admission Status" value={form.admissionStatus} required />
+              <PreviewRow label="Enrollment Date" value={form.enrollmentDate} />
               <PreviewRow label="Reg Number" value={form.regNumber} />
             </dl>
           </section>
@@ -304,6 +305,7 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     admCat: 'GM' as AdmCat,
     academicYear: defaultYear ?? ('' as AcademicYear),
     admissionStatus: '',
+    enrollmentDate: new Date().toISOString().slice(0, 10),
     meritNumber: '',
     regNumber: '',
   };
@@ -571,6 +573,7 @@ export function EnrollStudent() {
           if (!formData.regNumber) formData.regNumber = formData.course ? `308${formData.course}` : '';
           if (!formData.admType) formData.admType = 'REGULAR';
           if (!formData.admCat) formData.admCat = 'GM';
+          if (!formData.enrollmentDate) formData.enrollmentDate = new Date().toISOString().slice(0, 10);
           setForm(formData);
           setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
           setEditOriginalAdmCat(formData.admCat ?? null);
@@ -662,6 +665,7 @@ export function EnrollStudent() {
       dateOfBirth: dob,
       meritNumber: '',
       admissionStatus: '',
+      enrollmentDate: new Date().toISOString().slice(0, 10),
       academicYear: settings?.currentAcademicYear ?? ('' as AcademicYear),
     });
     setErrors({});
@@ -1358,6 +1362,13 @@ export function EnrollStudent() {
                 onChange={handleSelectChange('admissionStatus')}
                 error={displayErrors['admissionStatus']}
                 placeholder="Select status"
+              />
+              <Input
+                label="Enrollment Date"
+                type="date"
+                value={form.enrollmentDate}
+                onChange={handleTextChange('enrollmentDate')}
+                error={displayErrors['enrollmentDate']}
               />
               <Input
                 label="Reg Number"

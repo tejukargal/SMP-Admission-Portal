@@ -59,6 +59,7 @@ export interface Student {
   admCat: AdmCat;
   academicYear: AcademicYear;
   admissionStatus: string;
+  enrollmentDate: string;
   meritNumber: string;
   regNumber: string;
   createdAt: string;
