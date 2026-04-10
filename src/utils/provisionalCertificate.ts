@@ -90,7 +90,7 @@ function buildPC(student: Student, data: PCFormData): string {
   .seal-header {
     position: absolute;
     right: 12pt;
-    top: 18pt;
+    top: 30pt;
     width: 72pt;
     height: 72pt;
     object-fit: contain;
@@ -133,17 +133,31 @@ function buildPC(student: Student, data: PCFormData): string {
   .para {
     font-style: italic;
     font-size: 12pt;
-    line-height: 1.75;
+    line-height: 2.1;
     text-align: justify;
     text-indent: 40pt;
     margin-bottom: 26pt;
   }
-  .principal {
-    text-align: right;
+  .principal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 40pt;
+    padding-right: 32pt;
+  }
+  .seal-watermark {
+    width: 96pt;
+    height: 96pt;
+    opacity: 0.55;
+    flex-shrink: 0;
+    margin-left: 20pt;
+  }
+  .principal-text {
     font-style: italic;
     font-size: 12pt;
     font-weight: bold;
-    margin-top: 40pt;
+    text-align: center;
+    min-width: 90pt;
   }
   .footer-note {
     margin-top: auto;
@@ -181,15 +195,22 @@ function buildPC(student: Student, data: PCFormData): string {
     <div class="pc-title">PROVISIONAL CERTIFICATE</div>
 
     <p class="para">This is to certify that ${prefix} <strong>${name}</strong> S/o <strong>${fatherName}</strong>
-      a student of this institution has passed Diploma in ${courseFull}
-      conducted by the Board of Technical Examinations, Bangalore held during
-      <strong>${examPeriod}</strong> with Register No.<strong>${regNumber}</strong>
-      and has been placed <strong>${resultClass}</strong>.</p>
+      bearing Register No. <strong>${regNumber}</strong>, a student of this institution,
+      has successfully completed the three-year Diploma in ${courseFull},
+      having cleared all subjects in all six semesters, and has passed the final
+      sixth semester examination conducted by the Board of Technical Examinations,
+      Bangalore, held during <strong>${examPeriod}</strong>, securing
+      <strong>${resultClass}</strong>.</p>
 
     <p class="para">During the period of ${pronoun} stay in the institution ${pronoun} character
       and conduct were satisfactory.</p>
 
-    <div class="principal">PRINCIPAL</div>
+    <div class="principal-row">
+      <svg class="seal-watermark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="47" fill="none" stroke="#000" stroke-width="2.5"/>
+      </svg>
+      <div class="principal-text">PRINCIPAL</div>
+    </div>
 
     <div class="footer-note">Note : This Certificate is issued pending issue of original diploma certificate by the Board of Technical Examinations, Bangalore</div>
   </div>
