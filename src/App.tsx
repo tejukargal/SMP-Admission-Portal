@@ -9,6 +9,9 @@ import { PageSpinner } from './components/common/PageSpinner';
 const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Students = lazy(() => import('./pages/Students').then((m) => ({ default: m.Students })));
+const Admissions = lazy(() =>
+  import('./pages/Admissions').then((m) => ({ default: m.Admissions }))
+);
 const EnrollStudent = lazy(() =>
   import('./pages/EnrollStudent').then((m) => ({ default: m.EnrollStudent }))
 );
@@ -50,6 +53,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/enroll" element={<EnrollStudent />} />
+        <Route path="/admissions" element={<Admissions />} />
         <Route path="/students" element={<Students />} />
         <Route
           path="/fees"

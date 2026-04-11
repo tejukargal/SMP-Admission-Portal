@@ -232,6 +232,11 @@ export async function updateStudent(
   });
 }
 
+export async function updateStudentStatus(id: string, status: string): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, { admissionStatus: status, updatedAt: new Date().toISOString() });
+}
+
 export async function deleteStudent(id: string): Promise<void> {
   // Cascade-delete all associated data: fee records, fee overrides, student documents
   const [feeRecordsSnap, feeOverridesSnap] = await Promise.all([

@@ -86,10 +86,9 @@ const ACADEMIC_YEAR_OPTIONS = [
 ];
 
 const ADMISSION_STATUS_OPTIONS = [
-  { value: 'PROVISIONAL', label: 'PROVISIONAL' },
+  { value: 'PENDING', label: 'PENDING' },
   { value: 'CONFIRMED', label: 'CONFIRMED' },
   { value: 'CANCELLED', label: 'CANCELLED' },
-  { value: 'PENDING', label: 'PENDING' },
 ];
 
 interface YearWarningModalProps {
@@ -304,7 +303,7 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     admType: 'REGULAR' as AdmType,
     admCat: 'GM' as AdmCat,
     academicYear: defaultYear ?? ('' as AcademicYear),
-    admissionStatus: '',
+    admissionStatus: 'PENDING',
     enrollmentDate: new Date().toISOString().slice(0, 10),
     meritNumber: '',
     regNumber: '',
@@ -664,7 +663,7 @@ export function EnrollStudent() {
       ...rest,
       dateOfBirth: dob,
       meritNumber: '',
-      admissionStatus: '',
+      admissionStatus: 'PENDING',
       enrollmentDate: new Date().toISOString().slice(0, 10),
       academicYear: settings?.currentAcademicYear ?? ('' as AcademicYear),
     });
@@ -1362,6 +1361,8 @@ export function EnrollStudent() {
                 onChange={handleSelectChange('admissionStatus')}
                 error={displayErrors['admissionStatus']}
                 placeholder="Select status"
+                disabled={!editId}
+                className="disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500"
               />
               <Input
                 label="Enrollment Date"

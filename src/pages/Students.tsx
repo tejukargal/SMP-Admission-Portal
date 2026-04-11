@@ -60,7 +60,6 @@ export function Students() {
     categoryFilter,
     admTypeFilter,
     admCatFilter,
-    admStatusFilter,
     visibleCount,
   } = studentsFilters;
 
@@ -71,7 +70,6 @@ export function Students() {
   function setCategoryFilter(v: Category | '') { setStudentsFilters({ categoryFilter: v }); }
   function setAdmTypeFilter(v: AdmType | '') { setStudentsFilters({ admTypeFilter: v }); }
   function setAdmCatFilter(v: AdmCat | '') { setStudentsFilters({ admCatFilter: v }); }
-  function setAdmStatusFilter(v: string) { setStudentsFilters({ admStatusFilter: v }); }
   function setVisibleCount(updater: ((c: number) => number) | number) {
     const next = typeof updater === 'function' ? updater(visibleCount) : updater;
     setStudentsFilters({ visibleCount: next });
@@ -132,18 +130,13 @@ export function Students() {
   }, [searchTerm]);
 
   const filteredStudents = useMemo(() => {
-    let result = allStudents;
+    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
     if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
-    if (admStatusFilter) result = result.filter((s) =>
-      admStatusFilter === 'PENDING'
-        ? !['PROVISIONAL', 'CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
-        : s.admissionStatus === admStatusFilter
-    );
     if (debouncedSearch) {
       const search = debouncedSearch.trim().toUpperCase();
       result = result.filter((s) => {
@@ -163,7 +156,7 @@ export function Students() {
       if (c !== 0) return c;
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
-  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter, debouncedSearch]);
+  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -178,7 +171,7 @@ export function Students() {
 
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+    !!categoryFilter || !!admTypeFilter || !!admCatFilter;
 
   function clearFilters() {
     clearStudentsFilters();
@@ -231,7 +224,7 @@ export function Students() {
           genderFilter,
           admTypeFilter,
           admCatFilter,
-          admStatusFilter,
+          admStatusFilter: 'CONFIRMED',
           searchTerm: debouncedSearch,
         });
       } finally {
@@ -415,13 +408,6 @@ export function Students() {
             <option value="SNQ">SNQ</option>
             <option value="OTHERS">OTHERS</option>
           </select>
-          <select className={fs} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
-            <option value="">All Statuses</option>
-            <option value="PROVISIONAL">PROVISIONAL</option>
-            <option value="CONFIRMED">CONFIRMED</option>
-            <option value="CANCELLED">CANCELLED</option>
-            <option value="PENDING">PENDING</option>
-          </select>
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
@@ -435,7 +421,7 @@ export function Students() {
               onClick={() => setShowMissingDocs(true)}
               className="rounded border border-purple-300 px-2 py-1.5 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 cursor-pointer transition-colors font-medium flex items-center gap-1"
             >
-              📁 Doc Status
+              Doc Status
             </button>
           )}
           {!isLoading && filteredStudents.length > 0 && (

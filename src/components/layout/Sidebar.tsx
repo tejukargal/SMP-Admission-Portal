@@ -8,6 +8,7 @@ export function Sidebar() {
   const navItems = [
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/enroll', label: 'Enroll Student' },
+    { to: '/admissions', label: 'Admissions' },
     { to: '/students', label: 'Students' },
     ...(isAdmin ? [{ to: '/fees', label: 'Collect Fee' }] : []),
     { to: '/fee-register', label: 'Fee Register' },
