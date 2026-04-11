@@ -50,7 +50,7 @@ function buildCertificate(student: Student, certType: CertificateType): string {
   const sonDaughter = isFemale ? 'Daughter' : 'Son';
   const pronoun     = isFemale ? 'She' : 'He';
   const hisHer      = isFemale ? 'her' : 'his';
-  const himHer      = isFemale ? 'her' : 'him';
+
 
   const refNumber = `SMP/ADM/${student.academicYear}/`;
 
@@ -152,21 +152,13 @@ function buildCertificate(student: Student, certType: CertificateType): string {
     font-size: 13pt;
     line-height: 2.2;
     text-align: justify;
+    text-indent: 36pt;
     margin-bottom: 20pt;
   }
   .hl {
     font-weight: bold;
     text-decoration: underline;
   }
-  .cert-note {
-    font-size: 10.5pt;
-    font-style: italic;
-    color: #333;
-    border-top: 0.5pt solid #ccc;
-    padding-top: 10pt;
-    margin-top: 6pt;
-  }
-  /* Seal sits just below the note, left-aligned */
   .seal-circle {
     width: 80pt;
     height: 80pt;
@@ -184,6 +176,7 @@ function buildCertificate(student: Student, certType: CertificateType): string {
   /* ── Footer ── */
   .footer {
     padding: 0 28pt 22pt;
+    margin-top: -80pt;
   }
   .footer-row {
     display: flex;
@@ -250,9 +243,8 @@ function buildCertificate(student: Student, certType: CertificateType): string {
       during the Academic Year <span class="hl">${academicYear}</span>.
     </p>
     <p class="cert-para">
-      ${pronoun} bore good character and conduct throughout ${hisHer} period of
-      study in this institution. This certificate is issued on ${hisHer} request
-      for the purpose stated by ${himHer}.
+      During ${hisHer} stay in this institution ${hisHer} character and conduct
+      were satisfactory.
     </p>` : isLeft ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
@@ -263,9 +255,8 @@ function buildCertificate(student: Student, certType: CertificateType): string {
       during the Academic Year <span class="hl">${academicYear}</span>.
     </p>
     <p class="cert-para">
-      ${hisHer.charAt(0).toUpperCase() + hisHer.slice(1)} character and conduct were satisfactory during ${hisHer} stay in this
-      institution. This certificate is issued on ${hisHer} request for the purpose
-      stated by ${himHer}.
+      During ${hisHer} stay in this institution ${hisHer} character and conduct
+      were satisfactory.
     </p>` : `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
@@ -276,17 +267,11 @@ function buildCertificate(student: Student, certType: CertificateType): string {
       during the Academic Year <span class="hl">${academicYear}</span>.
     </p>
     <p class="cert-para">
-      ${pronoun} bears good character and conduct during ${hisHer} stay in this
-      institution. This certificate is issued on ${hisHer} request for the purpose
-      stated by ${himHer}.
+      During ${hisHer} stay in this institution ${hisHer} character and conduct
+      are satisfactory.
     </p>`}
 
-    <p class="cert-note">
-      Note: This certificate is valid only for the Academic Year ${academicYear}
-      and is issued for bonafide purposes only.
-    </p>
-
-    <!-- Seal sits just below the note -->
+    <!-- Seal -->
     <div class="seal-circle">SEAL</div>
   </div>
 
