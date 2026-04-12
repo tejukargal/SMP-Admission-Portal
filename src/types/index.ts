@@ -178,6 +178,24 @@ export interface AcademicFineSchedule {
   updatedAt: string;
 }
 
+// ─── Inquiry (pre-admission walk-in) ─────────────────────────────────────────
+
+export type InquiryStatus = 'active' | 'converted' | 'cancelled';
+
+export interface Inquiry {
+  id: string;
+  studentName: string;
+  mobile: string;
+  address: string;
+  interestedCourse: Course;
+  visitDate: string;       // 'YYYY-MM-DD'
+  notes: string;
+  status: InquiryStatus;
+  academicYear: AcademicYear;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppSettings {
   id: 'app_settings';
   currentAcademicYear: AcademicYear;

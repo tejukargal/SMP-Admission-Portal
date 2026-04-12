@@ -7,6 +7,7 @@ export function Sidebar() {
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard' },
+    { to: '/inquiries', label: 'Inquiries' },
     { to: '/enroll', label: 'Enroll Student' },
     { to: '/admissions', label: 'Admissions' },
     { to: '/students', label: 'Students' },

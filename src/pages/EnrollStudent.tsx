@@ -479,6 +479,33 @@ export function EnrollStudent() {
     }
   }, [settings, editId]);
 
+  // Pre-fill from inquiry walk-in (set by Inquiries page via sessionStorage)
+  useEffect(() => {
+    if (editId) return;
+    const raw = sessionStorage.getItem('smp_inquiry_prefill');
+    if (!raw) return;
+    sessionStorage.removeItem('smp_inquiry_prefill');
+    try {
+      const prefill = JSON.parse(raw) as {
+        studentName: string;
+        mobile: string;
+        address: string;
+        course: string;
+      };
+      setForm((prev) => ({
+        ...prev,
+        studentNameSSLC: prefill.studentName ?? prev.studentNameSSLC,
+        studentMobile: prefill.mobile ?? prev.studentMobile,
+        address: prefill.address ?? prev.address,
+        course: (prefill.course as import('../types').Course) || prev.course,
+      }));
+    } catch {
+      // malformed sessionStorage entry — ignore
+    }
+  // Run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-preview unique default reg number for new enrollments.
   // Runs whenever course / year / academicYear change.
   // Skipped in edit mode or when using the "re-enroll from previous year" flow

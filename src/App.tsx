@@ -28,6 +28,9 @@ const FeeReportsPage = lazy(() =>
 const Messaging = lazy(() =>
   import('./pages/Messaging').then((m) => ({ default: m.Messaging }))
 );
+const Inquiries = lazy(() =>
+  import('./pages/Inquiries').then((m) => ({ default: m.Inquiries }))
+);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -54,6 +57,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/enroll" element={<EnrollStudent />} />
         <Route path="/admissions" element={<Admissions />} />
+        <Route path="/inquiries" element={<Inquiries />} />
         <Route path="/students" element={<Students />} />
         <Route
           path="/fees"
