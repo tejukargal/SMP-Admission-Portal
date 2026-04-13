@@ -394,6 +394,14 @@ export function Admissions() {
                         {activeTab === 'pending' ? (
                           <>
                             <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={actionLoading !== null}
+                              onClick={() => navigate(`/enroll?edit=${student.id}`)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
                               size="sm"
                               className="!bg-green-600 !hover:bg-green-700 border-transparent text-white"
                               loading={actionLoading === student.id}
