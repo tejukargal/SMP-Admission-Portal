@@ -185,7 +185,10 @@ export type InquiryStatus = 'active' | 'converted' | 'cancelled';
 export interface Inquiry {
   id: string;
   studentName: string;
-  mobile: string;
+  parentName?: string;      // Parent / Guardian name
+  parentMobile?: string;    // Father / Guardian mobile (mandatory on new records)
+  studentMobile?: string;   // Student mobile (optional)
+  mobile?: string;          // Legacy field — kept for backward compat with old records
   address: string;
   interestedCourse: Course;
   visitDate: string;       // 'YYYY-MM-DD'

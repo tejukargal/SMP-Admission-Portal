@@ -26,6 +26,13 @@ export async function updateInquiryStatus(id: string, status: InquiryStatus): Pr
   await updateDoc(doc(db, COL, id), { status, updatedAt: new Date().toISOString() });
 }
 
+export async function updateInquiry(
+  id: string,
+  data: Omit<Inquiry, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<void> {
+  await updateDoc(doc(db, COL, id), { ...data, updatedAt: new Date().toISOString() });
+}
+
 export async function deleteInquiry(id: string): Promise<void> {
   await deleteDoc(doc(db, COL, id));
 }

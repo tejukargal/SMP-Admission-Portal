@@ -459,10 +459,21 @@ export function Dashboard() {
   const activeStats = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of activeSource) {
-      map[s.academicYear] = (map[s.academicYear] ?? 0) + 1;
+      if (s.admissionStatus === 'CONFIRMED') {
+        map[s.academicYear] = (map[s.academicYear] ?? 0) + 1;
+      }
     }
     return sortedAcademicYears.map((ay) => ({ year: ay, count: map[ay] ?? 0 }));
   }, [activeSource, sortedAcademicYears]);
+
+  const confirmedActiveCount = useMemo(
+    () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
+    [activeSource]
+  );
+  const confirmedTotalCount = useMemo(
+    () => allStudents.filter((s) => s.admissionStatus === 'CONFIRMED').length,
+    [allStudents]
+  );
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
@@ -553,14 +564,14 @@ export function Dashboard() {
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
         <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {/* Total chip */}
+          {/* Total chip — confirmed admissions only */}
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
             <span className="text-gray-400 font-medium">Total</span>
             <span className="font-bold tabular-nums text-gray-800">
-              <AnimNum value={activeSource.length} />
+              <AnimNum value={confirmedActiveCount} />
             </span>
-            {activeSource.length < allStudents.length && (
-              <span className="text-gray-300 text-[10px]">/{allStudents.length}</span>
+            {confirmedActiveCount < confirmedTotalCount && (
+              <span className="text-gray-300 text-[10px]">/{confirmedTotalCount}</span>
             )}
           </div>
           <span className="text-gray-200 text-xs select-none shrink-0">·</span>

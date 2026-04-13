@@ -10,6 +10,10 @@ function fmtDate(iso: string): string {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
+function resolveParentMobile(inq: Inquiry): string {
+  return inq.parentMobile || inq.mobile || '—';
+}
+
 const STATUS_LABEL: Record<InquiryStatus, string> = {
   active:    'Active',
   converted: 'Converted',
@@ -37,7 +41,9 @@ export function exportInquiriesPdf(inquiries: Inquiry[], academicYear: string | 
   const rows = inquiries.map((inq, i) => [
     i + 1,
     inq.studentName,
-    inq.mobile,
+    inq.parentName || '—',
+    resolveParentMobile(inq),
+    inq.studentMobile || '—',
     inq.interestedCourse,
     fmtDate(inq.visitDate),
     inq.address || '—',
@@ -47,16 +53,17 @@ export function exportInquiriesPdf(inquiries: Inquiry[], academicYear: string | 
 
   autoTable(doc, {
     startY: subtitle ? 23 : 18,
-    head: [['#', 'Name', 'Mobile', 'Course', 'Visit Date', 'Address', 'Notes', 'Status']],
+    head: [['#', 'Student Name', 'Parent / Guardian', 'Father Mobile', 'Student Mobile', 'Course', 'Visit Date', 'Address', 'Notes', 'Status']],
     body: rows,
-    styles: { fontSize: 8, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 } },
+    styles: { fontSize: 7, cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 } },
     headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', halign: 'center' },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      2: { halign: 'center', cellWidth: 26 },
-      3: { halign: 'center', cellWidth: 18 },
-      4: { halign: 'center', cellWidth: 22 },
-      7: { halign: 'center', cellWidth: 20 },
+      0: { halign: 'center', cellWidth: 8 },
+      3: { halign: 'center', cellWidth: 24 },
+      4: { halign: 'center', cellWidth: 24 },
+      5: { halign: 'center', cellWidth: 16 },
+      6: { halign: 'center', cellWidth: 20 },
+      9: { halign: 'center', cellWidth: 18 },
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: margin, right: margin },
@@ -79,14 +86,16 @@ export function exportInquiriesPdf(inquiries: Inquiry[], academicYear: string | 
 
 export function exportInquiriesExcel(inquiries: Inquiry[], academicYear: string | null, statusLabel: string): void {
   const rows = inquiries.map((inq, i) => ({
-    '#':           i + 1,
-    'Name':        inq.studentName,
-    'Mobile':      inq.mobile,
-    'Course':      inq.interestedCourse,
-    'Visit Date':  fmtDate(inq.visitDate),
-    'Address':     inq.address || '',
-    'Notes':       inq.notes || '',
-    'Status':      STATUS_LABEL[inq.status],
+    '#':                i + 1,
+    'Student Name':     inq.studentName,
+    'Parent / Guardian': inq.parentName || '',
+    'Father Mobile':    resolveParentMobile(inq),
+    'Student Mobile':   inq.studentMobile || '',
+    'Course':           inq.interestedCourse,
+    'Visit Date':       fmtDate(inq.visitDate),
+    'Address':          inq.address || '',
+    'Notes':            inq.notes || '',
+    'Status':           STATUS_LABEL[inq.status],
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -94,12 +103,14 @@ export function exportInquiriesExcel(inquiries: Inquiry[], academicYear: string 
   // Column widths
   ws['!cols'] = [
     { wch: 5 },   // #
-    { wch: 28 },  // Name
-    { wch: 14 },  // Mobile
+    { wch: 26 },  // Student Name
+    { wch: 22 },  // Parent / Guardian
+    { wch: 14 },  // Father Mobile
+    { wch: 14 },  // Student Mobile
     { wch: 10 },  // Course
     { wch: 14 },  // Visit Date
-    { wch: 32 },  // Address
-    { wch: 30 },  // Notes
+    { wch: 30 },  // Address
+    { wch: 28 },  // Notes
     { wch: 12 },  // Status
   ];
 
