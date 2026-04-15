@@ -6,6 +6,7 @@ import { updateStudentStatus } from '../services/studentService';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/common/Button';
 import { PageSpinner } from '../components/common/PageSpinner';
+import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { exportMeritListPdf, exportMeritListExcel, sortByMerit, sslcPct, fmtDate } from '../utils/meritListExport';
 import type { Student, AcademicYear, Course } from '../types';
 
@@ -95,6 +96,26 @@ export function Admissions() {
     }))
   , [allStudents]);
 
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
+  const [admLetterModal, setAdmLetterModal] = useState<{ student: Student; lang: 'en' | 'kn' } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setContextMenu(null); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [contextMenu]);
+
+  function handleContextMenu(e: React.MouseEvent, student: Student) {
+    e.preventDefault();
+    e.stopPropagation();
+    const MENU_W = 215;
+    const MENU_H = 110;
+    const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
+    const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
+    setContextMenu({ x, y, student });
+  }
+
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
@@ -145,6 +166,7 @@ export function Admissions() {
     meritStudents;
 
   return (
+    <>
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Page header */}
@@ -377,7 +399,11 @@ export function Admissions() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {displayStudents.map((student, idx) => (
-                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={student.id}
+                  className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                  onContextMenu={(e) => handleContextMenu(e, student)}
+                >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
@@ -444,5 +470,49 @@ export function Admissions() {
         </div>
       )}
     </div>
+
+    {/* ── Context menu for pending / cancelled rows ── */}
+    {contextMenu && (
+      <>
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
+        />
+        <div
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[210px] text-sm"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100 mb-1 truncate max-w-[210px]">
+            {contextMenu.student.studentNameSSLC}
+          </div>
+          <button
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'en' }); setContextMenu(null); }}
+          >
+            <span className="text-sm leading-none">📨</span>
+            Seat Allotment Letter
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors flex items-center gap-2"
+            onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'kn' }); setContextMenu(null); }}
+          >
+            <span className="text-sm leading-none">📨</span>
+            <span>Seat Allotment Letter</span>
+            <span className="ml-auto text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">ಕನ್ನಡ</span>
+          </button>
+        </div>
+      </>
+    )}
+
+    {admLetterModal && (
+      <AdmissionLetterModal
+        student={admLetterModal.student}
+        lang={admLetterModal.lang}
+        onClose={() => setAdmLetterModal(null)}
+      />
+    )}
+    </>
   );
 }
