@@ -13,12 +13,12 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
 const fs =
-  'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+  'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function statusBadgeClass(status: string): string {
-  if (status === 'CONFIRMED') return 'bg-green-100 text-green-700';
+  if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
   if (status === 'CANCELLED') return 'bg-red-100 text-red-700';
-  return 'bg-yellow-100 text-yellow-700';
+  return 'bg-amber-100 text-amber-700';
 }
 
 // ─── Animated number ────────────────────────────────────────────────────────
@@ -38,7 +38,6 @@ function AnimNum({ value }: { value: number }) {
 interface StatCardProps {
   label: string;
   value: number;
-  /** Pass 0 to suppress the progress bar (e.g. the Total card) */
   total: number;
   bg: string;
   border: string;
@@ -47,13 +46,9 @@ interface StatCardProps {
   subText?: string;
   breakdown?: { label: string; value: number }[];
   className?: string;
-  /** Renders the card label as a coloured pill badge instead of muted gray text */
   highlightLabel?: boolean;
-  /** Renders breakdown labels as coloured pill badges instead of muted gray text */
   highlightBreakdown?: boolean;
-  /** Large watermark text rendered in the card background */
   watermark?: string;
-  /** Makes the card clickable */
   onClick?: () => void;
 }
 
@@ -62,7 +57,8 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer hover:shadow-md hover:brightness-[0.97] transition-all duration-150' : ''}`}
+      className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer hover:shadow-md transition-all duration-150 hover:-translate-y-0.5' : ''}`}
+      style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04), 0 1px 2px -1px rgba(0,0,0,0.04)' }}
     >
       {watermark && (
         <span
@@ -77,11 +73,11 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
           {label}
         </span>
       ) : (
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 truncate leading-tight">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">
           {label}
         </p>
       )}
-      <p className={`text-3xl font-bold leading-none ${textColor}`}>
+      <p className={`text-3xl font-black leading-none ${textColor}`}>
         <AnimNum value={value} />
       </p>
       {total > 0 ? (
@@ -118,7 +114,7 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   );
 }
 
-// ─── Breakdown panel (list-style rows) ──────────────────────────────────────
+// ─── Breakdown panel ─────────────────────────────────────────────────────────
 interface BreakdownItem {
   label: string;
   value: number;
@@ -128,8 +124,8 @@ interface BreakdownItem {
 
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">{title}</h4>
+    <div className="bg-white/80 rounded-2xl border border-emerald-100 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+      <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-4">{title}</h4>
       <div className="space-y-3.5">
         {items.map((item) => {
           const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
@@ -140,7 +136,7 @@ function BreakdownPanel({ title, items, total }: { title: string; items: Breakdo
               <span className="text-sm font-bold text-gray-800 w-7 tabular-nums text-right shrink-0">
                 <AnimNum value={item.value} />
               </span>
-              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 bg-emerald-50 rounded-full overflow-hidden">
                 <div
                   className={`h-full ${item.barClass} rounded-full transition-all duration-700 ease-out`}
                   style={{ width: `${pct}%` }}
@@ -170,7 +166,7 @@ function SectionLabel({ children, accent }: { children: React.ReactNode; accent?
     );
   }
   return (
-    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
+    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-2.5">
       {children}
     </p>
   );
@@ -180,47 +176,40 @@ function SectionLabel({ children, accent }: { children: React.ReactNode; accent?
 function LoadingGate() {
   return (
     <div className="h-full flex flex-col gap-3 overflow-hidden" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      {/* Ghost header */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
-        <div className="flex-1 h-10 bg-white rounded-lg border border-gray-100 animate-pulse" />
-        <div className="w-28 h-8 bg-white rounded-lg border border-gray-100 animate-pulse" />
+        <div className="flex-1 h-10 bg-white/60 rounded-2xl border border-emerald-100 animate-pulse" />
+        <div className="w-28 h-8 bg-white/60 rounded-xl border border-emerald-100 animate-pulse" />
       </div>
-      {/* Ghost year chips */}
       <div className="flex-shrink-0 flex gap-2">
         {[80, 96, 80, 80, 80].map((w, i) => (
-          <div key={i} className="h-7 bg-white rounded border border-gray-100 animate-pulse" style={{ width: w }} />
+          <div key={i} className="h-7 bg-white/60 rounded-lg border border-emerald-100 animate-pulse" style={{ width: w }} />
         ))}
       </div>
-      {/* Ghost filter bar */}
-      <div className="flex-shrink-0 h-9 bg-white rounded-lg border border-gray-100 animate-pulse" />
-      {/* Skeleton stat cards mirroring dashboard layout */}
+      <div className="flex-shrink-0 h-9 bg-white/60 rounded-xl border border-emerald-100 animate-pulse" />
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="space-y-5">
           <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-2 rounded-xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
-            <div className="rounded-xl border border-blue-200 bg-blue-50 h-24 animate-pulse" />
-            <div className="rounded-xl border border-pink-200 bg-pink-50 h-24 animate-pulse" />
+            <div className="col-span-2 rounded-2xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 h-24 animate-pulse" />
           </div>
           <div className="space-y-2.5">
-            <div className="h-3.5 w-20 bg-gray-100 rounded animate-pulse" />
+            <div className="h-3.5 w-20 bg-white/60 rounded animate-pulse" />
             <div className="grid grid-cols-5 gap-3">
-              <div className="rounded-xl border border-orange-200 bg-orange-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-rose-200 bg-rose-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-violet-200 bg-violet-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-amber-200 bg-amber-50 h-20 animate-pulse" />
+              {['amber','green','sky','teal','violet'].map((c) => (
+                <div key={c} className={`rounded-2xl border border-${c}-200 bg-${c}-50 h-20 animate-pulse`} />
+              ))}
             </div>
           </div>
           <div className="space-y-2.5">
-            <div className="h-3.5 w-28 bg-gray-100 rounded animate-pulse" />
+            <div className="h-3.5 w-28 bg-white/60 rounded animate-pulse" />
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-cyan-200 bg-cyan-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-teal-200 bg-teal-50 h-20 animate-pulse" />
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-lime-200 bg-lime-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-teal-200 bg-teal-50 h-20 animate-pulse" />
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -261,8 +250,6 @@ export function Dashboard() {
 
   const [, startTransition] = useTransition();
 
-  // Local input state — typing only updates this (fast, no context cascade).
-  // Debounced value is written to context after 300ms idle.
   const [inputValue, setInputValue] = useState(searchTerm);
   useEffect(() => {
     const t = setTimeout(() => {
@@ -272,7 +259,6 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue]);
 
-  // Auto-default academic year to current year once settings load
   const didAutoSet = useRef(false);
   useEffect(() => {
     if (!didAutoSet.current && settings?.currentAcademicYear && !academicYearFilter) {
@@ -282,7 +268,6 @@ export function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.currentAcademicYear]);
 
-  // searchTerm in context is the debounced committed value — drives all filtering
   const isSearchMode = searchTerm.trim().length > 0;
 
   const sortedAcademicYears = useMemo(() => {
@@ -290,7 +275,6 @@ export function Dashboard() {
     return Array.from(years).sort().reverse();
   }, [allStudents]);
 
-  // Pre-built search index: toUpperCase() only once per student, not on every query
   const searchIndex = useMemo(() =>
     allStudents.map((s) => ({
       s,
@@ -300,7 +284,6 @@ export function Dashboard() {
     [allStudents]
   );
 
-  // Filtered students — feeds stats cards
   const filteredStudents = useMemo(() => {
     let result = allStudents;
     if (!isSearchMode && academicYearFilter) result = result.filter((s) => s.academicYear === academicYearFilter);
@@ -314,7 +297,6 @@ export function Dashboard() {
     return result;
   }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
-  // Search results — uses pre-built index, runs only when debounced searchTerm changes
   const searchResults = useMemo(() => {
     if (!isSearchMode) return [];
     const q = searchTerm.trim().toUpperCase();
@@ -376,7 +358,6 @@ export function Dashboard() {
       EE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
     };
 
-    // 1st Year pending seats: Regular quota (60) and SNQ quota (3) per course
     const firstYearSeats: Record<Course, { regularConfirmed: number; snqConfirmed: number }> = {
       CE: { regularConfirmed: 0, snqConfirmed: 0 },
       ME: { regularConfirmed: 0, snqConfirmed: 0 },
@@ -390,14 +371,12 @@ export function Dashboard() {
       '3RD YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
     };
 
-    // byStatus counts all filtered students (not just confirmed)
     for (const s of filteredStudents) {
       const status = s.admissionStatus?.trim() || 'PENDING';
       if (status in byStatus) byStatus[status]++;
       else byStatus['PENDING']++;
     }
 
-    // Per-year-per-course breakdown for the report-style tables
     type SCell = { regular: number; ltrl: number; snq: number; rptr: number };
     type CCell = { gm: number; c1: number; twoA: number; twoB: number; threeA: number; threeB: number; sc: number; st: number };
     const summaryTable: Record<string, Record<string, SCell>> = {};
@@ -451,7 +430,6 @@ export function Dashboard() {
     return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats };
   }, [filteredStudents]);
 
-  // Year-chips stats — per-academic-year counts from active source
   const activeSource = useMemo(
     () => (isSearchMode ? searchResults : filteredStudents),
     [isSearchMode, searchResults, filteredStudents]
@@ -498,19 +476,19 @@ export function Dashboard() {
     ? 'All Years'
     : (academicYearFilter || 'All Years');
 
-  // ── Course colour map ────────────────────────────────────────────────────
+  // ── Nature palette colour map ────────────────────────────────────────────
   const courseConfig: Record<Course, { bg: string; border: string; textColor: string; barFill: string }> = {
-    CE: { bg: 'bg-orange-50', border: 'border-orange-200', textColor: 'text-orange-700', barFill: 'bg-orange-400' },
-    ME: { bg: 'bg-rose-50',   border: 'border-rose-200',   textColor: 'text-rose-700',   barFill: 'bg-rose-400'   },
-    EC: { bg: 'bg-violet-50', border: 'border-violet-200', textColor: 'text-violet-700', barFill: 'bg-violet-400' },
-    CS: { bg: 'bg-indigo-50', border: 'border-indigo-200', textColor: 'text-indigo-700', barFill: 'bg-indigo-400' },
-    EE: { bg: 'bg-amber-50',  border: 'border-amber-200',  textColor: 'text-amber-700',  barFill: 'bg-amber-400'  },
+    CE: { bg: 'bg-amber-50',   border: 'border-amber-200',   textColor: 'text-amber-700',   barFill: 'bg-amber-400'   },
+    ME: { bg: 'bg-green-50',   border: 'border-green-200',   textColor: 'text-green-700',   barFill: 'bg-green-400'   },
+    EC: { bg: 'bg-sky-50',     border: 'border-sky-200',     textColor: 'text-sky-700',     barFill: 'bg-sky-400'     },
+    CS: { bg: 'bg-teal-50',    border: 'border-teal-200',    textColor: 'text-teal-700',    barFill: 'bg-teal-400'    },
+    EE: { bg: 'bg-violet-50',  border: 'border-violet-200',  textColor: 'text-violet-700',  barFill: 'bg-violet-400'  },
   };
 
   const yearConfig: Record<Year, { label: string; bg: string; border: string; textColor: string; barFill: string }> = {
-    '1ST YEAR': { label: '1st Year', bg: 'bg-cyan-50',    border: 'border-cyan-200',    textColor: 'text-cyan-700',    barFill: 'bg-cyan-400'    },
-    '2ND YEAR': { label: '2nd Year', bg: 'bg-teal-50',    border: 'border-teal-200',    textColor: 'text-teal-700',    barFill: 'bg-teal-400'    },
-    '3RD YEAR': { label: '3rd Year', bg: 'bg-emerald-50', border: 'border-emerald-200', textColor: 'text-emerald-700', barFill: 'bg-emerald-400' },
+    '1ST YEAR': { label: '1st Year', bg: 'bg-lime-50',     border: 'border-lime-200',     textColor: 'text-lime-700',     barFill: 'bg-lime-400'     },
+    '2ND YEAR': { label: '2nd Year', bg: 'bg-emerald-50',  border: 'border-emerald-200',  textColor: 'text-emerald-700',  barFill: 'bg-emerald-400'  },
+    '3RD YEAR': { label: '3rd Year', bg: 'bg-teal-50',     border: 'border-teal-200',     textColor: 'text-teal-700',     barFill: 'bg-teal-400'     },
   };
 
   if (loading) return <LoadingGate />;
@@ -523,16 +501,16 @@ export function Dashboard() {
       <div className="flex-shrink-0 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-baseline gap-3 flex-wrap">
-            <h2 className="text-xl font-semibold text-gray-900 leading-tight">Dashboard</h2>
+            <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Dashboard</h2>
             <span
               className={`text-2xl font-black tracking-tight leading-tight transition-colors duration-200 ${
-                !isSearchMode && academicYearFilter ? 'text-blue-700' : 'text-gray-400'
+                !isSearchMode && academicYearFilter ? 'text-emerald-600' : 'text-gray-300'
               }`}
             >
               {displayYear}
             </span>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-gray-400 mt-0.5 font-medium">
             {`${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -563,66 +541,70 @@ export function Dashboard() {
 
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
-        <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {/* Total chip — confirmed admissions only */}
-          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-            <span className="text-gray-400 font-medium">Total</span>
-            <span className="font-bold tabular-nums text-gray-800">
-              <AnimNum value={confirmedActiveCount} />
-            </span>
-            {confirmedActiveCount < confirmedTotalCount && (
-              <span className="text-gray-300 text-[10px]">/{confirmedTotalCount}</span>
-            )}
+        <div
+          className="flex-shrink-0 bg-white/60 rounded-xl border border-emerald-100 px-3 py-2"
+          style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
+        >
+          <div className="flex items-center gap-1.5 overflow-x-auto scroll-emerald pb-0.5">
+            {/* Total chip */}
+            <div className="flex items-center gap-1.5 bg-emerald-500 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+              <span className="text-emerald-100 font-medium text-[11px]">Total</span>
+              <span className="font-bold tabular-nums text-white">
+                <AnimNum value={confirmedActiveCount} />
+              </span>
+              {confirmedActiveCount < confirmedTotalCount && (
+                <span className="text-emerald-200 text-[10px]">/{confirmedTotalCount}</span>
+              )}
+            </div>
+            <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+            {/* Per-year chips */}
+            {activeStats.map(({ year, count }) => {
+              const isSelected = !isSearchMode && academicYearFilter === year;
+              const isDimmed = count === 0;
+              return (
+                <button
+                  key={year}
+                  type="button"
+                  disabled={isSearchMode}
+                  onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
+                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 transition-all duration-150 ${
+                    isSearchMode ? 'cursor-default' : 'cursor-pointer'
+                  } ${
+                    isSelected
+                      ? 'bg-emerald-50 border-emerald-300'
+                      : isDimmed
+                      ? 'bg-transparent border-gray-100'
+                      : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                  }`}
+                >
+                  <span className={`font-medium text-[11px] ${isSelected ? 'text-emerald-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
+                    {year}
+                  </span>
+                  <span className={`font-bold tabular-nums ${isSelected ? 'text-emerald-800' : isDimmed ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <AnimNum value={count} />
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <span className="text-gray-200 text-xs select-none shrink-0">·</span>
-          {/* Per-year chips */}
-          {activeStats.map(({ year, count }) => {
-            const isSelected = !isSearchMode && academicYearFilter === year;
-            const isDimmed = count === 0;
-            return (
-              <button
-                key={year}
-                type="button"
-                disabled={isSearchMode}
-                onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 ${
-                  isSearchMode ? 'cursor-default' : 'cursor-pointer'
-                } ${
-                  isSelected
-                    ? 'bg-blue-50 border-blue-300'
-                    : isDimmed
-                    ? 'bg-white border-gray-100 hover:border-gray-200'
-                    : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                }`}
-              >
-                <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
-                  {year}
-                </span>
-                <span className={`font-bold tabular-nums ${isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
-                  <AnimNum value={count} />
-                </span>
-              </button>
-            );
-          })}
         </div>
       )}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2">
-        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto">
+      <div className="flex-shrink-0 bg-white/70 rounded-2xl border border-emerald-100 overflow-hidden" style={{ backdropFilter: 'blur(8px)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
+        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-2.5">
           <input
             type="text"
             placeholder="Search name / reg / mobile…"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            className="w-40 shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="w-40 shrink-0 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
           />
           <select
             className={`${fs} w-[90px] shrink-0 ${isSearchMode ? 'opacity-40 cursor-not-allowed' : ''}`}
             value={academicYearFilter}
             onChange={(e) => setAcademicYearFilter(e.target.value as AcademicYear | '')}
             disabled={isSearchMode}
-            title={isSearchMode ? 'Disabled during search' : 'Academic year'}
           >
             <option value="">Acad Yr</option>
             {sortedAcademicYears.map((ay) => (
@@ -676,7 +658,7 @@ export function Dashboard() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="shrink-0 rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
+              className="shrink-0 rounded-lg border border-amber-300 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
             >
               Clear
             </button>
@@ -703,30 +685,30 @@ export function Dashboard() {
               </p>
             )}
             {studentGroups.slice(0, 100).map((group) => (
-              <div key={group.key} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-baseline gap-3 flex-wrap">
-                  <span className="font-semibold text-gray-900 text-sm">{group.nameSSLC}</span>
+              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                <div className="px-4 py-2.5 border-b border-emerald-50 flex items-baseline gap-3 flex-wrap" style={{ background: 'linear-gradient(90deg, #f0fdf8, #f8fafc)' }}>
+                  <span className="font-bold text-gray-900 text-sm">{group.nameSSLC}</span>
                   {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
                     <span className="text-xs text-gray-500">({group.nameAadhar})</span>
                   )}
                   <span className="text-xs text-gray-500">DOB: {group.dob || '—'}</span>
                   <span className="text-xs text-gray-500">{group.gender}</span>
-                  <span className="text-xs text-blue-600 font-medium ml-auto">
+                  <span className="text-xs text-emerald-600 font-semibold ml-auto">
                     {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-xs divide-y divide-gray-100">
-                    <thead className="bg-white">
+                  <table className="min-w-full text-xs divide-y divide-emerald-50">
+                    <thead className="bg-white/50">
                       <tr>
                         {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', ''].map((h) => (
-                          <th key={h} className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-3 py-1.5 text-left font-semibold text-gray-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-emerald-50/50">
                       {group.records.map((s) => (
-                        <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={s.id} className="hover:bg-emerald-50/40 transition-colors">
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.year}</td>
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.course}</td>
@@ -734,7 +716,7 @@ export function Dashboard() {
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(s.admissionStatus)}`}>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass(s.admissionStatus)}`}>
                               {s.admissionStatus || '—'}
                             </span>
                           </td>
@@ -778,40 +760,43 @@ export function Dashboard() {
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard
-                className="col-span-2"
-                label="Total Enrolled"
-                value={stats.total}
-                total={0}
-                bg="bg-sky-50"
-                border="border-sky-200"
-                textColor="text-sky-700"
-                barFill="bg-sky-400"
-                subText={`${stats.boys}B · ${stats.girls}G`}
-              />
+              {/* Total card — hero with subtle gradient */}
+              <div
+                className="col-span-2 rounded-2xl border border-sky-200 p-4 flex flex-col gap-1.5 relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 1px 3px 0 rgba(14,165,233,0.08)' }}
+              >
+                <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
+                  ALL
+                </span>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-sky-600/70">Total Enrolled</p>
+                <p className="text-4xl font-black leading-none text-sky-700">
+                  <AnimNum value={stats.total} />
+                </p>
+                <p className="text-xs text-sky-500/80 mt-auto font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
+              </div>
               <StatCard
                 label="Boys"
                 value={stats.boys}
                 total={stats.total}
-                bg="bg-blue-50"
-                border="border-blue-200"
-                textColor="text-blue-700"
-                barFill="bg-blue-400"
+                bg="bg-sky-50"
+                border="border-sky-200"
+                textColor="text-sky-700"
+                barFill="bg-sky-400"
               />
               <StatCard
                 label="Girls"
                 value={stats.girls}
                 total={stats.total}
-                bg="bg-pink-50"
-                border="border-pink-200"
-                textColor="text-pink-700"
-                barFill="bg-pink-400"
+                bg="bg-rose-50"
+                border="border-rose-200"
+                textColor="text-rose-600"
+                barFill="bg-rose-400"
               />
             </div>
 
             {/* By Course */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-indigo-500', text: 'text-indigo-700' }}>By Course</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-emerald-500', text: 'text-emerald-700' }}>By Course</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -864,7 +849,7 @@ export function Dashboard() {
 
             {/* 1st Year Pending Seats */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-orange-500', text: 'text-orange-700' }}>1st Year — Pending Seats</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }}>1st Year — Pending Seats</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -873,14 +858,13 @@ export function Dashboard() {
                   const snqPending = Math.max(0, 3 - snqConfirmed);
                   const regularFillPct = Math.min(100, Math.round((regularConfirmed / 60) * 100));
                   return (
-                    <div key={course} className={`rounded-xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`}>
+                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
                       <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
                       <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor}`}>{course}</span>
-                      {/* Regular seats */}
                       <div className="flex flex-col gap-1">
                         <div className="flex items-end justify-between">
-                          <span className="text-[10px] text-gray-400 font-medium">Regular</span>
-                          <span className={`text-2xl font-bold leading-none tabular-nums ${regularPending === 0 ? 'text-green-600' : c.textColor}`}>
+                          <span className="text-[10px] text-gray-400 font-semibold">Regular</span>
+                          <span className={`text-2xl font-black leading-none tabular-nums ${regularPending === 0 ? 'text-emerald-600' : c.textColor}`}>
                             <AnimNum value={regularPending} />
                           </span>
                         </div>
@@ -892,13 +876,12 @@ export function Dashboard() {
                         </div>
                         <p className="text-[10px] text-gray-400 tabular-nums">{regularConfirmed} / 60 filled</p>
                       </div>
-                      {/* SNQ seats */}
                       <div className="pt-1.5 border-t border-white/50 flex items-center justify-between">
                         <div>
-                          <span className="text-[10px] text-gray-400 font-medium">SNQ</span>
+                          <span className="text-[10px] text-gray-400 font-semibold">SNQ</span>
                           <p className="text-[10px] text-gray-400 tabular-nums">{snqConfirmed} / 3 filled</p>
                         </div>
-                        <span className={`text-lg font-bold tabular-nums ${snqPending === 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                        <span className={`text-lg font-black tabular-nums ${snqPending === 0 ? 'text-emerald-600' : 'text-gray-600'}`}>
                           <AnimNum value={snqPending} />
                         </span>
                       </div>
@@ -914,29 +897,29 @@ export function Dashboard() {
                 title="Admission Status"
                 total={stats.total}
                 items={[
-                  { label: 'Provisional', value: stats.byStatus['PROVISIONAL'], dotClass: 'bg-amber-400',  barClass: 'bg-amber-400'  },
-                  { label: 'Confirmed',   value: stats.byStatus['CONFIRMED'],   dotClass: 'bg-green-400', barClass: 'bg-green-400' },
-                  { label: 'Cancelled',   value: stats.byStatus['CANCELLED'],   dotClass: 'bg-red-400',   barClass: 'bg-red-400'   },
-                  { label: 'Pending',     value: stats.byStatus['PENDING'],     dotClass: 'bg-gray-300',  barClass: 'bg-gray-300'  },
+                  { label: 'Provisional', value: stats.byStatus['PROVISIONAL'], dotClass: 'bg-amber-400',    barClass: 'bg-amber-400'    },
+                  { label: 'Confirmed',   value: stats.byStatus['CONFIRMED'],   dotClass: 'bg-emerald-400', barClass: 'bg-emerald-400' },
+                  { label: 'Cancelled',   value: stats.byStatus['CANCELLED'],   dotClass: 'bg-red-400',     barClass: 'bg-red-400'     },
+                  { label: 'Pending',     value: stats.byStatus['PENDING'],     dotClass: 'bg-gray-300',    barClass: 'bg-gray-300'    },
                 ]}
               />
               <BreakdownPanel
                 title="Admission Type"
                 total={stats.total}
                 items={[
-                  { label: 'Regular',  value: stats.byAdmType['REGULAR'],  dotClass: 'bg-indigo-400', barClass: 'bg-indigo-400' },
-                  { label: 'Repeater', value: stats.byAdmType['REPEATER'], dotClass: 'bg-orange-400', barClass: 'bg-orange-400' },
-                  { label: 'Lateral',  value: stats.byAdmType['LATERAL'],  dotClass: 'bg-purple-400', barClass: 'bg-purple-400' },
-                  { label: 'External', value: stats.byAdmType['EXTERNAL'], dotClass: 'bg-teal-400',   barClass: 'bg-teal-400'   },
-                  { label: 'SNQ',      value: stats.byAdmType['SNQ'],      dotClass: 'bg-gray-400',   barClass: 'bg-gray-400'   },
+                  { label: 'Regular',  value: stats.byAdmType['REGULAR'],  dotClass: 'bg-teal-400',    barClass: 'bg-teal-400'    },
+                  { label: 'Repeater', value: stats.byAdmType['REPEATER'], dotClass: 'bg-amber-400',   barClass: 'bg-amber-400'   },
+                  { label: 'Lateral',  value: stats.byAdmType['LATERAL'],  dotClass: 'bg-sky-400',     barClass: 'bg-sky-400'     },
+                  { label: 'External', value: stats.byAdmType['EXTERNAL'], dotClass: 'bg-violet-400',  barClass: 'bg-violet-400'  },
+                  { label: 'SNQ',      value: stats.byAdmType['SNQ'],      dotClass: 'bg-gray-400',    barClass: 'bg-gray-400'    },
                 ]}
               />
             </div>
 
-            {/* Report-style tables */}
+            {/* Report tables */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
-              {/* Category Report table */}
+              {/* Category Report */}
               {(() => {
                 const catRows = YEARS.flatMap((yr) => {
                   const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
@@ -958,34 +941,34 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Category-wise Count</p>
+                  <div className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                    <div className="px-4 py-2.5 border-b border-emerald-50">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px] border-collapse">
                         <thead>
-                          <tr className="bg-blue-600 text-white">
+                          <tr style={{ background: 'linear-gradient(90deg, #065f46, #047857)' }}>
                             {['Year','Course','GM','C1','2A','2B','3A','3B','SC','ST','Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap first:text-left text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {catRows.map((r, i) => r.isSubtotal ? (
-                            <tr key={i} className="bg-blue-500 text-white font-semibold">
+                            <tr key={i} className="text-white font-semibold" style={{ background: '#059669' }}>
                               <td className={tl}>{r.yrLabel}</td>
                               <td className={tl}>{r.course}</td>
                               {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                             </tr>
                           ) : (
-                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className={tl + ' text-gray-500'}>{r.yrLabel}</td>
-                              <td className={tl + ' font-medium text-gray-700'}>{r.course}</td>
+                            <tr key={i} className="border-b border-emerald-50 hover:bg-emerald-50/40 transition-colors">
+                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
+                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
                               {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
                             </tr>
                           ))}
-                          <tr className="bg-blue-800 text-white font-bold">
+                          <tr className="text-white font-bold" style={{ background: '#064e3b' }}>
                             <td className={tl}>GRAND TOTAL</td>
                             <td className={tl}></td>
                             {[grand.gm, grand.c1, grand.twoA, grand.twoB, grand.threeA, grand.threeB, grand.sc, grand.st, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
@@ -997,7 +980,7 @@ export function Dashboard() {
                 );
               })()}
 
-              {/* Summary Report table */}
+              {/* Summary Report */}
               {(() => {
                 const sumRows = YEARS.flatMap((yr) => {
                   const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
@@ -1017,34 +1000,34 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Admission Type-wise Count</p>
+                  <div className="bg-white/80 rounded-2xl border border-sky-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                    <div className="px-4 py-2.5 border-b border-sky-50">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Admission Type-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px] border-collapse">
                         <thead>
-                          <tr className="bg-blue-600 text-white">
+                          <tr style={{ background: 'linear-gradient(90deg, #0c4a6e, #075985)' }}>
                             {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {sumRows.map((r, i) => r.isSubtotal ? (
-                            <tr key={i} className="bg-blue-500 text-white font-semibold">
+                            <tr key={i} className="text-white font-semibold" style={{ background: '#0284c7' }}>
                               <td className={tl}>{r.yrLabel}</td>
                               <td className={tl}>{r.course}</td>
                               {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                             </tr>
                           ) : (
-                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className={tl + ' text-gray-500'}>{r.yrLabel}</td>
-                              <td className={tl + ' font-medium text-gray-700'}>{r.course}</td>
+                            <tr key={i} className="border-b border-sky-50 hover:bg-sky-50/40 transition-colors">
+                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
+                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
                               {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
                             </tr>
                           ))}
-                          <tr className="bg-blue-800 text-white font-bold">
+                          <tr className="text-white font-bold" style={{ background: '#082f49' }}>
                             <td className={tl}>GRAND TOTAL</td>
                             <td className={tl}></td>
                             {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
@@ -1071,7 +1054,7 @@ export function Dashboard() {
       />
     )}
 
-    {/* Course Admission Type modal */}
+    {/* Course modal */}
     {courseModalCourse && (() => {
       const c = courseConfig[courseModalCourse];
       const rows = YEARS.map((yr) => {
@@ -1093,10 +1076,8 @@ export function Dashboard() {
       ];
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-black/40" onClick={() => setCourseModalCourse(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCourseModalCourse(null)} aria-hidden="true" />
           <div className={`relative rounded-2xl border-2 ${c.border} ${c.bg} shadow-2xl w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
-
-            {/* Header */}
             <div className={`px-5 py-3.5 flex items-center justify-between border-b ${c.border} relative overflow-hidden`}>
               <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>
                 {courseModalCourse}
@@ -1105,7 +1086,7 @@ export function Dashboard() {
                 <span className={`px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border ${c.border} bg-white/70 ${c.textColor}`}>
                   {courseModalCourse}
                 </span>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admission Type-wise Count</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Admission Type-wise</p>
               </div>
               <button
                 onClick={() => setCourseModalCourse(null)}
@@ -1115,8 +1096,6 @@ export function Dashboard() {
                 ×
               </button>
             </div>
-
-            {/* Table */}
             <div className="p-4">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -1153,12 +1132,12 @@ export function Dashboard() {
                 </tfoot>
               </table>
             </div>
-
           </div>
         </div>
       );
     })()}
-    {/* Year Admission Type modal */}
+
+    {/* Year modal */}
     {yearModalYear && (() => {
       const y = yearConfig[yearModalYear];
       const wm = yearModalYear === '1ST YEAR' ? '1st' : yearModalYear === '2ND YEAR' ? '2nd' : '3rd';
@@ -1180,10 +1159,8 @@ export function Dashboard() {
       ];
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-black/40" onClick={() => setYearModalYear(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setYearModalYear(null)} aria-hidden="true" />
           <div className={`relative rounded-2xl border-2 ${y.border} ${y.bg} shadow-2xl w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
-
-            {/* Header */}
             <div className={`px-5 py-3.5 flex items-center justify-between border-b ${y.border} relative overflow-hidden`}>
               <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${y.textColor} opacity-[0.07]`}>
                 {wm}
@@ -1192,7 +1169,7 @@ export function Dashboard() {
                 <span className={`px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border ${y.border} bg-white/70 ${y.textColor}`}>
                   {y.label}
                 </span>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Admission Type-wise Count</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Admission Type-wise</p>
               </div>
               <button
                 onClick={() => setYearModalYear(null)}
@@ -1202,8 +1179,6 @@ export function Dashboard() {
                 ×
               </button>
             </div>
-
-            {/* Table */}
             <div className="p-4">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -1244,7 +1219,6 @@ export function Dashboard() {
                 </tfoot>
               </table>
             </div>
-
           </div>
         </div>
       );

@@ -24,7 +24,7 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
-const fs = 'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function AnimNum({ value }: { value: number }) {
   return (
@@ -178,16 +178,17 @@ export function Students() {
     setDebouncedSearch('');
   }
 
-  // Stats from the full unfiltered dataset
+  // Stats from confirmed students only
   const stats = useMemo(() => {
-    if (!allStudents.length) return null;
+    const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    if (!confirmed.length) return null;
     const yearCount: Record<string, number> = {};
     const courseCount: Record<string, number> = {};
-    for (const s of allStudents) {
+    for (const s of confirmed) {
       yearCount[s.year] = (yearCount[s.year] ?? 0) + 1;
       courseCount[s.course] = (courseCount[s.course] ?? 0) + 1;
     }
-    return { yearCount, courseCount, total: allStudents.length };
+    return { yearCount, courseCount, total: confirmed.length };
   }, [allStudents]);
 
   function openDeleteModal(student: Student) {
@@ -244,7 +245,7 @@ export function Students() {
       {/* Page header + stats chips */}
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
         <div className="shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 leading-tight">Students</h2>
+          <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Students</h2>
           {academicYear && (
             <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
           )}
@@ -256,12 +257,12 @@ export function Students() {
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
 
               {/* Total chip */}
-              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-gray-400 font-medium">Total</span>
+              <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-emerald-500 font-semibold">Total</span>
                 <AnimNum value={stats.total} />
               </div>
 
-              <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
               {/* Study-year chips */}
               {YEARS.map((yr) => {
@@ -273,25 +274,25 @@ export function Students() {
                   <button
                     key={yr}
                     onClick={() => setYearFilter(isSelected ? '' : yr)}
-                    className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-50 border-blue-300'
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
                         : isDimmed
-                        ? 'bg-white border-gray-100'
-                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        ? 'bg-white/50 border-gray-100'
+                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
                     }`}
                   >
-                    <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
+                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>
                       {label}
                     </span>
-                    <span className={isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}>
+                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
                       <AnimNum value={count} />
                     </span>
                   </button>
                 );
               })}
 
-              <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
               {/* Course chips */}
               {COURSES.map((c) => {
@@ -302,18 +303,18 @@ export function Students() {
                   <button
                     key={c}
                     onClick={() => setCourseFilter(isSelected ? '' : c)}
-                    className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-50 border-blue-300'
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
                         : isDimmed
-                        ? 'bg-white border-gray-100'
-                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        ? 'bg-white/50 border-gray-100'
+                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
                     }`}
                   >
-                    <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
+                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>
                       {c}
                     </span>
-                    <span className={isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}>
+                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
                       <AnimNum value={count} />
                     </span>
                   </button>
@@ -323,9 +324,9 @@ export function Students() {
               {/* Filtered count */}
               {hasActiveFilters && (
                 <>
-                  <span className="text-gray-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-blue-500 font-medium">Filtered</span>
+                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-emerald-600 font-semibold">Filtered</span>
                     <AnimNum value={filteredStudents.length} />
                   </div>
                 </>
@@ -355,14 +356,14 @@ export function Students() {
       </div>
 
       {/* Filters — always visible, never scrolls */}
-      <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex-shrink-0 bg-white/70 rounded-2xl border border-emerald-100 overflow-hidden" style={{ backdropFilter: 'blur(8px)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
           <input
             type="text"
             placeholder="Search name / reg / mobile…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="w-44 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
           />
           <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
             <option value="">All Courses</option>
@@ -411,15 +412,15 @@ export function Students() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
+              className="rounded-lg border border-amber-300 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold"
             >
-              Clear Filters
+              Clear
             </button>
           )}
           {!isLoading && allStudents.length > 0 && (
             <button
               onClick={() => setShowMissingDocs(true)}
-              className="rounded border border-purple-300 px-2 py-1.5 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400 cursor-pointer transition-colors font-medium flex items-center gap-1"
+              className="rounded-lg border border-violet-200 px-2 py-1.5 text-xs text-violet-700 bg-violet-50 hover:bg-violet-100 hover:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer transition-colors font-medium flex items-center gap-1"
             >
               Doc Status
             </button>
@@ -428,7 +429,7 @@ export function Students() {
             <button
               onClick={handleSavePdf}
               disabled={savingPdf}
-              className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               {savingPdf ? 'Generating…' : 'Save PDF'}
             </button>
@@ -446,30 +447,30 @@ export function Students() {
       ) : filteredStudents.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No students found.</div>
       ) : (
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 text-xs">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+        <div className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col" style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
+          <table className="min-w-full divide-y divide-emerald-50 text-xs">
+            <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Year</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Gender</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Adm Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Status</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Name (SSLC)</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Reg No</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Course</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Year</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
                 {isAdmin && (
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-48">Actions</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-48">Actions</th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-emerald-50/60">
               {visibleStudents.map((student, idx) => (
                 <tr
                   key={student.id}
-                  className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                  className="hover:bg-emerald-50/40 transition-colors cursor-context-menu"
                   onContextMenu={(e) => handleContextMenu(e, student)}
                 >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
@@ -522,7 +523,7 @@ export function Students() {
                 <tr>
                   <td colSpan={isAdmin ? 11 : 10} className="px-4 py-2.5 text-center">
                     <button
-                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                     >
                       Load more ({filteredStudents.length - visibleCount} remaining)
@@ -533,10 +534,10 @@ export function Students() {
             </tbody>
           </table>
 
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+          <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
             Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length}
-            {filteredStudents.length < allStudents.length && (
-              <span className="text-gray-400"> (filtered from {allStudents.length} total)</span>
+            {stats && filteredStudents.length < stats.total && (
+              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}
           </div>
         </div>
@@ -571,43 +572,43 @@ export function Students() {
         />
         {/* Menu */}
         <div
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[185px] text-sm"
+          className="fixed z-50 bg-white/95 border border-emerald-100 rounded-2xl shadow-2xl py-1 min-w-[185px] text-sm"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100 mb-1 truncate max-w-[185px]">
+          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-emerald-50 mb-1 truncate max-w-[185px]">
             {contextMenu.student.studentNameSSLC}
           </div>
           <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
             onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📁</span>
             Manage Documents
           </button>
           <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
             onClick={() => { printStudentProfile(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">🖨️</span>
             Print Profile
           </button>
           <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
             onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📄</span>
             ANS Letter
           </button>
           <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
             onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📋</span>
             Study Certificate
           </button>
           <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
             onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
           >
             <span className="text-sm leading-none">📜</span>
@@ -615,7 +616,7 @@ export function Students() {
           </button>
           {contextMenu.student.year === '3RD YEAR' && (
             <button
-              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
               onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
             >
               <span className="text-sm leading-none">🎓</span>

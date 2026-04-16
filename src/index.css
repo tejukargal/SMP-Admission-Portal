@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* ── Typography ─────────────────────────────────────────────────────────────
+   Segoe UI Variable (Win 11) → Segoe UI (Win 10) → system-ui fallback.
+   Inter is loaded as a web-font fallback for non-Windows platforms.        */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 @keyframes stat-pop {
   0%   { opacity: 0.4; transform: scale(0.88); }
   60%  { opacity: 1;   transform: scale(1.06); }
@@ -34,7 +46,7 @@
   width: 50px;
   aspect-ratio: 1;
   display: grid;
-  color: #2563eb;
+  color: #059669;
   background: radial-gradient(farthest-side, currentColor calc(100% - 6px), #0000 calc(100% - 5px) 0);
   -webkit-mask: radial-gradient(farthest-side, #0000 calc(100% - 13px), #000 calc(100% - 12px));
   border-radius: 50%;
@@ -80,3 +92,24 @@
 .connecting-dots span:nth-child(1) { animation-delay: 0s; }
 .connecting-dots span:nth-child(2) { animation-delay: 0.2s; }
 .connecting-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Thin emerald scrollbar ─────────────────────────────────────────────── */
+.scroll-emerald {
+  scrollbar-width: thin;
+  scrollbar-color: #a7f3d0 transparent;
+}
+.scroll-emerald::-webkit-scrollbar {
+  height: 3px;
+  width: 3px;
+}
+.scroll-emerald::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 99px;
+}
+.scroll-emerald::-webkit-scrollbar-thumb {
+  background: #a7f3d0;
+  border-radius: 99px;
+}
+.scroll-emerald::-webkit-scrollbar-thumb:hover {
+  background: #34d399;
+}

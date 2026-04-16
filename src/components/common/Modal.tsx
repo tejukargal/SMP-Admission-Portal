@@ -27,16 +27,19 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
       <div
         className="absolute inset-0 bg-black/40"
+        style={{ backdropFilter: 'blur(4px)' }}
         onClick={onCancel}
         aria-hidden="true"
       />
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-        <div className="text-sm text-gray-600 mb-6">{message}</div>
-        <div className="flex justify-end gap-3">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-gray-100" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">{title}</h3>
+        </div>
+        <div className="px-6 py-4 text-sm text-gray-600">{message}</div>
+        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex justify-end gap-3">
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>

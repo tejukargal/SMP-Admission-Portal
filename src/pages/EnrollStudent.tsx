@@ -101,10 +101,10 @@ interface YearWarningModalProps {
 
 function YearWarningModal({ studentName, selectedYear, conflictRecord, onProceed, onEdit }: YearWarningModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="px-6 py-5 border-b border-gray-200">
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-amber-100 w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-amber-50" style={{ background: 'linear-gradient(90deg, #fffbeb, #fef9c3)' }}>
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
             <span className="text-amber-500">⚠</span> Year Conflict Detected
           </h3>
         </div>
@@ -120,7 +120,7 @@ function YearWarningModal({ studentName, selectedYear, conflictRecord, onProceed
             or go back and edit the year?
           </p>
         </div>
-        <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex gap-3 justify-end">
           <Button variant="secondary" onClick={onEdit}>Edit Year</Button>
           <Button onClick={onProceed}>Proceed Anyway</Button>
         </div>
@@ -150,7 +150,7 @@ function PreviewRow({ label, value, required }: { label: string; value: string |
     ? null
     : String(value);
   return (
-    <div className="grid grid-cols-2 gap-2 py-1.5 border-b border-gray-100 last:border-0">
+    <div className="grid grid-cols-2 gap-2 py-1.5 border-b border-emerald-50/60 last:border-0">
       <dt className="text-xs text-gray-500 font-medium flex items-center gap-1">
         {label}
         {required && <span className="text-red-500">*</span>}
@@ -164,11 +164,11 @@ function PreviewRow({ label, value, required }: { label: string; value: string |
 
 function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: EnrollmentPreviewProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-2xl my-8 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Review Enrollment Details</h2>
+        <div className="px-6 py-4 border-b border-emerald-50" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
+          <h2 className="text-base font-bold text-gray-900">Review Enrollment Details</h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Please verify all details before confirming. Fields marked <span className="text-red-500 font-bold">*</span> are mandatory.
           </p>
@@ -249,13 +249,13 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
         </div>
 
         {errorMsg && (
-          <div className="mx-6 mb-3 text-sm text-red-600 bg-red-50 rounded-md px-4 py-3">
+          <div className="mx-6 mb-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 border border-red-100">
             {errorMsg}
           </div>
         )}
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">
+        <div className="px-6 py-4 bg-gray-50/60 border-t border-emerald-50 flex gap-3 justify-end">
           <Button variant="secondary" size="lg" onClick={onEdit} disabled={saving}>
             Edit Details
           </Button>
@@ -834,7 +834,7 @@ export function EnrollStudent() {
     <div className="w-full" ref={topRef} style={{ animation: 'page-enter 0.22s ease-out' }}>
       {/* Page header */}
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">
           {editId ? 'Edit Student' : 'Enroll Student'}
         </h2>
         <Button variant="secondary" size="sm" onClick={() => void navigate(backTo)}>
@@ -946,11 +946,11 @@ export function EnrollStudent() {
       <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
 
         {/* ── Personal Information ─────────────────────────────────────── */}
-        <section className="rounded-xl border border-blue-200 shadow-sm">
-          <div className="bg-blue-100 px-6 py-2.5 border-b border-blue-200 rounded-t-xl">
-            <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider">Personal Information</h3>
+        <section className="rounded-xl border border-sky-200 shadow-sm">
+          <div className="bg-sky-100 px-6 py-2.5 border-b border-sky-200 rounded-t-xl">
+            <h3 className="text-sm font-bold text-sky-800 uppercase tracking-wider">Personal Information</h3>
           </div>
-          <div className="bg-blue-50 px-6 py-5 rounded-b-xl">
+          <div className="bg-sky-50 px-6 py-5 rounded-b-xl">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <Input
@@ -1025,7 +1025,7 @@ export function EnrollStudent() {
                 placeholder="Select religion"
               />
               <div className="flex flex-col gap-1 relative">
-                <label className="text-sm font-medium text-gray-700">Caste Name</label>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Caste Name</label>
                 <input
                   type="text"
                   value={form.caste}
@@ -1035,17 +1035,17 @@ export function EnrollStudent() {
                   onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); setCasteOpen(false); setCasteHighlight(-1); }}
                   placeholder="CASTE"
                   style={{ textTransform: 'uppercase' }}
-                  className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${displayErrors['caste'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors ${displayErrors['caste'] ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
                 />
-                {displayErrors['caste'] && <p className="text-xs text-red-600">{displayErrors['caste']}</p>}
+                {displayErrors['caste'] && <p className="text-xs text-red-500 font-medium">{displayErrors['caste']}</p>}
                 {casteOpen && (
-                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-md shadow-lg mt-0.5 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-emerald-100 rounded-lg shadow-lg mt-0.5 overflow-hidden">
                     {casteSuggestions.map((item, idx) => (
                       <button
                         key={item.caste}
                         type="button"
                         onMouseDown={() => handleCastePick(item)}
-                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === casteHighlight ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 text-gray-800'}`}
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === casteHighlight ? 'bg-emerald-50 text-emerald-700' : 'hover:bg-emerald-50 text-gray-800'}`}
                       >
                         <span className="font-medium">{item.caste}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
@@ -1120,7 +1120,7 @@ export function EnrollStudent() {
                 placeholder="TOWN / CITY"
               />
               <div className="flex flex-col gap-1 relative">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   {`Taluk${form.address.trim() ? ' *' : ''}`}
                 </label>
                 <input
@@ -1131,17 +1131,17 @@ export function EnrollStudent() {
                   onBlur={() => { talukSuggestTimer.current && clearTimeout(talukSuggestTimer.current); setTalukOpen(false); setTalukHighlight(-1); }}
                   placeholder="TALUK"
                   style={{ textTransform: 'uppercase' }}
-                  className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${displayErrors['taluk'] ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors ${displayErrors['taluk'] ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
                 />
-                {displayErrors['taluk'] && <p className="text-xs text-red-600">{displayErrors['taluk']}</p>}
+                {displayErrors['taluk'] && <p className="text-xs text-red-500 font-medium">{displayErrors['taluk']}</p>}
                 {talukOpen && (
-                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-gray-200 rounded-md shadow-lg mt-0.5 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-emerald-100 rounded-lg shadow-lg mt-0.5 overflow-hidden">
                     {talukSuggestions.map((taluk, idx) => (
                       <button
                         key={taluk}
                         type="button"
                         onMouseDown={() => handleTalukPick(taluk)}
-                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === talukHighlight ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50 text-gray-800'}`}
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === talukHighlight ? 'bg-emerald-50 text-emerald-700' : 'hover:bg-emerald-50 text-gray-800'}`}
                       >
                         <span className="font-medium">{taluk}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{KARNATAKA_TALUK_DISTRICT[taluk]}</span>
@@ -1236,7 +1236,7 @@ export function EnrollStudent() {
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="text-sm font-medium text-gray-700 block mb-1">SSLC Percentage</label>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">SSLC Percentage</label>
                 <input
                   type="text"
                   readOnly
@@ -1287,7 +1287,7 @@ export function EnrollStudent() {
                 error={displayErrors['mathsObtained']}
               />
               <div className="lg:col-span-2">
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">
                   Maths + Science Max Total
                 </label>
                 <input
@@ -1298,7 +1298,7 @@ export function EnrollStudent() {
                 />
               </div>
               <div className="lg:col-span-2">
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">
                   Maths + Science Obtained Total
                 </label>
                 <input
@@ -1332,7 +1332,7 @@ export function EnrollStudent() {
               <div className="lg:col-span-2">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-700">Year</span>
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Year</span>
                     {prevSourceStudent && (
                       <span className="text-xs text-amber-600 font-medium">
                         Previously: {prevSourceStudent.year} ({prevSourceStudent.academicYear})
@@ -1407,7 +1407,7 @@ export function EnrollStudent() {
                 placeholder="Auto-assigned if blank"
               />
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">
                   Merit Number
                 </label>
                 {editId ? (

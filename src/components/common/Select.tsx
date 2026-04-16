@@ -23,11 +23,11 @@ export function Select({
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{label}</label>
       )}
       <select
-        className={`block w-full rounded-md border px-3 py-2 text-sm shadow-sm bg-inherit focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-          error ? 'border-red-500' : 'border-gray-300'
+        className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors ${
+          error ? 'border-red-400 bg-red-50' : 'border-gray-200'
         } ${className}`}
         {...props}
       >
@@ -42,7 +42,7 @@ export function Select({
           </option>
         ))}
       </select>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
     </div>
   );
 }
