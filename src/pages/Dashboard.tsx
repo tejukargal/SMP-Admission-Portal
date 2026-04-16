@@ -520,14 +520,14 @@ export function Dashboard() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter), academicYearFilter)}
+                onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
               >
                 Summary PDF
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => exportCategoryReport(allStudents.filter((s) => s.academicYear === academicYearFilter), academicYearFilter)}
+                onClick={() => exportCategoryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
               >
                 Category PDF
               </Button>

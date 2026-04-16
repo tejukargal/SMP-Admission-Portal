@@ -66,10 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setStaffDefaultYear(result.role === 'staff' ? (result.defaultAcademicYear ?? null) : null);
           }
         })
-        .catch(() => {
-          // On Firestore error, fail safe: treat as admin to avoid locking out existing admin
-          setUser(u);
-          setRole('admin');
+        .catch(async () => {
+          // On Firestore error, fail CLOSED — sign out rather than granting elevated access
+          await signOut(auth);
+          setUser(null);
+          setRole(null);
           setStaffDefaultYear(null);
         })
         .finally(() => {

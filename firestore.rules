@@ -1,92 +1,155 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────
+    // These are evaluated per-request; Firestore caches the get() result
+    // within a single rule evaluation so multiple calls are not extra reads.
+
+    function userRef() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userDocExists() {
+      return request.auth != null && exists(userRef());
+    }
+
+    function userDoc() {
+      return get(userRef()).data;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && userDocExists()
+        && userDoc().role == 'admin'
+        && userDoc().active != false;
+    }
+
+    function isActiveStaff() {
+      return request.auth != null
+        && userDocExists()
+        && userDoc().role == 'staff'
+        && userDoc().active != false;
+    }
+
+    // Any non-deactivated authenticated user (admin OR staff)
+    function isActiveUser() {
+      return isAdmin() || isActiveStaff();
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
-      // Users can read their own role doc (needed on login);
-      // admins can read all user docs (needed for staff list query)
+      // Users read their own doc; admins read all (for staff list)
       allow read: if request.auth != null && (
-        request.auth.uid == userId ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false)
+        request.auth.uid == userId || isAdmin()
       );
-      // A user with no doc yet (original admin, first login) can create their own doc
-      allow create: if request.auth != null && request.auth.uid == userId
-        && !exists(/databases/$(database)/documents/users/$(request.auth.uid));
-      // Admin users can write any user doc (create/update staff accounts)
-      allow write: if request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
-    }
-    match /settings/{settingId} {
-      allow read, write: if request.auth != null;
-    }
-    match /students/{studentId} {
-      allow read: if request.auth != null;
+      // First-time admin self-bootstrap (no doc yet → create own doc)
       allow create: if request.auth != null
+        && request.auth.uid == userId
+        && !exists(userRef());
+      // Only active admins can write user docs (create/update staff accounts)
+      allow write: if isAdmin();
+    }
+
+    // ── Settings ──────────────────────────────────────────────────────────
+    match /settings/{settingId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ── Students ──────────────────────────────────────────────────────────
+    match /students/{studentId} {
+      allow read:   if request.auth != null;
+      // Both admin and active staff can enroll (create/update) students
+      allow create: if isActiveUser()
         && request.resource.data.keys().hasAll([
              'studentNameSSLC', 'course', 'academicYear',
              'meritNumber', 'regNumber'
            ]);
-      allow update, delete: if request.auth != null;
+      allow update: if isActiveUser();
+      // Only admins can permanently delete a student record
+      allow delete: if isAdmin();
     }
+
+    // ── Fee Structure ─────────────────────────────────────────────────────
     match /feeStructure/{structureId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
              'academicYear', 'course', 'smp', 'svk'
            ]);
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
+
+    // ── Fee Records ───────────────────────────────────────────────────────
     match /feeRecords/{recordId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
              'studentId', 'academicYear', 'smp', 'svk', 'date'
            ]);
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
+
+    // ── Fine Schedules ────────────────────────────────────────────────────
     match /fineSchedules/{yearId} {
-      allow read, write: if request.auth != null;
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
     }
+
+    // ── Student Documents ─────────────────────────────────────────────────
     match /studentDocuments/{studentId} {
-      allow read, write: if request.auth != null;
+      allow read:  if request.auth != null;
+      // Both admin and staff can track document status
+      allow write: if isActiveUser();
     }
+
+    // ── Exam Fee Records ──────────────────────────────────────────────────
     match /examFeeRecords/{recordId} {
-      allow read, write: if request.auth != null;
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
     }
+
+    // ── Counters ──────────────────────────────────────────────────────────
+    // Merit/reg number counters — written during enrollment transactions.
+    // Both admin and staff can enroll, so both need write access here.
     match /counters/{counterId} {
-      allow read, write: if request.auth != null;
+      allow read:  if request.auth != null;
+      allow write: if isActiveUser();
     }
+
+    // ── Inquiries ─────────────────────────────────────────────────────────
     match /inquiries/{inquiryId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null
+      allow create: if isActiveUser()
         && request.resource.data.keys().hasAll(['studentName', 'academicYear', 'status'])
-        && (request.resource.data.keys().hasAny(['mobile', 'parentMobile']));
-      allow update, delete: if request.auth != null;
+        && request.resource.data.keys().hasAny(['mobile', 'parentMobile']);
+      allow update: if isActiveUser();
+      // Only admins can delete inquiries
+      allow delete: if isAdmin();
     }
-match /feeOverrides/{overrideId} {
+
+    // ── Fee Overrides ─────────────────────────────────────────────────────
+    match /feeOverrides/{overrideId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.data.keys().hasAll(['studentId', 'academicYear', 'smp', 'svk']);
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasAll([
+             'studentId', 'academicYear', 'smp', 'svk'
+           ]);
+      allow delete: if isAdmin();
     }
+
+    // ── Admin Config (API keys, SMS config, etc.) ─────────────────────────
     match /adminConfig/{docId} {
-      // Only active admins can read/write (stores API keys etc.)
-      // active != false handles docs created before the active field was added
-      allow read, write: if request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
+      allow read, write: if isAdmin();
     }
+
+    // ── SMS Logs ──────────────────────────────────────────────────────────
+    // Writes come from Cloud Functions (Admin SDK bypasses rules);
+    // rule below prevents direct browser writes from non-admins.
     match /smsLogs/{logId} {
-      allow read: if request.auth != null;
-      // Writes come from Cloud Function (Admin SDK bypasses rules);
-      // rule below prevents direct browser writes from non-admins.
-      allow write: if request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active != false;
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
     }
   }
 }
