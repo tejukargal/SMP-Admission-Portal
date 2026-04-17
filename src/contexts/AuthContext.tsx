@@ -104,10 +104,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string) {
-    // Wait for persistence to be configured; swallow failures so a setPersistence
-    // error (e.g. during token migration on first load) doesn't block sign-in.
     await authReady.catch(() => {});
-    await signInWithEmailAndPassword(auth, email, password);
+
+    // Retry on network errors: App Check's reCAPTCHA token loads asynchronously
+    // and the first sign-in attempt can fail with network-request-failed while
+    // the script is still initialising. Credential errors are never retried.
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        return;
+      } catch (err) {
+        lastError = err;
+        if ((err as { code?: string })?.code !== 'auth/network-request-failed') throw err;
+        if (attempt < 3) await new Promise<void>((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+    throw lastError;
   }
 
   async function logout() {
