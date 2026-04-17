@@ -11,7 +11,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, authReady } from '../config/firebase';
 import { getUserRole, createOrUpdateUserDoc } from '../services/userService';
 import type { UserRole, AcademicYear } from '../types';
 
@@ -43,44 +43,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Fetch role from Firestore after auth resolves
-      getUserRole(u.uid)
-        .then(async (result) => {
-          if (result === null) {
-            // No user doc yet — this is the original admin user (backward compat).
-            // Auto-create their admin doc.
-            await createOrUpdateUserDoc(u.uid, u.email ?? '', 'admin');
-            setUser(u);
-            setRole('admin');
-            setStaffDefaultYear(null);
-          } else if (!result.active) {
-            // Deactivated account — sign out immediately
-            await signOut(auth);
-            setUser(null);
-            setRole(null);
-            setStaffDefaultYear(null);
-          } else {
-            setUser(u);
-            setRole(result.role);
-            // Only staff can have a locked default year; admins always use global setting
-            setStaffDefaultYear(result.role === 'staff' ? (result.defaultAcademicYear ?? null) : null);
-          }
-        })
-        .catch(async () => {
-          // On Firestore error, fail CLOSED — sign out rather than granting elevated access
-          await signOut(auth);
-          setUser(null);
-          setRole(null);
-          setStaffDefaultYear(null);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+      void resolveRole(u);
     });
     return unsubscribe;
   }, []);
 
+  // Fetches the user's role from Firestore with retries to handle transient errors
+  // (App Check token not yet ready, brief network blip, etc.).
+  // Only fails closed (signs out) on permission errors or after all retries are exhausted.
+  async function resolveRole(u: import('firebase/auth').User) {
+    const maxAttempts = 3;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const result = await getUserRole(u.uid);
+
+        if (result === null) {
+          // No user doc yet — first-time admin, auto-create their doc.
+          await createOrUpdateUserDoc(u.uid, u.email ?? '', 'admin');
+          setUser(u);
+          setRole('admin');
+          setStaffDefaultYear(null);
+        } else if (!result.active) {
+          // Deactivated account — sign out immediately.
+          await signOut(auth);
+          setUser(null);
+          setRole(null);
+          setStaffDefaultYear(null);
+        } else {
+          setUser(u);
+          setRole(result.role);
+          setStaffDefaultYear(result.role === 'staff' ? (result.defaultAcademicYear ?? null) : null);
+        }
+        setLoading(false);
+        return;
+      } catch (err) {
+        lastError = err;
+        const code = (err as { code?: string })?.code ?? '';
+
+        // Fail immediately on permission errors — never grant access.
+        if (code === 'permission-denied' || code === 'unauthenticated') {
+          break;
+        }
+
+        // For transient errors (network, App Check token not yet ready), wait then retry.
+        if (attempt < maxAttempts - 1) {
+          await new Promise<void>((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+    }
+
+    // All retries exhausted or hard permission error — fail closed.
+    console.error('Auth: could not resolve user role, signing out.', lastError);
+    await signOut(auth);
+    setUser(null);
+    setRole(null);
+    setStaffDefaultYear(null);
+    setLoading(false);
+  }
+
   async function login(email: string, password: string) {
+    // Ensure session persistence is configured before signing in.
+    await authReady;
     await signInWithEmailAndPassword(auth, email, password);
   }
 

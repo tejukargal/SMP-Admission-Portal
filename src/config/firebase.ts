@@ -30,7 +30,8 @@ if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
 
 export const auth = getAuth(app);
 // Session-scoped persistence: auth state clears when the tab/browser closes.
-void setPersistence(auth, browserSessionPersistence);
+// Export the promise so login() can await it before signing in (avoids race condition).
+export const authReady = setPersistence(auth, browserSessionPersistence);
 
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
