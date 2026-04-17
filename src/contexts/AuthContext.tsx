@@ -104,8 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string) {
-    // Ensure session persistence is configured before signing in.
-    await authReady;
+    // Wait for persistence to be configured; swallow failures so a setPersistence
+    // error (e.g. during token migration on first load) doesn't block sign-in.
+    await authReady.catch(() => {});
     await signInWithEmailAndPassword(auth, email, password);
   }
 
