@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, setPersistence, browserSessionPersistence } from 'firebase/auth';
+import { initializeAuth, browserSessionPersistence } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -17,10 +17,10 @@ export const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-// Session-scoped persistence: auth state clears when the tab/browser closes.
-// Export the promise so login() can await it before signing in (avoids race condition).
-export const authReady = setPersistence(auth, browserSessionPersistence);
+// initializeAuth sets persistence synchronously at creation — no async migration race.
+export const auth = initializeAuth(app, {
+  persistence: browserSessionPersistence,
+});
 
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({

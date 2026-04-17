@@ -11,7 +11,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { auth, authReady } from '../config/firebase';
+import { auth } from '../config/firebase';
 import { getUserRole, createOrUpdateUserDoc } from '../services/userService';
 import type { UserRole, AcademicYear } from '../types';
 
@@ -48,8 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Fetches the user's role from Firestore with retries to handle transient errors
-  // (App Check token not yet ready, brief network blip, etc.).
+  // Fetches the user's role from Firestore with retries to handle transient network blips.
   // Only fails closed (signs out) on permission errors or after all retries are exhausted.
   async function resolveRole(u: import('firebase/auth').User) {
     const maxAttempts = 3;
@@ -87,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           break;
         }
 
-        // For transient errors (network, App Check token not yet ready), wait then retry.
+        // For transient errors, wait then retry.
         if (attempt < maxAttempts - 1) {
           await new Promise<void>((r) => setTimeout(r, 1000 * (attempt + 1)));
         }
@@ -104,7 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string) {
-    await authReady.catch(() => {});
+    // Wait for Firebase Auth to finish reading the initial state from sessionStorage
+    // before attempting sign-in, so the instance is in a clean, ready state.
+    await auth.authStateReady();
     await signInWithEmailAndPassword(auth, email, password);
   }
 
