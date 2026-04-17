@@ -5,7 +5,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 export const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,16 +16,6 @@ export const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-
-// ── App Check — ties API access to this web app only ─────────────────────
-// Set VITE_RECAPTCHA_SITE_KEY in .env (get from Firebase Console → App Check).
-// In development without the key, App Check is skipped so local dev still works.
-if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
-    isTokenAutoRefreshEnabled: true,
-  });
-}
 
 export const auth = getAuth(app);
 // Session-scoped persistence: auth state clears when the tab/browser closes.
