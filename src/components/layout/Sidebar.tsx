@@ -74,6 +74,14 @@ function IconMessaging() {
     </svg>
   );
 }
+function IconFeeStructure() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <path d="M3 9h18M3 15h18M9 3v18"/>
+    </svg>
+  );
+}
 function IconSettings() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -106,14 +114,16 @@ const NAV_ITEMS = [
   { to: '/students',     label: 'Students',       Icon: IconStudents   },
 ];
 const ADMIN_ITEMS = [
-  { to: '/fees',         label: 'Collect Fee',    Icon: IconFee        },
-  { to: '/fee-register', label: 'Fee Register',   Icon: IconRegister   },
-  { to: '/fee-reports',  label: 'Fee Reports',    Icon: IconReports    },
-  { to: '/messaging',    label: 'Messaging',      Icon: IconMessaging  },
-  { to: '/settings',     label: 'Settings',       Icon: IconSettings   },
+  { to: '/fees',           label: 'Collect Fee',    Icon: IconFee          },
+  { to: '/fee-register',   label: 'Fee Register',   Icon: IconRegister     },
+  { to: '/fee-structure',  label: 'Fee Structure',  Icon: IconFeeStructure },
+  { to: '/fee-reports',    label: 'Fee Reports',    Icon: IconReports      },
+  { to: '/messaging',      label: 'Messaging',      Icon: IconMessaging    },
+  { to: '/settings',       label: 'Settings',       Icon: IconSettings     },
 ];
 const STAFF_ONLY = [
-  { to: '/fee-register', label: 'Fee Register',   Icon: IconRegister   },
+  { to: '/fee-register',  label: 'Fee Register',  Icon: IconRegister     },
+  { to: '/fee-structure', label: 'Fee Structure',  Icon: IconFeeStructure },
 ];
 
 // ── Props ──────────────────────────────────────────────────────────────────
