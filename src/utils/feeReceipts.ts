@@ -630,7 +630,7 @@ export function generateSVKReceipt(record: FeeRecord): void {
   .rbox-wrap { margin-top: 5pt; }
   .rbox {
     display: inline-block;
-    background: #000; color: #fff;
+    border: 2pt solid #000;
     padding: 2pt 22pt;
     font-size: 11pt; font-weight: bold; letter-spacing: 2pt;
   }
