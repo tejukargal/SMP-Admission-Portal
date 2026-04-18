@@ -86,9 +86,13 @@ const SMP_LINES: { label: string; key: SMPFeeHead | null }[] = [
 // ── SMP: one copy HTML fragment ───────────────────────────────────────────────
 
 function buildSMPCopy(record: FeeRecord, copyLabel: string): string {
-  const date  = formatDate(record.date);
-  const total = (SMP_FEE_HEADS as { key: SMPFeeHead }[]).reduce((s, { key }) => s + (record.smp[key] ?? 0), 0);
-  const words = numToWords(total);
+  const date    = formatDate(record.date);
+  const total   = (SMP_FEE_HEADS as { key: SMPFeeHead }[]).reduce((s, { key }) => s + (record.smp[key] ?? 0), 0);
+  const words   = numToWords(total);
+  const isDues  = /due/i.test(record.remarks ?? '');
+  const remNote = isDues
+    ? `Admission Fee Dues \u2013 ${esc(record.academicYear)}`
+    : `Admission Fee \u2013 ${esc(record.academicYear)}`;
 
   const itemRows = SMP_LINES.map((line, i) => {
     const amt = line.key ? (record.smp[line.key] ?? 0) : 0;
@@ -130,6 +134,7 @@ function buildSMPCopy(record: FeeRecord, copyLabel: string): string {
         <div class="fc-rem">REMARKS</div>
       </div>
       <div class="fee-body">
+        <div class="rem-note">${remNote}</div>
         ${itemRows}
         <div class="fee-row total-row">
           <div class="fc-part total-lbl">TOTAL Rs. &hellip;&hellip;</div>
@@ -213,7 +218,7 @@ export function generateSMPReceipt(record: FeeRecord): void {
 
   /* ── Field rows: use full width, aligned with table below ── */
   .field-row { font-size: 9pt; flex-shrink: 0; display: flex; align-items: baseline; }
-  .field-lbl { flex-shrink: 0; }
+  .field-lbl { flex-shrink: 0; margin-right: 5pt; }
   .name-field { margin: 1.5pt 0; }
   .class-field { margin: 1.5pt 0 2.5pt; }
 
@@ -261,7 +266,7 @@ export function generateSMPReceipt(record: FeeRecord): void {
   .fee-head .fc-amt,
   .fee-head .fc-rem {
     font-weight: bold;
-    font-size: 8pt;
+    font-size: 9pt;
     text-align: center;
     justify-content: center;
     padding: 2.5pt 3pt;
@@ -273,6 +278,27 @@ export function generateSMPReceipt(record: FeeRecord): void {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    position: relative;
+  }
+
+  /* Vertical note in remarks column */
+  .rem-note {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 60pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 8.5pt;
+    font-weight: bold;
+    color: #555;
+    letter-spacing: 1pt;
+    pointer-events: none;
+    white-space: nowrap;
   }
 
   /* Each row: equal share — NO horizontal borders between items */
@@ -302,17 +328,17 @@ export function generateSMPReceipt(record: FeeRecord): void {
   }
   /* AMOUNT */
   .fc-amt {
-    width: 46pt; flex-shrink: 0;
+    width: 54pt; flex-shrink: 0;
     display: flex; align-items: center; justify-content: flex-end;
     border-right: 0.8pt solid #000;
-    padding: 0 3pt;
-    font-size: 8.5pt;
+    padding: 0 6pt;
+    font-size: 9.5pt;
   }
   /* REMARKS: no right border (open right edge) */
   .fc-rem {
-    width: 48pt; flex-shrink: 0;
+    width: 60pt; flex-shrink: 0;
     display: flex; align-items: center;
-    padding: 0 3pt;
+    padding: 0 6pt;
     font-size: 8.5pt;
   }
 
@@ -329,7 +355,7 @@ export function generateSMPReceipt(record: FeeRecord): void {
   .amt-dots { color: #555; font-size: 8.5pt; }
 
   /* ── Rupees in words — also spans full width ── */
-  .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; }
+  .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; gap: 5pt; }
   .words-line2 { margin-top: 2pt; }
   .words-dl {
     flex: 1; border-bottom: 0.7pt dotted #444;

@@ -93,6 +93,49 @@
 .connecting-dots span:nth-child(2) { animation-delay: 0.2s; }
 .connecting-dots span:nth-child(3) { animation-delay: 0.4s; }
 
+/* Each chip-glow-* class is self-contained: sets outline + runs its own animation.
+   outline is not clipped by overflow:auto, so chips glow inside the scroll container. */
+@keyframes chip-glow-emerald {
+  0%, 100% { outline-color: rgba( 52, 211, 153, 0);    }
+  50%      { outline-color: rgba( 52, 211, 153, 0.6);  }
+}
+@keyframes chip-glow-sky {
+  0%, 100% { outline-color: rgba( 56, 189, 248, 0);    }
+  50%      { outline-color: rgba( 56, 189, 248, 0.6);  }
+}
+@keyframes chip-glow-violet {
+  0%, 100% { outline-color: rgba(167, 139, 250, 0);    }
+  50%      { outline-color: rgba(167, 139, 250, 0.6);  }
+}
+@keyframes chip-glow-amber {
+  0%, 100% { outline-color: rgba(251, 191,  36, 0);    }
+  50%      { outline-color: rgba(251, 191,  36, 0.6);  }
+}
+@keyframes chip-glow-rose {
+  0%, 100% { outline-color: rgba(251, 113, 133, 0);    }
+  50%      { outline-color: rgba(251, 113, 133, 0.6);  }
+}
+@keyframes chip-glow-gray {
+  0%, 100% { outline-color: rgba(156, 163, 175, 0);    }
+  50%      { outline-color: rgba(156, 163, 175, 0.45); }
+}
+
+.chip-glow-emerald { outline: 2px solid rgba( 52,211,153,0); outline-offset: 2px; animation: chip-glow-emerald 2.5s ease-in-out infinite; }
+.chip-glow-sky     { outline: 2px solid rgba( 56,189,248,0); outline-offset: 2px; animation: chip-glow-sky     2.5s ease-in-out infinite; }
+.chip-glow-violet  { outline: 2px solid rgba(167,139,250,0); outline-offset: 2px; animation: chip-glow-violet  2.5s ease-in-out infinite; }
+.chip-glow-amber   { outline: 2px solid rgba(251,191, 36,0); outline-offset: 2px; animation: chip-glow-amber   2.5s ease-in-out infinite; }
+.chip-glow-rose    { outline: 2px solid rgba(251,113,133,0); outline-offset: 2px; animation: chip-glow-rose    2.5s ease-in-out infinite; }
+.chip-glow-gray    { outline: 2px solid rgba(156,163,175,0); outline-offset: 2px; animation: chip-glow-gray    2.5s ease-in-out infinite; }
+
+/* ── Year chips scroll — hidden scrollbar, arrows handle navigation ─────── */
+.chips-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Thin emerald scrollbar ─────────────────────────────────────────────── */
 .scroll-emerald {
   scrollbar-width: thin;

@@ -157,16 +157,16 @@ function BreakdownPanel({ title, items, total }: { title: string; items: Breakdo
 function SectionLabel({ children, accent }: { children: React.ReactNode; accent?: { bar: string; text: string } }) {
   if (accent) {
     return (
-      <div className="flex items-center gap-2.5 mb-2.5">
-        <span className={`w-1 h-5 rounded-full shrink-0 ${accent.bar}`} />
-        <p className={`text-sm font-extrabold uppercase tracking-widest ${accent.text}`}>
+      <div className="flex items-center gap-2.5 mb-1.5">
+        <span className={`w-1 h-4 rounded-full shrink-0 ${accent.bar}`} />
+        <p className={`text-xs font-extrabold uppercase tracking-widest ${accent.text}`}>
           {children}
         </p>
       </div>
     );
   }
   return (
-    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-2.5">
+    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-1.5">
       {children}
     </p>
   );
@@ -175,7 +175,7 @@ function SectionLabel({ children, accent }: { children: React.ReactNode; accent?
 // ─── Loading gate ────────────────────────────────────────────────────────────
 function LoadingGate() {
   return (
-    <div className="h-full flex flex-col gap-3 overflow-hidden" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="h-full flex flex-col gap-1.5 overflow-hidden" style={{ animation: 'page-enter 0.22s ease-out' }}>
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
         <div className="flex-1 h-10 bg-white/60 rounded-2xl border border-emerald-100 animate-pulse" />
         <div className="w-28 h-8 bg-white/60 rounded-xl border border-emerald-100 animate-pulse" />
@@ -258,6 +258,11 @@ export function Dashboard() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue]);
+
+  const chipsScrollRef = useRef<HTMLDivElement>(null);
+  function scrollChips(dir: 'left' | 'right') {
+    chipsScrollRef.current?.scrollBy({ left: dir === 'left' ? -140 : 140, behavior: 'smooth' });
+  }
 
   const didAutoSet = useRef(false);
   useEffect(() => {
@@ -486,6 +491,15 @@ export function Dashboard() {
     ? 'All Years'
     : (academicYearFilter || 'All Years');
 
+  // ── Year chip palette (cycles if more than 5 academic years) ────────────
+  const CHIP_PALETTE = [
+    { idle: 'bg-emerald-50/80 border-emerald-200 text-emerald-700', count: 'text-emerald-800', sel: 'bg-emerald-100 border-emerald-400 text-emerald-800', glow: 'chip-glow-emerald' },
+    { idle: 'bg-sky-50/80 border-sky-200 text-sky-700',             count: 'text-sky-800',     sel: 'bg-sky-100 border-sky-400 text-sky-800',             glow: 'chip-glow-sky'     },
+    { idle: 'bg-violet-50/80 border-violet-200 text-violet-700',    count: 'text-violet-800',  sel: 'bg-violet-100 border-violet-400 text-violet-800',    glow: 'chip-glow-violet'  },
+    { idle: 'bg-amber-50/80 border-amber-200 text-amber-700',       count: 'text-amber-800',   sel: 'bg-amber-100 border-amber-400 text-amber-800',       glow: 'chip-glow-amber'   },
+    { idle: 'bg-rose-50/80 border-rose-200 text-rose-700',          count: 'text-rose-800',    sel: 'bg-rose-100 border-rose-400 text-rose-800',          glow: 'chip-glow-rose'    },
+  ] as const;
+
   // ── Nature palette colour map ────────────────────────────────────────────
   const courseConfig: Record<Course, { bg: string; border: string; textColor: string; barFill: string }> = {
     CE: { bg: 'bg-amber-50',   border: 'border-amber-200',   textColor: 'text-amber-700',   barFill: 'bg-amber-400'   },
@@ -505,7 +519,7 @@ export function Dashboard() {
 
   return (
     <>
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="h-full flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-start justify-between gap-4">
@@ -552,57 +566,80 @@ export function Dashboard() {
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
         <div
-          className="flex-shrink-0 bg-white/60 rounded-xl border border-emerald-100 px-3 py-2"
+          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-2"
           style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
         >
-          <div className="flex items-center gap-1.5 overflow-x-auto scroll-emerald pb-0.5">
+          {/* Left arrow */}
+          <button
+            type="button"
+            onClick={() => scrollChips('left')}
+            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-base leading-none select-none"
+            aria-label="Scroll left"
+          >
+            ‹
+          </button>
+
+          {/* Chips — scrollable, no scrollbar */}
+          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-1.5 flex-1 py-1">
             {/* Total chip */}
-            <div className="flex items-center gap-1.5 bg-emerald-500 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+            <div className="flex items-center gap-1.5 bg-emerald-500 border border-emerald-400 rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 chip-glow-emerald">
               <span className="text-emerald-100 font-medium text-[11px]">Total</span>
-              <span className="font-bold tabular-nums text-white">
+              <span className="font-bold tabular-nums text-white text-[11px]">
                 <AnimNum value={confirmedActiveCount} />
               </span>
               {confirmedActiveCount < confirmedTotalCount && (
-                <span className="text-emerald-200 text-[10px]">/{confirmedTotalCount}</span>
+                <span className="text-emerald-200 font-medium text-[11px]">/{confirmedTotalCount}</span>
               )}
             </div>
             <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
             {/* Per-year chips */}
-            {activeStats.map(({ year, count }) => {
+            {activeStats.map(({ year, count }, idx) => {
               const isSelected = !isSearchMode && academicYearFilter === year;
               const isDimmed = count === 0;
+              const p = CHIP_PALETTE[idx % CHIP_PALETTE.length];
+              const glowClass = isDimmed ? 'chip-glow-gray' : p.glow;
+              const delay = `${(idx * 0.4).toFixed(1)}s`;
               return (
                 <button
                   key={year}
                   type="button"
                   disabled={isSearchMode}
                   onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 transition-all duration-150 ${
+                  style={{ animationDelay: delay }}
+                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 transition-colors duration-150 ${glowClass} ${
                     isSearchMode ? 'cursor-default' : 'cursor-pointer'
                   } ${
-                    isSelected
-                      ? 'bg-emerald-50 border-emerald-300'
-                      : isDimmed
-                      ? 'bg-transparent border-gray-100'
-                      : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                    isDimmed
+                      ? 'bg-transparent border-gray-100 text-gray-300'
+                      : isSelected
+                      ? p.sel
+                      : p.idle
                   }`}
                 >
-                  <span className={`font-medium text-[11px] ${isSelected ? 'text-emerald-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
-                    {year}
-                  </span>
-                  <span className={`font-bold tabular-nums ${isSelected ? 'text-emerald-800' : isDimmed ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <span className="font-medium text-[11px]">{year}</span>
+                  <span className={`font-bold tabular-nums ${isDimmed ? '' : isSelected ? p.count : ''}`}>
                     <AnimNum value={count} />
                   </span>
                 </button>
               );
             })}
           </div>
+
+          {/* Right arrow */}
+          <button
+            type="button"
+            onClick={() => scrollChips('right')}
+            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-base leading-none select-none"
+            aria-label="Scroll right"
+          >
+            ›
+          </button>
         </div>
       )}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white/70 rounded-2xl border border-emerald-100 overflow-hidden" style={{ backdropFilter: 'blur(8px)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
-        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-2.5">
+      <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
+        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1.5">
           <input
             type="text"
             placeholder="Search name / reg / mobile…"
@@ -766,7 +803,7 @@ export function Dashboard() {
 
         /* ── Metric cards ───────────────────────────────────────────── */
         <div className="flex-1 min-h-0 overflow-auto pb-4">
-          <div className="space-y-5 min-w-0">
+          <div className="space-y-3 min-w-0">
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -901,18 +938,79 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* Admission Status + Adm Type */}
+            {/* Course Strength + Adm Type */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <BreakdownPanel
-                title="Admission Status"
-                total={stats.total}
-                items={[
-                  { label: 'Provisional', value: stats.byStatus['PROVISIONAL'], dotClass: 'bg-amber-400',    barClass: 'bg-amber-400'    },
-                  { label: 'Confirmed',   value: stats.byStatus['CONFIRMED'],   dotClass: 'bg-emerald-400', barClass: 'bg-emerald-400' },
-                  { label: 'Cancelled',   value: stats.byStatus['CANCELLED'],   dotClass: 'bg-red-400',     barClass: 'bg-red-400'     },
-                  { label: 'Pending',     value: stats.byStatus['PENDING'],     dotClass: 'bg-gray-300',    barClass: 'bg-gray-300'    },
-                ]}
-              />
+
+              {/* Course-wise vertical bar chart — all 3 years */}
+              <div className="bg-white/80 rounded-2xl border border-emerald-100 p-4" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                {/* Header + legend */}
+                <div className="flex items-start justify-between mb-3">
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 leading-tight">
+                    Course-wise<br />
+                    <span className="text-gray-300 font-medium normal-case tracking-normal">confirmed · 63 seats ref</span>
+                  </h4>
+                  <div className="flex flex-col gap-1 items-end">
+                    {YEARS.map((yr) => {
+                      const y = yearConfig[yr];
+                      return (
+                        <span key={yr} className="flex items-center gap-1">
+                          <span className={`inline-block w-2.5 h-2 rounded-sm ${y.barFill}`} />
+                          <span className="text-[9px] text-gray-400 font-medium">{y.label}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Bars — border-b is the baseline the bars grow up from */}
+                <div className="flex items-end gap-2 border-b border-gray-200" style={{ height: 120 }}>
+                  {COURSES.map((course) => (
+                    <div key={course} className="flex-1 flex items-end gap-px" style={{ height: '100%' }}>
+                      {YEARS.map((year) => {
+                        const y = yearConfig[year];
+                        const count = stats.byCourseByYear[course][year];
+                        const pct = Math.min(100, (count / 63) * 100);
+                        return (
+                          <div key={year} className="flex-1 flex flex-col items-center justify-end h-full">
+                            {count > 0 && (
+                              <span className="text-[7px] font-bold text-gray-400 tabular-nums leading-none mb-px">{count}</span>
+                            )}
+                            <div
+                              className={`w-full rounded-t-sm ${y.barFill} opacity-90 transition-all duration-700 ease-out`}
+                              style={{ height: `${Math.max(pct, count > 0 ? 3 : 0)}%` }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Course labels — sit below the baseline */}
+                <div className="flex gap-2 mt-1.5">
+                  {COURSES.map((course) => {
+                    const c = courseConfig[course];
+                    return (
+                      <div key={course} className={`flex-1 text-center text-[9px] font-bold ${c.textColor}`}>{course}</div>
+                    );
+                  })}
+                </div>
+
+                {/* Per-year totals */}
+                <div className="mt-2.5 grid grid-cols-3 divide-x divide-emerald-50">
+                  {YEARS.map((year) => {
+                    const y = yearConfig[year];
+                    const total = COURSES.reduce((s, c) => s + stats.byCourseByYear[c][year], 0);
+                    return (
+                      <div key={year} className="flex flex-col items-center">
+                        <span className={`text-sm font-black tabular-nums ${y.textColor}`}>{total}</span>
+                        <span className="text-[9px] text-gray-400 font-medium">{y.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <BreakdownPanel
                 title="Admission Type"
                 total={stats.total}
