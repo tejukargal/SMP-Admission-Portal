@@ -230,7 +230,7 @@ export function Messaging() {
   const fs = 'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
 
   return (
-    <div className="p-4 space-y-4 max-w-4xl">
+    <div className="p-4 space-y-4 max-w-4xl" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Page header */}
       <div className="flex items-baseline gap-3">

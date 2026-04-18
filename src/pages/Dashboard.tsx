@@ -829,6 +829,7 @@ export function Dashboard() {
                 border="border-sky-200"
                 textColor="text-sky-700"
                 barFill="bg-sky-400"
+                watermark="B"
               />
               <StatCard
                 label="Girls"
@@ -838,6 +839,7 @@ export function Dashboard() {
                 border="border-rose-200"
                 textColor="text-rose-600"
                 barFill="bg-rose-400"
+                watermark="G"
               />
             </div>
 

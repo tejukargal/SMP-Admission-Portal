@@ -363,7 +363,7 @@ export function FeeStructureView() {
   const totalRows = filteredStructures.length;
 
   return (
-    <div className="px-6 pt-3 pb-6 space-y-3">
+    <div className="px-6 pt-3 pb-6 space-y-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
