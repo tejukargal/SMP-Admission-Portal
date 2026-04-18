@@ -293,7 +293,11 @@ export function Dashboard() {
     if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
-    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
+    if (admStatusFilter) result = result.filter((s) =>
+      admStatusFilter === 'PENDING'
+        ? !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+        : s.admissionStatus?.trim() === admStatusFilter
+    );
     return result;
   }, [allStudents, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
@@ -309,7 +313,11 @@ export function Dashboard() {
     if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
-    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
+    if (admStatusFilter) result = result.filter((s) =>
+      admStatusFilter === 'PENDING'
+        ? !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+        : s.admissionStatus?.trim() === admStatusFilter
+    );
     return result;
   }, [isSearchMode, searchTerm, searchIndex, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
@@ -339,7 +347,9 @@ export function Dashboard() {
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const confirmed = filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    const confirmed = admStatusFilter
+      ? filteredStudents
+      : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
 
     const total = confirmed.length;
     const boys  = confirmed.filter((s) => s.gender === 'BOY').length;
@@ -428,7 +438,7 @@ export function Dashboard() {
     }
 
     return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats };
-  }, [filteredStudents]);
+  }, [filteredStudents, admStatusFilter]);
 
   const activeSource = useMemo(
     () => (isSearchMode ? searchResults : filteredStudents),
@@ -651,9 +661,9 @@ export function Dashboard() {
           </select>
           <select className={`${fs} w-[86px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
             <option value="">Status</option>
-            <option value="PROVISIONAL">PROVISIONAL</option>
             <option value="CONFIRMED">CONFIRMED</option>
             <option value="CANCELLED">CANCELLED</option>
+            <option value="PENDING">PENDING</option>
           </select>
           {hasActiveFilters && (
             <button
