@@ -170,83 +170,43 @@ function ProfileTab({ student: s }: { student: Student }) {
 
       {/* Marks */}
       <ProfileSection title="Marks Details" accent="bg-amber-50 text-amber-600">
-        <div className="space-y-3">
-          {/* SSLC */}
-          <div className="flex items-center gap-4">
-            <div className="w-28 shrink-0">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SSLC Total</div>
-              <div className="text-xs font-bold text-gray-800 mt-0.5">
-                {s.sslcObtainedTotal || '—'} / {s.sslcMaxTotal || '—'}
-              </div>
-            </div>
-            <div className="flex-1">
-              {sslcPct !== null ? (
-                <div className="space-y-0.5">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-gray-400">Score</span>
-                    <span className="font-bold text-blue-700">{sslcPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        {(() => {
+          const sciPct = s.scienceMax > 0 ? (s.scienceObtained / s.scienceMax) * 100 : null;
+          const mathPct = s.mathsMax > 0 ? (s.mathsObtained / s.mathsMax) * 100 : null;
+          const bars = [
+            { label: 'SSLC Total', obtained: s.sslcObtainedTotal, max: s.sslcMaxTotal, pct: sslcPct, color: 'bg-blue-500', track: 'bg-blue-50', textColor: 'text-blue-700' },
+            { label: 'Science',    obtained: s.scienceObtained,          max: s.scienceMax,          pct: sciPct,  color: 'bg-emerald-500', track: 'bg-emerald-50', textColor: 'text-emerald-700' },
+            { label: 'Maths',      obtained: s.mathsObtained,            max: s.mathsMax,            pct: mathPct, color: 'bg-violet-500',  track: 'bg-violet-50',  textColor: 'text-violet-700' },
+            { label: 'M + S',      obtained: s.mathsScienceObtainedTotal, max: s.mathsScienceMaxTotal, pct: msPct,  color: 'bg-amber-500',  track: 'bg-amber-50',   textColor: 'text-amber-700' },
+          ];
+          return (
+            <div className="flex gap-3 pt-1">
+              {bars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
+                <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                  <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
+                    {pct !== null ? `${pct.toFixed(1)}%` : '—'}
+                  </span>
+                  <div className={`relative w-full rounded-lg overflow-hidden h-20 ${track} border border-gray-100`}>
                     <div
-                      className="h-full bg-blue-500 rounded-full transition-all"
-                      style={{ width: `${Math.min(sslcPct, 100)}%` }}
+                      className={`absolute bottom-0 left-0 right-0 ${color} rounded-t-lg`}
+                      style={{
+                        height: pct !== null ? `${Math.min(pct, 100)}%` : '0%',
+                        transformOrigin: 'bottom',
+                        animation: `bar-grow 0.45s ease-out ${idx * 55}ms both`,
+                      }}
                     />
                   </div>
+                  <span className="text-[9px] text-gray-500 tabular-nums font-medium text-center leading-tight">
+                    {obtained || '—'} / {max || '—'}
+                  </span>
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 text-center leading-tight">
+                    {label}
+                  </span>
                 </div>
-              ) : (
-                <span className="text-xs text-gray-300">—</span>
-              )}
+              ))}
             </div>
-          </div>
-
-          <div className="border-t border-gray-50" />
-
-          {/* Science + Maths */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Science</div>
-              <div className="text-xs font-medium text-gray-700 mt-0.5">
-                {s.scienceObtained || '—'} / {s.scienceMax || '—'}
-              </div>
-            </div>
-            <div>
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths</div>
-              <div className="text-xs font-medium text-gray-700 mt-0.5">
-                {s.mathsObtained || '—'} / {s.mathsMax || '—'}
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-50" />
-
-          {/* Maths + Science combined */}
-          <div className="flex items-center gap-4">
-            <div className="w-28 shrink-0">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths + Science</div>
-              <div className="text-xs font-bold text-gray-800 mt-0.5">
-                {s.mathsScienceObtainedTotal || '—'} / {s.mathsScienceMaxTotal || '—'}
-              </div>
-            </div>
-            <div className="flex-1">
-              {msPct !== null ? (
-                <div className="space-y-0.5">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-gray-400">Score</span>
-                    <span className="font-bold text-amber-700">{msPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all"
-                      style={{ width: `${Math.min(msPct, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <span className="text-xs text-gray-300">—</span>
-              )}
-            </div>
-          </div>
-        </div>
+          );
+        })()}
       </ProfileSection>
 
     </div>

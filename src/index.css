@@ -43,6 +43,11 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
 @keyframes l19 {
   100% { transform: rotate(1turn); }
 }
