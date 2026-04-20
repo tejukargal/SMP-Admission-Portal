@@ -182,12 +182,13 @@ function ProfileTab({ student: s }: { student: Student }) {
           const priorPct = s.priorQualification === 'ITI' ? s.itiPercentage
                          : s.priorQualification === 'PUC' ? s.pucPercentage
                          : null;
+          const sortedBars = [...bars].sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0));
           return (
-            <div className="flex gap-5 items-start pt-1">
+            <div className="flex items-start pt-1">
 
-              {/* ── Bar chart (left) ────────────────────────────── */}
-              <div className="flex gap-2.5 shrink-0">
-                {bars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
+              {/* ── Bar chart (left half) ────────────────────────── */}
+              <div className="w-1/2 flex justify-center items-end gap-2.5 pr-4">
+                {sortedBars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
                   <div key={label} className="flex flex-col items-center gap-1">
                     <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
                       {pct !== null ? `${pct.toFixed(1)}%` : '—'}
@@ -212,8 +213,8 @@ function ProfileTab({ student: s }: { student: Student }) {
                 ))}
               </div>
 
-              {/* ── Details (right) ─────────────────────────────── */}
-              <div className="flex-1 min-w-0 space-y-2.5 border-l border-gray-100 pl-5">
+              {/* ── Details (right half) ────────────────────────── */}
+              <div className="w-1/2 space-y-2.5 border-l border-gray-100 pl-4">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                   <div>
                     <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">10th Board</div>
