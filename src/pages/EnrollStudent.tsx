@@ -849,8 +849,8 @@ export function EnrollStudent() {
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">{errorMsg}</p>
       )}
 
-      {/* Re-enroll banner */}
-      {!editId && (
+      {/* Re-enroll banner — admin only */}
+      {!editId && isAdmin && (
         <div className="bg-sky-50 rounded-lg border border-sky-200 mb-5">
           <button
             type="button"
