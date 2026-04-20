@@ -187,13 +187,13 @@ function ProfileTab({ student: s }: { student: Student }) {
             <div className="flex items-start pt-1">
 
               {/* ── Bar chart (left half) ────────────────────────── */}
-              <div className="w-1/2 flex justify-center items-end gap-2.5 pr-4">
+              <div className="w-1/2 flex items-end pr-4">
                 {sortedBars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
-                  <div key={label} className="flex flex-col items-center gap-1">
+                  <div key={label} className="flex-1 flex flex-col items-center gap-1 px-1.5">
                     <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
                       {pct !== null ? `${pct.toFixed(1)}%` : '—'}
                     </span>
-                    <div className={`relative rounded-lg overflow-hidden h-20 w-6 ${track} border border-gray-100`}>
+                    <div className={`relative rounded-lg overflow-hidden h-20 w-full ${track} border border-gray-100`}>
                       <div
                         className={`absolute bottom-0 left-0 right-0 ${color} rounded-t-md`}
                         style={{
