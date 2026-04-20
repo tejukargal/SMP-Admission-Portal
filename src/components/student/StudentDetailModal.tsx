@@ -422,7 +422,7 @@ function FeeTab({
   return (
     <div className="px-5 py-4 space-y-4">
       {/* Year blocks */}
-      {yearData.map((yd) => {
+      {yearData.map((yd, ydIdx) => {
         const { academicYear, records, structure, override } = yd;
         const ev = effectiveValues(yd);
         const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
@@ -447,6 +447,7 @@ function FeeTab({
         return (
           <div
             key={academicYear}
+            style={{ animation: `content-enter 0.3s ease-out ${ydIdx * 65}ms both` }}
             className={`rounded-xl overflow-hidden shadow-sm border-l-4 ${
               noDues ? 'border-l-emerald-400' : 'border-l-red-400'
             } border ${palette.cardBorder}`}
@@ -740,7 +741,7 @@ function FeeTab({
       })}
 
       {/* Overall summary */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" style={{ animation: 'content-enter 0.35s ease-out' }}>
         <div className="flex-1 min-w-[100px] rounded-xl bg-white border border-gray-200 px-3 py-2">
           <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Total Allotted</div>
           <div className="text-sm font-bold text-gray-800 mt-0.5">₹{overallAllotted.toLocaleString()}</div>
