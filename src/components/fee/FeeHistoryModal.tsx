@@ -187,7 +187,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
       : 'from-slate-700 to-slate-900';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
@@ -195,51 +195,43 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col overflow-hidden max-h-[calc(100vh-3rem)]"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"
         style={{ animation: 'modal-enter 0.25s ease-out' }}
       >
 
         {/* Header */}
-        <div className={`px-5 py-3.5 bg-gradient-to-r ${headerGradient} flex items-start justify-between shrink-0`}>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+        <div className={`px-5 py-3.5 bg-gradient-to-r ${headerGradient} flex items-center justify-between shrink-0`}>
+          <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 text-xs font-bold text-white shrink-0">
                 ≡
               </span>
               Fee Details
             </h3>
-            {!loading && !error && yearData.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                {yearData.map((yd) => {
-                  const ev = effectiveValues(yd);
-                  const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
-                  const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : null;
-                  const due = allotted !== null ? allotted - paid : null;
-                  const noDues = due !== null && due <= 0;
-                  return (
-                    <span
-                      key={yd.academicYear}
-                      className={`inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 ${
-                        noDues
-                          ? 'bg-white/20 text-white border border-white/40'
-                          : 'bg-white/20 text-white border border-white/40'
-                      }`}
-                    >
-                      {yd.academicYear}
-                      <span className="opacity-80">·</span>
-                      <span>{noDues ? '✓ No Dues' : `Due ₹${due !== null ? due.toLocaleString() : '—'}`}</span>
-                      {yd.override && (
-                        <span className="text-amber-300 opacity-80">· custom</span>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
+            {!loading && !error && yearData.length > 0 && yearData.map((yd) => {
+              const ev = effectiveValues(yd);
+              const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
+              const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : null;
+              const due = allotted !== null ? allotted - paid : null;
+              const noDues = due !== null && due <= 0;
+              return (
+                <span
+                  key={yd.academicYear}
+                  className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40"
+                >
+                  {yd.academicYear}
+                  <span className="opacity-80">·</span>
+                  <span>{noDues ? '✓ No Dues' : `Due ₹${due !== null ? due.toLocaleString() : '—'}`}</span>
+                  {yd.override && (
+                    <span className="text-amber-300 opacity-80">· custom</span>
+                  )}
+                </span>
+              );
+            })}
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 mt-0.5 ml-3"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
           >
             ×
           </button>
@@ -311,7 +303,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
               <span className="text-sm text-gray-400">No fee records found for this student.</span>
             </div>
           ) : (
-            yearData.map((yd) => {
+            yearData.map((yd, ydIdx) => {
               const { academicYear, records, structure, override } = yd;
               const ev = effectiveValues(yd);
               const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
@@ -336,6 +328,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
               return (
                 <div
                   key={academicYear}
+                  style={{ animation: `content-enter 0.3s ease-out ${ydIdx * 65}ms both` }}
                   className={`rounded-xl overflow-hidden shadow-sm border-l-4 ${
                     noDues ? 'border-l-emerald-400' : 'border-l-red-400'
                   } border ${palette.cardBorder}`}
@@ -647,7 +640,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
         {/* Footer: overall summary + close */}
         <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0">
           {!loading && !error && yearData.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
+            <div className="flex flex-wrap gap-2 mb-3" style={{ animation: 'content-enter 0.35s ease-out' }}>
               <div className="flex-1 min-w-[100px] rounded-xl bg-white border border-gray-200 px-3 py-2">
                 <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Total Allotted</div>
                 <div className="text-sm font-bold text-gray-800 mt-0.5">₹{overallAllotted.toLocaleString()}</div>

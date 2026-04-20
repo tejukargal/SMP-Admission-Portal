@@ -336,7 +336,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const isUpdate = priorPayments.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
@@ -344,7 +344,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"
         style={{ animation: 'modal-enter 0.25s ease-out' }}
       >
 
@@ -434,7 +434,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+        <div className="px-5 py-4 flex-1 min-h-0 overflow-y-auto">
           {loadingData ? (
             <div className="space-y-5">
               {/* SMP table skeleton */}
@@ -474,7 +474,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               {loadError}
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-5" style={{ animation: 'content-enter 0.3s ease-out' }}>
               {!structure && !loadedOverride && (
                 <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3 text-xs text-yellow-800">
                   No fee structure configured for{' '}
