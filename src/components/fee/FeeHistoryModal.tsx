@@ -64,15 +64,31 @@ function effectiveValues(yd: YearData): { smp: SMPHeads; svk: number; additional
   return null;
 }
 
+const FEE_PALETTE = {
+  noDues:  { headerBg: 'bg-emerald-100', headerBorder: 'border-emerald-200', cardBorder: 'border-emerald-300', badgeBg: 'bg-emerald-700', divider: 'border-emerald-300', duesBg: 'bg-emerald-50' },
+  hasDues: { headerBg: 'bg-red-100',     headerBorder: 'border-red-200',     cardBorder: 'border-red-300',     badgeBg: 'bg-red-700',     divider: 'border-red-300',     duesBg: 'bg-red-50'     },
+};
+
 interface Props {
   student: FeeHistoryStudentInfo;
   onClose: () => void;
+  /** Pre-computed dues status from the parent — used as the initial header colour while data loads. */
+  initialNoDues?: boolean;
 }
 
-export function FeeHistoryModal({ student, onClose }: Props) {
+export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
   const [yearData, setYearData] = useState<YearData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
+
+  function toggleDues(ay: string) {
+    setExpandedDues((prev) => {
+      const next = new Set(prev);
+      if (next.has(ay)) next.delete(ay); else next.add(ay);
+      return next;
+    });
+  }
 
   useEffect(() => {
     // Query by both studentId and regNumber to capture records across all academic years.
@@ -158,17 +174,42 @@ export function FeeHistoryModal({ student, onClose }: Props) {
   );
   const overallDue = overallAllotted - overallPaid;
 
+  const headerGradient = loading
+    ? initialNoDues === true
+      ? 'from-emerald-600 to-emerald-800'
+      : initialNoDues === false
+        ? 'from-red-600 to-red-800'
+        : 'from-slate-700 to-slate-900'
+    : !error && yearData.length > 0
+      ? overallDue > 0
+        ? 'from-red-600 to-red-800'
+        : 'from-emerald-600 to-emerald-800'
+      : 'from-slate-700 to-slate-900';
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 overflow-y-auto">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" style={{ animation: 'backdrop-enter 0.2s ease-out' }} />
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 flex flex-col" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+        style={{ animation: 'backdrop-enter 0.2s ease-out' }}
+      />
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col overflow-hidden max-h-[calc(100vh-3rem)]"
+        style={{ animation: 'modal-enter 0.25s ease-out' }}
+      >
 
         {/* Header */}
-        <div className="px-5 py-3 border-b border-gray-200 flex items-start justify-between shrink-0">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 shrink-0">Fee History</h3>
+        <div className={`px-5 py-3.5 bg-gradient-to-r ${headerGradient} flex items-start justify-between shrink-0`}>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 text-xs font-bold text-white shrink-0">
+                ≡
+              </span>
+              Fee Details
+            </h3>
             {!loading && !error && yearData.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                 {yearData.map((yd) => {
                   const ev = effectiveValues(yd);
                   const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
@@ -178,10 +219,18 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                   return (
                     <span
                       key={yd.academicYear}
-                      className={`text-xs font-bold ${noDues ? 'text-green-600' : 'text-red-500'}`}
+                      className={`inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 ${
+                        noDues
+                          ? 'bg-white/20 text-white border border-white/40'
+                          : 'bg-white/20 text-white border border-white/40'
+                      }`}
                     >
-                      {yd.academicYear}: {noDues ? 'No Dues' : `Dues ₹${due !== null ? due.toLocaleString() : '—'}`}
-                      {yd.override && <span className="ml-1 text-[10px] font-normal text-amber-600">(custom)</span>}
+                      {yd.academicYear}
+                      <span className="opacity-80">·</span>
+                      <span>{noDues ? '✓ No Dues' : `Due ₹${due !== null ? due.toLocaleString() : '—'}`}</span>
+                      {yd.override && (
+                        <span className="text-amber-300 opacity-80">· custom</span>
+                      )}
                     </span>
                   );
                 })}
@@ -190,76 +239,64 @@ export function FeeHistoryModal({ student, onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer mt-0.5 shrink-0 ml-3"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 mt-0.5 ml-3"
           >
             ×
           </button>
         </div>
 
-        {/* Student info */}
-        <div className="px-5 py-2 bg-gray-50 border-b border-gray-200 text-xs shrink-0">
-          <div className="flex flex-wrap gap-x-5 gap-y-0.5">
-            <span>
-              <span className="text-gray-500">Name: </span>
-              <span className="font-semibold text-gray-900">{student.studentNameSSLC}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Father: </span>
-              <span className="text-gray-700">{student.fatherName}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Reg: </span>
-              <span className="text-gray-700">{student.regNumber || '—'}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Course: </span>
-              <span className="text-gray-700">{student.course}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Year: </span>
-              <span className="text-gray-700">{student.year}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Adm Type: </span>
-              <span className="text-gray-700">{student.admType}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Cat: </span>
-              <span className="text-gray-700">{student.admCat}</span>
-            </span>
+        {/* Student info bar */}
+        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 shrink-0">
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {[
+              { label: 'Student', value: student.studentNameSSLC, bold: true },
+              { label: 'Father', value: student.fatherName },
+              { label: 'Reg No', value: student.regNumber || '—' },
+              { label: 'Course', value: student.course },
+              { label: 'Year', value: student.year },
+              { label: 'Adm Type', value: student.admType },
+              { label: 'Cat', value: student.admCat },
+            ].map(({ label, value, bold }) => (
+              <div key={label} className="flex flex-col min-w-0">
+                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">{label}</span>
+                <span className={`text-xs truncate ${bold ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                  {value}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 overflow-y-auto space-y-4" style={{ maxHeight: '65vh' }}>
+        <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
           {loading ? (
             <div className="space-y-4">
               {Array.from({ length: 2 }).map((_, yi) => (
-                <div key={yi} className="border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Year header skeleton */}
-                  <div className="bg-blue-50 border-b border-blue-100 px-3 py-2 flex items-center gap-4">
-                    <div className="skeleton h-3.5 w-20 rounded" />
-                    <div className="skeleton h-3 w-32 rounded" />
+                <div key={yi} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex items-center gap-4">
+                    <div className="skeleton h-5 w-24 rounded-full" />
+                    <div className="skeleton h-3 w-40 rounded" />
                     <div className="ml-auto flex gap-6">
-                      <div className="skeleton h-3 w-28 rounded" />
-                      <div className="skeleton h-3 w-24 rounded" />
-                      <div className="skeleton h-3 w-20 rounded" />
+                      <div className="skeleton h-8 w-20 rounded-lg" />
+                      <div className="skeleton h-8 w-20 rounded-lg" />
+                      <div className="skeleton h-8 w-20 rounded-lg" />
                     </div>
                   </div>
-                  {/* Payment rows skeleton */}
-                  <div className="border border-gray-100 rounded overflow-hidden mx-3 my-3">
-                    <div className="bg-gray-50 px-3 py-1.5 flex gap-3 border-b border-gray-200">
-                      {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
-                        <div key={j} className={`skeleton h-2.5 ${w} rounded`} />
-                      ))}
-                    </div>
-                    {Array.from({ length: 2 + yi }).map((_, i) => (
-                      <div key={i} className="px-3 py-2 flex gap-3 border-b border-gray-100 last:border-0">
+                  <div className="px-4 py-3">
+                    <div className="border border-gray-100 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 px-3 py-1.5 flex gap-3 border-b border-gray-200">
                         {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
-                          <div key={j} className={`skeleton h-3 ${w} rounded`} />
+                          <div key={j} className={`skeleton h-2.5 ${w} rounded`} />
                         ))}
                       </div>
-                    ))}
+                      {Array.from({ length: 2 + yi }).map((_, i) => (
+                        <div key={i} className="px-3 py-2 flex gap-3 border-b border-gray-100 last:border-0">
+                          {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
+                            <div key={j} className={`skeleton h-3 ${w} rounded`} />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -269,8 +306,9 @@ export function FeeHistoryModal({ student, onClose }: Props) {
               {error}
             </div>
           ) : yearData.length === 0 ? (
-            <div className="flex items-center justify-center py-10 text-sm text-gray-400">
-              No fee records found for this student.
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <span className="text-2xl opacity-20">₹</span>
+              <span className="text-sm text-gray-400">No fee records found for this student.</span>
             </div>
           ) : (
             yearData.map((yd) => {
@@ -280,6 +318,8 @@ export function FeeHistoryModal({ student, onClose }: Props) {
               const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, records) : null;
               const fine = ev ? calcEffectiveFine(ev.smp.fine, records) : 0;
               const due = allotted !== null ? allotted - totalPaid : null;
+              const noDues = due !== null && due <= 0;
+              const palette = noDues ? FEE_PALETTE.noDues : FEE_PALETTE.hasDues;
               const svkBaseAllotted = ev?.svk ?? 0;
               const additionalAllotted = ev ? ev.additional.reduce((t, h) => t + h.amount, 0) : 0;
               const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
@@ -294,67 +334,77 @@ export function FeeHistoryModal({ student, onClose }: Props) {
               const additionalDue = additionalAllotted - additionalPaidTotal;
 
               return (
-                <div key={academicYear} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  key={academicYear}
+                  className={`rounded-xl overflow-hidden shadow-sm border-l-4 ${
+                    noDues ? 'border-l-emerald-400' : 'border-l-red-400'
+                  } border ${palette.cardBorder}`}
+                >
 
-                  {/* Academic year header with summary */}
-                  <div className="bg-blue-50 border-b border-blue-100 px-3 py-2 flex flex-wrap items-center gap-x-5 gap-y-1">
-                    <span className="text-xs font-semibold text-blue-800 shrink-0">
-                      {academicYear}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {records[0].course} · {records[0].year} · {records[0].admType} · {records[0].admCat}
-                    </span>
-                    {override && (
-                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
-                        Custom Allotted Fee
+                  {/* Year card header */}
+                  <div className={`px-4 py-2.5 ${palette.headerBg} border-b ${palette.headerBorder} flex flex-wrap items-center gap-3`}>
+                    {/* Left: year + meta */}
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <span className={`rounded-full ${palette.badgeBg} text-white text-[10px] font-bold px-2.5 py-0.5 shrink-0`}>
+                        {academicYear}
                       </span>
-                    )}
-                    <div className="ml-auto flex gap-4 text-xs">
+                      <span className="text-xs text-slate-500">
+                        {records[0].course} · {records[0].year} · {records[0].admType} · {records[0].admCat}
+                      </span>
+                      {override && (
+                        <span className="text-[10px] rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-amber-700 font-semibold shrink-0">
+                          Custom Allotted
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: stat metrics */}
+                    <div className="ml-auto flex items-stretch gap-0 shrink-0">
                       {allotted !== null ? (
                         <>
-                          <span>
-                            <span className="text-gray-500">Allotted: </span>
-                            <span className="font-semibold text-gray-700">
-                              ₹{allotted.toLocaleString()}
+                          <div className={`flex flex-col items-end px-3 border-r ${palette.divider}`}>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Allotted</span>
+                            <span className="text-xs font-bold text-slate-700">₹{allotted.toLocaleString()}</span>
+                            <span className="text-[9px] text-slate-400 font-normal">
+                              {smpAllotted > 0 && `SMP ₹${smpAllotted.toLocaleString()}`}
+                              {svkBaseAllotted > 0 && ` · SVK ₹${svkBaseAllotted.toLocaleString()}`}
+                              {additionalAllotted > 0 && ` · Addl ₹${additionalAllotted.toLocaleString()}`}
                             </span>
-                            <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpAllotted.toLocaleString()} | SVK ₹{svkBaseAllotted.toLocaleString()} | Addl ₹{additionalAllotted.toLocaleString()})
+                          </div>
+                          <div className={`flex flex-col items-end px-3 border-r ${palette.divider}`}>
+                            <span className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">Paid</span>
+                            <span className="text-xs font-bold text-emerald-700">₹{totalPaid.toLocaleString()}</span>
+                            <span className="text-[9px] text-slate-400 font-normal">
+                              {smpPaid > 0 && `SMP ₹${smpPaid.toLocaleString()}`}
+                              {svkBasePaid > 0 && ` · SVK ₹${svkBasePaid.toLocaleString()}`}
+                              {additionalPaidTotal > 0 && ` · Addl ₹${additionalPaidTotal.toLocaleString()}`}
                             </span>
-                          </span>
-                          <span>
-                            <span className="text-gray-500">Paid: </span>
-                            <span className="font-semibold text-green-700">
-                              ₹{totalPaid.toLocaleString()}
+                          </div>
+                          <div className="flex flex-col items-end pl-3">
+                            <span className={`text-[9px] font-semibold uppercase tracking-wider ${noDues ? 'text-emerald-400' : 'text-red-400'}`}>
+                              Due
                             </span>
-                            <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpPaid.toLocaleString()} | SVK ₹{svkBasePaid.toLocaleString()} | Addl ₹{additionalPaidTotal.toLocaleString()})
-                            </span>
-                          </span>
-                          <span>
-                            <span className="text-gray-500">Due: </span>
-                            <span
-                              className={`font-semibold ${
-                                due! > 0 ? 'text-red-600' : 'text-green-600'
-                              }`}
-                            >
+                            <span className={`text-xs font-bold ${noDues ? 'text-emerald-600' : 'text-red-600'}`}>
                               ₹{due!.toLocaleString()}
                             </span>
-                            <span className="text-gray-400 font-normal ml-1 text-[10px]">
-                              (SMP ₹{smpDue.toLocaleString()} | SVK ₹{svkDue.toLocaleString()} | Addl ₹{additionalDue.toLocaleString()})
+                            <span className="text-[9px] text-slate-400 font-normal">
+                              {smpDue !== 0 && `SMP ₹${smpDue.toLocaleString()}`}
+                              {svkDue !== 0 && ` · SVK ₹${svkDue.toLocaleString()}`}
+                              {additionalDue !== 0 && ` · Addl ₹${additionalDue.toLocaleString()}`}
                             </span>
-                          </span>
+                          </div>
                         </>
                       ) : (
                         <>
-                          <span>
-                            <span className="text-gray-500">Paid: </span>
-                            <span className="font-semibold text-green-700">
-                              ₹{totalPaid.toLocaleString()}
+                          <div className={`flex flex-col items-end px-3 border-r ${palette.divider}`}>
+                            <span className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">Paid</span>
+                            <span className="text-xs font-bold text-emerald-700">₹{totalPaid.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center pl-3">
+                            <span className="text-[10px] text-amber-500 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-0.5 font-medium">
+                              No structure configured
                             </span>
-                          </span>
-                          <span className="text-yellow-600 text-[10px] self-center">
-                            No fee structure configured
-                          </span>
+                          </div>
                         </>
                       )}
                     </div>
@@ -363,18 +413,18 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                   {/* Receipts table */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Date</th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">SMP Rpt</th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">SVK Rpt</th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Addl Rpt</th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Mode</th>
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Remarks</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">SMP (₹)</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">SVK (₹)</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">Addl (₹)</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 whitespace-nowrap">Total (₹)</th>
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Date</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">SMP Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">SVK Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Addl Rpt</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Mode</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Remarks</th>
+                          <th className="px-3 py-1.5 text-right font-semibold whitespace-nowrap bg-blue-50 text-blue-600">SMP (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold whitespace-nowrap bg-purple-50 text-purple-600">SVK (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold whitespace-nowrap bg-emerald-50 text-emerald-600">Addl (₹)</th>
+                          <th className="px-3 py-1.5 text-right font-semibold whitespace-nowrap bg-slate-100 text-slate-700">Total (₹)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -384,17 +434,17 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                           const rowAddlTotal = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
                           const rowTotal = rowSmpTotal + rowSvkBase + rowAddlTotal;
                           return (
-                            <tr key={r.id} className="hover:bg-gray-50">
-                              <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">
+                            <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap font-medium">
                                 {r.date.split('-').reverse().join('-')}
                               </td>
-                              <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                              <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">
                                 {r.receiptNumber || '—'}
                               </td>
-                              <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                              <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">
                                 {r.svkReceiptNumber || '—'}
                               </td>
-                              <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">
+                              <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">
                                 {r.additionalReceiptNumber || '—'}
                               </td>
                               <td className="px-3 py-1.5 whitespace-nowrap">
@@ -404,7 +454,11 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                                   const rowAddlAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
                                   const hasPerSection = r.smpPaymentMode !== undefined || r.svkPaymentMode !== undefined || r.additionalPaymentMode !== undefined;
                                   const badge = (mode: typeof r.paymentMode) => (
-                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${mode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>
+                                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                      mode === 'CASH'
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        : 'bg-violet-50 text-violet-700 border border-violet-200'
+                                    }`}>
                                       {mode}
                                     </span>
                                   );
@@ -422,47 +476,59 @@ export function FeeHistoryModal({ student, onClose }: Props) {
                                   }
                                   return (
                                     <div className="flex flex-col gap-0.5">
-                                      {rowSmpAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${smpMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>SMP:{smpMode}</span>}
-                                      {rowSvkAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${svkMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>SVK:{svkMode}</span>}
-                                      {rowAddlAmt > 0 && <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${addlMode === 'CASH' ? 'bg-amber-50 text-amber-700' : 'bg-purple-50 text-purple-700'}`}>Addl:{addlMode}</span>}
+                                      {rowSmpAmt > 0 && (
+                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${smpMode === 'CASH' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-violet-50 text-violet-700 border border-violet-200'}`}>
+                                          SMP · {smpMode}
+                                        </span>
+                                      )}
+                                      {rowSvkAmt > 0 && (
+                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${svkMode === 'CASH' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-violet-50 text-violet-700 border border-violet-200'}`}>
+                                          SVK · {svkMode}
+                                        </span>
+                                      )}
+                                      {rowAddlAmt > 0 && (
+                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${addlMode === 'CASH' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-violet-50 text-violet-700 border border-violet-200'}`}>
+                                          Addl · {addlMode}
+                                        </span>
+                                      )}
                                     </div>
                                   );
                                 })()}
                               </td>
-                              <td className="px-3 py-1.5 text-gray-500 max-w-[8rem] truncate">
+                              <td className="px-3 py-1.5 text-gray-400 max-w-[8rem] truncate">
                                 {r.remarks || '—'}
                               </td>
-                              <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
-                                {rowSmpTotal.toLocaleString()}
+                              <td className="px-3 py-1.5 text-right text-blue-700 whitespace-nowrap bg-blue-50/40">
+                                {rowSmpTotal > 0 ? rowSmpTotal.toLocaleString() : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
-                                {rowSvkBase.toLocaleString()}
+                              <td className="px-3 py-1.5 text-right text-purple-700 whitespace-nowrap bg-purple-50/40">
+                                {rowSvkBase > 0 ? rowSvkBase.toLocaleString() : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right text-gray-700 whitespace-nowrap">
-                                {rowAddlTotal > 0 ? rowAddlTotal.toLocaleString() : '—'}
+                              <td className="px-3 py-1.5 text-right text-emerald-700 whitespace-nowrap bg-emerald-50/40">
+                                {rowAddlTotal > 0 ? rowAddlTotal.toLocaleString() : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="px-3 py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">
-                                {rowTotal.toLocaleString()}
+                              <td className="px-3 py-1.5 text-right font-bold text-slate-800 whitespace-nowrap bg-slate-50">
+                                ₹{rowTotal.toLocaleString()}
                               </td>
                             </tr>
                           );
                         })}
                       </tbody>
-                      <tfoot className="border-t border-gray-200 bg-gray-50">
-                        <tr>
-                          <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-gray-600">
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                          <td colSpan={6} className="px-3 py-1.5 text-xs text-gray-500">
                             {records.length} receipt{records.length > 1 ? 's' : ''}
                           </td>
-                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
+                          <td className="px-3 py-1.5 text-right text-xs text-blue-700 bg-blue-50">
                             {records.reduce((s, r) => s + sumSMPRecord(r.smp), 0).toLocaleString()}
                           </td>
-                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
+                          <td className="px-3 py-1.5 text-right text-xs text-purple-700 bg-purple-50">
                             {records.reduce((s, r) => s + r.svk, 0).toLocaleString()}
                           </td>
-                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-800">
+                          <td className="px-3 py-1.5 text-right text-xs text-emerald-700 bg-emerald-50">
                             {records.reduce((s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0), 0).toLocaleString()}
                           </td>
-                          <td className="px-3 py-1.5 text-right text-xs font-semibold text-green-700">
+                          <td className="px-3 py-1.5 text-right text-xs text-slate-800 bg-slate-100">
                             ₹{totalPaid.toLocaleString()}
                           </td>
                         </tr>
@@ -472,65 +538,104 @@ export function FeeHistoryModal({ student, onClose }: Props) {
 
                   {/* Pending dues breakdown */}
                   {ev && (
-                    <div className="border-t border-gray-200 px-3 py-2 bg-gray-50">
-                      <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                        Pending Dues Breakdown
-                        {override && !structure && (
-                          <span className="ml-1 normal-case text-amber-600">(using custom allotted fee)</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        {/* SMP heads */}
-                        {SMP_FEE_HEADS.map(({ key, label }) => {
-                          const allottedAmt = key === 'fine' ? fine : ev.smp[key];
-                          const paidAmt = records.reduce((s, r) => s + r.smp[key], 0);
-                          const dueAmt = allottedAmt - paidAmt;
-                          if (allottedAmt === 0) return null;
+                    <div className={`border-t ${palette.headerBorder}`}>
+                      <button
+                        onClick={() => toggleDues(academicYear)}
+                        className={`w-full flex items-center justify-between px-4 py-2 ${palette.duesBg} hover:brightness-95 transition-all cursor-pointer text-left`}
+                      >
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                          Pending Dues Breakdown
+                          {override && !structure && (
+                            <span className="ml-1 normal-case text-amber-500 font-normal">· custom allotted</span>
+                          )}
+                        </span>
+                        <span className={`text-gray-400 text-xs transition-transform duration-200 ${expandedDues.has(academicYear) ? 'rotate-180' : ''}`}>
+                          ▾
+                        </span>
+                      </button>
+                      {expandedDues.has(academicYear) && (
+                      <div className={`px-4 pb-3 pt-2 ${palette.duesBg}`}>
+                      <div className="space-y-2">
+
+                        {/* SMP row */}
+                        {(() => {
+                          const items = SMP_FEE_HEADS.flatMap(({ key, label }) => {
+                            const allottedAmt = key === 'fine' ? fine : ev.smp[key];
+                            if (allottedAmt === 0) return [];
+                            const paidAmt = records.reduce((s, r) => s + r.smp[key], 0);
+                            return [{ key, label, dueAmt: allottedAmt - paidAmt }];
+                          });
+                          if (items.length === 0) return null;
                           return (
-                            <span key={key}>
-                              <span className="text-gray-500">{label}: </span>
-                              <span className={dueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
-                                ₹{dueAmt.toLocaleString()}
-                              </span>
-                            </span>
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-8 pt-1.5 shrink-0">SMP</span>
+                              <div className="flex-1 overflow-x-auto">
+                                <div className="flex gap-x-4 pb-0.5">
+                                  {items.map(({ key, label, dueAmt }) => (
+                                    <div key={key} className="flex flex-col items-center shrink-0">
+                                      <span className="text-[10px] text-gray-500 whitespace-nowrap leading-tight">{label}</span>
+                                      <span className={`text-xs font-bold tabular-nums leading-tight ${dueAmt > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                        {dueAmt === 0 ? '✓' : `₹${dueAmt.toLocaleString()}`}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
                           );
-                        })}
-                        {/* SVK */}
+                        })()}
+
+                        {/* SVK row */}
                         {ev.svk > 0 && (() => {
                           const svkPd = records.reduce((s, r) => s + r.svk, 0);
                           const svkDueAmt = ev.svk - svkPd;
                           return (
-                            <span key="svk">
-                              <span className="text-gray-500">SVK: </span>
-                              <span className={svkDueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
-                                ₹{svkDueAmt.toLocaleString()}
-                              </span>
-                            </span>
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-8 pt-1.5 shrink-0">SVK</span>
+                              <div className="flex gap-x-4">
+                                <div className="flex flex-col items-center shrink-0">
+                                  <span className="text-[10px] text-gray-500 whitespace-nowrap leading-tight">SVK Fee</span>
+                                  <span className={`text-xs font-bold tabular-nums leading-tight ${svkDueAmt > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                    {svkDueAmt === 0 ? '✓' : `₹${svkDueAmt.toLocaleString()}`}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           );
                         })()}
-                        {/* Additional heads */}
-                        {ev.additional.length > 0 && (
-                          <span className="w-full text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                            Additional:
-                          </span>
-                        )}
-                        {ev.additional.map((h) => {
-                          const paidAmt = records.reduce(
-                            (s, r) => s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
-                            0,
-                          );
-                          const dueAmt = h.amount - paidAmt;
-                          if (h.amount === 0) return null;
+
+                        {/* Additional heads row */}
+                        {ev.additional.length > 0 && (() => {
+                          const items = ev.additional.flatMap((h) => {
+                            if (h.amount === 0) return [];
+                            const paidAmt = records.reduce(
+                              (s, r) => s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0), 0,
+                            );
+                            return [{ label: h.label, dueAmt: h.amount - paidAmt }];
+                          });
+                          if (items.length === 0) return null;
                           return (
-                            <span key={h.label}>
-                              <span className="text-gray-500">{h.label}: </span>
-                              <span className={dueAmt > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
-                                ₹{dueAmt.toLocaleString()}
-                              </span>
-                            </span>
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider w-8 pt-1.5 shrink-0">Addl</span>
+                              <div className="flex-1 overflow-x-auto">
+                                <div className="flex gap-x-4 pb-0.5">
+                                  {items.map(({ label, dueAmt }) => (
+                                    <div key={label} className="flex flex-col items-center shrink-0">
+                                      <span className="text-[10px] text-gray-500 whitespace-nowrap leading-tight">{label}</span>
+                                      <span className={`text-xs font-bold tabular-nums leading-tight ${dueAmt > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                        {dueAmt === 0 ? '✓' : `₹${dueAmt.toLocaleString()}`}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
                           );
-                        })}
+                        })()}
+
                       </div>
+                      </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -539,42 +644,43 @@ export function FeeHistoryModal({ student, onClose }: Props) {
           )}
         </div>
 
-        {/* Overall summary footer */}
-        {!loading && !error && yearData.length > 0 && (
-          <div className="px-5 py-2.5 border-t border-gray-200 bg-gray-50 flex flex-wrap gap-x-6 gap-y-1 text-xs shrink-0">
-            <span className="font-semibold text-gray-600 self-center">Overall:</span>
-            <span>
-              <span className="text-gray-500">Total Allotted: </span>
-              <span className="font-semibold text-gray-900">
-                ₹{overallAllotted.toLocaleString()}
-              </span>
-              {overallFine > 0 && (
-                <span className="text-amber-600 font-normal ml-1">
-                  (₹{(overallAllotted - overallFine).toLocaleString()} + Fine ₹{overallFine.toLocaleString()})
-                </span>
-              )}
-            </span>
-            <span>
-              <span className="text-gray-500">Total Paid: </span>
-              <span className="font-semibold text-green-700">₹{overallPaid.toLocaleString()}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Total Due: </span>
-              <span className={`font-semibold ${overallDue > 0 ? 'text-red-600' : 'text-green-700'}`}>
-                ₹{overallDue.toLocaleString()}
-              </span>
-            </span>
+        {/* Footer: overall summary + close */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0">
+          {!loading && !error && yearData.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex-1 min-w-[100px] rounded-xl bg-white border border-gray-200 px-3 py-2">
+                <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Total Allotted</div>
+                <div className="text-sm font-bold text-gray-800 mt-0.5">₹{overallAllotted.toLocaleString()}</div>
+                {overallFine > 0 && (
+                  <div className="text-[9px] text-amber-500 mt-0.5">
+                    +Fine ₹{overallFine.toLocaleString()}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-[100px] rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
+                <div className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">Total Paid</div>
+                <div className="text-sm font-bold text-emerald-700 mt-0.5">₹{overallPaid.toLocaleString()}</div>
+              </div>
+              <div className={`flex-1 min-w-[100px] rounded-xl px-3 py-2 border ${
+                overallDue > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-100'
+              }`}>
+                <div className={`text-[9px] font-semibold uppercase tracking-wider ${overallDue > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  Total Due
+                </div>
+                <div className={`text-sm font-bold mt-0.5 ${overallDue > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  ₹{overallDue.toLocaleString()}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+            >
+              Close
+            </button>
           </div>
-        )}
-
-        {/* Close button */}
-        <div className="px-5 py-3 border-t border-gray-200 flex justify-end shrink-0">
-          <button
-            onClick={onClose}
-            className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

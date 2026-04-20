@@ -64,7 +64,7 @@ export function CollectFee() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
+  const [feeHistoryStudent, setFeeHistoryStudent] = useState<{ student: Student; noDues: boolean } | null>(null);
 
   // Context menu
   const [ctxMenu, setCtxMenu] = useState<{
@@ -555,7 +555,7 @@ export function CollectFee() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setFeeHistoryStudent(student)}
+                        onClick={() => setFeeHistoryStudent({ student, noDues: isFullyPaid })}
                       >
                         Fee Details
                       </Button>
@@ -627,7 +627,8 @@ export function CollectFee() {
       {/* Fee history modal */}
       {feeHistoryStudent && (
         <FeeHistoryModal
-          student={feeHistoryStudent}
+          student={feeHistoryStudent.student}
+          initialNoDues={feeHistoryStudent.noDues}
           onClose={() => setFeeHistoryStudent(null)}
         />
       )}
@@ -654,7 +655,7 @@ export function CollectFee() {
           </button>
           <button
             className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 cursor-pointer"
-            onClick={() => { setFeeHistoryStudent(ctxMenu.student); closeCtx(); }}
+            onClick={() => { setFeeHistoryStudent({ student: ctxMenu.student, noDues: ctxMenu.isFullyPaid }); closeCtx(); }}
           >
             <span className="text-gray-400 font-bold text-[10px] border border-gray-300 rounded px-1 py-0.5">≡</span>
             Fee Details

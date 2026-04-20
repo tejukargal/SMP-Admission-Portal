@@ -59,7 +59,7 @@ interface Props {
 }
 
 const ni =
-  'w-full rounded border border-gray-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500';
+  'w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors';
 
 export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: Props) {
   const [structure, setStructure] = useState<FeeStructure | null>(null);
@@ -338,96 +338,92 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 overflow-y-auto">
       <div
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/50"
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 flex flex-col" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col overflow-hidden"
+        style={{ animation: 'modal-enter 0.25s ease-out' }}
+      >
 
         {/* Header */}
-        <div className="px-5 py-3 border-b border-gray-200 flex items-start justify-between shrink-0">
+        <div className="px-5 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-start justify-between shrink-0">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 flex items-baseline gap-2">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 text-xs font-bold text-white shrink-0">
+                ₹
+              </span>
               {isUpdate ? 'Add Payment Installment' : 'Collect Fee'}
               {isUpdate && !loadingData && grandAllotted > 0 && (
-                <span className="text-sm font-bold text-red-600">
+                <span className="inline-flex items-center rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5">
                   Due: ₹{(grandAllotted - totalPrevious).toLocaleString()}
                 </span>
               )}
             </h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">
+            <p className="text-[11px] text-blue-100 mt-0.5">
               {academicYear}
               {isUpdate && (
-                <span className="ml-2 text-amber-600 font-medium">
-                  {priorPayments.length} prior payment{priorPayments.length > 1 ? 's' : ''} on record
+                <span className="ml-2 text-amber-300 font-medium">
+                  · {priorPayments.length} prior payment{priorPayments.length > 1 ? 's' : ''} on record
                 </span>
               )}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer mt-0.5"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 mt-0.5"
           >
             ×
           </button>
         </div>
 
-        {/* Student info + override indicator */}
-        <div className="px-5 py-2 bg-gray-50 border-b border-gray-200 text-xs shrink-0">
-          <div className="flex flex-wrap gap-x-5 gap-y-0.5">
-            <span>
-              <span className="text-gray-500">Name: </span>
-              <span className="font-semibold text-gray-900">{student.studentNameSSLC}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Father: </span>
-              <span className="text-gray-700">{student.fatherName}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Reg: </span>
-              <span className="text-gray-700">{student.regNumber || '—'}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Year: </span>
-              <span className="text-gray-700">{student.year}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Course: </span>
-              <span className="text-gray-700">{student.course}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Cat: </span>
-              <span className="text-gray-700">{student.admCat}</span>
-            </span>
-            <span>
-              <span className="text-gray-500">Adm Type: </span>
-              <span className="text-gray-700">{student.admType}</span>
-            </span>
+        {/* Student info bar */}
+        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 shrink-0">
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {[
+              { label: 'Student', value: student.studentNameSSLC, bold: true },
+              { label: 'Father', value: student.fatherName },
+              { label: 'Reg No', value: student.regNumber || '—' },
+              { label: 'Year', value: student.year },
+              { label: 'Course', value: student.course },
+              { label: 'Cat', value: student.admCat },
+              { label: 'Adm Type', value: student.admType },
+            ].map(({ label, value, bold }) => (
+              <div key={label} className="flex flex-col min-w-0">
+                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">{label}</span>
+                <span className={`text-xs truncate ${bold ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                  {value}
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* Override allotted controls */}
           {!loadingData && !loadError && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               {loadedOverride && !editingAllotted && (
-                <span className="inline-flex items-center gap-1 rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[10px] font-semibold text-amber-800">
                   ✎ Custom allotted fee active
                 </span>
               )}
               {!editingAllotted && (structure || loadedOverride) && (
                 <button
                   onClick={startEditAllotted}
-                  className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   {loadedOverride ? 'Edit Custom Allotted' : 'Override Allotted Fee'}
                 </button>
               )}
               {editingAllotted && (
                 <>
-                  <span className="text-[10px] font-semibold text-amber-700">Editing allotted fee — save separately below</span>
+                  <span className="text-[10px] font-semibold text-amber-700">
+                    Editing allotted fee — save separately below
+                  </span>
                   <button
                     onClick={cancelEditAllotted}
-                    className="rounded border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
+                    className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -444,7 +440,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               {/* SMP table skeleton */}
               <div>
                 <div className="skeleton h-3 w-36 mb-3 rounded" />
-                <div className="border border-gray-200 rounded overflow-hidden">
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 flex gap-4 border-b border-gray-200">
                     <div className="skeleton h-3 flex-1" />
                     <div className="skeleton h-3 w-20" />
@@ -462,7 +458,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               {/* SVK skeleton */}
               <div>
                 <div className="skeleton h-3 w-28 mb-3 rounded" />
-                <div className="border border-gray-200 rounded overflow-hidden">
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
                   {Array.from({ length: 2 }).map((_, i) => (
                     <div key={i} className="px-3 py-2 flex gap-4 border-b border-gray-100 last:border-0">
                       <div className="skeleton h-3 flex-1" />
@@ -480,7 +476,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
           ) : (
             <div className="space-y-5">
               {!structure && !loadedOverride && (
-                <div className="rounded bg-yellow-50 border border-yellow-200 px-3 py-2 text-xs text-yellow-800">
+                <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3 text-xs text-yellow-800">
                   No fee structure configured for{' '}
                   <strong>
                     {student.course} / {student.year} / {student.admType} / {student.admCat}
@@ -490,261 +486,328 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                 </div>
               )}
 
-              {/* SMP Fee table */}
+              {/* ── SMP Fee Table ──────────────────────────────────────── */}
               <div>
-                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  SMP Fee (Government)
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-4 rounded-full bg-blue-500 shrink-0" />
+                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
+                    SMP Fee — Government
+                  </span>
                 </div>
-                <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">
-                        Head
-                      </th>
-                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-24">
-                        Allotted (₹)
-                      </th>
-                      {isUpdate && (
-                        <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-gray-200 w-24">
-                          Paid so far (₹)
-                        </th>
-                      )}
-                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-28">
-                        {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {SMP_FEE_HEADS.map(({ key, label }) => (
-                      <tr key={key} className={editingAllotted ? 'bg-amber-50' : 'hover:bg-gray-50'}>
-                        <td className="px-3 py-1 text-gray-700">{label}</td>
-                        <td className="px-2 py-1">
-                          {editingAllotted ? (
-                            <input
-                              type="number"
-                              min="0"
-                              value={overrideSmp[key] === 0 ? '' : overrideSmp[key]}
-                              onChange={(e) => setOverrideSmp((prev) => ({ ...prev, [key]: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
-                              placeholder="0"
-                            />
-                          ) : (
-                            <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
-                              {hasAllotted ? effSmpValues[key].toLocaleString() : '—'}
-                            </span>
-                          )}
-                        </td>
+                <div className="rounded-xl overflow-hidden border border-blue-100 shadow-sm">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-blue-600 text-white">
+                        <th className="text-left px-3 py-2 font-semibold">Head</th>
+                        <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
                         {isUpdate && (
-                          <td className="px-3 py-1 text-right text-gray-400">
-                            {cumulativeSmp[key].toLocaleString()}
-                          </td>
+                          <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                            Paid (₹)
+                          </th>
                         )}
-                        <td className="px-2 py-1">
-                          <input
-                            type="number"
-                            min="0"
-                            value={smpNow[key] === 0 ? '' : smpNow[key]}
-                            onChange={(e) => handleSMPChange(key, e.target.value)}
-                            className={ni}
-                            placeholder="0"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t border-gray-200 font-semibold text-gray-800">
-                      <td className="px-3 py-1.5">Total SMP</td>
-                      <td className="px-3 py-1.5 text-right">{smpAllotted.toLocaleString()}</td>
-                      {isUpdate && (
-                        <td className="px-3 py-1.5 text-right text-gray-500">
-                          {smpPreviousTotal.toLocaleString()}
-                        </td>
-                      )}
-                      <td className="px-3 py-1.5 text-right text-blue-700">
-                        {smpNowTotal.toLocaleString()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              {/* SVK Fee table */}
-              <div>
-                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  SVK Fee (Management)
-                </div>
-                <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200">Head</th>
-                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-24">Allotted (₹)</th>
-                      {isUpdate && (
-                        <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-gray-200 w-24">Paid so far (₹)</th>
-                      )}
-                      <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-gray-200 w-28">
-                        {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    <tr className={editingAllotted ? 'bg-amber-50' : 'hover:bg-gray-50'}>
-                      <td className="px-3 py-1 text-gray-700">SVK</td>
-                      <td className="px-2 py-1">
-                        {editingAllotted ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={overrideSvk === 0 ? '' : overrideSvk}
-                            onChange={(e) => setOverrideSvk(Math.max(0, parseInt(e.target.value) || 0))}
-                            className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
-                            placeholder="0"
-                          />
-                        ) : (
-                          <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
-                            {hasAllotted ? effSvkValue.toLocaleString() : '—'}
-                          </span>
-                        )}
-                      </td>
-                      {isUpdate && (
-                        <td className="px-3 py-1 text-right text-gray-400">
-                          {cumulativeSvk.toLocaleString()}
-                        </td>
-                      )}
-                      <td className="px-2 py-1">
-                        <input
-                          type="number"
-                          min="0"
-                          value={svkNow === 0 ? '' : svkNow}
-                          onChange={(e) => setSvkNow(Math.max(0, parseInt(e.target.value) || 0))}
-                          className={ni}
-                          placeholder="0"
-                        />
-                      </td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t border-gray-200 font-semibold text-gray-800">
-                      <td className="px-3 py-1.5">Total SVK</td>
-                      <td className="px-3 py-1.5 text-right">{svkAllotted.toLocaleString()}</td>
-                      {isUpdate && (
-                        <td className="px-3 py-1.5 text-right text-gray-500">
-                          {svkPreviousTotal.toLocaleString()}
-                        </td>
-                      )}
-                      <td className="px-3 py-1.5 text-right text-blue-700">
-                        {svkNowTotal.toLocaleString()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              {/* Additional Fee table */}
-              {(additionalNow.length > 0 || (editingAllotted && effAdditionalHeads.length > 0)) && (
-                <div>
-                  <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Additional Fee
-                  </div>
-                  <table className="w-full text-xs border border-green-200 rounded overflow-hidden">
-                    <thead className="bg-green-50">
-                      <tr>
-                        <th className="text-left px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200">Head</th>
-                        <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200 w-24">Allotted (₹)</th>
-                        {isUpdate && (
-                          <th className="text-right px-3 py-1.5 font-semibold text-gray-500 border-b border-green-200 w-24">Paid so far (₹)</th>
-                        )}
-                        <th className="text-right px-3 py-1.5 font-semibold text-gray-600 border-b border-green-200 w-28">
+                        <th className="text-right px-3 py-2 font-semibold w-28 bg-blue-700">
                           {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {effAdditionalHeads.map((ah, idx) => {
-                        const nowEntry = additionalNow.find((h) => h.label === ah.label);
-                        const nowIdx = additionalNow.findIndex((h) => h.label === ah.label);
-                        return (
-                          <tr key={ah.label} className={editingAllotted ? 'bg-amber-50' : 'hover:bg-green-50'}>
-                            <td className="px-3 py-1 text-gray-700">{ah.label}</td>
-                            <td className="px-2 py-1">
-                              {editingAllotted ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={overrideAdditional[idx]?.amount === 0 ? '' : overrideAdditional[idx]?.amount ?? ''}
-                                  onChange={(e) => setOverrideAdditional((prev) =>
-                                    prev.map((h, i) =>
-                                      i === idx ? { ...h, amount: Math.max(0, parseInt(e.target.value) || 0) } : h
-                                    )
-                                  )}
-                                  className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
-                                  placeholder="0"
-                                />
-                              ) : (
-                                <span className={`block text-right pr-2 ${loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>
-                                  {ah.amount.toLocaleString()}
-                                </span>
-                              )}
-                            </td>
-                            {isUpdate && (
-                              <td className="px-3 py-1 text-right text-gray-400">
-                                {(cumulativeAdditional.get(ah.label) ?? 0).toLocaleString()}
-                              </td>
+                    <tbody className="divide-y divide-blue-50">
+                      {SMP_FEE_HEADS.map(({ key, label }) => (
+                        <tr
+                          key={key}
+                          className={editingAllotted ? 'bg-amber-50' : 'hover:bg-blue-50/40 transition-colors'}
+                        >
+                          <td className="px-3 py-1.5 text-gray-700">{label}</td>
+                          <td className="px-2 py-1.5">
+                            {editingAllotted ? (
+                              <input
+                                type="number"
+                                min="0"
+                                value={overrideSmp[key] === 0 ? '' : overrideSmp[key]}
+                                onChange={(e) =>
+                                  setOverrideSmp((prev) => ({
+                                    ...prev,
+                                    [key]: Math.max(0, parseInt(e.target.value) || 0),
+                                  }))
+                                }
+                                className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                                placeholder="0"
+                              />
+                            ) : (
+                              <span
+                                className={`block text-right pr-2 ${
+                                  loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                                }`}
+                              >
+                                {hasAllotted ? effSmpValues[key].toLocaleString() : '—'}
+                              </span>
                             )}
-                            <td className="px-2 py-1">
-                              {nowIdx !== -1 ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={nowEntry!.amount === 0 ? '' : nowEntry!.amount}
-                                  onChange={(e) => handleAdditionalChange(nowIdx, e.target.value)}
-                                  className={ni}
-                                  placeholder="0"
-                                />
-                              ) : (
-                                <span className="block text-right pr-2 text-gray-300 text-xs">—</span>
-                              )}
+                          </td>
+                          {isUpdate && (
+                            <td className="px-3 py-1.5 text-right text-gray-400">
+                              {cumulativeSmp[key].toLocaleString()}
                             </td>
-                          </tr>
-                        );
-                      })}
+                          )}
+                          <td className="px-2 py-1.5 bg-blue-50/60">
+                            <input
+                              type="number"
+                              min="0"
+                              value={smpNow[key] === 0 ? '' : smpNow[key]}
+                              onChange={(e) => handleSMPChange(key, e.target.value)}
+                              className={ni}
+                              placeholder="0"
+                            />
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-green-50 border-t border-green-200 font-semibold text-gray-800">
-                        <td className="px-3 py-1.5">Total Additional</td>
-                        <td className="px-3 py-1.5 text-right">{additionalAllotted.toLocaleString()}</td>
+                      <tr className="bg-blue-50 border-t-2 border-blue-200 font-semibold">
+                        <td className="px-3 py-2 text-blue-800">Total SMP</td>
+                        <td className="px-3 py-2 text-right text-blue-700">
+                          {smpAllotted.toLocaleString()}
+                        </td>
                         {isUpdate && (
-                          <td className="px-3 py-1.5 text-right text-gray-500">
-                            {additionalPreviousTotal.toLocaleString()}
+                          <td className="px-3 py-2 text-right text-gray-500">
+                            {smpPreviousTotal.toLocaleString()}
                           </td>
                         )}
-                        <td className="px-3 py-1.5 text-right text-green-700">
-                          {additionalNowTotal.toLocaleString()}
+                        <td className="px-3 py-2 text-right text-blue-700 font-bold bg-blue-100">
+                          {smpNowTotal.toLocaleString()}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
+              </div>
+
+              {/* ── SVK Fee Table ──────────────────────────────────────── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-4 rounded-full bg-purple-500 shrink-0" />
+                  <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
+                    SVK Fee — Management
+                  </span>
+                </div>
+                <div className="rounded-xl overflow-hidden border border-purple-100 shadow-sm">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-purple-600 text-white">
+                        <th className="text-left px-3 py-2 font-semibold">Head</th>
+                        <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
+                        {isUpdate && (
+                          <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                            Paid (₹)
+                          </th>
+                        )}
+                        <th className="text-right px-3 py-2 font-semibold w-28 bg-purple-700">
+                          {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-purple-50">
+                      <tr
+                        className={
+                          editingAllotted ? 'bg-amber-50' : 'hover:bg-purple-50/40 transition-colors'
+                        }
+                      >
+                        <td className="px-3 py-1.5 text-gray-700">SVK</td>
+                        <td className="px-2 py-1.5">
+                          {editingAllotted ? (
+                            <input
+                              type="number"
+                              min="0"
+                              value={overrideSvk === 0 ? '' : overrideSvk}
+                              onChange={(e) =>
+                                setOverrideSvk(Math.max(0, parseInt(e.target.value) || 0))
+                              }
+                              className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                              placeholder="0"
+                            />
+                          ) : (
+                            <span
+                              className={`block text-right pr-2 ${
+                                loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                              }`}
+                            >
+                              {hasAllotted ? effSvkValue.toLocaleString() : '—'}
+                            </span>
+                          )}
+                        </td>
+                        {isUpdate && (
+                          <td className="px-3 py-1.5 text-right text-gray-400">
+                            {cumulativeSvk.toLocaleString()}
+                          </td>
+                        )}
+                        <td className="px-2 py-1.5 bg-purple-50/60">
+                          <input
+                            type="number"
+                            min="0"
+                            value={svkNow === 0 ? '' : svkNow}
+                            onChange={(e) =>
+                              setSvkNow(Math.max(0, parseInt(e.target.value) || 0))
+                            }
+                            className={ni}
+                            placeholder="0"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-purple-50 border-t-2 border-purple-200 font-semibold">
+                        <td className="px-3 py-2 text-purple-800">Total SVK</td>
+                        <td className="px-3 py-2 text-right text-purple-700">
+                          {svkAllotted.toLocaleString()}
+                        </td>
+                        {isUpdate && (
+                          <td className="px-3 py-2 text-right text-gray-500">
+                            {svkPreviousTotal.toLocaleString()}
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-right text-purple-700 font-bold bg-purple-100">
+                          {svkNowTotal.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Additional Fee Table ───────────────────────────────── */}
+              {(additionalNow.length > 0 || (editingAllotted && effAdditionalHeads.length > 0)) && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1 h-4 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+                      Additional Fee
+                    </span>
+                  </div>
+                  <div className="rounded-xl overflow-hidden border border-emerald-100 shadow-sm">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-emerald-600 text-white">
+                          <th className="text-left px-3 py-2 font-semibold">Head</th>
+                          <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
+                          {isUpdate && (
+                            <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                              Paid (₹)
+                            </th>
+                          )}
+                          <th className="text-right px-3 py-2 font-semibold w-28 bg-emerald-700">
+                            {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-emerald-50">
+                        {effAdditionalHeads.map((ah, idx) => {
+                          const nowEntry = additionalNow.find((h) => h.label === ah.label);
+                          const nowIdx = additionalNow.findIndex((h) => h.label === ah.label);
+                          return (
+                            <tr
+                              key={ah.label}
+                              className={
+                                editingAllotted
+                                  ? 'bg-amber-50'
+                                  : 'hover:bg-emerald-50/40 transition-colors'
+                              }
+                            >
+                              <td className="px-3 py-1.5 text-gray-700">{ah.label}</td>
+                              <td className="px-2 py-1.5">
+                                {editingAllotted ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={
+                                      overrideAdditional[idx]?.amount === 0
+                                        ? ''
+                                        : overrideAdditional[idx]?.amount ?? ''
+                                    }
+                                    onChange={(e) =>
+                                      setOverrideAdditional((prev) =>
+                                        prev.map((h, i) =>
+                                          i === idx
+                                            ? {
+                                                ...h,
+                                                amount: Math.max(0, parseInt(e.target.value) || 0),
+                                              }
+                                            : h
+                                        )
+                                      )
+                                    }
+                                    className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                                    placeholder="0"
+                                  />
+                                ) : (
+                                  <span
+                                    className={`block text-right pr-2 ${
+                                      loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                                    }`}
+                                  >
+                                    {ah.amount.toLocaleString()}
+                                  </span>
+                                )}
+                              </td>
+                              {isUpdate && (
+                                <td className="px-3 py-1.5 text-right text-gray-400">
+                                  {(cumulativeAdditional.get(ah.label) ?? 0).toLocaleString()}
+                                </td>
+                              )}
+                              <td className="px-2 py-1.5 bg-emerald-50/60">
+                                {nowIdx !== -1 ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={nowEntry!.amount === 0 ? '' : nowEntry!.amount}
+                                    onChange={(e) => handleAdditionalChange(nowIdx, e.target.value)}
+                                    className={ni}
+                                    placeholder="0"
+                                  />
+                                ) : (
+                                  <span className="block text-right pr-2 text-gray-300">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-emerald-50 border-t-2 border-emerald-200 font-semibold">
+                          <td className="px-3 py-2 text-emerald-800">Total Additional</td>
+                          <td className="px-3 py-2 text-right text-emerald-700">
+                            {additionalAllotted.toLocaleString()}
+                          </td>
+                          {isUpdate && (
+                            <td className="px-3 py-2 text-right text-gray-500">
+                              {additionalPreviousTotal.toLocaleString()}
+                            </td>
+                          )}
+                          <td className="px-3 py-2 text-right text-emerald-700 font-bold bg-emerald-100">
+                            {additionalNowTotal.toLocaleString()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
               )}
 
-              {/* Save override button (only shown while editing allotted) */}
+              {/* ── Save override panel (editing allotted) ─────────────── */}
               {editingAllotted && (
-                <div className="rounded bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3">
                   <div className="text-xs text-amber-800">
-                    <strong>Editing custom allotted fee.</strong> These values override the fee structure for this student only.
-                    Save before collecting payment.
+                    <strong>Editing custom allotted fee.</strong> These values override the fee
+                    structure for this student only. Save before collecting payment.
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={cancelEditAllotted}
-                      className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => void handleSaveOverride()}
                       disabled={savingOverride}
-                      className="rounded border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs text-white font-medium hover:bg-amber-600 cursor-pointer transition-colors disabled:opacity-50"
+                      className="rounded-lg border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs text-white font-medium hover:bg-amber-600 cursor-pointer transition-colors disabled:opacity-50"
                     >
                       {savingOverride ? 'Saving…' : 'Save Custom Allotted'}
                     </button>
@@ -752,178 +815,213 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                 </div>
               )}
               {overrideSaveError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                   {overrideSaveError}
                 </div>
               )}
 
-              {/* Grand total summary */}
-              <div className="rounded bg-gray-50 border border-gray-200 px-4 py-2.5 text-xs flex flex-wrap gap-x-6 gap-y-1">
-                <span>
-                  <span className="text-gray-500">Allotted: </span>
-                  <span className="font-semibold text-gray-900">
+              {/* ── Grand Total Summary Cards ──────────────────────────── */}
+              <div className="flex flex-wrap gap-2">
+                <div className="flex-1 min-w-[90px] rounded-xl bg-gray-50 border border-gray-200 px-3 py-2">
+                  <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">
+                    Allotted
+                  </div>
+                  <div className="text-sm font-bold text-gray-800 mt-0.5">
                     ₹{grandAllotted.toLocaleString()}
-                  </span>
-                </span>
+                  </div>
+                </div>
                 {isUpdate && (
-                  <span>
-                    <span className="text-gray-500">Paid so far: </span>
-                    <span className="font-semibold text-gray-700">
+                  <div className="flex-1 min-w-[90px] rounded-xl bg-blue-50 border border-blue-100 px-3 py-2">
+                    <div className="text-[9px] text-blue-400 font-semibold uppercase tracking-wider">
+                      Paid So Far
+                    </div>
+                    <div className="text-sm font-bold text-blue-700 mt-0.5">
                       ₹{totalPrevious.toLocaleString()}
-                    </span>
-                  </span>
+                    </div>
+                  </div>
                 )}
-                <span>
-                  <span className="text-gray-500">
-                    {isUpdate ? 'Now Paying: ' : 'Paying: '}
-                  </span>
-                  <span className="font-semibold text-blue-700">
+                <div className="flex-1 min-w-[90px] rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-2">
+                  <div className="text-[9px] text-indigo-400 font-semibold uppercase tracking-wider">
+                    {isUpdate ? 'Now Paying' : 'Paying'}
+                  </div>
+                  <div className="text-sm font-bold text-indigo-700 mt-0.5">
                     ₹{grandNow.toLocaleString()}
-                  </span>
-                </span>
+                  </div>
+                </div>
                 {isUpdate && (
-                  <span>
-                    <span className="text-gray-500">Total After: </span>
-                    <span className="font-semibold text-green-700">
+                  <div className="flex-1 min-w-[90px] rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
+                    <div className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
+                      Total After
+                    </div>
+                    <div className="text-sm font-bold text-emerald-700 mt-0.5">
                       ₹{grandTotal.toLocaleString()}
-                    </span>
-                  </span>
+                    </div>
+                  </div>
                 )}
-                <span>
-                  <span className="text-gray-500">Balance: </span>
-                  <span
-                    className={`font-semibold ${
-                      balance > 0 ? 'text-red-600' : 'text-green-700'
+                <div
+                  className={`flex-1 min-w-[90px] rounded-xl px-3 py-2 border ${
+                    balance > 0
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-emerald-50 border-emerald-100'
+                  }`}
+                >
+                  <div
+                    className={`text-[9px] font-semibold uppercase tracking-wider ${
+                      balance > 0 ? 'text-red-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    Balance
+                  </div>
+                  <div
+                    className={`text-sm font-bold mt-0.5 ${
+                      balance > 0 ? 'text-red-600' : 'text-emerald-600'
                     }`}
                   >
                     ₹{balance.toLocaleString()}
-                  </span>
-                </span>
+                  </div>
+                </div>
               </div>
 
-              {/* Payment details */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  />
+              {/* ── Payment Details ────────────────────────────────────── */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  Payment Details
                 </div>
-
-                {smpNowTotal > 0 && (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  {/* Date */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      SMP Receipt No (Rpt)
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Date <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="text"
-                      value={receiptNo}
-                      onChange={(e) => setReceiptNo(e.target.value)}
-                      placeholder="Auto-incremented, editable"
-                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
-                    <div className="mt-1.5 flex items-center gap-3">
-                      <span className="text-[10px] font-medium text-gray-500">SMP Mode:</span>
-                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
-                          <input
-                            type="radio"
-                            name="smpPaymentMode"
-                            value={mode}
-                            checked={smpPaymentMode === mode}
-                            onChange={() => setSmpPaymentMode(mode)}
-                            className="accent-blue-600"
-                          />
-                          {mode}
-                        </label>
-                      ))}
-                    </div>
                   </div>
-                )}
 
-                {svkNowTotal > 0 && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      SVK Receipt No
-                    </label>
+                  {/* SMP Receipt */}
+                  {smpNowTotal > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        SMP Receipt No
+                      </label>
+                      <input
+                        type="text"
+                        value={receiptNo}
+                        onChange={(e) => setReceiptNo(e.target.value)}
+                        placeholder="Auto-incremented, editable"
+                        className="w-full rounded-md border border-blue-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                      />
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
+                          Mode:
+                        </span>
+                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setSmpPaymentMode(mode)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                              smpPaymentMode === mode
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600'
+                            }`}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SVK Receipt */}
+                  {svkNowTotal > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        SVK Receipt No
+                      </label>
+                      <input
+                        type="text"
+                        value={svkReceiptNo}
+                        onChange={(e) => setSvkReceiptNo(e.target.value)}
+                        placeholder="Auto-incremented, editable"
+                        className="w-full rounded-md border border-purple-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
+                      />
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
+                          Mode:
+                        </span>
+                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setSvkPaymentMode(mode)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                              svkPaymentMode === mode
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-white border border-gray-300 text-gray-500 hover:border-purple-400 hover:text-purple-600'
+                            }`}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Additional Receipt */}
+                  {additionalNowTotal > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Additional Fee Receipt No
+                      </label>
+                      <input
+                        type="text"
+                        value={additionalReceiptNo}
+                        onChange={(e) => setAdditionalReceiptNo(e.target.value)}
+                        placeholder="Auto-incremented, editable"
+                        className="w-full rounded-md border border-emerald-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
+                      />
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
+                          Mode:
+                        </span>
+                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setAdditionalPaymentMode(mode)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                              additionalPaymentMode === mode
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-white border border-gray-300 text-gray-500 hover:border-emerald-400 hover:text-emerald-600'
+                            }`}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Remarks */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Remarks</label>
                     <input
                       type="text"
-                      value={svkReceiptNo}
-                      onChange={(e) => setSvkReceiptNo(e.target.value)}
-                      placeholder="Auto-incremented, editable"
-                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Optional notes"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
-                    <div className="mt-1.5 flex items-center gap-3">
-                      <span className="text-[10px] font-medium text-gray-500">SVK Mode:</span>
-                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
-                          <input
-                            type="radio"
-                            name="svkPaymentMode"
-                            value={mode}
-                            checked={svkPaymentMode === mode}
-                            onChange={() => setSvkPaymentMode(mode)}
-                            className="accent-purple-600"
-                          />
-                          {mode}
-                        </label>
-                      ))}
-                    </div>
                   </div>
-                )}
-
-                {additionalNowTotal > 0 && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Additional Fee Receipt No
-                    </label>
-                    <input
-                      type="text"
-                      value={additionalReceiptNo}
-                      onChange={(e) => setAdditionalReceiptNo(e.target.value)}
-                      placeholder="Auto-incremented, editable"
-                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
-                    />
-                    <div className="mt-1.5 flex items-center gap-3">
-                      <span className="text-[10px] font-medium text-gray-500">Addl Mode:</span>
-                      {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                        <label key={mode} className="flex items-center gap-1 cursor-pointer text-xs text-gray-700">
-                          <input
-                            type="radio"
-                            name="additionalPaymentMode"
-                            value={mode}
-                            checked={additionalPaymentMode === mode}
-                            onChange={() => setAdditionalPaymentMode(mode)}
-                            className="accent-green-600"
-                          />
-                          {mode}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Remarks
-                  </label>
-                  <input
-                    type="text"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="Optional notes"
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  />
                 </div>
               </div>
 
               {saveError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                   {saveError}
                 </div>
               )}
@@ -932,7 +1030,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-3 shrink-0">
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex justify-end gap-2.5 shrink-0">
           <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
