@@ -171,39 +171,99 @@ function ProfileTab({ student: s }: { student: Student }) {
       {/* Marks */}
       <ProfileSection title="Marks Details" accent="bg-amber-50 text-amber-600">
         {(() => {
-          const sciPct = s.scienceMax > 0 ? (s.scienceObtained / s.scienceMax) * 100 : null;
-          const mathPct = s.mathsMax > 0 ? (s.mathsObtained / s.mathsMax) * 100 : null;
+          const sciPct  = s.scienceMax > 0 ? (s.scienceObtained / s.scienceMax) * 100 : null;
+          const mathPct = s.mathsMax > 0   ? (s.mathsObtained   / s.mathsMax)   * 100 : null;
           const bars = [
-            { label: 'SSLC Total', obtained: s.sslcObtainedTotal, max: s.sslcMaxTotal, pct: sslcPct, color: 'bg-blue-500', track: 'bg-blue-50', textColor: 'text-blue-700' },
-            { label: 'Science',    obtained: s.scienceObtained,          max: s.scienceMax,          pct: sciPct,  color: 'bg-emerald-500', track: 'bg-emerald-50', textColor: 'text-emerald-700' },
-            { label: 'Maths',      obtained: s.mathsObtained,            max: s.mathsMax,            pct: mathPct, color: 'bg-violet-500',  track: 'bg-violet-50',  textColor: 'text-violet-700' },
-            { label: 'M + S',      obtained: s.mathsScienceObtainedTotal, max: s.mathsScienceMaxTotal, pct: msPct,  color: 'bg-amber-500',  track: 'bg-amber-50',   textColor: 'text-amber-700' },
+            { label: 'SSLC',    obtained: s.sslcObtainedTotal,        max: s.sslcMaxTotal,        pct: sslcPct, color: 'bg-blue-500',    track: 'bg-blue-50',    textColor: 'text-blue-700'    },
+            { label: 'Science', obtained: s.scienceObtained,          max: s.scienceMax,          pct: sciPct,  color: 'bg-emerald-500', track: 'bg-emerald-50', textColor: 'text-emerald-700' },
+            { label: 'Maths',   obtained: s.mathsObtained,            max: s.mathsMax,            pct: mathPct, color: 'bg-violet-500',  track: 'bg-violet-50',  textColor: 'text-violet-700'  },
+            { label: 'M + S',   obtained: s.mathsScienceObtainedTotal, max: s.mathsScienceMaxTotal, pct: msPct,  color: 'bg-amber-500',  track: 'bg-amber-50',   textColor: 'text-amber-700'   },
           ];
+          const priorPct = s.priorQualification === 'ITI' ? s.itiPercentage
+                         : s.priorQualification === 'PUC' ? s.pucPercentage
+                         : null;
           return (
-            <div className="flex gap-3 pt-1">
-              {bars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
-                <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                  <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
-                    {pct !== null ? `${pct.toFixed(1)}%` : '—'}
-                  </span>
-                  <div className={`relative w-full rounded-lg overflow-hidden h-20 ${track} border border-gray-100`}>
-                    <div
-                      className={`absolute bottom-0 left-0 right-0 ${color} rounded-t-lg`}
-                      style={{
-                        height: pct !== null ? `${Math.min(pct, 100)}%` : '0%',
-                        transformOrigin: 'bottom',
-                        animation: `bar-grow 0.45s ease-out ${idx * 55}ms both`,
-                      }}
-                    />
+            <div className="space-y-4">
+
+              {/* ── Bar chart ───────────────────────────────────── */}
+              <div className="flex justify-around pt-1">
+                {bars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
+                  <div key={label} className="flex flex-col items-center gap-1">
+                    <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
+                      {pct !== null ? `${pct.toFixed(1)}%` : '—'}
+                    </span>
+                    <div className={`relative rounded-lg overflow-hidden h-20 w-6 ${track} border border-gray-100`}>
+                      <div
+                        className={`absolute bottom-0 left-0 right-0 ${color} rounded-t-md`}
+                        style={{
+                          height: pct !== null ? `${Math.min(pct, 100)}%` : '0%',
+                          transformOrigin: 'bottom',
+                          animation: `bar-grow 0.45s ease-out ${idx * 55}ms both`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-gray-500 tabular-nums font-medium text-center leading-tight">
+                      {obtained || '—'}/{max || '—'}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 text-center leading-tight">
+                      {label}
+                    </span>
                   </div>
-                  <span className="text-[9px] text-gray-500 tabular-nums font-medium text-center leading-tight">
-                    {obtained || '—'} / {max || '—'}
-                  </span>
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 text-center leading-tight">
-                    {label}
-                  </span>
+                ))}
+              </div>
+
+              {/* ── SSLC detail grid ────────────────────────────── */}
+              <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-x-5 gap-y-2.5">
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">10th Board</div>
+                  <div className="text-xs font-medium text-gray-800 mt-0.5">{s.tenthBoard || '—'}</div>
                 </div>
-              ))}
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SSLC Total</div>
+                  <div className="text-xs font-medium text-gray-800 mt-0.5">
+                    {s.sslcObtainedTotal || '—'} / {s.sslcMaxTotal || '—'}
+                    {sslcPct !== null && <span className="ml-1.5 text-blue-600 font-bold text-[10px]">{sslcPct.toFixed(1)}%</span>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Science</div>
+                  <div className="text-xs font-medium text-gray-800 mt-0.5">
+                    {s.scienceObtained || '—'} / {s.scienceMax || '—'}
+                    {sciPct !== null && <span className="ml-1.5 text-emerald-600 font-bold text-[10px]">{sciPct.toFixed(1)}%</span>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths</div>
+                  <div className="text-xs font-medium text-gray-800 mt-0.5">
+                    {s.mathsObtained || '—'} / {s.mathsMax || '—'}
+                    {mathPct !== null && <span className="ml-1.5 text-violet-600 font-bold text-[10px]">{mathPct.toFixed(1)}%</span>}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths + Science</div>
+                  <div className="text-xs font-medium text-gray-800 mt-0.5">
+                    {s.mathsScienceObtainedTotal || '—'} / {s.mathsScienceMaxTotal || '—'}
+                    {msPct !== null && <span className="ml-1.5 text-amber-600 font-bold text-[10px]">{msPct.toFixed(1)}%</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Prior qualification ─────────────────────────── */}
+              {s.priorQualification !== 'NONE' && (
+                <div className="border-t border-gray-100 pt-3 flex items-center gap-6">
+                  <div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Prior Qualification</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">{s.priorQualification}</div>
+                  </div>
+                  {priorPct !== null && priorPct > 0 && (
+                    <div>
+                      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{s.priorQualification} Percentage</div>
+                      <div className="text-sm font-bold text-indigo-700 mt-0.5">{priorPct.toFixed(1)}%</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
             </div>
           );
         })()}
