@@ -461,45 +461,45 @@ export function FeeRegister() {
               </tr>
 
               {/* Column header */}
-              <tr className="border-b-2 border-gray-200 bg-slate-50">
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-500 whitespace-nowrap w-8 sticky left-0 z-20 bg-slate-50">#</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap sticky left-8 z-20 bg-slate-50 border-r border-gray-200">Name</th>
-                {showFatherName && <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap">Father Name</th>}
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-16">Year</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-12">Course</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-14">Cat</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-20">Date</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-12">SMP Rpt</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-24">SVK Rpt</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-14">Mode</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-28 border-r border-gray-200">Remarks</th>
+              <tr className="border-b border-slate-200">
+                <th className="px-2 py-2 text-left font-semibold text-slate-500 whitespace-nowrap w-8 sticky left-0 z-20 bg-slate-100 text-[10px] uppercase tracking-wide">#</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap sticky left-8 z-20 bg-slate-100 border-r border-slate-200 text-[10px] uppercase tracking-wide">Name</th>
+                {showFatherName && <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap bg-slate-100 text-[10px] uppercase tracking-wide">Father Name</th>}
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-16 bg-slate-100 text-[10px] uppercase tracking-wide">Year</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-12 bg-slate-100 text-[10px] uppercase tracking-wide">Course</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-24 bg-slate-100 text-[10px] uppercase tracking-wide">Reg No</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-14 bg-slate-100 text-[10px] uppercase tracking-wide">Cat</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">Adm Type</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">Date</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-12 bg-slate-100 text-[10px] uppercase tracking-wide">SMP Rpt</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-24 bg-slate-100 text-[10px] uppercase tracking-wide">SVK Rpt</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-14 bg-slate-100 text-[10px] uppercase tracking-wide">Mode</th>
+                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-28 bg-slate-100 border-r border-slate-200 text-[10px] uppercase tracking-wide">Remarks</th>
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key, label }) => (
-                  <th key={key} className="px-2 py-1.5 text-right font-semibold text-blue-600 whitespace-nowrap w-14">
+                  <th key={key} className="px-2 py-2 text-right font-semibold text-blue-700 whitespace-nowrap w-14 bg-blue-100 text-[10px] uppercase tracking-wide">
                     {label}
                   </th>
                 ))}
-                <th className="px-2 py-1.5 text-right font-bold text-blue-700 whitespace-nowrap w-16 border-r border-gray-200">
+                <th className="px-2 py-2 text-right font-bold text-blue-800 whitespace-nowrap w-16 bg-blue-100 border-r border-blue-200 text-[10px] uppercase tracking-wide">
                   SMP Total
                 </th>
 
                 {showSVKDetails && (
-                  <th className="px-2 py-1.5 text-right font-semibold text-violet-600 whitespace-nowrap w-14">SVK</th>
+                  <th className="px-2 py-2 text-right font-semibold text-violet-700 whitespace-nowrap w-14 bg-violet-100 text-[10px] uppercase tracking-wide">SVK</th>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <th key={label} className="px-2 py-1.5 text-right font-semibold text-violet-600 whitespace-nowrap w-20">{label}</th>
+                  <th key={label} className="px-2 py-2 text-right font-semibold text-violet-700 whitespace-nowrap w-20 bg-violet-100 text-[10px] uppercase tracking-wide">{label}</th>
                 ))}
-                <th className="px-2 py-1.5 text-right font-bold text-violet-700 whitespace-nowrap w-16 border-r border-gray-200">
+                <th className="px-2 py-2 text-right font-bold text-violet-800 whitespace-nowrap w-16 bg-violet-100 border-r border-violet-200 text-[10px] uppercase tracking-wide">
                   SVK Total
                 </th>
 
-                <th className="px-2 py-1.5 text-right font-bold text-emerald-700 whitespace-nowrap w-20 border-r border-gray-200">
+                <th className="px-2 py-2 text-right font-bold text-emerald-800 whitespace-nowrap w-20 bg-emerald-100 border-r border-emerald-200 text-[10px] uppercase tracking-wide">
                   Total
                 </th>
                 {isAdmin && (
-                  <th className="px-2 py-1.5 text-center font-semibold text-slate-500 whitespace-nowrap w-20">
+                  <th className="px-2 py-2 text-center font-semibold text-slate-600 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">
                     Actions
                   </th>
                 )}
