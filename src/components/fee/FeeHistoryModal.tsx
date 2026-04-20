@@ -260,7 +260,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+        <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {loading ? (
             <div className="space-y-4">
               {Array.from({ length: 2 }).map((_, yi) => (

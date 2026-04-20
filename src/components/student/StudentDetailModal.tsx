@@ -1254,7 +1254,7 @@ export function StudentDetailModal({ student, onClose }: Props) {
         </div>
 
         {/* Tab content */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {activeTab === 'profile' && <ProfileTab student={student} />}
           {activeTab === 'documents' && (
             <DocumentsTab docs={docs} loading={docsLoading} error={docsError} />

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -135,6 +137,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
+  const [showAbout, setShowAbout] = useState(false);
+  const [showTech, setShowTech] = useState(false);
 
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
@@ -155,7 +159,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     }`;
   }
 
-  return (
+  const sidebar = (
     <aside
       className="shrink-0 h-full flex flex-col overflow-hidden"
       style={{
@@ -253,26 +257,140 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}
-      <div className={`py-3 border-t border-emerald-50 ${collapsed ? 'flex justify-center px-0' : 'px-4'}`}>
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'}`}>
-          <div
-            className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-            style={{ background: isAdmin ? 'linear-gradient(135deg, #34d399, #059669)' : 'linear-gradient(135deg, #fbbf24, #f59e0b)' }}
-          >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {isAdmin
-                ? <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
-                : <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>
-              }
-            </svg>
-          </div>
+      <div className={`py-2.5 border-t border-emerald-50 ${collapsed ? 'flex justify-center px-0' : 'px-3'}`}>
+        <button
+          onClick={() => setShowAbout(true)}
+          title="About"
+          className={`flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer ${collapsed ? 'justify-center' : ''}`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
           {!collapsed && (
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-              {isAdmin ? 'Admin Portal' : 'Staff Portal'}
-            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider">About</span>
           )}
-        </div>
+        </button>
       </div>
+
     </aside>
+  );
+
+  return (
+    <>
+      {sidebar}
+      {showAbout && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { setShowAbout(false); setShowTech(false); }}
+            aria-hidden="true"
+            style={{ animation: 'backdrop-enter 0.2s ease-out' }}
+          />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[360px] overflow-hidden flex flex-col"
+            style={{ animation: 'modal-enter 0.25s ease-out', height: '420px' }}
+          >
+            {/* Header */}
+            <div className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                </span>
+                <h3 className="text-sm font-bold text-white">About</h3>
+              </div>
+              <button
+                onClick={() => { setShowAbout(false); setShowTech(false); }}
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Student info-bar style — app identity */}
+            <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shrink-0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900 leading-tight">SMP Admissions</p>
+                <p className="text-[10px] text-gray-500">Sanjay Memorial Polytechnic, Sagar</p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3.5 space-y-3 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+              {/* Description */}
+              <p className="text-[11px] text-gray-600 leading-relaxed">
+                SMP Admissions is a purpose-built web application designed to streamline the complete administrative workflow of Sanjay Memorial Polytechnic, Sagar. It covers student enrollment, academic records, structured fee collection with itemised receipts, document management, and the issuance of Transfer &amp; Provisional Certificates — all from a single, unified interface.
+              </p>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {['Admissions', 'Fee Records', 'Receipts', 'Documents', 'Certificates', 'Reports'].map((f) => (
+                  <span key={f} className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    {f}
+                  </span>
+                ))}
+              </div>
+
+              <div className="h-px bg-gray-100" />
+
+              {/* Developer */}
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">Developer</p>
+                <div
+                  className="flex items-center gap-2.5 cursor-default select-none"
+                  onDoubleClick={() => setShowTech((v) => !v)}
+                  title="Double-click to reveal tech details"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center shrink-0">
+                    <span className="text-[11px] font-bold text-white">TR</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Thejaraj R</p>
+                    <p className="text-[10px] text-gray-500">FDA · Sanjay Memorial Polytechnic, Sagar</p>
+                  </div>
+                </div>
+                {showTech && (
+                  <div className="mt-2.5 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 space-y-1" style={{ animation: 'content-enter 0.2s ease-out' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">Technology &amp; Security</p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      Built with <span className="font-semibold text-slate-700">React 19</span>, <span className="font-semibold text-slate-700">TypeScript</span>, and <span className="font-semibold text-slate-700">Tailwind CSS 4</span>, backed by <span className="font-semibold text-slate-700">Google Firebase</span> (Firestore &amp; Auth). Secured with role-based access control — admins have full access while staff are restricted to permitted operations. Data is cloud-hosted with persistent offline caching.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-gray-100" />
+
+              {/* Contact */}
+              <p className="text-[10px] text-gray-500 leading-relaxed">
+                For any queries or suggestions regarding this application, feel free to contact the developer.
+              </p>
+
+              {/* Acknowledgement */}
+              <p className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 leading-relaxed">
+                Special thanks to the college Principal and staff for their invaluable support in developing this software.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-100 px-5 py-2.5 flex justify-end bg-gray-50/60">
+              <button
+                onClick={() => { setShowAbout(false); setShowTech(false); }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
