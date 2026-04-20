@@ -184,10 +184,11 @@ function ProfileTab({ student: s }: { student: Student }) {
                          : null;
           const sortedBars = [...bars].sort((a, b) => (a.pct ?? 0) - (b.pct ?? 0));
           return (
-            <div className="flex items-start pt-1">
+            <div className="flex items-stretch pt-1">
 
               {/* ── Bar chart (left half) ────────────────────────── */}
-              <div className="w-1/2 flex items-end pr-4">
+              <div className="w-1/2 flex flex-col justify-end pr-4">
+                <div className="flex items-end">
                 {sortedBars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
                   <div key={label} className="flex-1 flex flex-col items-center gap-1 px-1.5">
                     <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
@@ -211,6 +212,7 @@ function ProfileTab({ student: s }: { student: Student }) {
                     </span>
                   </div>
                 ))}
+                </div>
               </div>
 
               {/* ── Details (right half) ────────────────────────── */}
