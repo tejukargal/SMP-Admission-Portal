@@ -19,7 +19,7 @@ const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI'];
 const PAGE_SIZE = 100;
 
 const fs =
-  'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+  'rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400 cursor-pointer transition-colors';
 
 function calcSMPTotal(record: FeeRecord): number {
   return (SMP_FEE_HEADS as { key: SMPFeeHead }[]).reduce((s, { key }) => s + record.smp[key], 0);
@@ -283,20 +283,20 @@ export function FeeRegister() {
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
-      {/* Header row */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 leading-tight">Fee Register</h2>
+          <h2 className="text-base font-bold text-gray-900 leading-tight tracking-tight">Fee Register</h2>
           {selectedYear && (
-            <p className="text-[10px] text-gray-400 leading-tight">{selectedYear}</p>
+            <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{selectedYear}</p>
           )}
         </div>
 
-        {/* Summary chips + export */}
         {!isLoading && sortedRecords.length > 0 && (
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2.5 py-1 text-xs shadow-sm whitespace-nowrap">
-              <span className="text-gray-400 font-medium">Records</span>
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
+              <span className="text-gray-500 font-medium">Records</span>
               <span className="font-bold tabular-nums text-gray-900">
                 {filteredRecords.length}
                 {hasActiveFilters && filteredRecords.length !== sortedRecords.length && (
@@ -304,27 +304,28 @@ export function FeeRegister() {
                 )}
               </span>
             </div>
-            <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded px-2.5 py-1 text-xs shadow-sm whitespace-nowrap">
-              <span className="text-green-600 font-medium">Total Collected</span>
-              <span className="font-bold tabular-nums text-green-800">
-                ₹{totals.grandTotal.toLocaleString()}
-              </span>
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              <span className="text-emerald-700 font-medium">Collected</span>
+              <span className="font-bold tabular-nums text-emerald-900">₹{totals.grandTotal.toLocaleString()}</span>
             </div>
             <button
               onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear)}
               disabled={filteredRecords.length === 0}
-              className="rounded border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-sm"
+              className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-sm"
             >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
+              </svg>
               Export Excel
             </button>
           </div>
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2.5">
+      {/* ── Filters ─────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Academic year selector */}
           <select
             className={fs}
             value={selectedYear}
@@ -343,53 +344,29 @@ export function FeeRegister() {
             placeholder="Search name / reg / rpt…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-44 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="w-44 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400 bg-white text-gray-700 placeholder:text-gray-400"
           />
-          <select
-            className={fs}
-            value={courseFilter}
-            onChange={(e) => setCourseFilter(e.target.value as Course | '')}
-          >
+          <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
             <option value="">All Courses</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select
-            className={fs}
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value as Year | '')}
-          >
+          <select className={fs} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
             <option value="">All Years</option>
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-          <select
-            className={fs}
-            value={admTypeFilter}
-            onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}
-          >
+          <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
             <option value="">All Adm Types</option>
             {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select
-            className={fs}
-            value={admCatFilter}
-            onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}
-          >
+          <select className={fs} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
             <option value="">All Adm Cats</option>
             {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select
-            className={fs}
-            value={paymentModeFilter}
-            onChange={(e) => setPaymentModeFilter(e.target.value as PaymentMode | '')}
-          >
+          <select className={fs} value={paymentModeFilter} onChange={(e) => setPaymentModeFilter(e.target.value as PaymentMode | '')}>
             <option value="">All Modes</option>
             {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select
-            className={fs}
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-          >
+          <select className={fs} value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
             <option value="">All Dates</option>
             {uniqueDates.map((d) => (
               <option key={d} value={d}>{formatDate(d)}</option>
@@ -399,130 +376,130 @@ export function FeeRegister() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium"
+              className="rounded-full border border-orange-300 px-3 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 focus:outline-none cursor-pointer transition-colors font-medium"
             >
-              Clear Filters
+              ✕ Clear
             </button>
           )}
 
           <span className="text-gray-200 text-sm select-none">|</span>
 
-          {/* Column visibility toggles */}
           <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wide select-none">Cols:</span>
           {(
             [
               { label: 'Father Name', active: showFatherName, toggle: () => setShowFatherName((v) => !v) },
               { label: 'Fee Breakdown', active: showSMPDetails, toggle: () => setShowSMPDetails((v) => !v) },
-              { label: 'SVK', active: showSVKDetails, toggle: () => setShowSVKDetails((v) => !v) },
+              { label: 'SVK Details', active: showSVKDetails, toggle: () => setShowSVKDetails((v) => !v) },
             ] as { label: string; active: boolean; toggle: () => void }[]
           ).map(({ label, active, toggle }) => (
             <button
               key={label}
               onClick={toggle}
-              className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
                 active
-                  ? 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                  : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                  ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {active ? '✓ ' : ''}{label}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Table */}
+      {/* ── Table / empty states ─────────────────────────────────────────── */}
       {!selectedYear ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Select an academic year to view the fee register.
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400">
+          <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 4h10M3 11h18M3 15h10m-7 4h4" />
+          </svg>
+          <span className="text-sm">Select an academic year to view the fee register.</span>
         </div>
       ) : filteredRecords.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-          {sortedRecords.length === 0
-            ? 'No fee records found for this academic year.'
-            : 'No records match the current filters.'}
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400">
+          <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm">
+            {sortedRecords.length === 0
+              ? 'No fee records found for this academic year.'
+              : 'No records match the current filters.'}
+          </span>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
+        <div className="flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto flex flex-col">
           <table className="min-w-full text-xs border-collapse">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead className="sticky top-0 z-10">
               {/* Group header */}
               <tr className="border-b border-gray-200">
                 <th
                   colSpan={showFatherName ? 13 : 12}
-                  className="px-3 py-1 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-200 bg-gray-50"
+                  className="px-3 py-1.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider border-r border-gray-200 bg-slate-50"
                 >
                   Student Info
                 </th>
                 <th
                   colSpan={showSMPDetails ? SMP_FEE_HEADS.length + 1 : 1}
-                  className="px-3 py-1 text-center text-[10px] font-semibold text-blue-500 uppercase tracking-wider border-r border-gray-200"
+                  className="px-3 py-1.5 text-center text-[10px] font-bold text-blue-600 uppercase tracking-wider border-r border-gray-200 bg-blue-50"
                 >
-                  SMP Fee (Government)
+                  SMP Fee — Government
                 </th>
                 <th
                   colSpan={showSVKDetails ? 1 + additionalHeadLabels.length + 1 : 1}
-                  className="px-3 py-1 text-center text-[10px] font-semibold text-purple-500 uppercase tracking-wider border-r border-gray-200"
+                  className="px-3 py-1.5 text-center text-[10px] font-bold text-violet-600 uppercase tracking-wider border-r border-gray-200 bg-violet-50"
                 >
-                  SVK Fee (Management)
+                  SVK Fee — Management
                 </th>
-                <th className="px-3 py-1 text-center text-[10px] font-semibold text-green-600 uppercase tracking-wider border-r border-gray-200">
+                <th className="px-3 py-1.5 text-center text-[10px] font-bold text-emerald-700 uppercase tracking-wider border-r border-gray-200 bg-emerald-50">
                   Grand Total
                 </th>
                 {isAdmin && (
-                  <th className="px-3 py-1 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-3 py-1.5 text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-slate-50">
                     Actions
                   </th>
                 )}
               </tr>
-              {/* Column header */}
-              <tr className="border-b border-gray-200">
-                {/* Student Info */}
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-8 sticky left-0 z-20 bg-gray-50">#</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-8 z-20 bg-gray-50 border-r border-gray-200">Name</th>
-                {showFatherName && <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap">Father Name</th>}
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Year</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-12">Course</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Cat</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Date</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-12">SMP Rpt</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-24">SVK Rpt</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Mode</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 whitespace-nowrap w-28 border-r border-gray-200">Remarks</th>
 
-                {/* SMP heads */}
+              {/* Column header */}
+              <tr className="border-b-2 border-gray-200 bg-slate-50">
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-500 whitespace-nowrap w-8 sticky left-0 z-20 bg-slate-50">#</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap sticky left-8 z-20 bg-slate-50 border-r border-gray-200">Name</th>
+                {showFatherName && <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap">Father Name</th>}
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-16">Year</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-12">Course</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Reg No</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-14">Cat</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-20">Adm Type</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-20">Date</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-12">SMP Rpt</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-24">SVK Rpt</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-14">Mode</th>
+                <th className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap w-28 border-r border-gray-200">Remarks</th>
+
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key, label }) => (
-                  <th key={key} className="px-2 py-1.5 text-right font-semibold text-blue-700 whitespace-nowrap w-14">
+                  <th key={key} className="px-2 py-1.5 text-right font-semibold text-blue-600 whitespace-nowrap w-14">
                     {label}
                   </th>
                 ))}
-                <th className="px-2 py-1.5 text-right font-semibold text-blue-800 whitespace-nowrap w-16 border-r border-gray-200">
+                <th className="px-2 py-1.5 text-right font-bold text-blue-700 whitespace-nowrap w-16 border-r border-gray-200">
                   SMP Total
                 </th>
 
-                {/* SVK heads */}
                 {showSVKDetails && (
-                  <th className="px-2 py-1.5 text-right font-semibold text-purple-700 whitespace-nowrap w-14">
-                    SVK
-                  </th>
+                  <th className="px-2 py-1.5 text-right font-semibold text-violet-600 whitespace-nowrap w-14">SVK</th>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <th key={label} className="px-2 py-1.5 text-right font-semibold text-purple-600 whitespace-nowrap w-20">
-                    {label}
-                  </th>
+                  <th key={label} className="px-2 py-1.5 text-right font-semibold text-violet-600 whitespace-nowrap w-20">{label}</th>
                 ))}
-                <th className="px-2 py-1.5 text-right font-semibold text-purple-800 whitespace-nowrap w-16 border-r border-gray-200">
+                <th className="px-2 py-1.5 text-right font-bold text-violet-700 whitespace-nowrap w-16 border-r border-gray-200">
                   SVK Total
                 </th>
 
-                {/* Grand total */}
-                <th className="px-2 py-1.5 text-right font-semibold text-green-700 whitespace-nowrap w-20 border-r border-gray-200">
+                <th className="px-2 py-1.5 text-right font-bold text-emerald-700 whitespace-nowrap w-20 border-r border-gray-200">
                   Total
                 </th>
                 {isAdmin && (
-                  <th className="px-2 py-1.5 text-center font-semibold text-gray-500 whitespace-nowrap w-20">
+                  <th className="px-2 py-1.5 text-center font-semibold text-slate-500 whitespace-nowrap w-20">
                     Actions
                   </th>
                 )}
@@ -537,95 +514,95 @@ export function FeeRegister() {
                 return (
                   <tr
                     key={record.id}
-                    className="group hover:bg-gray-50 transition-colors cursor-context-menu"
+                    className="group hover:bg-slate-50/80 transition-colors cursor-context-menu"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, record });
                     }}
                   >
-                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap sticky left-0 z-[1] bg-white group-hover:bg-gray-50 transition-colors">{idx + 1}</td>
-                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap sticky left-8 z-[1] bg-white group-hover:bg-gray-50 transition-colors border-r border-gray-200">
+                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap sticky left-0 z-[1] bg-white group-hover:bg-slate-50/80 transition-colors">{idx + 1}</td>
+                    <td className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap sticky left-8 z-[1] bg-white group-hover:bg-slate-50/80 transition-colors border-r border-gray-100">
                       {record.studentName}
                       {record.academicYear !== selectedYear && (
-                        <span className="ml-1.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 align-middle">
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 align-middle">
                           PY {record.academicYear}
                         </span>
                       )}
                     </td>
                     {showFatherName && <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.fatherName}</td>}
                     <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.year}</td>
-                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.course}</td>
-                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.regNumber || '—'}</td>
+                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-medium">{record.course}</td>
+                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap font-mono">{record.regNumber || '—'}</td>
                     <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.admCat}</td>
-                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap">{record.admType}</td>
-                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{formatDate(record.date)}</td>
-                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-mono">{record.receiptNumber || '—'}</td>
-                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-mono">{record.svkReceiptNumber || '—'}</td>
+                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.admType}</td>
+                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{formatDate(record.date)}</td>
+                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-mono text-[11px]">{record.receiptNumber || '—'}</td>
+                    <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-mono text-[11px]">{record.svkReceiptNumber || '—'}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                           record.paymentMode === 'UPI'
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'bg-gray-100 text-gray-600'
+                            ? 'bg-violet-100 text-violet-700'
+                            : 'bg-amber-50 text-amber-700'
                         }`}
                       >
                         {record.paymentMode}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap border-r border-gray-100 max-w-[7rem] truncate" title={record.remarks}>
-                      {record.remarks || '—'}
+                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap border-r border-gray-100 max-w-[7rem] truncate" title={record.remarks}>
+                      {record.remarks || <span className="text-gray-200">—</span>}
                     </td>
 
                     {/* SMP heads */}
                     {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
-                      <td key={key} className="px-2 py-1.5 text-right text-gray-700 whitespace-nowrap tabular-nums">
-                        {record.smp[key] > 0 ? record.smp[key].toLocaleString() : <span className="text-gray-300">—</span>}
+                      <td key={key} className="px-2 py-1.5 text-right text-gray-600 whitespace-nowrap tabular-nums bg-blue-50/30">
+                        {record.smp[key] > 0 ? record.smp[key].toLocaleString() : <span className="text-gray-200">—</span>}
                       </td>
                     ))}
-                    <td className="px-2 py-1.5 text-right font-semibold text-blue-800 whitespace-nowrap tabular-nums border-r border-gray-100">
+                    <td className="px-2 py-1.5 text-right font-bold text-blue-800 whitespace-nowrap tabular-nums border-r border-gray-100 bg-blue-50/50">
                       {smpTotal.toLocaleString()}
                     </td>
 
                     {/* SVK */}
                     {showSVKDetails && (
-                      <td className="px-2 py-1.5 text-right text-gray-700 whitespace-nowrap tabular-nums">
-                        {record.svk > 0 ? record.svk.toLocaleString() : <span className="text-gray-300">—</span>}
+                      <td className="px-2 py-1.5 text-right text-gray-600 whitespace-nowrap tabular-nums bg-violet-50/30">
+                        {record.svk > 0 ? record.svk.toLocaleString() : <span className="text-gray-200">—</span>}
                       </td>
                     )}
                     {showSVKDetails && additionalHeadLabels.map((label) => {
                       const val = record.additionalPaid.find((h) => h.label === label)?.amount ?? 0;
                       return (
-                        <td key={label} className="px-2 py-1.5 text-right text-gray-700 whitespace-nowrap tabular-nums">
-                          {val > 0 ? val.toLocaleString() : <span className="text-gray-300">—</span>}
+                        <td key={label} className="px-2 py-1.5 text-right text-gray-600 whitespace-nowrap tabular-nums bg-violet-50/30">
+                          {val > 0 ? val.toLocaleString() : <span className="text-gray-200">—</span>}
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1.5 text-right font-semibold text-purple-800 whitespace-nowrap tabular-nums border-r border-gray-100">
+                    <td className="px-2 py-1.5 text-right font-bold text-violet-800 whitespace-nowrap tabular-nums border-r border-gray-100 bg-violet-50/50">
                       {svkTotal.toLocaleString()}
                     </td>
 
                     {/* Grand total */}
-                    <td className="px-2 py-1.5 text-right font-bold text-green-700 whitespace-nowrap tabular-nums border-r border-gray-100">
-                      {total.toLocaleString()}
+                    <td className="px-2 py-1.5 text-right font-bold text-emerald-700 whitespace-nowrap tabular-nums border-r border-gray-100 bg-emerald-50/50">
+                      ₹{total.toLocaleString()}
                     </td>
 
                     {/* Actions */}
                     {isAdmin && (
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setEditRecord(record)}
-                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 border border-blue-200 hover:border-blue-300 transition-colors cursor-pointer"
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-blue-600 hover:bg-blue-50 border border-blue-200 hover:border-blue-300 transition-colors cursor-pointer"
                             title="Edit record"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => { setDeleteTarget(record); setDeleteError(null); }}
-                            className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-600 hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors cursor-pointer"
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-50 border border-red-200 hover:border-red-300 transition-colors cursor-pointer"
                             title="Delete record"
                           >
-                            Delete
+                            Del
                           </button>
                         </div>
                       </td>
@@ -643,13 +620,13 @@ export function FeeRegister() {
                       (showSVKDetails ? 1 + additionalHeadLabels.length : 0) + 1 +
                       1 + (isAdmin ? 1 : 0)
                     }
-                    className="px-4 py-2.5 text-center"
+                    className="px-4 py-3 text-center"
                   >
                     <button
-                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      className="rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 px-4 py-1 text-xs font-medium transition-colors cursor-pointer"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                     >
-                      Load more ({filteredRecords.length - visibleCount} remaining)
+                      Load {Math.min(PAGE_SIZE, filteredRecords.length - visibleCount)} more ({filteredRecords.length - visibleCount} remaining)
                     </button>
                   </td>
                 </tr>
@@ -658,52 +635,50 @@ export function FeeRegister() {
 
             {/* Totals footer */}
             <tfoot className="sticky bottom-0 z-10">
-              <tr className="bg-gray-100 border-t-2 border-gray-300 font-semibold text-gray-800">
-                <td className="px-2 py-1.5 text-gray-500 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-gray-100" colSpan={2}>
-                  Totals ({filteredRecords.length} records)
+              <tr className="bg-slate-700 border-t-2 border-slate-600 font-semibold text-white">
+                <td className="px-2 py-2 text-slate-300 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-slate-700" colSpan={2}>
+                  Totals · {filteredRecords.length} records
                 </td>
-                <td colSpan={showFatherName ? 11 : 10} className="bg-gray-100 border-r border-gray-200" />
+                <td colSpan={showFatherName ? 11 : 10} className="bg-slate-700 border-r border-slate-600" />
 
-                {/* SMP totals */}
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
-                  <td key={key} className="px-2 py-1.5 text-right text-blue-800 whitespace-nowrap tabular-nums text-xs">
-                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-gray-300">—</span>}
+                  <td key={key} className="px-2 py-2 text-right text-blue-200 whitespace-nowrap tabular-nums text-xs">
+                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-slate-500">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-right text-blue-900 whitespace-nowrap tabular-nums border-r border-gray-300">
+                <td className="px-2 py-2 text-right text-blue-100 whitespace-nowrap tabular-nums font-bold border-r border-slate-600">
                   {(Object.values(totals.smp) as number[]).reduce((s, v) => s + v, 0).toLocaleString()}
                 </td>
 
-                {/* SVK totals */}
                 {showSVKDetails && (
-                  <td className="px-2 py-1.5 text-right text-purple-800 whitespace-nowrap tabular-nums">
-                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-gray-300">—</span>}
+                  <td className="px-2 py-2 text-right text-violet-200 whitespace-nowrap tabular-nums">
+                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-slate-500">—</span>}
                   </td>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <td key={label} className="px-2 py-1.5 text-right text-purple-700 whitespace-nowrap tabular-nums">
+                  <td key={label} className="px-2 py-2 text-right text-violet-200 whitespace-nowrap tabular-nums">
                     {(totals.additional[label] ?? 0) > 0
                       ? (totals.additional[label] ?? 0).toLocaleString()
-                      : <span className="text-gray-300">—</span>}
+                      : <span className="text-slate-500">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-right text-purple-900 whitespace-nowrap tabular-nums border-r border-gray-300">
+                <td className="px-2 py-2 text-right text-violet-100 whitespace-nowrap tabular-nums font-bold border-r border-slate-600">
                   {(totals.svk + additionalHeadLabels.reduce((s, l) => s + (totals.additional[l] ?? 0), 0)).toLocaleString()}
                 </td>
 
-                {/* Grand total */}
-                <td className="px-2 py-1.5 text-right text-green-800 whitespace-nowrap tabular-nums font-bold border-r border-gray-300">
+                <td className="px-2 py-2 text-right text-emerald-300 whitespace-nowrap tabular-nums font-bold text-sm border-r border-slate-600">
                   ₹{totals.grandTotal.toLocaleString()}
                 </td>
-                {isAdmin && <td />}
+                {isAdmin && <td className="bg-slate-700" />}
               </tr>
             </tfoot>
           </table>
 
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto shrink-0">
+          <div className="px-3 py-1.5 border-t border-gray-100 text-[10px] text-gray-400 mt-auto shrink-0 flex items-center gap-1.5">
+            <span className="w-1 h-1 rounded-full bg-gray-300 inline-block" />
             Showing {Math.min(visibleCount, filteredRecords.length)} of {filteredRecords.length}
             {filteredRecords.length < sortedRecords.length && (
-              <span className="text-gray-400"> (filtered from {sortedRecords.length} total)</span>
+              <span className="text-gray-300"> (filtered from {sortedRecords.length} total)</span>
             )}
           </div>
         </div>
@@ -743,42 +718,42 @@ export function FeeRegister() {
         return (
           <div
             ref={ctxRef}
-            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[170px]"
+            className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-2xl py-1.5 min-w-[180px] overflow-hidden"
             style={{ top: ctxMenu.y, left: ctxMenu.x }}
           >
-            <div className="px-3 py-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[200px]">
+            <div className="px-3 py-1.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[220px]">
               {ctxMenu.record.studentName}
             </div>
             <button
               disabled={smp === 0}
-              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700 enabled:cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700 enabled:cursor-pointer transition-colors"
               onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
             >
-              <span className="text-blue-500 font-bold text-[10px] border border-blue-300 rounded px-1 py-0.5">SMP</span>
+              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">SMP</span>
               SMP Receipt
             </button>
             <button
               disabled={svk === 0}
-              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-purple-50 enabled:hover:text-purple-700 enabled:cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-violet-50 enabled:hover:text-violet-700 enabled:cursor-pointer transition-colors"
               onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
             >
-              <span className="text-purple-500 font-bold text-[10px] border border-purple-300 rounded px-1 py-0.5">SVK</span>
+              <span className="w-5 h-5 rounded-md bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">SVK</span>
               SVK Receipt
             </button>
             <button
               disabled={addl === 0}
-              className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-green-50 enabled:hover:text-green-700 enabled:cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-emerald-50 enabled:hover:text-emerald-700 enabled:cursor-pointer transition-colors"
               onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
             >
-              <span className="text-green-600 font-bold text-[10px] border border-green-300 rounded px-1 py-0.5">ADDL</span>
+              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">+</span>
               Additional Receipt
             </button>
             <div className="border-t border-gray-100 my-1" />
             <button
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 cursor-pointer"
+              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-slate-50 hover:text-gray-900 flex items-center gap-2.5 cursor-pointer transition-colors"
               onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
             >
-              <span className="text-gray-400 font-bold text-[10px] border border-gray-300 rounded px-1 py-0.5">≡</span>
+              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">≡</span>
               Fee Details
             </button>
           </div>
@@ -789,41 +764,54 @@ export function FeeRegister() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
             onClick={() => { if (!deleting) setDeleteTarget(null); }}
             aria-hidden="true"
             style={{ animation: 'backdrop-enter 0.2s ease-out' }}
           />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6" style={{ animation: 'modal-enter 0.25s ease-out' }}>
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Delete Fee Record?</h3>
-            <p className="text-xs text-gray-600 mb-1">
-              <span className="font-medium">{deleteTarget.studentName}</span>
-              {' '}· {deleteTarget.date}
-              {deleteTarget.receiptNumber && (
-                <span className="ml-1 text-gray-500">· Rpt {deleteTarget.receiptNumber}</span>
-              )}
-            </p>
-            <p className="text-xs text-red-600 mb-4">This action cannot be undone.</p>
-            {deleteError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
-                {deleteError}
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="bg-red-50 border-b border-red-100 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-red-900">Delete Fee Record?</h3>
+                  <p className="text-xs text-red-600 mt-0.5">This action cannot be undone.</p>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-xs text-gray-600 mb-1">
+                <span className="font-semibold text-gray-800">{deleteTarget.studentName}</span>
+                <span className="text-gray-400"> · {formatDate(deleteTarget.date)}</span>
+                {deleteTarget.receiptNumber && (
+                  <span className="ml-1 text-gray-400">· Rpt {deleteTarget.receiptNumber}</span>
+                )}
               </p>
-            )}
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void handleDelete()}
-                disabled={deleting}
-                className="rounded border border-transparent px-3 py-1.5 text-xs text-white bg-red-600 hover:bg-red-700 cursor-pointer transition-colors disabled:opacity-50"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+              {deleteError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">
+                  {deleteError}
+                </p>
+              )}
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="rounded-full border border-gray-200 px-4 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                  className="rounded-full border border-transparent px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
