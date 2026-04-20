@@ -183,10 +183,10 @@ function ProfileTab({ student: s }: { student: Student }) {
                          : s.priorQualification === 'PUC' ? s.pucPercentage
                          : null;
           return (
-            <div className="space-y-4">
+            <div className="flex gap-5 items-start pt-1">
 
-              {/* ── Bar chart ───────────────────────────────────── */}
-              <div className="flex justify-around pt-1">
+              {/* ── Bar chart (left) ────────────────────────────── */}
+              <div className="flex gap-2.5 shrink-0">
                 {bars.map(({ label, obtained, max, pct, color, track, textColor }, idx) => (
                   <div key={label} className="flex flex-col items-center gap-1">
                     <span className={`text-[10px] font-bold tabular-nums ${pct !== null ? textColor : 'text-gray-300'}`}>
@@ -212,57 +212,58 @@ function ProfileTab({ student: s }: { student: Student }) {
                 ))}
               </div>
 
-              {/* ── SSLC detail grid ────────────────────────────── */}
-              <div className="border-t border-gray-100 pt-3 grid grid-cols-2 gap-x-5 gap-y-2.5">
-                <div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">10th Board</div>
-                  <div className="text-xs font-medium text-gray-800 mt-0.5">{s.tenthBoard || '—'}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SSLC Total</div>
-                  <div className="text-xs font-medium text-gray-800 mt-0.5">
-                    {s.sslcObtainedTotal || '—'} / {s.sslcMaxTotal || '—'}
-                    {sslcPct !== null && <span className="ml-1.5 text-blue-600 font-bold text-[10px]">{sslcPct.toFixed(1)}%</span>}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Science</div>
-                  <div className="text-xs font-medium text-gray-800 mt-0.5">
-                    {s.scienceObtained || '—'} / {s.scienceMax || '—'}
-                    {sciPct !== null && <span className="ml-1.5 text-emerald-600 font-bold text-[10px]">{sciPct.toFixed(1)}%</span>}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths</div>
-                  <div className="text-xs font-medium text-gray-800 mt-0.5">
-                    {s.mathsObtained || '—'} / {s.mathsMax || '—'}
-                    {mathPct !== null && <span className="ml-1.5 text-violet-600 font-bold text-[10px]">{mathPct.toFixed(1)}%</span>}
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths + Science</div>
-                  <div className="text-xs font-medium text-gray-800 mt-0.5">
-                    {s.mathsScienceObtainedTotal || '—'} / {s.mathsScienceMaxTotal || '—'}
-                    {msPct !== null && <span className="ml-1.5 text-amber-600 font-bold text-[10px]">{msPct.toFixed(1)}%</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Prior qualification ─────────────────────────── */}
-              {s.priorQualification !== 'NONE' && (
-                <div className="border-t border-gray-100 pt-3 flex items-center gap-6">
+              {/* ── Details (right) ─────────────────────────────── */}
+              <div className="flex-1 min-w-0 space-y-2.5 border-l border-gray-100 pl-5">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                   <div>
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Prior Qualification</div>
-                    <div className="text-xs font-medium text-gray-800 mt-0.5">{s.priorQualification}</div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">10th Board</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">{s.tenthBoard || '—'}</div>
                   </div>
-                  {priorPct !== null && priorPct > 0 && (
-                    <div>
-                      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{s.priorQualification} Percentage</div>
-                      <div className="text-sm font-bold text-indigo-700 mt-0.5">{priorPct.toFixed(1)}%</div>
+                  <div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SSLC Total</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">
+                      {s.sslcObtainedTotal || '—'} / {s.sslcMaxTotal || '—'}
+                      {sslcPct !== null && <span className="ml-1.5 text-blue-600 font-bold text-[10px]">{sslcPct.toFixed(1)}%</span>}
                     </div>
-                  )}
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Science</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">
+                      {s.scienceObtained || '—'} / {s.scienceMax || '—'}
+                      {sciPct !== null && <span className="ml-1.5 text-emerald-600 font-bold text-[10px]">{sciPct.toFixed(1)}%</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">
+                      {s.mathsObtained || '—'} / {s.mathsMax || '—'}
+                      {mathPct !== null && <span className="ml-1.5 text-violet-600 font-bold text-[10px]">{mathPct.toFixed(1)}%</span>}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Maths + Science</div>
+                    <div className="text-xs font-medium text-gray-800 mt-0.5">
+                      {s.mathsScienceObtainedTotal || '—'} / {s.mathsScienceMaxTotal || '—'}
+                      {msPct !== null && <span className="ml-1.5 text-amber-600 font-bold text-[10px]">{msPct.toFixed(1)}%</span>}
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {s.priorQualification !== 'NONE' && (
+                  <div className="border-t border-gray-100 pt-2.5 flex items-center gap-5">
+                    <div>
+                      <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Prior Qualification</div>
+                      <div className="text-xs font-medium text-gray-800 mt-0.5">{s.priorQualification}</div>
+                    </div>
+                    {priorPct !== null && priorPct > 0 && (
+                      <div>
+                        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{s.priorQualification} %</div>
+                        <div className="text-sm font-bold text-indigo-700 mt-0.5">{priorPct.toFixed(1)}%</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
             </div>
           );
