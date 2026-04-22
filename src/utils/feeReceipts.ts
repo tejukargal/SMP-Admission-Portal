@@ -406,11 +406,11 @@ function buildAdditionalCopy(record: FeeRecord, copyLabel: string): string {
   const total = items.reduce((s, h) => s + h.amount, 0);
   const words = numToWords(total);
 
-  const itemRows = items.map((h, i) => `<tr>
-        <td class="col-part"><span class="rn">${i + 1}</span>${esc(h.label)}<span class="dots"> ....</span></td>
-        <td class="col-amt">${h.amount}</td>
-        <td class="col-rem"></td>
-      </tr>`).join('');
+  const itemRows = items.map((h, i) => `<div class="fee-row">
+        <div class="fc-part"><span class="rn">${i + 1}</span><span class="item-name">${esc(h.label)}</span><span class="dots"> ....</span></div>
+        <div class="fc-amt">${h.amount}</div>
+        <div class="fc-rem"></div>
+      </div>`).join('');
 
   return `<div class="copy">
     <div class="copy-tag">${copyLabel}</div>
@@ -435,27 +435,21 @@ function buildAdditionalCopy(record: FeeRecord, copyLabel: string): string {
       <span class="cls-group"><span class="field-lbl">Section</span><span class="sec-dl">&nbsp;<span class="bval">${esc(record.course)}&nbsp;(${esc(record.admCat === 'SNQ' ? 'SNQ' : record.admType)})</span>&nbsp;</span></span>
     </div>
 
-    <table class="fee-table">
-      <thead>
-        <tr>
-          <th class="col-part">PARTICULARS</th>
-          <th class="col-amt">AMOUNT</th>
-          <th class="col-rem">REMARKS</th>
-        </tr>
-      </thead>
-      <tbody>
+    <div class="fee-wrap">
+      <div class="fee-head">
+        <div class="fc-part">PARTICULARS</div>
+        <div class="fc-amt">AMOUNT</div>
+        <div class="fc-rem">REMARKS</div>
+      </div>
+      <div class="fee-body">
         ${itemRows}
-      </tbody>
-      <tfoot>
-        <tr class="total-row">
-          <td class="col-part total-lbl">TOTAL Rs. &hellip;&hellip;</td>
-          <td class="col-amt total-val">${total > 0 ? total : ''}</td>
-          <td class="col-rem"></td>
-        </tr>
-      </tfoot>
-    </table>
-
-    <div class="flex-spacer"></div>
+        <div class="fee-row total-row">
+          <div class="fc-part total-lbl">TOTAL Rs. &hellip;&hellip;</div>
+          <div class="fc-amt total-val">${total > 0 ? total : ''}</div>
+          <div class="fc-rem"></div>
+        </div>
+      </div>
+    </div>
 
     <div class="words-row">
       <span class="field-lbl">Rupees (in words)</span><span class="words-dl">&nbsp;<span class="wval">${esc(words)}</span>&nbsp;</span>
@@ -504,23 +498,21 @@ export function generateAdditionalReceipt(record: FeeRecord): void {
   .class-dl, .sec-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; min-width: 0; }
   .bval { font-weight: bold; font-size: 10.5pt; }
 
-  /* ── Fee table — uses border-collapse so column borders are continuous ── */
-  .fee-table { width: 100%; border-collapse: collapse; flex-shrink: 0; font-size: 8.5pt; margin-top: 2pt; }
-  .fee-table thead tr { border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
-  .fee-table th { font-weight: bold; font-size: 8pt; text-align: center; padding: 2.5pt 3pt; }
-  .fee-table td { padding: 3pt 4pt; vertical-align: middle; font-weight: normal; }
-  .fee-table tfoot .total-row { border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
-  /* Column separators via border-left/right on the AMOUNT column — spans all rows */
-  .col-amt { width: 46pt; text-align: right; border-left: 0.8pt solid #000; border-right: 0.8pt solid #000; }
-  .col-rem { width: 48pt; }
-  .col-part { /* flexible remaining width */ }
-  .rn { display: inline-block; min-width: 14pt; }
-  .dots { color: #444; }
-  .total-lbl { text-align: right; font-weight: bold; font-size: 9pt; }
-  .total-val { font-weight: bold; font-size: 9pt; text-align: right; }
-
-  /* Push words/sig to bottom */
-  .flex-spacer { flex: 1; }
+  /* ── Fee section — flex, fills all remaining vertical space ── */
+  .fee-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; margin-top: 2pt; }
+  .fee-head { display: flex; flex-shrink: 0; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
+  .fee-head .fc-part, .fee-head .fc-amt, .fee-head .fc-rem { font-weight: bold; font-size: 9pt; text-align: center; justify-content: center; padding: 2.5pt 3pt; }
+  .fee-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .fee-row { flex: 1; display: flex; align-items: stretch; min-height: 0; }
+  .total-row { flex: 0 0 auto; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; min-height: 16pt; }
+  .fc-part { flex: 1; display: flex; align-items: center; border-right: 0.8pt solid #000; padding: 0 4pt; font-size: 8.5pt; overflow: hidden; }
+  .fc-amt { width: 54pt; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; border-right: 0.8pt solid #000; padding: 0 6pt; font-size: 9.5pt; }
+  .fc-rem { width: 60pt; flex-shrink: 0; display: flex; align-items: center; padding: 0 6pt; font-size: 8.5pt; }
+  .rn { flex-shrink: 0; min-width: 14pt; font-size: 8.5pt; }
+  .item-name { flex: 1; font-size: 8.5pt; }
+  .dots { flex-shrink: 0; color: #444; font-size: 8.5pt; margin-left: 2pt; }
+  .total-lbl { justify-content: flex-end !important; font-weight: bold; font-size: 9pt; }
+  .total-val { font-weight: bold; font-size: 9pt; }
 
   .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; }
   .words-line2 { margin-top: 2pt; }

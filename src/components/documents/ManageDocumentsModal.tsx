@@ -20,6 +20,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (loadedDocs) setDocs(loadedDocs);
@@ -32,7 +33,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  function markDirty() { setSaved(false); }
+  function markDirty() { setSaved(false); setIsDirty(true); }
 
   function toggleSubmitted(key: DocKey) {
     if (!docs) return;
@@ -91,6 +92,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     try {
       await saveStudentDocuments(student.id, docs);
       setSaved(true);
+      setIsDirty(false);
       setTimeout(() => setSaved(false), 2500);
     } catch {
       setSaveError('Failed to save. Please try again.');
@@ -353,7 +355,9 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
             {docs && (
               <button
                 onClick={() => printStudentDocs(student, docs)}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer transition-colors flex items-center gap-1.5"
+                disabled={isDirty}
+                title={isDirty ? 'Save changes before printing' : 'Print document list'}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300"
               >
                 🖨️ Print
               </button>

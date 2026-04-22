@@ -138,9 +138,10 @@ interface FeeReceiptDetailModalProps {
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onFeeDetails: () => void;
 }
 
-function FeeReceiptDetailModal({ record, isAdmin, onClose, onEdit, onDelete }: FeeReceiptDetailModalProps) {
+function FeeReceiptDetailModal({ record, isAdmin, onClose, onEdit, onDelete, onFeeDetails }: FeeReceiptDetailModalProps) {
   const smpTotal = calcSMPTotal(record);
   const svkBase = record.svk;
   const addlTotal = record.additionalPaid.reduce((s, h) => s + h.amount, 0);
@@ -398,6 +399,15 @@ function FeeReceiptDetailModal({ record, isAdmin, onClose, onEdit, onDelete }: F
                 </button>
               </>
             )}
+            <button
+              onClick={onFeeDetails}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 transition-colors cursor-pointer"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Fee Details
+            </button>
           </div>
           {/* Right: close */}
           <button
@@ -1053,6 +1063,7 @@ export function FeeRegister() {
           onClose={() => setDetailRecord(null)}
           onEdit={() => { setEditRecord(detailRecord); setDetailRecord(null); }}
           onDelete={() => { setDeleteTarget(detailRecord); setDeleteError(null); setDetailRecord(null); }}
+          onFeeDetails={() => { setHistoryRecord(detailRecord); setDetailRecord(null); }}
         />
       )}
 
