@@ -572,73 +572,93 @@ export function Students() {
         />
         {/* Menu */}
         <div
-          className="fixed z-50 bg-white/95 border border-emerald-100 rounded-2xl shadow-2xl py-1 min-w-[185px] text-sm"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-emerald-50 mb-1 truncate max-w-[185px]">
-            {contextMenu.student.studentNameSSLC}
+          {/* Header */}
+          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+              {contextMenu.student.studentNameSSLC.charAt(0)}
+            </span>
+            <span className="text-[12px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
           </div>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-            onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📁</span>
-            Manage Documents
-          </button>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-            onClick={() => { printStudentProfile(contextMenu.student); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">🖨️</span>
-            Print Profile
-          </button>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-            onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📄</span>
-            ANS Letter
-          </button>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-            onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📋</span>
-            Study Certificate
-          </button>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-            onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📜</span>
-            Transfer Certificate
-          </button>
-          {contextMenu.student.year === '3RD YEAR' && (
+          {/* Items */}
+          <div className="py-1.5">
             <button
-              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center gap-2"
-              onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="text-sm leading-none">🎓</span>
-              Provisional Certificate
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              </span>
+              Manage Documents
             </button>
-          )}
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { printStudentProfile(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              </span>
+              Print Profile
+            </button>
+            <div className="my-1 h-px bg-gray-100 mx-3" />
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </span>
+              ANS Letter
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              </span>
+              Study Certificate
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </span>
+              Transfer Certificate
+            </button>
+            {contextMenu.student.year === '3RD YEAR' && (
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </span>
+                Provisional Certificate
+              </button>
+            )}
+          </div>
         </div>
       </>
+    )}
+
+    {showMissingDocs && (
+      <MissingDocsModal
+        students={allStudents}
+        onManage={(student) => setDocsModalStudent(student)}
+        onClose={() => setShowMissingDocs(false)}
+      />
     )}
 
     {docsModalStudent && (
       <ManageDocumentsModal
         student={docsModalStudent}
         onClose={() => setDocsModalStudent(null)}
-      />
-    )}
-
-    {showMissingDocs && (
-      <MissingDocsModal
-        students={allStudents}
-        onManage={(student) => { setShowMissingDocs(false); setDocsModalStudent(student); }}
-        onClose={() => setShowMissingDocs(false)}
       />
     )}
 

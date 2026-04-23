@@ -1101,44 +1101,53 @@ export function FeeRegister() {
         return (
           <div
             ref={ctxRef}
-            className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-2xl py-1.5 min-w-[180px] overflow-hidden"
-            style={{ top: ctxMenu.y, left: ctxMenu.x }}
+            className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
+            style={{ top: ctxMenu.y, left: ctxMenu.x, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           >
-            <div className="px-3 py-1.5 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[220px]">
-              {ctxMenu.record.studentName}
+            {/* Header */}
+            <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                {ctxMenu.record.studentName.charAt(0)}
+              </span>
+              <span className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.record.studentName}</span>
             </div>
-            <button
-              disabled={smp === 0}
-              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700 enabled:cursor-pointer transition-colors"
-              onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
-            >
-              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">SMP</span>
-              SMP Receipt
-            </button>
-            <button
-              disabled={svk === 0}
-              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-violet-50 enabled:hover:text-violet-700 enabled:cursor-pointer transition-colors"
-              onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
-            >
-              <span className="w-5 h-5 rounded-md bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">SVK</span>
-              SVK Receipt
-            </button>
-            <button
-              disabled={addl === 0}
-              className="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-700 enabled:hover:bg-emerald-50 enabled:hover:text-emerald-700 enabled:cursor-pointer transition-colors"
-              onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
-            >
-              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0">+</span>
-              Additional Receipt
-            </button>
-            <div className="border-t border-gray-100 my-1" />
-            <button
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-slate-50 hover:text-gray-900 flex items-center gap-2.5 cursor-pointer transition-colors"
-              onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
-            >
-              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">≡</span>
-              Fee Details
-            </button>
+            {/* Items */}
+            <div className="py-1.5">
+              <button
+                disabled={smp === 0}
+                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-blue-50/70 enabled:hover:text-blue-800 enabled:cursor-pointer"
+                onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0 group-enabled:group-hover:bg-blue-200 transition-colors">SMP</span>
+                SMP Receipt
+              </button>
+              <button
+                disabled={svk === 0}
+                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-violet-50/70 enabled:hover:text-violet-800 enabled:cursor-pointer"
+                onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0 group-enabled:group-hover:bg-violet-200 transition-colors">SVK</span>
+                SVK Receipt
+              </button>
+              <button
+                disabled={addl === 0}
+                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-emerald-50/70 enabled:hover:text-emerald-800 enabled:cursor-pointer"
+                onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-emerald-100 text-emerald-600 flex items-center justify-center text-[11px] font-bold flex-shrink-0 group-enabled:group-hover:bg-emerald-200 transition-colors">+</span>
+                Additional Receipt
+              </button>
+              <div className="my-1 h-px bg-gray-100 mx-3" />
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 cursor-pointer transition-colors duration-100"
+                onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </span>
+                Fee Details
+              </button>
+            </div>
           </div>
         );
       })()}

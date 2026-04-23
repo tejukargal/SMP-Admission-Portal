@@ -694,25 +694,33 @@ export function ExamFee() {
             onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
           />
           <div
-            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-44"
-            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[180px]"
+            style={{ top: contextMenu.y, left: contextMenu.x, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           >
-            <button
-              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors cursor-pointer flex items-center gap-2"
-              onClick={() => {
-                setContextMenu(null);
-                setWarnStudentId(contextMenu.studentId);
-              }}
-            >
-              <span>✕</span>
-              <span>Mark as Unpaid</span>
-            </button>
-            <button
-              className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
-              onClick={() => setContextMenu(null)}
-            >
-              Cancel
-            </button>
+            <div className="py-1.5">
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-red-600 hover:bg-red-50/80 hover:text-red-700 flex items-center gap-2.5 transition-colors duration-100"
+                onClick={() => {
+                  setContextMenu(null);
+                  setWarnStudentId(contextMenu.studentId);
+                }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 group-hover:text-red-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </span>
+                Mark as Unpaid
+              </button>
+              <div className="my-1 h-px bg-gray-100 mx-3" />
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-500 hover:bg-gray-50 hover:text-gray-700 flex items-center gap-2.5 transition-colors duration-100"
+                onClick={() => setContextMenu(null)}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-400 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </span>
+                Dismiss
+              </button>
+            </div>
           </div>
         </>
       )}

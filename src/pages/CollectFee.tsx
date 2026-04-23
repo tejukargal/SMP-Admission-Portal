@@ -637,29 +637,41 @@ export function CollectFee() {
       {ctxMenu && (
         <div
           ref={ctxRef}
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[170px]"
-          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[195px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
         >
-          <div className="px-3 py-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-100 mb-1 truncate max-w-[200px]">
-            {ctxMenu.student.studentNameSSLC}
-          </div>
-          <button
-            disabled={ctxMenu.isFullyPaid}
-            className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:text-gray-700 enabled:hover:bg-blue-50 enabled:hover:text-blue-700"
-            onClick={() => { setSelectedStudent(ctxMenu.student); closeCtx(); }}
-          >
-            <span className={`font-bold text-[10px] border rounded px-1 py-0.5 ${ctxMenu.hasFeeRecord ? 'text-amber-500 border-amber-300' : 'text-blue-500 border-blue-300'}`}>
-              {ctxMenu.isFullyPaid ? '✓' : '₹'}
+          {/* Header */}
+          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
+            <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${ctxMenu.isFullyPaid ? 'bg-emerald-100 text-emerald-700' : ctxMenu.hasFeeRecord ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+              {ctxMenu.student.studentNameSSLC.charAt(0)}
             </span>
-            {ctxMenu.isFullyPaid ? 'No Dues' : ctxMenu.hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
-          </button>
-          <button
-            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 cursor-pointer"
-            onClick={() => { setFeeHistoryStudent({ student: ctxMenu.student, noDues: ctxMenu.isFullyPaid }); closeCtx(); }}
-          >
-            <span className="text-gray-400 font-bold text-[10px] border border-gray-300 rounded px-1 py-0.5">≡</span>
-            Fee Details
-          </button>
+            <span className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.student.studentNameSSLC}</span>
+          </div>
+          {/* Items */}
+          <div className="py-1.5">
+            <button
+              disabled={ctxMenu.isFullyPaid}
+              className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-blue-50/70 enabled:hover:text-blue-800 enabled:cursor-pointer"
+              onClick={() => { setSelectedStudent(ctxMenu.student); closeCtx(); }}
+            >
+              <span className={`w-[18px] h-[18px] rounded-[5px] flex items-center justify-center flex-shrink-0 transition-colors ${ctxMenu.isFullyPaid ? 'bg-emerald-100 text-emerald-500' : ctxMenu.hasFeeRecord ? 'bg-amber-100 text-amber-500 group-hover:bg-amber-200 group-hover:text-amber-700' : 'bg-blue-100 text-blue-500 group-hover:bg-blue-200 group-hover:text-blue-700'}`}>
+                {ctxMenu.isFullyPaid
+                  ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>
+                }
+              </span>
+              {ctxMenu.isFullyPaid ? 'No Dues' : ctxMenu.hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
+              onClick={() => { setFeeHistoryStudent({ student: ctxMenu.student, noDues: ctxMenu.isFullyPaid }); closeCtx(); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </span>
+              Fee Details
+            </button>
+          </div>
         </div>
       )}
     </div>

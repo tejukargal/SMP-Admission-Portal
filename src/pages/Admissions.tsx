@@ -480,28 +480,39 @@ export function Admissions() {
           onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
         />
         <div
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[210px] text-sm"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[220px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100 mb-1 truncate max-w-[210px]">
-            {contextMenu.student.studentNameSSLC}
+          {/* Header */}
+          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+              {contextMenu.student.studentNameSSLC.charAt(0)}
+            </span>
+            <span className="text-[12px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
           </div>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
-            onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'en' }); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📨</span>
-            Seat Allotment Letter
-          </button>
-          <button
-            className="w-full text-left px-3 py-2 text-gray-700 hover:bg-orange-50 hover:text-orange-700 transition-colors flex items-center gap-2"
-            onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'kn' }); setContextMenu(null); }}
-          >
-            <span className="text-sm leading-none">📨</span>
-            <span>Seat Allotment Letter</span>
-            <span className="ml-auto text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">ಕನ್ನಡ</span>
-          </button>
+          {/* Items */}
+          <div className="py-1.5">
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-blue-50/70 hover:text-blue-800 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'en' }); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+              </span>
+              Seat Allotment Letter
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-orange-50/70 hover:text-orange-800 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setAdmLetterModal({ student: contextMenu.student, lang: 'kn' }); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+              </span>
+              <span>Seat Allotment Letter</span>
+              <span className="ml-auto text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">ಕನ್ನಡ</span>
+            </button>
+          </div>
         </div>
       </>
     )}

@@ -628,73 +628,99 @@ export function Inquiries() {
       {ctxMenu && (
         <div
           ref={ctxRef}
-          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999 }}
-          className="w-48 bg-white border border-gray-200 rounded-lg shadow-xl py-1 text-xs"
+          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
         >
           {/* Header */}
-          <div className="px-3 py-1.5 border-b border-gray-100">
-            <p className="font-semibold text-gray-800 truncate">{ctxMenu.inq.studentName}</p>
-            <p className="text-[10px] text-gray-400 truncate">{ctxMenu.inq.interestedCourse} · {fmtDate(ctxMenu.inq.visitDate)}</p>
+          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+              {ctxMenu.inq.studentName.charAt(0)}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.inq.studentName}</p>
+              <p className="text-[10px] text-gray-400 truncate">{ctxMenu.inq.interestedCourse} · {fmtDate(ctxMenu.inq.visitDate)}</p>
+            </div>
           </div>
 
-          {/* Edit — always available */}
-          <button
-            onClick={() => handleEdit(ctxMenu.inq)}
-            className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-          >
-            <span className="text-gray-400">✎</span> Edit Inquiry
-          </button>
+          {/* Items */}
+          <div className="py-1.5">
+            {/* Edit — always available */}
+            <button
+              onClick={() => handleEdit(ctxMenu.inq)}
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </span>
+              Edit Inquiry
+            </button>
 
-          {/* Active-only actions — admin only */}
-          {ctxMenu.inq.status === 'active' && isAdmin && (
-            <>
-              <button
-                onClick={() => handleBeginEnrollment(ctxMenu.inq)}
-                className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center gap-2 text-green-700 font-medium"
-              >
-                <span>→</span> Begin Enrollment
-              </button>
-              <div className="border-t border-gray-100 my-0.5" />
-              <button
-                onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'cancelled')}
-                className="w-full text-left px-3 py-2 hover:bg-red-50 flex items-center gap-2 text-red-600"
-              >
-                <span>✕</span> Cancel Inquiry
-              </button>
-            </>
-          )}
+            {/* Active-only actions — admin only */}
+            {ctxMenu.inq.status === 'active' && isAdmin && (
+              <>
+                <button
+                  onClick={() => handleBeginEnrollment(ctxMenu.inq)}
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-2.5 transition-colors duration-100 font-medium"
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  </span>
+                  Begin Enrollment
+                </button>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <button
+                  onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'cancelled')}
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-red-600 hover:bg-red-50/80 hover:text-red-700 flex items-center gap-2.5 transition-colors duration-100"
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 group-hover:text-red-600 transition-colors">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </span>
+                  Cancel Inquiry
+                </button>
+              </>
+            )}
 
-          {/* Converted-only actions */}
-          {ctxMenu.inq.status === 'converted' && (
-            <>
-              <div className="border-t border-gray-100 my-0.5" />
-              <button
-                onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
-                className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-600"
-              >
-                <span>↩</span> Restore to Active
-              </button>
-            </>
-          )}
+            {/* Converted-only actions */}
+            {ctxMenu.inq.status === 'converted' && (
+              <>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <button
+                  onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 101.85-4.17L1 10"/></svg>
+                  </span>
+                  Restore to Active
+                </button>
+              </>
+            )}
 
-          {/* Cancelled-only actions */}
-          {ctxMenu.inq.status === 'cancelled' && (
-            <>
-              <div className="border-t border-gray-100 my-0.5" />
-              <button
-                onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
-                className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-600"
-              >
-                <span>↩</span> Restore to Active
-              </button>
-              <button
-                onClick={() => void handleDelete(ctxMenu.inq.id, ctxMenu.inq.studentName)}
-                className="w-full text-left px-3 py-2 hover:bg-red-50 flex items-center gap-2 text-red-500"
-              >
-                <span>🗑</span> Delete
-              </button>
-            </>
-          )}
+            {/* Cancelled-only actions */}
+            {ctxMenu.inq.status === 'cancelled' && (
+              <>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <button
+                  onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 101.85-4.17L1 10"/></svg>
+                  </span>
+                  Restore to Active
+                </button>
+                <button
+                  onClick={() => void handleDelete(ctxMenu.inq.id, ctxMenu.inq.studentName)}
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-red-600 hover:bg-red-50/80 hover:text-red-700 flex items-center gap-2.5 transition-colors duration-100"
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 group-hover:text-red-600 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  </span>
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
