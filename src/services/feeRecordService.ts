@@ -7,6 +7,8 @@ import {
   where,
   getDocs,
   writeBatch,
+  runTransaction,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmType, AdmCat, SMPFeeHead } from '../types';
@@ -106,22 +108,85 @@ export async function getFeeRecordsByAcademicYear(
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord));
 }
 
+const SVK_RPT_PREFIX = 'SVK DVP ';
+
+// ── Atomic receipt number counters ────────────────────────────────────────
+//
+// Counter documents live at receiptCounters/{academicYear}.
+// Each document stores the highest number issued so far for each receipt type.
+//
+// Using Firestore transactions guarantees two concurrent users always receive
+// different numbers, eliminating the race condition of the previous scan approach
+// (where both users could read the same max and generate the same receipt number).
+//
+// On first use for a new academic year the counter document is seeded by scanning
+// existing fee records — exactly the same computation as the legacy logic — then
+// subsequent calls atomically increment the stored counter.
+
+const RECEIPT_COUNTERS_COL = 'receiptCounters';
+
+interface ReceiptCounterDoc {
+  smp: number;
+  smpPadLen: number;
+  svk: number;
+  svkPadLen: number;
+  additional: number;
+}
+
+/** Scans existing fee records to derive initial counter values (same logic as legacy functions). */
+async function _buildInitialCounterData(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
+  const records = await getFeeRecordsByAcademicYear(academicYear);
+  let smp = 0, smpPadLen = 1;
+  let svk = 0, svkPadLen = 1;
+  let additional = 0;
+  for (const r of records) {
+    const n = parseInt(r.receiptNumber, 10);
+    if (!isNaN(n) && n > smp) { smp = n; smpPadLen = r.receiptNumber.length; }
+    const svkRpt = r.svkReceiptNumber ?? '';
+    if (svkRpt.startsWith(SVK_RPT_PREFIX)) {
+      const numPart = svkRpt.slice(SVK_RPT_PREFIX.length);
+      const sn = parseInt(numPart, 10);
+      if (!isNaN(sn) && sn > svk) { svk = sn; svkPadLen = numPart.length; }
+    }
+    const addlRpt = r.additionalReceiptNumber ?? '';
+    if (addlRpt) {
+      const an = parseInt(addlRpt, 10);
+      if (!isNaN(an) && an > additional) additional = an;
+    }
+  }
+  return { smp, smpPadLen, svk, svkPadLen, additional };
+}
+
+/**
+ * Ensures the receiptCounters document for this academic year exists.
+ * On first use: seeds from existing records via a create-if-not-exists transaction
+ * so concurrent callers can never overwrite each other.
+ */
+async function _ensureReceiptCounterDoc(academicYear: AcademicYear): Promise<void> {
+  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return;
+  const initialData = await _buildInitialCounterData(academicYear);
+  await runTransaction(db, async (tx) => {
+    const check = await tx.get(ref);
+    if (!check.exists()) tx.set(ref, initialData);
+  });
+}
+
 /**
  * Returns the next SMP receipt number for a given academic year.
  * Finds the highest numeric receipt number saved so far and increments by 1.
  */
 export async function getNextReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  const records = await getFeeRecordsByAcademicYear(academicYear);
-  let max = 0;
-  let padLen = 1;
-  for (const r of records) {
-    const n = parseInt(r.receiptNumber, 10);
-    if (!isNaN(n) && n > max) {
-      max = n;
-      padLen = r.receiptNumber.length;
-    }
-  }
-  return String(max + 1).padStart(padLen, '0');
+  await _ensureReceiptCounterDoc(academicYear);
+  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() as ReceiptCounterDoc;
+    const next = data.smp + 1;
+    tx.update(ref, { smp: next });
+    return String(next).padStart(data.smpPadLen ?? 1, '0');
+  });
 }
 
 /**
@@ -129,40 +194,31 @@ export async function getNextReceiptNumber(academicYear: AcademicYear): Promise<
  * Format: 4-digit zero-padded (e.g. "0001", "0002", ...).
  */
 export async function getNextAdditionalReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  const records = await getFeeRecordsByAcademicYear(academicYear);
-  let max = 0;
-  for (const r of records) {
-    const rpt = r.additionalReceiptNumber ?? '';
-    if (rpt) {
-      const n = parseInt(rpt, 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
-  }
-  return String(max + 1).padStart(4, '0');
+  await _ensureReceiptCounterDoc(academicYear);
+  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() as ReceiptCounterDoc;
+    const next = data.additional + 1;
+    tx.update(ref, { additional: next });
+    return String(next).padStart(4, '0');
+  });
 }
-
-const SVK_RPT_PREFIX = 'SVK DVP ';
 
 /**
  * Returns the next SVK receipt number for a given academic year.
  * SVK receipt numbers follow the format "SVK DVP {n}" preserving zero-padding.
  */
 export async function getNextSvkReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  const records = await getFeeRecordsByAcademicYear(academicYear);
-  let max = 0;
-  let padLen = 1;
-  for (const r of records) {
-    const svkRpt = r.svkReceiptNumber ?? '';
-    if (svkRpt.startsWith(SVK_RPT_PREFIX)) {
-      const numPart = svkRpt.slice(SVK_RPT_PREFIX.length);
-      const n = parseInt(numPart, 10);
-      if (!isNaN(n) && n > max) {
-        max = n;
-        padLen = numPart.length;
-      }
-    }
-  }
-  return `${SVK_RPT_PREFIX}${String(max + 1).padStart(padLen, '0')}`;
+  await _ensureReceiptCounterDoc(academicYear);
+  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() as ReceiptCounterDoc;
+    const next = data.svk + 1;
+    tx.update(ref, { svk: next });
+    return `${SVK_RPT_PREFIX}${String(next).padStart(data.svkPadLen ?? 1, '0')}`;
+  });
 }
 
 /**

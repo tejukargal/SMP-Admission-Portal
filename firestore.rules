@@ -118,6 +118,15 @@ service cloud.firestore {
       allow write: if isActiveUser();
     }
 
+    // ── Receipt Number Counters ───────────────────────────────────────────
+    // One document per academic year tracks the highest SMP/SVK/Additional
+    // receipt number issued. Written inside Firestore transactions to guarantee
+    // uniqueness under concurrent fee collection by multiple staff users.
+    match /receiptCounters/{academicYear} {
+      allow read:  if request.auth != null;
+      allow write: if isActiveUser();
+    }
+
     // ── Inquiries ─────────────────────────────────────────────────────────
     match /inquiries/{inquiryId} {
       allow read: if request.auth != null;
