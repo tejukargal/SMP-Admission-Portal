@@ -11,6 +11,7 @@ import { exportStudentsPdf } from '../utils/studentsPdf';
 import { generateAnsLetter } from '../utils/ansLetter';
 import { printStudentProfile } from '../utils/printProfile';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
+import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
@@ -95,6 +96,7 @@ export function Students() {
   });
   const [deleting, setDeleting] = useState(false);
 
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
   const [showMissingDocs, setShowMissingDocs] = useState(false);
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
@@ -115,7 +117,7 @@ export function Students() {
     e.preventDefault();
     e.stopPropagation();
     const MENU_W = 190;
-    const MENU_H = 190;
+    const MENU_H = 250;
     const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
     const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
     setContextMenu({ x, y, student });
@@ -587,6 +589,16 @@ export function Students() {
           <div className="py-1.5">
             <button
               className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              onClick={() => { setDetailStudent(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+              </span>
+              View Details
+            </button>
+            <div className="my-1 h-px bg-gray-100 mx-3" />
+            <button
+              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
               onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
             >
               <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
@@ -652,6 +664,13 @@ export function Students() {
         students={allStudents}
         onManage={(student) => setDocsModalStudent(student)}
         onClose={() => setShowMissingDocs(false)}
+      />
+    )}
+
+    {detailStudent && (
+      <StudentDetailModal
+        student={detailStudent}
+        onClose={() => setDetailStudent(null)}
       />
     )}
 

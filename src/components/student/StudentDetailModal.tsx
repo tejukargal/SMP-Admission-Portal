@@ -1161,7 +1161,7 @@ export function StudentDetailModal({ student, onClose }: Props) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'profile',   label: 'Profile' },
-    { id: 'documents', label: 'Documents' },
+    { id: 'documents', label: 'Docs History' },
     { id: 'fee',       label: 'Fee History' },
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
