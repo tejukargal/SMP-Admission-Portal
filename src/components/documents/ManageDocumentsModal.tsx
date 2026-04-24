@@ -212,7 +212,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const skeletonGrid = (
     <div className="grid grid-cols-4 gap-3 p-5">
       {Array.from({ length: REQUIRED_DOCS.length }).map((_, i) => (
-        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-3 h-[110px] flex flex-col">
+        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-3 h-[90px] flex flex-col">
           <div className="skeleton h-3 w-3/4 rounded mb-1" />
           <div className="skeleton h-3 w-1/2 rounded" />
           <div className="flex-1 flex items-center justify-center">
@@ -319,14 +319,14 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                   return (
                     <div
                       key={key}
-                      className={`flex flex-col rounded-xl border-2 p-3 h-[110px] select-none hover:shadow-md transition-shadow duration-150 ${pal.bg} ${pal.border} ${!isSubmitted && !isReturned ? 'cursor-pointer' : 'cursor-context-menu'}`}
+                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[90px] select-none hover:shadow-md transition-shadow duration-150 ${pal.bg} ${pal.border} ${!isSubmitted && !isReturned ? 'cursor-pointer' : 'cursor-context-menu'}`}
                       onClick={() => handleCardClick(key, isSubmitted, isReturned)}
                       onDoubleClick={() => handleCardDoubleClick(key)}
                       onContextMenu={(e) => handleDocContextMenu(e, key)}
                       title={!isSubmitted && !isReturned ? 'Click to mark as submitted · Double-click for details · Right-click for options' : 'Double-click for details · Right-click for options'}
                     >
                       {/* Document label — small, top */}
-                      <p className={`text-[10px] font-semibold leading-snug line-clamp-2 shrink-0 ${pal.text} opacity-80`}>
+                      <p className={`text-[12px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
                         {label}
                       </p>
 
@@ -527,7 +527,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                       <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                       </span>
-                      Unmark Submitted
+                      Mark as Pending
                     </button>
                   </>
                 )}
