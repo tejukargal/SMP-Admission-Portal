@@ -36,7 +36,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function buildCertificate(student: Student, certType: CertificateType): string {
+export function buildStudyCertHTML(student: Student, certType: CertificateType): string {
   const today        = formatToday();
   const courseFull   = COURSE_NAMES[student.course] ?? student.course;
   const yearFigure   = YEAR_FIGURES[student.year] ?? student.year;
@@ -77,6 +77,10 @@ function buildCertificate(student: Student, certType: CertificateType): string {
     color: #000;
     background: #fff;
   }
+  @media screen {
+    html { background: #94a3b8; min-height: 100%; padding: 24px 0; }
+    body { max-width: 210mm; margin: 0 auto; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.22); border-radius: 4px; }
+  }
 
   /* ── Page wrapper (no border) ── */
   .page {
@@ -87,39 +91,41 @@ function buildCertificate(student: Student, certType: CertificateType): string {
 
   /* ── Header ── */
   .header {
-    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10pt;
     padding: 10pt 14pt 10pt;
     border-bottom: 4pt double #000;
   }
   .header-text {
+    flex: 1;
     text-align: center;
   }
   .college-name {
-    font-size: 22pt;
+    font-size: 20pt;
     font-weight: bold;
-    letter-spacing: 0.8pt;
+    letter-spacing: 0.6pt;
     margin-bottom: 3pt;
+    white-space: nowrap;
   }
   .college-tagline {
-    font-size: 9pt;
+    font-size: 8.5pt;
     margin-bottom: 4pt;
   }
   .college-instcode {
-    font-size: 13pt;
+    font-size: 12pt;
     font-weight: bold;
     margin-bottom: 3pt;
   }
   .college-address {
-    font-size: 10.5pt;
+    font-size: 10pt;
     margin-bottom: 2pt;
   }
   .college-contact {
-    font-size: 10.5pt;
+    font-size: 10pt;
   }
   .seal-header {
-    position: absolute;
-    right: 12pt;
-    top: 18pt;
+    flex-shrink: 0;
     width: 72pt;
     height: 72pt;
     object-fit: contain;
@@ -213,6 +219,7 @@ function buildCertificate(student: Student, certType: CertificateType): string {
 
   <!-- ── Header ── -->
   <div class="header">
+    <div style="flex-shrink:0;width:72pt"></div>
     <div class="header-text">
       <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
       <div class="college-tagline">(Approved by A.I.C.T.E., New&#8209;Delhi, and running with Grant&#8209;in&#8209;aid of State Govt. of Karnataka)</div>
@@ -295,18 +302,18 @@ function buildCertificate(student: Student, certType: CertificateType): string {
   </div>
 
 </div>
-<script>
-  window.onload = function () {
-    window.print();
-    window.addEventListener('afterprint', function () { window.close(); });
-  };
-</script>
 </body>
 </html>`;
 }
 
 export function generateStudyCertificate(student: Student, certType: CertificateType): void {
-  const html = buildCertificate(student, certType);
+  const base = buildStudyCertHTML(student, certType);
+  const html = base.replace('</body>', `<script>
+  window.onload = function () {
+    window.print();
+    window.addEventListener('afterprint', function () { window.close(); });
+  };
+</script>\n</body>`);
   const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');

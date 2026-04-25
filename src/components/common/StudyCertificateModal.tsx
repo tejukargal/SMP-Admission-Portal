@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Student } from '../../types';
-import { generateStudyCertificate, type CertificateType } from '../../utils/studyCertificate';
+import { buildStudyCertHTML, generateStudyCertificate, type CertificateType } from '../../utils/studyCertificate';
 
 interface Props {
   student: Student;
@@ -30,6 +30,7 @@ const OPTIONS: { type: CertificateType; label: string; desc: string; icon: strin
 
 export function StudyCertificateModal({ student, onClose }: Props) {
   const [selected, setSelected] = useState<CertificateType>('STUDYING');
+  const [previewHtml, setPreviewHtml] = useState('');
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -37,11 +38,122 @@ export function StudyCertificateModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  function handleGenerate() {
+  function handlePreview() {
+    setPreviewHtml(buildStudyCertHTML(student, selected));
+  }
+
+  function handlePrint() {
     generateStudyCertificate(student, selected);
     onClose();
   }
 
+  const CERT_LABELS: Record<CertificateType, string> = {
+    STUDYING: 'Currently Studying',
+    COMPLETED: 'Course Completed',
+    CANCELLED: 'Discontinued',
+  };
+
+  // ── Preview mode ──
+  if (previewHtml) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-6"
+        style={{ animation: 'backdrop-enter 0.18s ease-out' }}
+      >
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div
+          className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-5 py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center justify-between shrink-0">
+            <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                  </svg>
+                </span>
+                Print Preview — Study Certificate
+              </h2>
+              <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40 truncate max-w-xs">
+                {student.studentNameSSLC}
+              </span>
+              <span className="inline-flex items-center rounded-full text-[10px] font-semibold px-2 py-0.5 bg-blue-500/30 text-blue-100 border border-blue-400/30 shrink-0">
+                {CERT_LABELS[selected]}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Info banner */}
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center gap-2 shrink-0">
+            <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span className="text-xs text-blue-700">
+              Prints on a single A4 sheet. Verify all details before printing.
+            </span>
+          </div>
+
+          {/* Preview iframe */}
+          <div className="flex-1 overflow-auto min-h-0 bg-slate-300">
+            <iframe
+              srcDoc={previewHtml}
+              title="Study Certificate Print Preview"
+              scrolling="no"
+              className="w-full border-0 block"
+              style={{ height: '1250px' }}
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0 flex items-center justify-between">
+            <button
+              onClick={() => setPreviewHtml('')}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              Back
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={handlePrint}
+                className="rounded-lg bg-slate-700 text-white px-4 py-1.5 text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="6 9 6 2 18 2 18 9"/>
+                  <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                Print
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Selection mode ──
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
@@ -116,10 +228,15 @@ export function StudyCertificateModal({ student, onClose }: Props) {
             Cancel
           </button>
           <button
-            onClick={handleGenerate}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            onClick={handlePreview}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5"
           >
-            Generate
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            Preview & Print
           </button>
         </div>
       </div>

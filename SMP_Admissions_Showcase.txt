@@ -1,0 +1,346 @@
+================================================================================
+                    SMP ADMISSIONS PORTAL — PRODUCT SHOWCASE
+================================================================================
+
+HEADLINE
+--------
+A complete, cloud-powered student admissions management system built for modern
+engineering institutions — fast, secure, and accessible from any device.
+
+
+OVERVIEW
+--------
+SMP Admissions Portal is a full-stack web application purpose-built to digitise
+and streamline every stage of the student admissions lifecycle — from first
+inquiry to confirmed enrollment, fee collection, document tracking, and official
+certificate generation. It replaces error-prone paper registers and disconnected
+spreadsheets with a single, real-time, role-aware platform that your admin team
+and staff can use simultaneously from anywhere.
+
+
+AT A GLANCE
+-----------
+  Platform        : Web (browser-based, no installation required)
+  Access          : Any device — desktop, laptop, tablet
+  Data            : Live cloud database — always up to date across all users
+  Offline support : Works offline; syncs automatically when reconnected
+  Users           : Unlimited staff accounts under one admin
+  Security        : Enterprise-grade — Firebase App Check, role-enforced
+                    database rules, HTTPS-only
+  Live URL        : https://smp-admissions.web.app
+
+
+================================================================================
+                              CORE MODULES
+================================================================================
+
+1. DASHBOARD — REAL-TIME ADMISSIONS INTELLIGENCE
+-------------------------------------------------
+The dashboard is your command centre. It gives a live, filterable view of every
+student across all academic years — no manual counting, no stale reports.
+
+  What you see at a glance:
+  - Total confirmed students, broken down by Boys / Girls
+  - Course-wise counts (CE, ME, EC, CS, EE) with year-of-study breakdown
+  - Year-of-study cards (1st / 2nd / 3rd Year) with course breakdown
+  - 1st Year Pending Seats — live count of remaining seats (Regular: 60 cap,
+    SNQ: 3 cap) per course
+  - Admission Status panel — Provisional / Confirmed / Cancelled / Pending
+  - Admission Type panel — Regular / Lateral / Repeater / External / SNQ
+  - Category-wise report table (GM, C1, 2A, 2B, 3A, 3B, SC, ST) with year
+    and course breakdown
+  - Summary report table — admission type counts per year/course
+
+  Filters:
+  - Search by student name, register number, or mobile number (instant,
+    across all years)
+  - Filter by Academic Year, Course, Study Year, Gender, Category,
+    Admission Type, Admission Category, Status
+  - Academic year chips — click any year to instantly switch context
+  - All filters persist across page navigation
+
+  PDF Reports (Confirmed students only):
+  - One-click Summary Report PDF — year/course/admission-type matrix
+  - One-click Category Report PDF — caste category breakdown by year and course
+
+
+2. INQUIRIES — PRE-ADMISSION LEAD TRACKING
+-------------------------------------------
+Capture and manage walk-in and phone inquiries before students are formally
+enrolled.
+
+  - Record prospective student name, parent name, contact numbers, course
+    interest, and address
+  - Track inquiry status (New -> Contacted -> Interested -> Enrolled -> Dropped)
+  - Assign academic year to each inquiry
+  - Walk-in to Enrollment — convert any inquiry directly into the enrollment
+    form with one click (details pre-filled automatically)
+  - Right-click context menu for quick actions on any inquiry row
+  - Role-based: Staff can create and update; only Admins can delete
+
+
+3. ENROLL STUDENT — FAST, VALIDATED ENROLLMENT
+-----------------------------------------------
+A structured multi-section form that captures every data point required for a
+student's admission record.
+
+  Sections captured:
+  - Personal Information (Name as per SSLC & Aadhar, Father/Mother name, DOB,
+    Gender, Religion, Caste with auto-suggest, Category, Annual Income)
+  - Contact Details (Father & Student mobile, Address with Taluk auto-complete
+    that fills District automatically)
+  - SSLC Marks (Board, SSLC totals, Science & Maths marks, auto-calculated
+    combined totals, PUC/ITI percentage)
+  - Enrollment Details (Course, Study Year, Admission Type, Admission Category,
+    Academic Year, Status, Enrollment Date, Register Number, Merit Number)
+
+  Smart features:
+  - Caste auto-suggest — remembers castes from previous enrollments and
+    auto-fills the Category field
+  - Taluk auto-complete — 250+ Karnataka taluks; auto-fills District
+  - Reg Number auto-preview — generates the correct format automatically based
+    on course/year/academic year
+  - Re-enroll from previous year — search and pre-fill from a prior year's
+    record; just update the year and status
+  - Year conflict warning — alerts if a student is being enrolled in the same
+    year they were enrolled in previously (repeater detection)
+  - Preview & Confirm — full data review screen before committing to database
+  - Merit number auto-assigned sequentially on enrollment
+
+
+4. ADMISSIONS — PENDING LIST & SEAT ALLOTMENT
+----------------------------------------------
+Manage students who are in the admissions pipeline but not yet confirmed.
+
+  - View all PROVISIONAL / PENDING students filtered by year, course, and
+    academic year
+  - Inline status updates
+  - Generate Seat Allotment Intimation Letters for individual students (PDF)
+  - Edit button for Admin users to jump directly to a student's enrollment
+    record
+  - Tracks admission category (GM / SNQ / OTHERS) separately from student
+    category
+
+
+5. STUDENTS — CONFIRMED STUDENT REGISTER
+-----------------------------------------
+The official list of all CONFIRMED students for the active academic year.
+
+  - Paginated table (100 at a time, load-more on demand) sorted by
+    Year -> Course -> Name
+  - Filter by Course, Study Year, Gender, Category, Admission Type,
+    Admission Category
+  - Debounced search (300ms) across name, register number, and mobile
+  - Year and Course filter chips — clickable stat pills showing counts;
+    click to filter instantly
+  - Right-click context menu on any student row for:
+      > Manage Documents
+      > Print Student Profile
+      > ANS Letter (PDF)
+      > Study Certificate (formatted PDF)
+      > Transfer Certificate (formatted PDF)
+      > Provisional Certificate (3rd Year only, formatted PDF)
+  - Save PDF — exports the current filtered list to a formatted PDF register
+  - Doc Status — opens the Missing Documents report across all students
+  - Admin-only: Edit and Delete actions per student
+
+
+6. COLLECT FEE — FEE PAYMENT RECORDING
+----------------------------------------
+Admin-only module for recording fee payments against student accounts.
+
+  - Select student by register number or name
+  - Record SMP and SVK fee components separately
+  - Apply fee overrides per student (custom fee structures)
+  - Fine schedule integration (late fee calculation)
+  - Full payment history per student
+
+
+7. FEE REGISTER — PAYMENT LEDGER
+----------------------------------
+Staff-accessible read-only view of all fee transactions.
+
+  - Complete payment history across all students
+  - Filter by academic year, course, and study year
+  - Export to PDF and Excel
+
+
+8. FEE REPORTS — FINANCIAL SUMMARIES
+--------------------------------------
+Admin-only financial reporting module.
+
+  - Collection summaries by course, year, and date range
+  - Outstanding dues report
+  - Export to PDF
+
+
+9. DOCUMENT MANAGEMENT
+------------------------
+Track which documents each student has submitted and which are pending.
+
+  - Per-student document checklist (Aadhar, SSLC marks card, Transfer
+    Certificate, Caste Certificate, Income Certificate, Passport photo, etc.)
+  - Missing documents report across the entire student body — filter by
+    course and year
+  - Both Admin and Staff can update document status
+
+
+10. CERTIFICATE GENERATION
+----------------------------
+Generate official formatted certificates directly from student records —
+no manual typing required.
+
+  Certificate                      | Who can access
+  ---------------------------------+----------------------------------
+  Study Certificate                | All staff (via right-click)
+  Transfer Certificate             | All staff (via right-click)
+  Provisional Certificate          | All staff — 3rd Year only
+  ANS Letter (Admission No. Slip)  | All staff
+  Student Profile Print            | All staff
+  Seat Allotment Intimation Letter | Admin (Admissions module)
+
+  All certificates are generated as formatted print-ready PDFs from live
+  student data.
+
+
+11. MESSAGING
+--------------
+Bulk SMS/messaging module for communicating with students and parents.
+(Admin only)
+
+
+12. SETTINGS — SYSTEM CONFIGURATION
+--------------------------------------
+Admin-only control panel.
+
+  Tabs:
+  - General         — Set the active academic year (auto-populates across
+                      all modules)
+  - Fee Structure   — Define SMP and SVK fee amounts per course/year/
+                      academic year
+  - Fine Schedule   — Configure late fee rules
+  - Exam Fee        — Manage exam fee records
+  - Staff Accounts  — Create and manage staff login accounts, assign default
+                      academic years, activate/deactivate accounts
+  - Import Tools    — Bulk import students, fee register data, and address
+                      records from Excel
+
+
+================================================================================
+                         ROLE-BASED ACCESS CONTROL
+================================================================================
+
+Two roles — every permission enforced both in the UI and at the database level
+(server-side Firestore security rules).
+
+  Feature                          | Admin  | Staff
+  ---------------------------------+--------+--------
+  Dashboard (all filters + PDFs)   |  YES   |  YES
+  Inquiries (create/update)        |  YES   |  YES
+  Inquiries (delete)               |  YES   |  NO
+  Enroll Student                   |  YES   |  YES
+  Admissions (view + letters)      |  YES   |  YES
+  Admissions (edit)                |  YES   |  NO
+  Students (view + certificates)   |  YES   |  YES
+  Students (delete)                |  YES   |  NO
+  Collect Fee                      |  YES   |  NO
+  Fee Register (view)              |  YES   |  YES
+  Fee Reports                      |  YES   |  NO
+  Messaging                        |  YES   |  NO
+  Settings (all tabs)              |  YES   |  NO
+  Staff Account Management         |  YES   |  NO
+
+Staff accounts can be deactivated instantly from Settings — the user is signed
+out on their next session check.
+
+
+================================================================================
+                           SECURITY ARCHITECTURE
+================================================================================
+
+  Layer                | Implementation
+  ---------------------+--------------------------------------------------------
+  Authentication       | Firebase Email/Password — session-scoped (clears on
+                       | browser close)
+  API protection       | Firebase App Check (reCAPTCHA v3) — blocks all API
+                       | access from outside the web app
+  Database rules       | Firestore Security Rules enforce admin/staff roles
+                       | server-side — bypassing the UI is not possible
+  Transport            | HTTPS enforced with HSTS (2-year max-age, preload)
+  Clickjacking         | X-Frame-Options: DENY — cannot be embedded in iframes
+  Content injection    | Content Security Policy — restricts script/style/
+                       | connect sources
+  MIME sniffing        | X-Content-Type-Options: nosniff
+  Account deactivation | Deactivated staff are signed out on next auth check
+  Error handling       | Auth errors fail closed — never grant elevated access
+                       | on failure
+
+
+================================================================================
+                         TECHNICAL SPECIFICATIONS
+================================================================================
+
+  Frontend     : React 19, TypeScript (strict mode), Vite 6
+  Styling      : Tailwind CSS 4 — emerald nature palette, glassmorphism,
+                 responsive design
+  Font         : Segoe UI Variable -> Segoe UI -> Inter (web fallback)
+  Database     : Google Cloud Firestore (NoSQL, real-time, offline-capable)
+  Auth         : Firebase Auth (email/password)
+  Hosting      : Firebase Hosting — global CDN, custom domain support
+  PDF          : jsPDF + autoTable — client-side, no server needed
+  Excel        : SheetJS (xlsx) — import/export
+  Offline      : IndexedDB persistent cache — works without internet,
+                 auto-syncs on reconnect
+  Multi-tab    : Persistent multi-tab manager — multiple browser tabs stay
+                 in sync
+
+
+================================================================================
+                           DEPLOYMENT & PRICING
+================================================================================
+
+  Plan                        | Details
+  ----------------------------+-------------------------------------------------
+  Firebase Spark (Free)       | Up to ~50,000 Firestore reads/day, 1 GB storage
+                              | — suitable for a single institution with moderate
+                              | usage
+  Firebase Blaze (Pay-as-you) | $0.06 per 100K reads — for high-volume or
+                              | multi-year data; typical monthly cost for a
+                              | college: Rs. 150-500/month
+  Hosting                     | Free on Firebase Hosting (10 GB/month transfer)
+  Custom Domain               | Can be mapped to a custom domain (e.g.
+                              | admissions.yourcollege.edu) at no extra cost
+
+
+================================================================================
+                           WHAT MAKES IT DIFFERENT
+================================================================================
+
+  - No per-seat licensing — unlimited staff accounts under one Firebase project
+  - No server to manage — fully serverless; Firebase handles infrastructure,
+    scaling, and backups automatically
+  - Instant everywhere — a student enrolled on one computer appears on every
+    other screen in real time
+  - Built for Indian institutions — Karnataka taluk/district auto-fill,
+    SSLC/PUC/ITI qualification support, caste category system (GM/SC/ST/OBC),
+    Indian mobile number validation, academic year format (2024-25)
+  - Offline-first — works during internet outages; data syncs when connectivity
+    resumes
+  - Audit-ready — every student record timestamped; PDF reports match exactly
+    what is in the database
+
+
+================================================================================
+                             CONTACT & DEMO
+================================================================================
+
+  Live Demo  :  https://smp-admissions.web.app
+  GitHub     :  https://github.com/tejukargal/SMP-Admission-Portal
+  Contact    :  rajukargal@gmail.com
+
+  A demo account can be provided on request for a guided walkthrough of all
+  modules.
+
+================================================================================
+                    END OF DOCUMENT — SMP ADMISSIONS PORTAL
+================================================================================

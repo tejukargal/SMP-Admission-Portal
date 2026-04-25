@@ -228,6 +228,7 @@ export interface DocEntry {
   returned: boolean;
   returnedOn: string;    // 'YYYY-MM-DD' or ''
   remarks: string;
+  notRequired?: boolean;
 }
 
 export type DocRecord = Record<DocKey, DocEntry>;

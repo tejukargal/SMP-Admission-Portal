@@ -76,7 +76,7 @@ export interface TCFormData {
   isDuplicate: boolean;
 }
 
-function buildTC(student: Student, data: TCFormData): string {
+export function buildTCHTML(student: Student, data: TCFormData): string {
   const name          = esc(student.studentNameSSLC.trim());
   const fatherName    = esc(student.fatherName.trim());
   const gender        = student.gender === 'GIRL' ? 'FEMALE' : 'MALE';
@@ -112,6 +112,10 @@ function buildTC(student: Student, data: TCFormData): string {
     font-size: 11pt;
     color: #000;
     background: #fff;
+  }
+  @media screen {
+    html { background: #94a3b8; min-height: 100%; padding: 24px 0; }
+    body { max-width: 210mm; margin: 0 auto; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.22); border-radius: 4px; }
   }
   .page {
     border: 1.5pt solid #000;
@@ -153,10 +157,16 @@ function buildTC(student: Student, data: TCFormData): string {
     font-weight: bold;
     letter-spacing: 0.5pt;
     margin-bottom: 3pt;
+    white-space: nowrap;
   }
   .college-tagline {
     font-size: 8.5pt;
-    margin-bottom: 8pt;
+    margin-bottom: 3pt;
+  }
+  .college-instcode {
+    font-size: 11pt;
+    font-weight: bold;
+    margin-bottom: 5pt;
   }
   .college-address {
     font-size: 10.5pt;
@@ -251,9 +261,11 @@ function buildTC(student: Student, data: TCFormData): string {
     <div class="header-center">
       <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
       <div class="college-tagline">(Approved by AICTE, New Delhi and running with Grant-In-Aid of State Govt. of Karnataka)</div>
+      <div class="college-instcode">[Inst. Code: 308]</div>
       <div class="college-address">Ikkeri Road, Sagar - 577 401, Shivamogga Dist., Karnataka</div>
-      <div class="college-phone">Phone : 08183-226034, 8971774244</div>
+      <div class="college-phone">Phone : 9449685992 &nbsp;|&nbsp; Email : smp308ppl@gmail.com</div>
     </div>
+    <div style="flex-shrink:0;width:68pt"></div>
   </div>
 
   ${isDuplicate ? '<div class="duplicate-banner">DUPLICATE COPY</div>' : ''}
@@ -337,18 +349,18 @@ function buildTC(student: Student, data: TCFormData): string {
   </div>
 
 </div>
-<script>
-  window.onload = function () {
-    window.print();
-    window.addEventListener('afterprint', function () { window.close(); });
-  };
-</script>
 </body>
 </html>`;
 }
 
 export function generateTransferCertificate(student: Student, data: TCFormData): void {
-  const html = buildTC(student, data);
+  const base = buildTCHTML(student, data);
+  const html = base.replace('</body>', `<script>
+  window.onload = function () {
+    window.print();
+    window.addEventListener('afterprint', function () { window.close(); });
+  };
+</script>\n</body>`);
   const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const win  = window.open(url, '_blank');

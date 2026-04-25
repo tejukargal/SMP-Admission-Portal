@@ -16,23 +16,22 @@ function todayStr(): string {
 
 // Unique colour per document type — never changes with status
 const DOC_PALETTE: Record<string, { bg: string; border: string; text: string }> = {
-  sslcMarksCard:           { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-900'   },
-  transferCertificate:     { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-900'  },
-  studyCertificate:        { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-900' },
-  characterConduct:        { bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-900'   },
-  casteCertificate:        { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-900' },
-  incomeCertificate:       { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-900'   },
-  physicalFitness:         { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-900'    },
-  aadharCopy:              { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900' },
-  eligibilityCertificate:  { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-900' },
-  passportPhotos:          { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-900'   },
+  sslcMarksCard:           { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-700'   },
+  transferCertificate:     { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700'  },
+  studyCertificate:        { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700' },
+  characterConduct:        { bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700'   },
+  casteCertificate:        { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700' },
+  incomeCertificate:       { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-700'   },
+  physicalFitness:         { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-700'    },
+  aadharCopy:              { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
+  eligibilityCertificate:  { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
+  passportPhotos:          { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700'   },
 };
 
 export function ManageDocumentsModal({ student, onClose }: Props) {
   const { docs: loadedDocs, loading, error } = useStudentDocuments(student.id);
   const [docs, setDocs]         = useState(loadedDocs);
   const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
   const [saveError, setSaveError] = useState('');
   const [isDirty, setIsDirty]   = useState(false);
 
@@ -41,8 +40,8 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   useEffect(() => () => { if (clickTimerRef.current) clearTimeout(clickTimerRef.current); }, []);
 
   // Single click: wait briefly to see if a double-click follows before submitting
-  function handleCardClick(key: DocKey, isSubmitted: boolean, isReturned: boolean) {
-    if (isSubmitted || isReturned) return;
+  function handleCardClick(key: DocKey, isSubmitted: boolean, isReturned: boolean, isNotRequired: boolean) {
+    if (isSubmitted || isReturned || isNotRequired) return;
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     clickTimerRef.current = setTimeout(() => {
       clickTimerRef.current = null;
@@ -105,7 +104,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     return () => clearTimeout(t);
   }, [detailDoc]);
 
-  function markDirty() { setSaved(false); setIsDirty(true); }
+  function markDirty() { setIsDirty(true); }
 
   function toggleSubmitted(key: DocKey) {
     if (!docs) return;
@@ -121,6 +120,12 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
         returnedOn: submitted ? entry.returnedOn : '',
       },
     });
+    markDirty();
+  }
+
+  function toggleNotRequired(key: DocKey) {
+    if (!docs) return;
+    setDocs({ ...docs, [key]: { ...docs[key], notRequired: !docs[key].notRequired } });
     markDirty();
   }
 
@@ -162,8 +167,8 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     setSaving(true); setSaveError('');
     try {
       await saveStudentDocuments(student.id, docs);
-      setSaved(true); setIsDirty(false);
-      setTimeout(() => setSaved(false), 2500);
+      setIsDirty(false);
+      onClose();
     } catch {
       setSaveError('Failed to save. Please try again.');
     } finally {
@@ -179,18 +184,17 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     setDocContextMenu({ x, y, key });
   }
 
-  const submittedCount = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].submitted).length : 0;
-  const returnedCount  = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].returned).length  : 0;
-  const total = REQUIRED_DOCS.length;
+  const notRequiredCount = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].notRequired).length : 0;
+  const total          = REQUIRED_DOCS.length - notRequiredCount;
+  const submittedCount = docs ? REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired && docs[key].submitted).length : 0;
+  const returnedCount  = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].returned).length : 0;
   const pendingCount   = total - submittedCount;
 
-  const headerGradient = loading
+  const headerGradient = (loading || !docs)
     ? 'from-slate-700 to-slate-900'
-    : docs
-      ? submittedCount === total ? 'from-emerald-600 to-emerald-800'
-      : submittedCount === 0    ? 'from-red-600 to-red-800'
-                                : 'from-amber-500 to-amber-700'
-      : 'from-slate-700 to-slate-900';
+    : submittedCount === total ? 'from-emerald-600 to-emerald-800'
+    : submittedCount === 0    ? 'from-red-600 to-red-800'
+                              : 'from-amber-500 to-amber-700';
 
   // ── Context menu shared classes ───────────────────────────────────────────
   const mItem = 'group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100';
@@ -201,22 +205,24 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const dEntry  = dKey && docs ? docs[dKey] : null;
   const dLabel  = dKey ? REQUIRED_DOCS.find(d => d.key === dKey)?.label ?? '' : '';
   const dPal    = dKey ? (DOC_PALETTE[dKey] ?? DOC_PALETTE.sslcMarksCard) : DOC_PALETTE.sslcMarksCard;
-  const dStatus = dEntry?.returned ? 'Returned' : dEntry?.submitted ? 'Submitted' : 'Pending';
-  const dStatusCls = dEntry?.returned
-    ? 'bg-blue-500 text-white'
-    : dEntry?.submitted
-      ? 'bg-emerald-500 text-white'
-      : 'bg-gray-200 text-gray-600';
+  const dStatus = dEntry?.notRequired ? 'Not Required' : dEntry?.returned ? 'Returned' : dEntry?.submitted ? 'Submitted' : 'Pending';
+  const dStatusCls = dEntry?.notRequired
+    ? 'bg-gray-200 text-gray-500'
+    : dEntry?.returned
+      ? 'bg-blue-500 text-white'
+      : dEntry?.submitted
+        ? 'bg-emerald-500 text-white'
+        : 'bg-gray-200 text-gray-600';
 
   // ── Skeleton grid while loading ───────────────────────────────────────────
   const skeletonGrid = (
     <div className="grid grid-cols-4 gap-3 p-5">
       {Array.from({ length: REQUIRED_DOCS.length }).map((_, i) => (
-        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-3 h-[90px] flex flex-col">
-          <div className="skeleton h-3 w-3/4 rounded mb-1" />
-          <div className="skeleton h-3 w-1/2 rounded" />
+        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-2.5 h-[90px] flex flex-col">
+          <div className="skeleton h-2.5 w-3/4 rounded mb-1" />
+          <div className="skeleton h-2.5 w-1/2 rounded" />
           <div className="flex-1 flex items-center justify-center">
-            <div className="skeleton h-5 w-20 rounded" />
+            <div className="skeleton h-4 w-16 rounded" />
           </div>
         </div>
       ))}
@@ -261,6 +267,11 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                       {returnedCount} Returned
                     </span>
                   )}
+                  {notRequiredCount > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/10 text-white/60 border border-white/20">
+                      {notRequiredCount} N/A
+                    </span>
+                  )}
                   <span className="ml-1 text-[10px] text-white/55 italic hidden sm:inline">
                     Double-click for details · Right-click for options
                   </span>
@@ -298,32 +309,35 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
             className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: 'none' }}
           >
-            {loading ? skeletonGrid : error ? (
+            {error ? (
               <div className="flex items-center justify-center h-48 text-sm text-red-500">{error}</div>
-            ) : docs ? (
+            ) : (loading || !docs) ? skeletonGrid : (
               <div className="grid grid-cols-4 gap-3 p-5">
-                {REQUIRED_DOCS.map(({ key, label }) => {
-                  const entry       = docs[key];
-                  const isSubmitted = entry.submitted;
-                  const isReturned  = entry.returned;
+                {REQUIRED_DOCS.map(({ key, label }, idx) => {
+                  const entry         = docs[key];
+                  const isSubmitted   = entry.submitted;
+                  const isReturned    = entry.returned;
+                  const isNotRequired = !!entry.notRequired;
                   const pal = DOC_PALETTE[key] ?? DOC_PALETTE.sslcMarksCard;
 
-                  // Big centred status text + colour
-                  const statusText = isReturned ? 'RETURNED' : isSubmitted ? 'SUBMITTED' : 'PENDING';
-                  const statusTextCls = isReturned
-                    ? 'text-blue-600'
-                    : isSubmitted
-                      ? 'text-emerald-600'
-                      : 'text-gray-400';
+                  const statusText = isNotRequired ? 'NOT REQD'
+                    : isReturned  ? 'RETURNED'
+                    : isSubmitted ? 'SUBMITTED'
+                    : 'PENDING';
+                  const statusTextCls = isNotRequired ? 'text-gray-300'
+                    : isReturned  ? 'text-blue-600'
+                    : isSubmitted ? 'text-emerald-600'
+                    : 'text-gray-400';
 
                   return (
                     <div
                       key={key}
-                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[90px] select-none hover:shadow-md transition-shadow duration-150 ${pal.bg} ${pal.border} ${!isSubmitted && !isReturned ? 'cursor-pointer' : 'cursor-context-menu'}`}
-                      onClick={() => handleCardClick(key, isSubmitted, isReturned)}
+                      style={{ animation: `modal-enter 0.2s ease-out ${idx * 28}ms both` }}
+                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[90px] select-none transition-shadow duration-150 ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50 cursor-context-menu' : !isSubmitted && !isReturned ? 'cursor-pointer hover:shadow-md' : 'cursor-context-menu hover:shadow-md'}`}
+                      onClick={() => handleCardClick(key, isSubmitted, isReturned, isNotRequired)}
                       onDoubleClick={() => handleCardDoubleClick(key)}
                       onContextMenu={(e) => handleDocContextMenu(e, key)}
-                      title={!isSubmitted && !isReturned ? 'Click to mark as submitted · Double-click for details · Right-click for options' : 'Double-click for details · Right-click for options'}
+                      title={isNotRequired ? 'Marked as not required · Right-click to change' : !isSubmitted && !isReturned ? 'Click to mark as submitted · Double-click for details · Right-click for options' : 'Double-click for details · Right-click for options'}
                     >
                       {/* Document label — small, top */}
                       <p className={`text-[12px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
@@ -343,54 +357,73 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                   );
                 })}
               </div>
-            ) : null}
+            )}
           </div>
 
           {/* ── Footer: colour-coded status legend + action buttons ── */}
           <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0">
-            {docs && !loading && (
-              <div className="flex gap-2 mb-3" style={{ animation: 'content-enter 0.35s ease-out' }}>
-                {/* Total */}
-                <div className="flex-1 rounded-xl border-2 border-gray-200 bg-white px-3 py-1.5">
-                  <div className="text-[8.5px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
-                  <div className="text-base font-extrabold text-gray-700 leading-tight">{total}</div>
-                  <div className="text-[8.5px] text-gray-400">documents</div>
-                </div>
-                {/* Submitted */}
-                <div className={`flex-1 rounded-xl px-3 py-1.5 ${submittedCount === total ? 'bg-emerald-600' : 'bg-emerald-500'}`}>
-                  <div className="text-[8.5px] text-emerald-100 font-bold uppercase tracking-wider">Submitted</div>
-                  <div className="text-base font-extrabold text-white leading-tight">{submittedCount}</div>
-                  <div className="text-[8.5px] text-emerald-200">
-                    {submittedCount === total ? '✓ All submitted' : `${pendingCount} pending`}
+            <div className="flex gap-2 mb-3">
+              {docs && !loading ? (
+                <>
+                  {/* Total */}
+                  <div className="flex-1 rounded-xl border-2 border-gray-200 bg-white px-3 py-1.5">
+                    <div className="text-[8.5px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
+                    <div className="text-base font-extrabold text-gray-700 leading-tight">{total}</div>
+                    <div className="text-[8.5px] text-gray-400">documents</div>
                   </div>
-                </div>
-                {/* Returned */}
-                <div className="flex-1 rounded-xl bg-blue-500 px-3 py-1.5">
-                  <div className="text-[8.5px] text-blue-100 font-bold uppercase tracking-wider">Returned</div>
-                  <div className="text-base font-extrabold text-white leading-tight">{returnedCount}</div>
-                  <div className="text-[8.5px] text-blue-200">
-                    {submittedCount > 0 && returnedCount < submittedCount
-                      ? `${submittedCount - returnedCount} with college`
-                      : returnedCount === 0 ? 'none returned' : '✓ All returned'}
+                  {/* Submitted */}
+                  <div className={`flex-1 rounded-xl px-3 py-1.5 ${submittedCount === total ? 'bg-emerald-600' : 'bg-emerald-500'}`}>
+                    <div className="text-[8.5px] text-emerald-100 font-bold uppercase tracking-wider">Submitted</div>
+                    <div className="text-base font-extrabold text-white leading-tight">{submittedCount}</div>
+                    <div className="text-[8.5px] text-emerald-200">
+                      {submittedCount === total ? '✓ All submitted' : `${pendingCount} pending`}
+                    </div>
                   </div>
-                </div>
-                {/* Pending */}
-                <div className={`flex-1 rounded-xl px-3 py-1.5 border-2 ${pendingCount === 0 ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
-                  <div className={`text-[8.5px] font-bold uppercase tracking-wider ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>Pending</div>
-                  <div className={`text-base font-extrabold leading-tight ${pendingCount === 0 ? 'text-gray-400' : 'text-red-600'}`}>{pendingCount}</div>
-                  <div className={`text-[8.5px] ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>
-                    {pendingCount === 0 ? '✓ Complete' : 'not submitted'}
+                  {/* Returned */}
+                  <div className="flex-1 rounded-xl bg-blue-500 px-3 py-1.5">
+                    <div className="text-[8.5px] text-blue-100 font-bold uppercase tracking-wider">Returned</div>
+                    <div className="text-base font-extrabold text-white leading-tight">{returnedCount}</div>
+                    <div className="text-[8.5px] text-blue-200">
+                      {submittedCount > 0 && returnedCount < submittedCount
+                        ? `${submittedCount - returnedCount} with college`
+                        : returnedCount === 0 ? 'none returned' : '✓ All returned'}
+                    </div>
                   </div>
-                </div>
-                {/* Error tile */}
-                {saveError && (
-                  <div className="flex-1 rounded-xl bg-red-50 border-2 border-red-300 px-3 py-1.5">
-                    <div className="text-[8.5px] text-red-400 font-bold uppercase tracking-wider">Error</div>
-                    <div className="text-[10px] font-semibold text-red-600 mt-0.5 leading-tight">{saveError}</div>
+                  {/* Pending */}
+                  <div className={`flex-1 rounded-xl px-3 py-1.5 border-2 ${pendingCount === 0 ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className={`text-[8.5px] font-bold uppercase tracking-wider ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>Pending</div>
+                    <div className={`text-base font-extrabold leading-tight ${pendingCount === 0 ? 'text-gray-400' : 'text-red-600'}`}>{pendingCount}</div>
+                    <div className={`text-[8.5px] ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                      {pendingCount === 0 ? '✓ Complete' : 'not submitted'}
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+                  {/* Not Required tile */}
+                  {notRequiredCount > 0 && (
+                    <div className="flex-1 rounded-xl px-3 py-1.5 border-2 bg-gray-50 border-gray-200">
+                      <div className="text-[8.5px] text-gray-400 font-bold uppercase tracking-wider">Not Reqd</div>
+                      <div className="text-base font-extrabold text-gray-400 leading-tight">{notRequiredCount}</div>
+                      <div className="text-[8.5px] text-gray-400">exempted</div>
+                    </div>
+                  )}
+                  {/* Error tile */}
+                  {saveError && (
+                    <div className="flex-1 rounded-xl bg-red-50 border-2 border-red-300 px-3 py-1.5">
+                      <div className="text-[8.5px] text-red-400 font-bold uppercase tracking-wider">Error</div>
+                      <div className="text-[10px] font-semibold text-red-600 mt-0.5 leading-tight">{saveError}</div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Skeleton tiles — same height as real tiles so footer never shifts layout */
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex-1 rounded-xl border-2 border-gray-100 bg-white px-3 py-1.5">
+                    <div className="skeleton h-2 w-12 rounded mb-1.5" />
+                    <div className="skeleton h-4 w-5 rounded mb-1" />
+                    <div className="skeleton h-2 w-14 rounded" />
+                  </div>
+                ))
+              )}
+            </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={handleClose}
@@ -461,15 +494,6 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
             </div>
           )}
 
-          {/* Success toast */}
-          {saved && (
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-gray-900 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-lg pointer-events-none">
-              <svg className="w-4 h-4 text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              Documents saved successfully
-            </div>
-          )}
         </div>
       </div>
 
@@ -503,50 +527,71 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
               </div>
 
               <div className="py-1.5">
-                {/* Mark Submitted */}
-                {!ce.submitted && (
-                  <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                    <span className={`${mIcon} group-hover:bg-emerald-100 group-hover:text-emerald-600`}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                {/* Not Required: only show "Mark as Required" */}
+                {ce.notRequired ? (
+                  <button className={mItem} onClick={() => { toggleNotRequired(docContextMenu.key); setDocContextMenu(null); }}>
+                    <span className={`${mIcon} group-hover:bg-gray-100 group-hover:text-gray-700`}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                     </span>
-                    Mark as Submitted
+                    Mark as Required
                   </button>
-                )}
-
-                {/* Submitted, not returned */}
-                {ce.submitted && !ce.returned && (
+                ) : (
                   <>
-                    <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
-                      <span className={`${mIcon} group-hover:bg-blue-100 group-hover:text-blue-600`}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 00-4-4H4" /></svg>
-                      </span>
-                      Mark as Returned
-                    </button>
-                    <div className="my-1 h-px bg-gray-100 mx-3" />
-                    <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                      <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                      </span>
-                      Mark as Pending
-                    </button>
-                  </>
-                )}
+                    {/* Mark Submitted */}
+                    {!ce.submitted && (
+                      <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
+                        <span className={`${mIcon} group-hover:bg-emerald-100 group-hover:text-emerald-600`}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        </span>
+                        Mark as Submitted
+                      </button>
+                    )}
 
-                {/* Returned */}
-                {ce.returned && (
-                  <>
-                    <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
-                      <span className={`${mIcon} group-hover:bg-amber-100 group-hover:text-amber-600`}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 10 20 15 15 20" /><path d="M4 4v7a4 4 0 004 4h12" /></svg>
-                      </span>
-                      Unmark Returned
-                    </button>
+                    {/* Submitted, not returned */}
+                    {ce.submitted && !ce.returned && (
+                      <>
+                        <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
+                          <span className={`${mIcon} group-hover:bg-blue-100 group-hover:text-blue-600`}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 00-4-4H4" /></svg>
+                          </span>
+                          Mark as Returned
+                        </button>
+                        <div className="my-1 h-px bg-gray-100 mx-3" />
+                        <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
+                          <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                          </span>
+                          Mark as Pending
+                        </button>
+                      </>
+                    )}
+
+                    {/* Returned */}
+                    {ce.returned && (
+                      <>
+                        <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
+                          <span className={`${mIcon} group-hover:bg-amber-100 group-hover:text-amber-600`}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 10 20 15 15 20" /><path d="M4 4v7a4 4 0 004 4h12" /></svg>
+                          </span>
+                          Unmark Returned
+                        </button>
+                        <div className="my-1 h-px bg-gray-100 mx-3" />
+                        <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
+                          <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                          </span>
+                          Clear All Statuses
+                        </button>
+                      </>
+                    )}
+
+                    {/* Mark as Not Required */}
                     <div className="my-1 h-px bg-gray-100 mx-3" />
-                    <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                      <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    <button className={mItem} onClick={() => { toggleNotRequired(docContextMenu.key); setDocContextMenu(null); }}>
+                      <span className={`${mIcon} group-hover:bg-gray-100 group-hover:text-gray-500`}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                       </span>
-                      Clear All Statuses
+                      Mark as Not Required
                     </button>
                   </>
                 )}

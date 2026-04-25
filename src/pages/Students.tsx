@@ -8,9 +8,9 @@ import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
-import { generateAnsLetter } from '../utils/ansLetter';
-import { printStudentProfile } from '../utils/printProfile';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
+import { PrintProfileModal } from '../components/student/PrintProfileModal';
+import { AnsLetterPreviewModal } from '../components/student/AnsLetterPreviewModal';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
@@ -98,7 +98,9 @@ export function Students() {
 
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
+  const [printProfileStudent, setPrintProfileStudent] = useState<Student | null>(null);
   const [showMissingDocs, setShowMissingDocs] = useState(false);
+  const [ansLetterStudent, setAnsLetterStudent] = useState<Student | null>(null);
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
@@ -608,7 +610,7 @@ export function Students() {
             </button>
             <button
               className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
-              onClick={() => { printStudentProfile(contextMenu.student); setContextMenu(null); }}
+              onClick={() => { setPrintProfileStudent(contextMenu.student); setContextMenu(null); }}
             >
               <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -618,7 +620,7 @@ export function Students() {
             <div className="my-1 h-px bg-gray-100 mx-3" />
             <button
               className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
-              onClick={() => { generateAnsLetter(contextMenu.student); setContextMenu(null); }}
+              onClick={() => { setAnsLetterStudent(contextMenu.student); setContextMenu(null); }}
             >
               <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -678,6 +680,20 @@ export function Students() {
       <ManageDocumentsModal
         student={docsModalStudent}
         onClose={() => setDocsModalStudent(null)}
+      />
+    )}
+
+    {printProfileStudent && (
+      <PrintProfileModal
+        student={printProfileStudent}
+        onClose={() => setPrintProfileStudent(null)}
+      />
+    )}
+
+    {ansLetterStudent && (
+      <AnsLetterPreviewModal
+        student={ansLetterStudent}
+        onClose={() => setAnsLetterStudent(null)}
       />
     )}
 

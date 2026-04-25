@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Student } from '../../types';
 import {
+  buildTCHTML,
   generateTransferCertificate,
   TC_COURSE_NAMES,
   type TCFormData,
@@ -72,6 +73,10 @@ export function TransferCertificateModal({ student, onClose }: Props) {
   const [priorTcs,      setPriorTcs]      = useState<TCRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // Preview state
+  const [previewHtml,   setPreviewHtml]   = useState('');
+  const [pendingData,   setPendingData]   = useState<TCFormData | null>(null);
+
   // Track which academic year the current auto-generated TC number belongs to
   const autoAcademicYearRef = useRef<string>('');
 
@@ -114,12 +119,30 @@ export function TransferCertificateModal({ student, onClose }: Props) {
   const canGenerate   = !loadingHistory && tcNumber.trim() !== '' && dateAdmISO !== '' && dateLeaveISO !== '';
   const acYear        = dateLeaveISO ? academicYearFromDate(dateLeaveISO) : '';
 
-  async function handleGenerate() {
-    if (!canGenerate || generating) return;
+  function handlePreview() {
+    if (!canGenerate) return;
+    const data: TCFormData = {
+      tcNumber:        tcNumber.trim(),
+      dateOfAdmission: isoToDDMMYYYY(dateAdmISO),
+      dateOfLeaving:   isoToDDMMYYYY(dateLeaveISO),
+      semester,
+      lastExam,
+      result,
+      duesPaid,
+      concession,
+      character,
+      isDuplicate,
+    };
+    setPendingData(data);
+    setPreviewHtml(buildTCHTML(student, data));
+  }
+
+  async function handlePrint() {
+    if (!pendingData || generating) return;
     setGenerating(true);
     try {
       // 1. Save / advance counter
-      const match = /^(\d+)\//.exec(tcNumber.trim());
+      const match = /^(\d+)\//.exec(pendingData.tcNumber);
       if (match) {
         const seq    = parseInt(match[1], 10);
         const acYrFinal = autoAcademicYearRef.current || acYear;
@@ -130,31 +153,19 @@ export function TransferCertificateModal({ student, onClose }: Props) {
       await saveTcRecord(student.id, {
         studentId:       student.id,
         studentName:     student.studentNameSSLC,
-        tcNumber:        tcNumber.trim(),
-        dateOfAdmission: isoToDDMMYYYY(dateAdmISO),
-        dateOfLeaving:   isoToDDMMYYYY(dateLeaveISO),
-        semester,
+        tcNumber:        pendingData.tcNumber,
+        dateOfAdmission: pendingData.dateOfAdmission,
+        dateOfLeaving:   pendingData.dateOfLeaving,
+        semester:        pendingData.semester,
         course:          student.course,
-        lastExam,
-        result,
-        isDuplicate,
+        lastExam:        pendingData.lastExam,
+        result:          pendingData.result,
+        isDuplicate:     pendingData.isDuplicate,
         issuedAt:        new Date().toISOString(),
       }).catch(() => {});
 
       // 3. Generate PDF
-      const data: TCFormData = {
-        tcNumber:        tcNumber.trim(),
-        dateOfAdmission: isoToDDMMYYYY(dateAdmISO),
-        dateOfLeaving:   isoToDDMMYYYY(dateLeaveISO),
-        semester,
-        lastExam,
-        result,
-        duesPaid,
-        concession,
-        character,
-        isDuplicate,
-      };
-      generateTransferCertificate(student, data);
+      generateTransferCertificate(student, pendingData);
       onClose();
     } finally {
       setGenerating(false);
@@ -175,6 +186,109 @@ export function TransferCertificateModal({ student, onClose }: Props) {
     );
   }
 
+  // ── Preview mode ──
+  if (previewHtml) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-6"
+        style={{ animation: 'backdrop-enter 0.18s ease-out' }}
+      >
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div
+          className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-5 py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center justify-between shrink-0">
+            <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                  </svg>
+                </span>
+                Print Preview — Transfer Certificate
+              </h2>
+              <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40 truncate max-w-xs">
+                {student.studentNameSSLC}
+              </span>
+              {isDuplicate && (
+                <span className="inline-flex items-center rounded-full text-[10px] font-semibold px-2 py-0.5 bg-amber-500/30 text-amber-100 border border-amber-400/30 shrink-0">
+                  Duplicate Copy
+                </span>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Info banner */}
+          <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center gap-2 shrink-0">
+            <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span className="text-xs text-blue-700">
+              TC record will be saved when you click <strong>Print</strong>. Verify all details before printing.
+            </span>
+          </div>
+
+          {/* Preview iframe */}
+          <div className="flex-1 overflow-auto min-h-0 bg-slate-300">
+            <iframe
+              srcDoc={previewHtml}
+              title="Transfer Certificate Print Preview"
+              className="w-full border-0 block"
+              style={{ height: '1100px' }}
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0 flex items-center justify-between">
+            <button
+              onClick={() => { setPreviewHtml(''); setPendingData(null); }}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              Back
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={handlePrint}
+                disabled={generating}
+                className="rounded-lg bg-slate-700 text-white px-4 py-1.5 text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <polyline points="6 9 6 2 18 2 18 9"/>
+                  <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                {generating ? 'Saving…' : 'Print'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Form mode ──
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
@@ -338,11 +452,16 @@ export function TransferCertificateModal({ student, onClose }: Props) {
             Cancel
           </button>
           <button
-            onClick={handleGenerate}
-            disabled={!canGenerate || generating || loadingTc}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handlePreview}
+            disabled={!canGenerate || loadingTc}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            {generating ? 'Generating…' : isDuplicate ? 'Generate Duplicate' : 'Generate'}
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            {isDuplicate ? 'Preview Duplicate' : 'Preview & Print'}
           </button>
         </div>
       </div>

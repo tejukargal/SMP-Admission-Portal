@@ -49,12 +49,13 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
     return students
       .map((s) => {
         const docs = docMap.get(s.id) ?? mergeWithDefaults({});
-        const missing = REQUIRED_DOCS.filter(({ key }) => !docs[key].submitted).map(({ label }) => label);
-        const submittedCount = REQUIRED_DOCS.length - missing.length;
-        return { student: s, docs, missing, submittedCount };
+        const missing = REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired && !docs[key].submitted).map(({ label }) => label);
+        const requiredTotal = REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired).length;
+        const submittedCount = requiredTotal - missing.length;
+        return { student: s, docs, missing, submittedCount, requiredTotal };
       })
-      .filter(({ missing }) =>
-        filterMode === 'none' ? missing.length === REQUIRED_DOCS.length : missing.length > 0
+      .filter(({ missing, requiredTotal }) =>
+        filterMode === 'none' ? missing.length === requiredTotal : missing.length > 0
       )
       .filter(({ student: s }) => {
         const q = search.trim().toUpperCase();
@@ -72,12 +73,10 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
       .sort((a, b) => a.submittedCount - b.submittedCount);
   }, [students, docMap, filterMode, search, courseFilter, yearFilter]);
 
-  const total = REQUIRED_DOCS.length;
-
   const completeCount = !loading
     ? students.filter((s) => {
         const docs = docMap.get(s.id) ?? mergeWithDefaults({});
-        return REQUIRED_DOCS.every(({ key }) => docs[key].submitted);
+        return REQUIRED_DOCS.every(({ key }) => docs[key].notRequired || docs[key].submitted);
       }).length
     : 0;
 
@@ -255,7 +254,7 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10">{tableHeader}</thead>
               <tbody className="divide-y divide-gray-100">
-                {enriched.map(({ student, missing, submittedCount }, idx) => (
+                {enriched.map(({ student, missing, submittedCount, requiredTotal }, idx) => (
                   <tr
                     key={student.id}
                     className="hover:bg-gray-50/70 transition-colors cursor-pointer select-none"
@@ -280,20 +279,20 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                     <td className="px-3 py-2.5 text-center bg-amber-50/30">
                       <div className="flex flex-col items-center gap-1">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          submittedCount === total ? 'bg-emerald-100 text-emerald-700' :
-                          submittedCount === 0     ? 'bg-red-100 text-red-600'         :
-                                                     'bg-amber-100 text-amber-700'
+                          submittedCount === requiredTotal ? 'bg-emerald-100 text-emerald-700' :
+                          submittedCount === 0             ? 'bg-red-100 text-red-600'         :
+                                                             'bg-amber-100 text-amber-700'
                         }`}>
-                          {submittedCount} / {total}
+                          {submittedCount} / {requiredTotal}
                         </span>
                         <div className="w-12 h-1 rounded-full bg-gray-200 overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
-                              submittedCount === total ? 'bg-emerald-500' :
-                              submittedCount === 0     ? 'bg-red-400'     :
-                                                         'bg-amber-400'
+                              submittedCount === requiredTotal ? 'bg-emerald-500' :
+                              submittedCount === 0             ? 'bg-red-400'     :
+                                                                 'bg-amber-400'
                             }`}
-                            style={{ width: `${(submittedCount / total) * 100}%` }}
+                            style={{ width: `${requiredTotal > 0 ? (submittedCount / requiredTotal) * 100 : 0}%` }}
                           />
                         </div>
                       </div>

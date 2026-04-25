@@ -29,7 +29,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function buildLetterPage(student: Student): string {
+export function buildAnsLetterHTML(student: Student): string {
   const today = formatDate(new Date());
   const courseFull = COURSE_NAMES[student.course] ?? student.course;
   const yearLabel = YEAR_LABELS[student.year] ?? student.year;
@@ -51,6 +51,10 @@ function buildLetterPage(student: Student): string {
     font-size: 11pt;
     color: #000;
     background: #fff;
+  }
+  @media screen {
+    html { background: #94a3b8; min-height: 100%; padding: 24px 0; }
+    body { max-width: 680px; margin: 0 auto; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.22); border-radius: 4px; padding: 20px; }
   }
   .kn {
     font-family: 'Nirmala UI', 'Noto Sans Kannada', 'Arial Unicode MS', Latha, sans-serif;
@@ -235,18 +239,18 @@ function buildLetterPage(student: Student): string {
     </div>
   </div>
 
-  <script>
-    window.onload = function () {
-      window.print();
-      window.addEventListener('afterprint', function () { window.close(); });
-    };
-  </script>
 </body>
 </html>`;
 }
 
 export function generateAnsLetter(student: Student): void {
-  const html = buildLetterPage(student);
+  const base = buildAnsLetterHTML(student);
+  const html = base.replace('</body>', `<script>
+    window.onload = function () {
+      window.print();
+      window.addEventListener('afterprint', function () { window.close(); });
+    };
+  </script>\n</body>`);
   const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, '_blank');
