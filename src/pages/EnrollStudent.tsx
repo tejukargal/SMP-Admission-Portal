@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
 import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber } from '../services/studentService';
@@ -319,6 +319,8 @@ export function EnrollStudent() {
   const backTo = fromDashboard ? '/dashboard' : '/students';
   const backLabel = fromDashboard ? 'Back to Dashboard' : 'Back to Students';
   const navigate = useNavigate();
+  const location = useLocation();
+  const navStudent = (location.state as { student?: Student } | null)?.student ?? null;
   const { settings } = useSettings();
 
   const [form, setForm] = useState<StudentFormData>(emptyForm());
@@ -466,12 +468,13 @@ export function EnrollStudent() {
     return { ...warnings, ...errors };
   }, [editId, form, errors]);
 
-  // Staff cannot access edit mode — redirect to students list
+  // Staff cannot access edit mode — redirect to students list.
+  // Guard on role !== null so we don't redirect before auth has resolved.
   useEffect(() => {
-    if (editId && !isAdmin) {
+    if (editId && role !== null && !isAdmin) {
       navigate('/students', { replace: true });
     }
-  }, [editId, isAdmin, navigate]);
+  }, [editId, role, isAdmin, navigate]);
 
   useEffect(() => {
     if (!editId && settings?.currentAcademicYear) {
@@ -582,46 +585,55 @@ export function EnrollStudent() {
 
   useEffect(() => {
     if (!editId) return;
+
+    function applyStudentData(student: Student) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id: _id, createdAt: _c, updatedAt: _u, motherMobile: _mm, ...rest } = student as Student & { motherMobile?: string };
+      if (rest.dateOfBirth && /^\d{4}-\d{2}-\d{2}$/.test(rest.dateOfBirth)) {
+        const [y, m, d] = rest.dateOfBirth.split('-');
+        rest.dateOfBirth = `${d}/${m}/${y}`;
+      }
+      const formData = rest as StudentFormData;
+      if (!formData.meritNumber) formData.meritNumber = '';
+      if (!formData.regNumber) formData.regNumber = formData.course ? `308${formData.course}` : '';
+      if (!formData.admType) formData.admType = 'REGULAR';
+      if (!formData.admCat) formData.admCat = 'GM';
+      if (!formData.enrollmentDate) formData.enrollmentDate = new Date().toISOString().slice(0, 10);
+      setForm(formData);
+      setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
+      setEditOriginalAdmCat(formData.admCat ?? null);
+      setEditOriginalCourse(formData.course ?? null);
+      getAllStudents().then((all) => {
+        const history = all
+          .filter((s) => {
+            if (s.id === editId) return false;
+            if (student.regNumber) {
+              return s.regNumber?.toUpperCase() === student.regNumber.toUpperCase();
+            }
+            return s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase();
+          })
+          .sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+        setEnrollmentHistory(history);
+      }).catch(() => {});
+    }
+
+    // When navigated from Students page the student object is in router state —
+    // use it immediately so the form renders without a Firestore round-trip.
+    if (navStudent) {
+      applyStudentData(navStudent);
+      return;
+    }
+
+    // Fallback: direct URL navigation or browser refresh — fetch from Firestore.
     setLoadingEdit(true);
     getStudent(editId)
       .then((student) => {
-        if (student) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { id: _id, createdAt: _c, updatedAt: _u, motherMobile: _mm, ...rest } = student as Student & { motherMobile?: string };
-          // Convert YYYY-MM-DD to DD/MM/YYYY if needed
-          if (rest.dateOfBirth && /^\d{4}-\d{2}-\d{2}$/.test(rest.dateOfBirth)) {
-            const [y, m, d] = rest.dateOfBirth.split('-');
-            rest.dateOfBirth = `${d}/${m}/${y}`;
-          }
-          // Default missing fields for records predating these additions
-          const formData = rest as StudentFormData;
-          if (!formData.meritNumber) formData.meritNumber = '';
-          if (!formData.regNumber) formData.regNumber = formData.course ? `308${formData.course}` : '';
-          if (!formData.admType) formData.admType = 'REGULAR';
-          if (!formData.admCat) formData.admCat = 'GM';
-          if (!formData.enrollmentDate) formData.enrollmentDate = new Date().toISOString().slice(0, 10);
-          setForm(formData);
-          setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
-          setEditOriginalAdmCat(formData.admCat ?? null);
-          setEditOriginalCourse(formData.course ?? null);
-          // Fetch all other enrollment records for this student (for history display + year conflict check)
-          getAllStudents().then((all) => {
-            const history = all
-              .filter((s) => {
-                if (s.id === editId) return false;
-                if (student.regNumber) {
-                  return s.regNumber?.toUpperCase() === student.regNumber.toUpperCase();
-                }
-                return s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase();
-              })
-              .sort((a, b) => a.academicYear.localeCompare(b.academicYear));
-            setEnrollmentHistory(history);
-          }).catch(() => {});
-        }
+        if (student) applyStudentData(student);
+        else setErrorMsg('Student not found.');
       })
       .catch(() => setErrorMsg('Failed to load student data'))
       .finally(() => setLoadingEdit(false));
-  }, [editId]);
+  }, [editId, navStudent]);
 
   function handleFieldChange(field: keyof StudentFormData, value: string | number) {
     setForm((prev) => {

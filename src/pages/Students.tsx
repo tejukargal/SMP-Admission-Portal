@@ -505,7 +505,7 @@ export function Students() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => void navigate(`/enroll?edit=${student.id}`)}
+                          onClick={() => void navigate(`/enroll?edit=${student.id}`, { state: { student } })}
                         >
                           Edit
                         </Button>
