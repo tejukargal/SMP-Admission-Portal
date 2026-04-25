@@ -3,9 +3,7 @@ import { getFeeStructure } from '../../services/feeStructureService';
 import {
   getFeeRecordsByStudent,
   saveFeeRecord,
-  getNextReceiptNumber,
-  getNextSvkReceiptNumber,
-  getNextAdditionalReceiptNumber,
+  getNextAllReceiptNumbers,
 } from '../../services/feeRecordService';
 import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
 import { getFineSchedule } from '../../services/fineScheduleService';
@@ -127,18 +125,16 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         student.admCat
       ),
       getFeeRecordsByStudent(student.id, academicYear),
-      getNextReceiptNumber(academicYear),
-      getNextSvkReceiptNumber(academicYear),
-      getNextAdditionalReceiptNumber(academicYear),
+      getNextAllReceiptNumbers(academicYear),
       getFineSchedule(academicYear),
       getFeeOverride(student.id, academicYear),
     ])
-      .then(([struct, prior, nextRpt, nextSvkRpt, nextAddlRpt, schedule, override]) => {
+      .then(([struct, prior, receipts, schedule, override]) => {
         setStructure(struct);
         setPriorPayments(prior);
-        setReceiptNo(nextRpt);
-        setSvkReceiptNo(nextSvkRpt);
-        setAdditionalReceiptNo(nextAddlRpt);
+        setReceiptNo(receipts.smp);
+        setSvkReceiptNo(receipts.svk);
+        setAdditionalReceiptNo(receipts.additional);
         setFineSchedule(schedule);
         setLoadedOverride(override);
 

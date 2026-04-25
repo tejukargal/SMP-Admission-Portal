@@ -222,6 +222,33 @@ export async function getNextSvkReceiptNumber(academicYear: AcademicYear): Promi
 }
 
 /**
+ * Returns all three receipt numbers for a given academic year in one atomic
+ * transaction, eliminating the contention caused by three separate concurrent
+ * transactions targeting the same counter document.
+ */
+export async function getNextAllReceiptNumbers(academicYear: AcademicYear): Promise<{
+  smp: string;
+  svk: string;
+  additional: string;
+}> {
+  await _ensureReceiptCounterDoc(academicYear);
+  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() as ReceiptCounterDoc;
+    const nextSmp = data.smp + 1;
+    const nextSvk = data.svk + 1;
+    const nextAdditional = data.additional + 1;
+    tx.update(ref, { smp: nextSmp, svk: nextSvk, additional: nextAdditional });
+    return {
+      smp: String(nextSmp).padStart(data.smpPadLen ?? 1, '0'),
+      svk: `${SVK_RPT_PREFIX}${String(nextSvk).padStart(data.svkPadLen ?? 1, '0')}`,
+      additional: String(nextAdditional).padStart(4, '0'),
+    };
+  });
+}
+
+/**
  * When a student's course or year is changed, updates all existing fee records
  * for that student in the given academic year to reflect the new values and
  * appends an auto-generated remark describing the change.
