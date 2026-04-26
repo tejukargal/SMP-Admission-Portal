@@ -63,12 +63,15 @@ export function validateStudentFormEdit(data: StudentFormData): EditValidationRe
     }
   }
 
-  // Mobile format warnings
-  for (const field of (['fatherMobile', 'studentMobile'] as (keyof StudentFormData)[])) {
-    const val = String(data[field] ?? '');
-    if (val && !MOBILE_RE.test(val)) {
-      warnings[field as string] = 'Enter a valid 10-digit mobile number starting with 6-9';
-    }
+  // At least one mobile number required (warning in edit mode)
+  const fMobE = String(data.fatherMobile ?? '').trim();
+  const sMobE = String(data.studentMobile ?? '').trim();
+  if (!fMobE && !sMobE) {
+    warnings['fatherMobile'] = 'Enter at least one mobile number';
+    warnings['studentMobile'] = 'Enter at least one mobile number';
+  } else {
+    if (fMobE && !MOBILE_RE.test(fMobE)) warnings['fatherMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
+    if (sMobE && !MOBILE_RE.test(sMobE)) warnings['studentMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
   }
 
   // Marks warnings
@@ -148,12 +151,16 @@ export function validateStudentForm(data: StudentFormData): ValidationErrors {
     }
   }
 
-  // Mobile validation (only if provided)
-  for (const field of (['fatherMobile', 'studentMobile'] as (keyof StudentFormData)[])) {
-    const val = String(data[field] ?? '');
-    if (val && !MOBILE_RE.test(val)) {
-      errors[field] = 'Enter a valid 10-digit mobile number starting with 6-9';
-    }
+  // At least one mobile number is required
+  const fMob = String(data.fatherMobile ?? '').trim();
+  const sMob = String(data.studentMobile ?? '').trim();
+  if (!fMob && !sMob) {
+    errors['fatherMobile'] = 'Enter at least one mobile number';
+    errors['studentMobile'] = 'Enter at least one mobile number';
+  } else {
+    // Format validation (only if provided)
+    if (fMob && !MOBILE_RE.test(fMob)) errors['fatherMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
+    if (sMob && !MOBILE_RE.test(sMob)) errors['studentMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
   }
 
   // Marks non-negative

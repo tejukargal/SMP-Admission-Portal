@@ -763,13 +763,18 @@ export function EnrollStudent() {
       return updated;
     });
 
-    if (errors[field as string]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[field as string];
-        return next;
-      });
-    }
+    setErrors((prev) => {
+      const isMobile = field === 'fatherMobile' || field === 'studentMobile';
+      if (!prev[field as string] && !(isMobile && (prev['fatherMobile'] || prev['studentMobile']))) return prev;
+      const next = { ...prev };
+      delete next[field as string];
+      // Filling either mobile clears the "at least one required" error on both
+      if (isMobile && String(value).trim()) {
+        delete next['fatherMobile'];
+        delete next['studentMobile'];
+      }
+      return next;
+    });
   }
 
   function handleTextChange(field: keyof StudentFormData) {
@@ -1579,14 +1584,23 @@ export function EnrollStudent() {
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <div className="flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0" style={{ scrollbarWidth: 'none' }}>
-              {Object.keys(errors).map((key) => (
-                <span
-                  key={key}
-                  className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
-                >
-                  {FIELD_LABELS[key] ?? key}
-                </span>
-              ))}
+              {(() => {
+                const keys = Object.keys(errors);
+                // Merge fatherMobile + studentMobile into one pill when both share the same message
+                const mobileMerged = keys.includes('fatherMobile') && keys.includes('studentMobile') &&
+                  errors['fatherMobile'] === errors['studentMobile'];
+                const displayKeys = mobileMerged
+                  ? keys.filter((k) => k !== 'studentMobile')
+                  : keys;
+                return displayKeys.map((key) => (
+                  <span
+                    key={key}
+                    className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                  >
+                    {key === 'fatherMobile' && mobileMerged ? 'Mobile (Father / Student)' : (FIELD_LABELS[key] ?? key)}
+                  </span>
+                ));
+              })()}
             </div>
           </div>
         )}
