@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
 import type { AcademicYear, FeeStructure, Course, Year } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { getSettings } from '../services/settingsService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
+import { exportFeeStructureFormatted, exportFeeStructureFormattedPDF } from '../utils/feeStructureExport';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -56,13 +55,12 @@ function smpTotal(s: FeeStructure) {
 function additionalTotal(s: FeeStructure) {
   return s.additionalHeads.reduce((sum, h) => sum + h.amount, 0);
 }
+function r(n: number) { return n === 0 ? 0 : n; }
 function fmtCell(n: number) {
   return n === 0
     ? <span className="text-gray-300">—</span>
     : <span>₹{n.toLocaleString('en-IN')}</span>;
 }
-function r(n: number) { return n === 0 ? 0 : n; }  // raw number for exports
-
 // ── Export: Excel ──────────────────────────────────────────────────────────
 
 function exportExcel(
@@ -101,192 +99,6 @@ function exportExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Fee Structure');
   XLSX.writeFile(wb, `Fee_Structure_${academicYear}.xlsx`);
-}
-
-// ── Export: PDF ────────────────────────────────────────────────────────────
-
-function exportPdf(
-  rows: FeeStructure[],
-  additionalLabels: string[],
-  academicYear: string,
-  showBreakup: boolean,
-  courseFilter: string,
-  yearFilter: string,
-) {
-  const margin = 8;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-
-  // Title
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text('SMP Admissions — Fee Structure', margin, 12);
-
-  // Sub-line
-  const chips: string[] = [`AY ${academicYear}`];
-  if (courseFilter) chips.push(courseFilter);
-  if (yearFilter) chips.push(yearFilter);
-  chips.push(`${rows.length} combination${rows.length !== 1 ? 's' : ''}`);
-  const dateStr = new Date().toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(chips.join('  ·  '), margin, 18);
-  doc.text(`Generated ${dateStr}`, pageW - margin, 18, { align: 'right' });
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.2);
-  doc.line(margin, 20.5, pageW - margin, 20.5);
-  doc.setTextColor(0);
-
-  // Build columns
-  type ColDef = { header: string; get: (s: FeeStructure) => string | number; halign: 'left' | 'center' | 'right' };
-  const cols: ColDef[] = [
-    { header: 'Course',   get: (s) => s.course,   halign: 'center' },
-    { header: 'Year',     get: (s) => s.year,      halign: 'left'   },
-    { header: 'Adm Type', get: (s) => s.admType,   halign: 'center' },
-    { header: 'Cat',      get: (s) => s.admCat,    halign: 'center' },
-  ];
-
-  if (showBreakup) {
-    SMP_FEE_HEADS.forEach(({ key }) => {
-      cols.push({ header: SMP_HEAD_FULL[key] ?? key, get: (s) => r(s.smp[key] ?? 0), halign: 'right' });
-    });
-  }
-
-  cols.push({ header: 'SMP Total',    get: (s) => r(smpTotal(s)), halign: 'right' });
-  cols.push({ header: 'SVK Mgmt Fee', get: (s) => r(s.svk),       halign: 'right' });
-
-  additionalLabels.forEach((lbl) => {
-    cols.push({
-      header: lbl,
-      get: (s) => {
-        const h = s.additionalHeads.find((x) => x.label === lbl);
-        return r(h?.amount ?? 0);
-      },
-      halign: 'right',
-    });
-  });
-  if (additionalLabels.length > 0) {
-    cols.push({ header: 'Addl. Total', get: (s) => r(additionalTotal(s)), halign: 'right' });
-  }
-  cols.push({ header: 'Grand Total', get: (s) => r(smpTotal(s) + s.svk + additionalTotal(s)), halign: 'right' });
-
-  const tableRows = rows.map((s) => cols.map((c) => {
-    const v = c.get(s);
-    return typeof v === 'number' && v === 0 ? '—' : v;
-  }));
-
-  // Auto-size: measure each column
-  const FONT_SIZE = 7;
-  const PAD_H = 5;
-  const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  measureDoc.setFontSize(FONT_SIZE);
-
-  const usableW = pageW - margin * 2;
-  const NAME_COLS = [0, 1]; // Course + Year stretch to fill
-  let fixedTotal = 0;
-  const colWidths = cols.map((col, idx) => {
-    if (NAME_COLS.includes(idx)) return 0;
-    measureDoc.setFont('helvetica', 'bold');
-    let w = measureDoc.getTextWidth(col.header);
-    measureDoc.setFont('helvetica', 'normal');
-    for (const row of tableRows) {
-      const cw = measureDoc.getTextWidth(String(row[idx]));
-      if (cw > w) w = cw;
-    }
-    const fw = w + PAD_H;
-    fixedTotal += fw;
-    return fw;
-  });
-  const stretch = Math.max((usableW - fixedTotal) / NAME_COLS.length, 16);
-  NAME_COLS.forEach((i) => { colWidths[i] = stretch; });
-  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-
-  const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
-  cols.forEach((col, idx) => {
-    columnStyles[idx] = { cellWidth: colWidths[idx], halign: col.halign };
-  });
-
-  // Group header row above main header (visual grouping)
-  const smpColStart = 4;
-  const smpColCount = showBreakup ? SMP_FEE_HEADS.length + 1 : 1;
-  const svkColIdx   = smpColStart + smpColCount;
-  const addColStart = svkColIdx + 1;
-  const addColCount = additionalLabels.length + (additionalLabels.length > 0 ? 1 : 0);
-  const grandIdx    = addColStart + addColCount;
-
-  autoTable(doc, {
-    startY: 23,
-    margin: { left: margin, right: margin },
-    head: [cols.map((c) => c.header)],
-    body: tableRows,
-    tableWidth,
-    styles: {
-      fontSize: FONT_SIZE,
-      cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
-      valign: 'middle',
-      overflow: 'ellipsize',
-      lineColor: [226, 232, 240],
-      lineWidth: 0.15,
-    },
-    headStyles: {
-      fillColor: [15, 23, 42],
-      textColor: 255,
-      fontStyle: 'bold',
-      fontSize: FONT_SIZE,
-    },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles,
-    didParseCell: (data) => {
-      if (data.section === 'head') return;
-      const ci = data.column.index;
-      // SMP columns — light blue tint
-      if (ci >= smpColStart && ci < smpColStart + smpColCount) {
-        data.cell.styles.fillColor = [239, 246, 255];
-        if (ci === smpColStart + smpColCount - 1) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.textColor = [29, 78, 216];
-        }
-      }
-      // SVK — light purple tint
-      if (ci === svkColIdx) {
-        data.cell.styles.fillColor = [245, 243, 255];
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.textColor = [109, 40, 217];
-      }
-      // Additional columns — amber tint
-      if (ci >= addColStart && ci < addColStart + addColCount) {
-        data.cell.styles.fillColor = [255, 251, 235];
-        if (ci === addColStart + addColCount - 1 && additionalLabels.length > 0) {
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.textColor = [180, 83, 9];
-        }
-      }
-      // Grand total — emerald tint
-      if (ci === grandIdx) {
-        data.cell.styles.fillColor = [236, 253, 245];
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.textColor = [4, 120, 87];
-      }
-    },
-    didDrawPage: (data) => {
-      const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
-        .internal.getNumberOfPages();
-      doc.setFontSize(7);
-      doc.setTextColor(148, 163, 184);
-      doc.text(`Page ${data.pageNumber} of ${total}`, pageW - margin, pageH - 4, { align: 'right' });
-      doc.setTextColor(0);
-    },
-  });
-
-  const parts = ['Fee_Structure', academicYear.replace(/[^0-9-]/g, '')];
-  if (courseFilter) parts.push(courseFilter);
-  if (yearFilter) parts.push(yearFilter.replace(/\s+/g, ''));
-  doc.save(parts.join('_') + '.pdf');
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -501,18 +313,26 @@ export function FeeStructureView() {
           {/* Export PDF */}
           {hasData && (
             <button
-              onClick={() =>
-                exportPdf(
-                  filteredStructures, additionalLabels, selectedYear ?? '',
-                  showSmpBreakup, courseFilter, yearFilter,
-                )
-              }
+              onClick={() => exportFeeStructureFormattedPDF(structures, selectedYear ?? '')}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
               </svg>
               PDF
+            </button>
+          )}
+
+          {/* Fee Structure Format */}
+          {hasData && (
+            <button
+              onClick={() => exportFeeStructureFormatted(structures, selectedYear ?? '')}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+              </svg>
+              Fee Structure Format
             </button>
           )}
         </div>

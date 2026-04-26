@@ -18,12 +18,12 @@ const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI'];
 const PAGE_SIZE = 100;
 
-const COURSE_COLORS: Record<Course, { accent: string; badge: string }> = {
-  CE: { accent: 'border-l-blue-400',   badge: 'bg-blue-100 text-blue-700 border-blue-200' },
-  ME: { accent: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
-  EC: { accent: 'border-l-green-500',  badge: 'bg-green-100 text-green-700 border-green-200' },
-  CS: { accent: 'border-l-purple-400', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
-  EE: { accent: 'border-l-rose-400',   badge: 'bg-rose-100 text-rose-700 border-rose-200' },
+const COURSE_COLORS: Record<Course, string> = {
+  CE: 'border-l-blue-400',
+  ME: 'border-l-orange-400',
+  EC: 'border-l-green-500',
+  CS: 'border-l-purple-400',
+  EE: 'border-l-rose-400',
 };
 
 const YEAR_LABELS: Record<string, string> = {
@@ -789,75 +789,75 @@ export function FeeRegister() {
           <table className="min-w-full text-xs border-collapse">
             <thead className="sticky top-0 z-10">
               {/* Group header */}
-              <tr className="border-b border-gray-200">
+              <tr>
                 <th
                   colSpan={showFatherName ? 13 : 12}
-                  className="px-3 py-1.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider border-r border-gray-200 bg-slate-50"
+                  className="px-3 py-2 text-left text-[10px] font-bold text-amber-900 uppercase tracking-wider border-r border-amber-300 bg-amber-200"
                 >
                   Student Info
                 </th>
                 <th
                   colSpan={showSMPDetails ? SMP_FEE_HEADS.length + 1 : 1}
-                  className="px-3 py-1.5 text-center text-[10px] font-bold text-blue-600 uppercase tracking-wider border-r border-gray-200 bg-blue-50"
+                  className="px-3 py-2 text-center text-[10px] font-bold text-blue-800 uppercase tracking-wider border-r border-blue-300 bg-blue-200"
                 >
                   SMP Fee — Government
                 </th>
                 <th
                   colSpan={showSVKDetails ? 1 + additionalHeadLabels.length + 1 : 1}
-                  className="px-3 py-1.5 text-center text-[10px] font-bold text-violet-600 uppercase tracking-wider border-r border-gray-200 bg-violet-50"
+                  className="px-3 py-2 text-center text-[10px] font-bold text-violet-800 uppercase tracking-wider border-r border-violet-300 bg-violet-200"
                 >
                   SVK Fee — Management
                 </th>
-                <th className="px-3 py-1.5 text-center text-[10px] font-bold text-emerald-700 uppercase tracking-wider border-r border-gray-200 bg-emerald-50">
+                <th className="px-3 py-2 text-center text-[10px] font-bold text-emerald-900 uppercase tracking-wider border-r border-emerald-300 bg-emerald-200">
                   Grand Total
                 </th>
                 {isAdmin && (
-                  <th className="px-3 py-1.5 text-center text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-slate-50">
+                  <th className="px-3 py-2 text-center text-[10px] font-bold text-amber-800 uppercase tracking-wider bg-amber-200">
                     Actions
                   </th>
                 )}
               </tr>
 
               {/* Column header */}
-              <tr className="border-b border-slate-200">
-                <th className="px-2 py-2 text-left font-semibold text-slate-500 whitespace-nowrap w-8 sticky left-0 z-20 bg-slate-100 text-[10px] uppercase tracking-wide">#</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap sticky left-8 z-20 bg-slate-100 border-r border-slate-200 text-[10px] uppercase tracking-wide">Name</th>
-                {showFatherName && <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap bg-slate-100 text-[10px] uppercase tracking-wide">Father Name</th>}
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-16 bg-slate-100 text-[10px] uppercase tracking-wide">Year</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-12 bg-slate-100 text-[10px] uppercase tracking-wide">Course</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-24 bg-slate-100 text-[10px] uppercase tracking-wide">Reg No</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-14 bg-slate-100 text-[10px] uppercase tracking-wide">Cat</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">Adm Type</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">Date</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-12 bg-slate-100 text-[10px] uppercase tracking-wide">SMP Rpt</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-24 bg-slate-100 text-[10px] uppercase tracking-wide">SVK Rpt</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-14 bg-slate-100 text-[10px] uppercase tracking-wide">Mode</th>
-                <th className="px-2 py-2 text-left font-semibold text-slate-700 whitespace-nowrap w-28 bg-slate-100 border-r border-slate-200 text-[10px] uppercase tracking-wide">Remarks</th>
+              <tr className="border-b border-amber-300">
+                <th className="px-2 py-2 text-left font-semibold text-amber-700 whitespace-nowrap w-8 sticky left-0 z-20 bg-amber-100 border-r border-amber-100 text-[10px] uppercase tracking-wide">#</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap sticky left-8 z-20 bg-amber-100 border-r border-amber-300 text-[10px] uppercase tracking-wide">Name</th>
+                {showFatherName && <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap bg-amber-100 text-[10px] uppercase tracking-wide">Father Name</th>}
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-16 bg-amber-100 text-[10px] uppercase tracking-wide">Year</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-12 bg-amber-100 text-[10px] uppercase tracking-wide">Course</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-24 bg-amber-100 text-[10px] uppercase tracking-wide">Reg No</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-14 bg-amber-100 text-[10px] uppercase tracking-wide">Cat</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-20 bg-amber-100 text-[10px] uppercase tracking-wide">Adm Type</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-20 bg-amber-100 text-[10px] uppercase tracking-wide">Date</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-12 bg-amber-100 text-[10px] uppercase tracking-wide">SMP Rpt</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-24 bg-amber-100 text-[10px] uppercase tracking-wide">SVK Rpt</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-14 bg-amber-100 text-[10px] uppercase tracking-wide">Mode</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-28 bg-amber-100 border-r border-amber-300 text-[10px] uppercase tracking-wide">Remarks</th>
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key, label }) => (
-                  <th key={key} className="px-2 py-2 text-right font-semibold text-blue-700 whitespace-nowrap w-14 bg-blue-100 text-[10px] uppercase tracking-wide">
+                  <th key={key} className="px-2 py-2 text-right font-semibold text-blue-800 whitespace-nowrap w-14 bg-blue-100 text-[10px] uppercase tracking-wide">
                     {label}
                   </th>
                 ))}
-                <th className="px-2 py-2 text-right font-bold text-blue-800 whitespace-nowrap w-16 bg-blue-100 border-r border-blue-200 text-[10px] uppercase tracking-wide">
+                <th className="px-2 py-2 text-right font-bold text-blue-900 whitespace-nowrap w-16 bg-blue-200 border-r border-blue-300 text-[10px] uppercase tracking-wide">
                   SMP Total
                 </th>
 
                 {showSVKDetails && (
-                  <th className="px-2 py-2 text-right font-semibold text-violet-700 whitespace-nowrap w-14 bg-violet-100 text-[10px] uppercase tracking-wide">SVK</th>
+                  <th className="px-2 py-2 text-right font-semibold text-violet-800 whitespace-nowrap w-14 bg-violet-100 text-[10px] uppercase tracking-wide">SVK</th>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <th key={label} className="px-2 py-2 text-right font-semibold text-violet-700 whitespace-nowrap w-20 bg-violet-100 text-[10px] uppercase tracking-wide">{label}</th>
+                  <th key={label} className="px-2 py-2 text-right font-semibold text-violet-800 whitespace-nowrap w-20 bg-violet-100 text-[10px] uppercase tracking-wide">{label}</th>
                 ))}
-                <th className="px-2 py-2 text-right font-bold text-violet-800 whitespace-nowrap w-16 bg-violet-100 border-r border-violet-200 text-[10px] uppercase tracking-wide">
+                <th className="px-2 py-2 text-right font-bold text-violet-900 whitespace-nowrap w-16 bg-violet-200 border-r border-violet-300 text-[10px] uppercase tracking-wide">
                   SVK Total
                 </th>
 
-                <th className="px-2 py-2 text-right font-bold text-emerald-800 whitespace-nowrap w-20 bg-emerald-100 border-r border-emerald-200 text-[10px] uppercase tracking-wide">
+                <th className="px-2 py-2 text-right font-bold text-emerald-900 whitespace-nowrap w-20 bg-emerald-200 border-r border-emerald-300 text-[10px] uppercase tracking-wide">
                   Total
                 </th>
                 {isAdmin && (
-                  <th className="px-2 py-2 text-center font-semibold text-slate-600 whitespace-nowrap w-20 bg-slate-100 text-[10px] uppercase tracking-wide">
+                  <th className="px-2 py-2 text-center font-semibold text-amber-800 whitespace-nowrap w-20 bg-amber-100 text-[10px] uppercase tracking-wide">
                     Actions
                   </th>
                 )}
@@ -869,11 +869,10 @@ export function FeeRegister() {
                 const smpTotal = calcSMPTotal(record);
                 const svkTotal = calcSVKTotal(record);
                 const total = smpTotal + svkTotal;
-                const cc = COURSE_COLORS[record.course];
                 return (
                   <tr
                     key={record.id}
-                    className={`group hover:bg-slate-50/70 transition-colors cursor-context-menu border-l-2 ${cc.accent}`}
+                    className={`group hover:bg-slate-50/70 transition-colors cursor-context-menu border-l-2 ${COURSE_COLORS[record.course]}`}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, record });
@@ -899,7 +898,7 @@ export function FeeRegister() {
                       </span>
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold ${cc.badge}`}>
+                      <span className="inline-flex items-center justify-center w-10 py-0.5 rounded border text-[10px] font-bold bg-slate-100 text-slate-600 border-slate-200">
                         {record.course}
                       </span>
                     </td>
@@ -911,7 +910,7 @@ export function FeeRegister() {
                     <td className="px-2 py-1.5 text-gray-700 whitespace-nowrap font-mono text-[11px]">{record.svkReceiptNumber || '—'}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        className={`inline-flex items-center justify-center w-12 py-0.5 rounded-full text-[10px] font-semibold border ${
                           record.paymentMode === 'UPI'
                             ? 'bg-violet-100 text-violet-700 border-violet-200'
                             : 'bg-amber-50 text-amber-700 border-amber-200'
@@ -1006,41 +1005,41 @@ export function FeeRegister() {
 
             {/* Totals footer */}
             <tfoot className="sticky bottom-0 z-10">
-              <tr className="bg-slate-700 border-t-2 border-slate-600 font-semibold text-white">
-                <td className="px-2 py-2 text-slate-300 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-slate-700" colSpan={2}>
+              <tr className="bg-amber-100 border-t-2 border-amber-300 font-semibold">
+                <td className="px-2 py-2 text-amber-900 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-amber-100" colSpan={2}>
                   Totals · {filteredRecords.length} records
                 </td>
-                <td colSpan={showFatherName ? 11 : 10} className="bg-slate-700 border-r border-slate-600" />
+                <td colSpan={showFatherName ? 11 : 10} className="bg-amber-100 border-r border-amber-300" />
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
-                  <td key={key} className="px-2 py-2 text-right text-blue-200 whitespace-nowrap tabular-nums text-xs">
-                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-slate-500">—</span>}
+                  <td key={key} className="px-2 py-2 text-right text-blue-800 whitespace-nowrap tabular-nums text-xs bg-blue-100">
+                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-blue-300">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-2 text-right text-blue-100 whitespace-nowrap tabular-nums font-bold border-r border-slate-600">
+                <td className="px-2 py-2 text-right text-blue-900 whitespace-nowrap tabular-nums font-bold border-r border-blue-300 bg-blue-200">
                   {(Object.values(totals.smp) as number[]).reduce((s, v) => s + v, 0).toLocaleString()}
                 </td>
 
                 {showSVKDetails && (
-                  <td className="px-2 py-2 text-right text-violet-200 whitespace-nowrap tabular-nums">
-                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-slate-500">—</span>}
+                  <td className="px-2 py-2 text-right text-violet-800 whitespace-nowrap tabular-nums bg-violet-100">
+                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-violet-300">—</span>}
                   </td>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <td key={label} className="px-2 py-2 text-right text-violet-200 whitespace-nowrap tabular-nums">
+                  <td key={label} className="px-2 py-2 text-right text-violet-800 whitespace-nowrap tabular-nums bg-violet-100">
                     {(totals.additional[label] ?? 0) > 0
                       ? (totals.additional[label] ?? 0).toLocaleString()
-                      : <span className="text-slate-500">—</span>}
+                      : <span className="text-violet-300">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-2 text-right text-violet-100 whitespace-nowrap tabular-nums font-bold border-r border-slate-600">
+                <td className="px-2 py-2 text-right text-violet-900 whitespace-nowrap tabular-nums font-bold border-r border-violet-300 bg-violet-200">
                   {(totals.svk + additionalHeadLabels.reduce((s, l) => s + (totals.additional[l] ?? 0), 0)).toLocaleString()}
                 </td>
 
-                <td className="px-2 py-2 text-right text-emerald-300 whitespace-nowrap tabular-nums font-bold text-sm border-r border-slate-600">
+                <td className="px-2 py-2 text-right text-emerald-900 whitespace-nowrap tabular-nums font-bold text-sm border-r border-emerald-300 bg-emerald-200">
                   ₹{totals.grandTotal.toLocaleString()}
                 </td>
-                {isAdmin && <td className="bg-slate-700" />}
+                {isAdmin && <td className="bg-amber-100" />}
               </tr>
             </tfoot>
           </table>

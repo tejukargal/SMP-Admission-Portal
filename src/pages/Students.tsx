@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { deleteStudent } from '../services/studentService';
@@ -78,6 +79,7 @@ export function Students() {
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
   const [savingPdf, setSavingPdf] = useState(false);
+  const [savingExcel, setSavingExcel] = useState(false);
 
   // Toast for post-edit success message passed via router state
   const [toastMsg, setToastMsg] = useState<string>(() => {
@@ -234,6 +236,70 @@ export function Students() {
         });
       } finally {
         setSavingPdf(false);
+      }
+    }, 0);
+  }
+
+  function handleSaveExcel() {
+    setSavingExcel(true);
+    setTimeout(() => {
+      try {
+        const headers = [
+          '#', 'Name (SSLC)', 'Name (Aadhar)', 'Father Name', 'Mother Name',
+          'Date of Birth', 'Gender', 'Religion', 'Caste', 'Category',
+          'Course', 'Year', 'Adm Type', 'Adm Cat', 'Reg No',
+          'Student Mobile', 'Father Mobile',
+          'Address', 'Town', 'Taluk', 'District',
+          'SSLC Max', 'SSLC Obtained',
+          'Maths Max', 'Maths Obtained', 'Science Max', 'Science Obtained',
+          'M+S Max', 'M+S Obtained',
+          'PUC %', 'ITI %', 'Annual Income',
+          'Merit No', 'Enrollment Date', 'Admission Status', 'Academic Year',
+        ];
+        const rows = filteredStudents.map((s, i) => [
+          i + 1,
+          s.studentNameSSLC,
+          s.studentNameAadhar,
+          s.fatherName,
+          s.motherName,
+          s.dateOfBirth,
+          s.gender,
+          s.religion,
+          s.caste,
+          s.category,
+          s.course,
+          s.year,
+          s.admType,
+          s.admCat,
+          s.regNumber || '',
+          s.studentMobile || '',
+          s.fatherMobile || '',
+          s.address,
+          s.town,
+          s.taluk,
+          s.district,
+          s.sslcMaxTotal,
+          s.sslcObtainedTotal,
+          s.mathsMax,
+          s.mathsObtained,
+          s.scienceMax,
+          s.scienceObtained,
+          s.mathsScienceMaxTotal,
+          s.mathsScienceObtainedTotal,
+          s.pucPercentage,
+          s.itiPercentage,
+          s.annualIncome,
+          s.meritNumber || '',
+          s.enrollmentDate,
+          s.admissionStatus,
+          s.academicYear,
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Students');
+        XLSX.writeFile(wb, `Students_${academicYear ?? 'export'}.xlsx`);
+      } finally {
+        setSavingExcel(false);
       }
     }, 0);
   }
@@ -430,13 +496,22 @@ export function Students() {
             </button>
           )}
           {!isLoading && filteredStudents.length > 0 && (
-            <button
-              onClick={handleSavePdf}
-              disabled={savingPdf}
-              className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            >
-              {savingPdf ? 'Generating…' : 'Save PDF'}
-            </button>
+            <>
+              <button
+                onClick={handleSavePdf}
+                disabled={savingPdf}
+                className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {savingPdf ? 'Generating…' : 'Save PDF'}
+              </button>
+              <button
+                onClick={handleSaveExcel}
+                disabled={savingExcel}
+                className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {savingExcel ? 'Exporting…' : 'Export Excel'}
+              </button>
+            </>
           )}
         </div>
       </div>

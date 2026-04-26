@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { getFeeStructure, saveFeeStructure, getAllFeeStructures, deleteAllFeeStructures, applyAdditionalHeadsToYear } from '../services/feeStructureService';
 import { getFineSchedule, saveFineSchedule } from '../services/fineScheduleService';
-import { exportFeeStructurePDF, exportFeeStructureExcel } from '../utils/feeStructureExport';
+import { exportFeeStructurePDF, exportFeeStructureExcel, exportFeeStructureFormatted } from '../utils/feeStructureExport';
 import { Button } from '../components/common/Button';
 import { FeeStructureImportModal } from '../components/fee/FeeStructureImportModal';
 import type {
@@ -21,7 +21,7 @@ import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
-const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
 const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 
 const fs =
@@ -70,7 +70,7 @@ export function FeeStructurePage() {
   const [showImport, setShowImport] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | 'formatted' | null>(null);
 
   // ── Apply-to-all additional heads dialog ──────────────────────────────────
   const [showApplyToAllDialog, setShowApplyToAllDialog] = useState(false);
@@ -254,7 +254,7 @@ export function FeeStructurePage() {
     }
   }
 
-  function handleExport(format: 'pdf' | 'excel') {
+  function handleExport(format: 'pdf' | 'excel' | 'formatted') {
     const exportYear = selectedYear || settings?.currentAcademicYear;
     if (!exportYear) return;
     const yearStructures = allStructures.filter((s) => s.academicYear === exportYear);
@@ -262,7 +262,8 @@ export function FeeStructurePage() {
     setExporting(format);
     try {
       if (format === 'pdf') exportFeeStructurePDF(yearStructures, exportYear);
-      else exportFeeStructureExcel(yearStructures, exportYear);
+      else if (format === 'excel') exportFeeStructureExcel(yearStructures, exportYear);
+      else exportFeeStructureFormatted(yearStructures, exportYear);
     } finally {
       setExporting(null);
     }
@@ -388,18 +389,32 @@ export function FeeStructurePage() {
             {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
           </button>
 
-          {/* Export Excel */}
+          {/* Export Excel (flat data) */}
           <button
             onClick={() => handleExport('excel')}
             disabled={exporting !== null || allStructures.filter(s => s.academicYear === (selectedYear || settings?.currentAcademicYear)).length === 0}
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-green-700 cursor-pointer transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Export fee structure as Excel spreadsheet"
+            title="Export fee structure as Excel spreadsheet (flat data)"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
+          </button>
+
+          {/* Fee Structure Format (reference layout) */}
+          <button
+            onClick={() => handleExport('formatted')}
+            disabled={exporting !== null || allStructures.filter(s => s.academicYear === (selectedYear || settings?.currentAcademicYear)).length === 0}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 cursor-pointer transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Generate formatted fee structure Excel (Fee Structure + Component Breakup + Course-wise Data + Quick Reference)"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {exporting === 'formatted' ? 'Generating…' : 'Fee Structure Format'}
           </button>
 
           {/* Import from Excel */}
