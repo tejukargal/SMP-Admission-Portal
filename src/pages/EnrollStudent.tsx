@@ -308,6 +308,39 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
   );
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  studentNameSSLC:      'Name (SSLC)',
+  studentNameAadhar:    'Name (Aadhar)',
+  fatherName:           'Father Name',
+  motherName:           'Mother Name',
+  gender:               'Gender',
+  religion:             'Religion',
+  dateOfBirth:          'Date of Birth',
+  course:               'Course',
+  year:                 'Year',
+  admType:              'Adm Type',
+  admCat:               'Adm Cat',
+  academicYear:         'Academic Year',
+  admissionStatus:      'Status',
+  fatherMobile:         'Father Mobile',
+  studentMobile:        'Student Mobile',
+  sslcMaxTotal:         'SSLC Max',
+  sslcObtainedTotal:    'SSLC Obtained',
+  scienceMax:           'Science Max',
+  scienceObtained:      'Science Obt.',
+  mathsMax:             'Maths Max',
+  mathsObtained:        'Maths Obt.',
+  town:                 'Town',
+  taluk:                'Taluk',
+  district:             'District',
+  pucPercentage:        'PUC %',
+  itiPercentage:        'ITI %',
+  caste:                'Caste',
+  category:             'Category',
+  address:              'Address',
+  regNumber:            'Reg No',
+};
+
 function emptyForm(defaultYear?: AcademicYear): StudentFormData {
   return {
     studentNameSSLC: '',
@@ -910,6 +943,16 @@ export function EnrollStudent() {
     void performSave();
   }
 
+  // Disable main's own scroll so this page owns its scroll container.
+  // Restored automatically on unmount (navigation away).
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    const prev = (main as HTMLElement).style.overflowY;
+    (main as HTMLElement).style.overflowY = 'hidden';
+    return () => { (main as HTMLElement).style.overflowY = prev; };
+  }, []);
+
   if (loadingEdit) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -919,7 +962,10 @@ export function EnrollStudent() {
   }
 
   return (
-    <div className="w-full" ref={topRef} style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="flex flex-col h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
+      {/* ── Scrollable area ─────────────────────────────────────────────── */}
+      <div ref={topRef} className="flex-1 min-h-0 overflow-y-auto px-0 pb-2">
+
       {/* Page header */}
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">
@@ -1031,7 +1077,7 @@ export function EnrollStudent() {
         </div>
       )}
 
-      <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+      <form id="enroll-form" onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
 
         {/* ── Personal Information ─────────────────────────────────────── */}
         <section className="rounded-xl border border-sky-200 shadow-sm">
@@ -1517,20 +1563,59 @@ export function EnrollStudent() {
           </div>
         </section>
 
-        <div className="flex gap-3 pt-1 pb-4">
-          <Button type="submit" loading={saving} size="lg">
-            {editId ? 'Update Student' : 'Preview & Enroll'}
-          </Button>
+      </form>
+
+      </div>{/* end scrollable area */}
+
+      {/* ── Footer bar — mirrors the top Header style ───────────────────── */}
+      <div
+        className="flex-shrink-0 flex items-center gap-3 bg-white h-13 -mx-4 -mb-4 px-5"
+        style={{ borderTop: '1px solid #d1fae5', boxShadow: '0 -1px 6px 0 rgba(16,185,129,0.06)' }}
+      >
+        {/* Error field pills — shown on the left when validation fails */}
+        {Object.keys(errors).length > 0 && (
+          <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+            <svg className="shrink-0 text-red-500 w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div className="flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0" style={{ scrollbarWidth: 'none' }}>
+              {Object.keys(errors).map((key) => (
+                <span
+                  key={key}
+                  className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                >
+                  {FIELD_LABELS[key] ?? key}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Buttons — pushed to the right */}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {!editId && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevSourceStudent(null); }}
+            >
+              Reset
+            </Button>
+          )}
           <Button
             type="button"
             variant="secondary"
-            size="lg"
+            size="sm"
             onClick={() => void navigate(backTo)}
           >
             Cancel
           </Button>
+          <Button type="submit" form="enroll-form" loading={saving} size="sm">
+            {editId ? 'Update Student' : 'Preview & Enroll'}
+          </Button>
         </div>
-      </form>
+      </div>
 
       {showPreview && (
         <EnrollmentPreview
