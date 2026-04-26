@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { getCachedSettings } from '../services/settingsService';
+import { useSettings } from './SettingsContext';
 import type { Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const PAGE_SIZE = 100;
@@ -66,6 +67,8 @@ const defaultStudents: StudentsFilters = {
 const FiltersContext = createContext<FiltersContextValue | null>(null);
 
 export function FiltersProvider({ children }: { children: ReactNode }) {
+  const { settings } = useSettings();
+
   // Initialise academic year synchronously from the settings cache so the
   // Dashboard never starts with an empty year filter on return visits.
   const [dashboardFilters, setDashboard] = useState<DashboardFilters>(() => ({
@@ -74,12 +77,23 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
   }));
   const [studentsFilters, setStudents] = useState<StudentsFilters>(defaultStudents);
 
+  // When settings load (or change), apply the current academic year as the
+  // default if no year filter has been selected yet.
+  const currentAcademicYear = settings?.currentAcademicYear;
+  useEffect(() => {
+    if (currentAcademicYear) {
+      setDashboard((prev) =>
+        prev.academicYearFilter ? prev : { ...prev, academicYearFilter: currentAcademicYear }
+      );
+    }
+  }, [currentAcademicYear]);
+
   function setDashboardFilters(patch: Partial<DashboardFilters>) {
     setDashboard((prev) => ({ ...prev, ...patch }));
   }
 
   function clearDashboardFilters() {
-    setDashboard(defaultDashboard);
+    setDashboard({ ...defaultDashboard, academicYearFilter: currentAcademicYear ?? '' });
   }
 
   function setStudentsFilters(patch: Partial<StudentsFilters>) {

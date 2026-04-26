@@ -99,6 +99,46 @@ interface YearWarningModalProps {
   onEdit: () => void;
 }
 
+interface DuplicateWarningModalProps {
+  match: Student;
+  onContinue: () => void;
+  onReset: () => void;
+}
+
+function DuplicateWarningModal({ match, onContinue, onReset }: DuplicateWarningModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-red-100 w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-red-50" style={{ background: 'linear-gradient(90deg, #fff1f2, #fff7ed)' }}>
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <span className="text-red-500">⚠</span> Possible Duplicate Entry
+          </h3>
+        </div>
+        <div className="px-6 py-5 space-y-3">
+          <p className="text-sm text-gray-700">
+            A student with the same name, father name, and mother name already exists in the system:
+          </p>
+          <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-1">
+            <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
+            <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
+            <p className="text-xs text-gray-600">{match.course} · {match.year} · {match.academicYear}</p>
+            {match.meritNumber && (
+              <p className="text-xs text-gray-500 font-mono">Merit: {match.meritNumber} · Reg: {match.regNumber}</p>
+            )}
+          </div>
+          <p className="text-sm text-gray-600">
+            Do you want to continue with this entry, or reset the name fields to start over?
+          </p>
+        </div>
+        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex gap-3 justify-end">
+          <Button variant="secondary" onClick={onReset}>Reset Fields</Button>
+          <Button onClick={onContinue}>Continue Anyway</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function YearWarningModal({ studentName, selectedYear, conflictRecord, onProceed, onEdit }: YearWarningModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
@@ -337,6 +377,11 @@ export function EnrollStudent() {
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // Duplicate detection
+  const allStudentsDupRef = useRef<Student[] | null>(null);
+  const dupAcknowledgedRef = useRef<Set<string>>(new Set());
+  const [dupStudent, setDupStudent] = useState<Student | null>(null);
 
   // Caste autocomplete
   type CasteEntry = { caste: string; category: Category };
@@ -583,6 +628,36 @@ export function EnrollStudent() {
     return () => clearTimeout(timer);
   }, [prevQuery, editId, settings?.currentAcademicYear]);
 
+  // Debounced duplicate check: fires when name + father + mother all have ≥3 chars (add mode only)
+  useEffect(() => {
+    if (editId) return;
+    const name = form.studentNameSSLC.trim();
+    const father = form.fatherName.trim();
+    const mother = form.motherName.trim();
+    if (name.length < 3 || father.length < 3 || mother.length < 3) return;
+    const key = `${name.toUpperCase()}__${father.toUpperCase()}__${mother.toUpperCase()}`;
+    if (dupAcknowledgedRef.current.has(key)) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        if (allStudentsDupRef.current === null) {
+          allStudentsDupRef.current = await getAllStudents();
+        }
+        const match = allStudentsDupRef.current.find(
+          (s) =>
+            s.studentNameSSLC.trim().toUpperCase() === name.toUpperCase() &&
+            s.fatherName.trim().toUpperCase() === father.toUpperCase() &&
+            s.motherName.trim().toUpperCase() === mother.toUpperCase()
+        );
+        if (match) setDupStudent(match);
+      } catch {
+        // silently ignore
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.studentNameSSLC, form.fatherName, form.motherName, editId]);
+
   useEffect(() => {
     if (!editId) return;
 
@@ -769,6 +844,7 @@ export function EnrollStudent() {
         navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
         const { meritNumber, regNumber } = await addStudent(form);
+        allStudentsDupRef.current = null; // invalidate so next check sees the new entry
         setForm(emptyForm(settings?.currentAcademicYear));
         setPrevSourceStudent(null);
         setShowPreview(false);
@@ -1463,6 +1539,21 @@ export function EnrollStudent() {
           errorMsg={errorMsg}
           onConfirm={handleConfirmEnroll}
           onEdit={() => setShowPreview(false)}
+        />
+      )}
+
+      {dupStudent && (
+        <DuplicateWarningModal
+          match={dupStudent}
+          onContinue={() => {
+            const key = `${form.studentNameSSLC.trim().toUpperCase()}__${form.fatherName.trim().toUpperCase()}__${form.motherName.trim().toUpperCase()}`;
+            dupAcknowledgedRef.current.add(key);
+            setDupStudent(null);
+          }}
+          onReset={() => {
+            setDupStudent(null);
+            setForm((prev) => ({ ...prev, studentNameSSLC: '', fatherName: '', motherName: '' }));
+          }}
         />
       )}
 

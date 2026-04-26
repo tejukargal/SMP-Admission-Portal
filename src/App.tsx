@@ -55,6 +55,7 @@ function AppRoutes() {
 
   return (
     <SettingsProvider>
+    <FiltersProvider>
     <Layout>
       <Routes>
         <Route path="/dashboard" element={<Dashboard />} />
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Layout>
+    </FiltersProvider>
     </SettingsProvider>
   );
 }
@@ -92,11 +94,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <FiltersProvider>
         <Suspense fallback={<PageSpinner fullScreen />}>
           <AppRoutes />
         </Suspense>
-        </FiltersProvider>
       </AuthProvider>
     </BrowserRouter>
   );

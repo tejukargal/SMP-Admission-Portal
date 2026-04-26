@@ -264,15 +264,6 @@ export function Dashboard() {
     chipsScrollRef.current?.scrollBy({ left: dir === 'left' ? -140 : 140, behavior: 'smooth' });
   }
 
-  const didAutoSet = useRef(false);
-  useEffect(() => {
-    if (!didAutoSet.current && settings?.currentAcademicYear && !academicYearFilter) {
-      setAcademicYearFilter(settings.currentAcademicYear);
-      didAutoSet.current = true;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings?.currentAcademicYear]);
-
   const isSearchMode = searchTerm.trim().length > 0;
 
   const sortedAcademicYears = useMemo(() => {
