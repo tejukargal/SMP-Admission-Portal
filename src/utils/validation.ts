@@ -63,12 +63,12 @@ export function validateStudentFormEdit(data: StudentFormData): EditValidationRe
     }
   }
 
-  // At least one mobile number required (warning in edit mode)
+  // At least one mobile number is required — blocks save in edit mode too
   const fMobE = String(data.fatherMobile ?? '').trim();
   const sMobE = String(data.studentMobile ?? '').trim();
   if (!fMobE && !sMobE) {
-    warnings['fatherMobile'] = 'Enter at least one mobile number';
-    warnings['studentMobile'] = 'Enter at least one mobile number';
+    errors['fatherMobile'] = 'Enter at least one mobile number';
+    errors['studentMobile'] = 'Enter at least one mobile number';
   } else {
     if (fMobE && !MOBILE_RE.test(fMobE)) warnings['fatherMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
     if (sMobE && !MOBILE_RE.test(sMobE)) warnings['studentMobile'] = 'Enter a valid 10-digit mobile number starting with 6-9';
