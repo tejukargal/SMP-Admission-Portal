@@ -879,50 +879,53 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
               </div>
 
               {/* ── Payment Details ────────────────────────────────────── */}
-              <div className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                  Payment Details
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                {/* Section header */}
+                <div className="px-4 py-2 bg-gray-100/80 border-b border-gray-200">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    Payment Details
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+
+                <div className="divide-y divide-gray-100 bg-gray-50/40">
+
                   {/* Date */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Date <span className="text-red-500">*</span>
-                    </label>
+                  <div className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="w-36 shrink-0 text-[11px] font-semibold text-gray-500">
+                      Date <span className="text-red-400">*</span>
+                    </span>
                     <input
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
+                    <div className="w-[104px] shrink-0" />
                   </div>
 
-                  {/* SMP Receipt */}
+                  {/* SMP Receipt + mode */}
                   {smpNowTotal > 0 && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="w-36 shrink-0 text-[11px] font-semibold text-blue-600/80">
                         SMP Receipt No
-                      </label>
+                      </span>
                       <input
                         type="text"
                         value={receiptNo}
                         onChange={(e) => setReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented, editable"
-                        className="w-full rounded-md border border-blue-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                        placeholder="Auto-incremented"
+                        className="flex-1 rounded-md border border-blue-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                       />
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
-                          Mode:
-                        </span>
+                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
                         {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => setSmpPaymentMode(mode)}
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
                               smpPaymentMode === mode
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-white border border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600'
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-400 border-gray-200 hover:border-blue-400 hover:text-blue-600'
                             }`}
                           >
                             {mode}
@@ -932,32 +935,29 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                     </div>
                   )}
 
-                  {/* SVK Receipt */}
+                  {/* SVK Receipt + mode */}
                   {svkNowTotal > 0 && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="w-36 shrink-0 text-[11px] font-semibold text-purple-600/80">
                         SVK Receipt No
-                      </label>
+                      </span>
                       <input
                         type="text"
                         value={svkReceiptNo}
                         onChange={(e) => setSvkReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented, editable"
-                        className="w-full rounded-md border border-purple-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
+                        placeholder="Auto-incremented"
+                        className="flex-1 rounded-md border border-purple-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
                       />
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
-                          Mode:
-                        </span>
+                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
                         {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => setSvkPaymentMode(mode)}
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
                               svkPaymentMode === mode
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-white border border-gray-300 text-gray-500 hover:border-purple-400 hover:text-purple-600'
+                                ? 'bg-purple-600 text-white border-purple-600'
+                                : 'bg-white text-gray-400 border-gray-200 hover:border-purple-400 hover:text-purple-600'
                             }`}
                           >
                             {mode}
@@ -967,32 +967,29 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                     </div>
                   )}
 
-                  {/* Additional Receipt */}
+                  {/* Additional Receipt + mode */}
                   {additionalNowTotal > 0 && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Additional Fee Receipt No
-                      </label>
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="w-36 shrink-0 text-[11px] font-semibold text-emerald-600/80">
+                        Additional Receipt
+                      </span>
                       <input
                         type="text"
                         value={additionalReceiptNo}
                         onChange={(e) => setAdditionalReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented, editable"
-                        className="w-full rounded-md border border-emerald-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
+                        placeholder="Auto-incremented"
+                        className="flex-1 rounded-md border border-emerald-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
                       />
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
-                          Mode:
-                        </span>
+                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
                         {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => setAdditionalPaymentMode(mode)}
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
                               additionalPaymentMode === mode
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-white border border-gray-300 text-gray-500 hover:border-emerald-400 hover:text-emerald-600'
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white text-gray-400 border-gray-200 hover:border-emerald-400 hover:text-emerald-600'
                             }`}
                           >
                             {mode}
@@ -1003,16 +1000,20 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                   )}
 
                   {/* Remarks */}
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Remarks</label>
+                  <div className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="w-36 shrink-0 text-[11px] font-semibold text-gray-500">
+                      Remarks
+                    </span>
                     <input
                       type="text"
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
                       placeholder="Optional notes"
-                      className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
+                    <div className="w-[104px] shrink-0" />
                   </div>
+
                 </div>
               </div>
 

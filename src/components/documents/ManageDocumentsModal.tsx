@@ -35,26 +35,6 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const [saveError, setSaveError] = useState('');
   const [isDirty, setIsDirty]   = useState(false);
 
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Clear pending single-click timer on unmount to avoid state updates on dead component
-  useEffect(() => () => { if (clickTimerRef.current) clearTimeout(clickTimerRef.current); }, []);
-
-  // Single click: wait briefly to see if a double-click follows before submitting
-  function handleCardClick(key: DocKey, isSubmitted: boolean, isReturned: boolean, isNotRequired: boolean) {
-    if (isSubmitted || isReturned || isNotRequired) return;
-    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = setTimeout(() => {
-      clickTimerRef.current = null;
-      toggleSubmitted(key);
-    }, 220);
-  }
-
-  // Double click: cancel the pending single-click and open the detail popup
-  function handleCardDoubleClick(key: DocKey) {
-    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
-    setDetailDoc({ key, focusRemarks: false });
-  }
-
   const [docContextMenu, setDocContextMenu]       = useState<{ x: number; y: number; key: DocKey } | null>(null);
   const [detailDoc, setDetailDoc]                 = useState<{ key: DocKey; focusRemarks: boolean } | null>(null);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -273,7 +253,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                     </span>
                   )}
                   <span className="ml-1 text-[10px] text-white/55 italic hidden sm:inline">
-                    Double-click for details · Right-click for options
+                    Tick to mark · Double-click for details · Right-click for options
                   </span>
                 </>
               )}
@@ -320,38 +300,71 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                   const isNotRequired = !!entry.notRequired;
                   const pal = DOC_PALETTE[key] ?? DOC_PALETTE.sslcMarksCard;
 
-                  const statusText = isNotRequired ? 'NOT REQD'
-                    : isReturned  ? 'RETURNED'
-                    : isSubmitted ? 'SUBMITTED'
-                    : 'PENDING';
-                  const statusTextCls = isNotRequired ? 'text-gray-300'
-                    : isReturned  ? 'text-blue-600'
-                    : isSubmitted ? 'text-emerald-600'
-                    : 'text-gray-400';
-
                   return (
                     <div
                       key={key}
                       style={{ animation: `modal-enter 0.2s ease-out ${idx * 28}ms both` }}
-                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[90px] select-none transition-shadow duration-150 ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50 cursor-context-menu' : !isSubmitted && !isReturned ? 'cursor-pointer hover:shadow-md' : 'cursor-context-menu hover:shadow-md'}`}
-                      onClick={() => handleCardClick(key, isSubmitted, isReturned, isNotRequired)}
-                      onDoubleClick={() => handleCardDoubleClick(key)}
+                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[96px] select-none transition-shadow duration-150 hover:shadow-md cursor-context-menu ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50' : ''}`}
+                      onDoubleClick={() => setDetailDoc({ key, focusRemarks: false })}
                       onContextMenu={(e) => handleDocContextMenu(e, key)}
-                      title={isNotRequired ? 'Marked as not required · Right-click to change' : !isSubmitted && !isReturned ? 'Click to mark as submitted · Double-click for details · Right-click for options' : 'Double-click for details · Right-click for options'}
+                      title="Double-click for details · Right-click for options"
                     >
-                      {/* Document label — small, top */}
-                      <p className={`text-[12px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
+                      {/* Document label */}
+                      <p className={`text-[11px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
                         {label}
                       </p>
 
-                      {/* Status — centred, big bold, colour-coded */}
-                      <div className="flex-1 flex items-center justify-center">
-                        <span
-                          className={`text-[13px] font-black tracking-widest uppercase transition-colors duration-200 ${statusTextCls}`}
-                          style={{ letterSpacing: '0.12em' }}
+                      {/* Checkboxes — opposite ends */}
+                      <div className="flex items-end justify-between mt-auto pt-1">
+
+                        {/* Submitted — left */}
+                        <button
+                          type="button"
+                          disabled={isNotRequired}
+                          onClick={(e) => { e.stopPropagation(); toggleSubmitted(key); }}
+                          className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
                         >
-                          {statusText}
-                        </span>
+                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
+                            ${isSubmitted
+                              ? 'bg-emerald-500 border-emerald-500 shadow-emerald-200'
+                              : `bg-white/70 ${pal.border} group-hover:border-emerald-400 group-hover:bg-white`}
+                            ${isNotRequired ? 'opacity-40' : ''}`}
+                          >
+                            {isSubmitted && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[9px] font-bold tracking-wide leading-none transition-colors ${isSubmitted ? pal.text : 'text-gray-400 group-hover:text-gray-500'}`}>
+                            SUBM
+                          </span>
+                        </button>
+
+                        {/* Returned — right */}
+                        <button
+                          type="button"
+                          disabled={!isSubmitted || isNotRequired}
+                          onClick={(e) => { e.stopPropagation(); toggleReturned(key); }}
+                          className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
+                        >
+                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
+                            ${isReturned
+                              ? 'bg-blue-500 border-blue-500 shadow-blue-200'
+                              : 'bg-white/70 border-blue-200 group-hover:border-blue-400 group-hover:bg-white'}
+                            ${(!isSubmitted || isNotRequired) ? 'opacity-30' : ''}`}
+                          >
+                            {isReturned && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-[9px] font-bold tracking-wide leading-none transition-colors ${isReturned ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                            RETD
+                          </span>
+                        </button>
+
                       </div>
                     </div>
                   );

@@ -674,6 +674,17 @@ export function Students() {
               View Details
             </button>
             <div className="my-1 h-px bg-gray-100 mx-3" />
+            {isAdmin && (
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                onClick={() => { navigate('/fees', { state: { prefillStudent: contextMenu.student.studentNameSSLC } }); setContextMenu(null); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                </span>
+                Collect Fee
+              </button>
+            )}
             <button
               className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
               onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}

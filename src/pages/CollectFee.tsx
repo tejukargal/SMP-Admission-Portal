@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
@@ -52,8 +53,21 @@ export function CollectFee() {
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Pre-fill search when navigated here from another page (e.g. Students right-click → Collect Fee)
+  useEffect(() => {
+    const prefill = (location.state as { prefillStudent?: string } | null)?.prefillStudent;
+    if (prefill) {
+      setSearchTerm(prefill);
+      setDebouncedSearch(prefill);
+      // Clear state so back-navigation doesn't re-apply the prefill
+      window.history.replaceState({}, '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [courseFilter, setCourseFilter] = useState<Course | ''>('');
   const [yearFilter, setYearFilter] = useState<Year | ''>('');
   const [genderFilter, setGenderFilter] = useState<Gender | ''>('');
