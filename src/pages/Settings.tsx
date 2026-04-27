@@ -1,7 +1,7 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
-import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear, getAllStudents } from '../services/studentService';
+import { deleteStudentsByAcademicYear, deleteAllStudents, getStudentsByAcademicYear, getAllStudents, resetAcademicYearCounters } from '../services/studentService';
 import { clearTcHistory, type TCRecord } from '../services/tcService';
 import { clearPcHistory, type PCRecord } from '../services/pcService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
@@ -9,6 +9,7 @@ import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureServi
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear } from '../services/userService';
 import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
+import { RESET_PASSKEY } from '../config/constants';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
 import { FeeStructurePage } from './FeeStructurePage';
@@ -16,9 +17,10 @@ import { ExamFee } from './ExamFee';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
+import { BackupRestore } from './BackupRestore';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff' | 'messaging';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff' | 'messaging' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -29,6 +31,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'import-address', label: 'Import Address' },
   { id: 'staff', label: 'Staff Accounts' },
   { id: 'messaging', label: 'Messaging' },
+  { id: 'backup', label: 'Backup & Restore' },
 ];
 
 const ACADEMIC_YEAR_OPTIONS = [
@@ -52,7 +55,6 @@ const ACADEMIC_YEAR_OPTIONS = [
   { value: '2012-13', label: '2012-13' },
 ];
 
-const RESET_PASSKEY = 'teju2015';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
@@ -177,6 +179,7 @@ export function Settings() {
     setResetting(true);
     try {
       const count = await deleteStudentsByAcademicYear(currentValue as AcademicYear);
+      await resetAcademicYearCounters(currentValue as AcademicYear);
       setResetMsg(
         count > 0
           ? `Deleted ${count} student${count === 1 ? '' : 's'} for ${currentValue}.`
@@ -1045,6 +1048,11 @@ export function Settings() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── Backup & Restore ── */}
+        {activeTab === 'backup' && (
+          <BackupRestore />
         )}
 
       </div>

@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  deleteDoc,
   getDoc,
   updateDoc,
   query,
@@ -9,6 +10,7 @@ import {
   getDocs,
   writeBatch,
   runTransaction,
+  documentId,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -313,4 +315,34 @@ export async function getStudentsByAcademicYear(
   const q = query(collection(db, STUDENTS_COLLECTION), ...constraints);
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+}
+
+/**
+ * Deletes all counter and receipt-counter documents for the given academic year
+ * so that merit numbers, reg numbers, and receipt numbers restart from 1 on the
+ * next enrollment / fee collection.
+ *
+ * Counters deleted:
+ *   counters/{academicYear}              — merit number counter
+ *   counters/{academicYear}__tc          — TC number counter
+ *   counters/{academicYear}__regseq__*   — per-course/year reg-number counters
+ *   receiptCounters/{academicYear}       — SMP / SVK / additional receipt counters
+ */
+export async function resetAcademicYearCounters(academicYear: AcademicYear): Promise<void> {
+  const regPrefix = `${academicYear}__regseq__`;
+  const regSnap = await getDocs(
+    query(
+      collection(db, COUNTERS_COLLECTION),
+      where(documentId(), '>=', regPrefix),
+      where(documentId(), '<=', regPrefix + ''),
+    )
+  );
+
+  const deletes: Promise<void>[] = [
+    deleteDoc(doc(db, COUNTERS_COLLECTION, academicYear)),
+    deleteDoc(doc(db, COUNTERS_COLLECTION, `${academicYear}__tc`)),
+    deleteDoc(doc(db, 'receiptCounters', academicYear)),
+    ...regSnap.docs.map((d) => deleteDoc(d.ref)),
+  ];
+  await Promise.all(deletes);
 }
