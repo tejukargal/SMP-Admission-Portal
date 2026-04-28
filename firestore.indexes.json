@@ -107,6 +107,14 @@
         { "fieldPath": "studentId", "order": "ASCENDING" },
         { "fieldPath": "academicYear", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "meritListSnapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "academicYear", "order": "ASCENDING" },
+        { "fieldPath": "phase", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

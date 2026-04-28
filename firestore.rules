@@ -153,6 +153,12 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ── Merit List Snapshots ──────────────────────────────────────────────
+    match /meritListSnapshots/{snapshotId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // ── SMS Logs ──────────────────────────────────────────────────────────
     // Writes come from Cloud Functions (Admin SDK bypasses rules);
     // rule below prevents direct browser writes from non-admins.

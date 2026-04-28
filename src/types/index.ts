@@ -60,8 +60,11 @@ export interface Student {
   academicYear: AcademicYear;
   admissionStatus: string;
   enrollmentDate: string;
+  applicationNumber: string;
   meritNumber: string;
   regNumber: string;
+  aadharNumber: string;
+  apaarId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -209,12 +212,10 @@ export interface AppSettings {
 
 export const REQUIRED_DOCS = [
   { key: 'sslcMarksCard',          label: 'SSLC Marks Card' },
-  { key: 'transferCertificate',    label: 'Transfer Certificate' },
+  { key: 'transferCertificate',    label: 'TC' },
   { key: 'studyCertificate',       label: 'Study Certificate' },
-  { key: 'characterConduct',       label: 'Character & Conduct Certificate' },
   { key: 'casteCertificate',       label: 'Caste Certificate' },
   { key: 'incomeCertificate',      label: 'Income Certificate' },
-  { key: 'physicalFitness',        label: 'Physical Fitness Certificate' },
   { key: 'aadharCopy',             label: 'Copy of Aadhar' },
   { key: 'eligibilityCertificate', label: 'Eligibility Certificate' },
   { key: 'passportPhotos',         label: 'Passport Photos (5 nos.)' },
@@ -238,6 +239,34 @@ export interface StudentDocuments {
   studentId: string;
   docs: Partial<DocRecord>;
   updatedAt: string;
+}
+
+// ─── Merit List Snapshots ─────────────────────────────────────────────────────
+
+/** Frozen snapshot of a single student's merit-list data, stored at save time. */
+export interface MeritListStudent {
+  studentNameSSLC: string;
+  fatherName: string;
+  gender: string;
+  dateOfBirth: string;
+  category: string;
+  annualIncome: number;
+  mathsScienceMaxTotal: number;
+  mathsScienceObtainedTotal: number;
+  sslcMaxTotal: number;
+  sslcObtainedTotal: number;
+  meritNumber: string;
+  course: Course;
+  year: Year;
+}
+
+/** Immutable snapshot of the merit list saved at a point in time. */
+export interface MeritListSnapshot {
+  id: string;
+  phase: number;
+  academicYear: AcademicYear;
+  savedAt: string;        // ISO timestamp
+  students: MeritListStudent[];
 }
 
 // ─── Exam Fee ─────────────────────────────────────────────────────────────────

@@ -11,7 +11,10 @@ export function emptyEntry(): DocEntry {
 
 export function emptyDocRecord(): DocRecord {
   return Object.fromEntries(
-    REQUIRED_DOCS.map(({ key }) => [key, emptyEntry()])
+    REQUIRED_DOCS.map(({ key }) => [
+      key,
+      key === 'eligibilityCertificate' ? { ...emptyEntry(), notRequired: true } : emptyEntry(),
+    ])
   ) as DocRecord;
 }
 
@@ -19,7 +22,7 @@ export function emptyDocRecord(): DocRecord {
 export function mergeWithDefaults(partial: Partial<DocRecord>): DocRecord {
   const full = emptyDocRecord();
   for (const { key } of REQUIRED_DOCS) {
-    if (partial[key]) full[key] = { ...emptyEntry(), ...partial[key] };
+    if (partial[key]) full[key] = { ...full[key], ...partial[key] };
   }
   return full;
 }

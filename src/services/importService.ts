@@ -148,8 +148,11 @@ function rowToFormData(row: ImportRow): StudentFormData {
     academicYear: row.academicYear.trim() as AcademicYear,
     admissionStatus: 'CONFIRMED',
     enrollmentDate: new Date().toISOString().slice(0, 10),
+    applicationNumber: '',
     meritNumber: '',
     regNumber: row.regNumber.trim().toUpperCase(),
+    aadharNumber: '',
+    apaarId: '',
   };
 }
 

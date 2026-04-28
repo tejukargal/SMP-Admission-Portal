@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent 
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
-import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber } from '../services/studentService';
+import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber } from '../services/studentService';
 import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/feeRecordService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
@@ -229,6 +229,8 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
               <PreviewRow label="Caste" value={form.caste} />
               <PreviewRow label="Category" value={form.category} />
               <PreviewRow label="Annual Income" value={form.annualIncome > 0 ? `₹ ${form.annualIncome.toLocaleString()}` : ''} />
+              <PreviewRow label="Aadhar Number" value={form.aadharNumber} />
+              <PreviewRow label="APAAR ID" value={form.apaarId} />
             </dl>
           </section>
 
@@ -283,6 +285,7 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
               <PreviewRow label="Academic Year" value={form.academicYear} required />
               <PreviewRow label="Admission Status" value={form.admissionStatus} required />
               <PreviewRow label="Enrollment Date" value={form.enrollmentDate} />
+              <PreviewRow label="Application No" value={form.applicationNumber} />
               <PreviewRow label="Reg Number" value={form.regNumber} />
             </dl>
           </section>
@@ -339,6 +342,9 @@ const FIELD_LABELS: Record<string, string> = {
   category:             'Category',
   address:              'Address',
   regNumber:            'Reg No',
+  applicationNumber:    'Application No',
+  aadharNumber:         'Aadhar Number',
+  apaarId:              'APAAR ID',
 };
 
 function emptyForm(defaultYear?: AcademicYear): StudentFormData {
@@ -378,8 +384,11 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     academicYear: defaultYear ?? ('' as AcademicYear),
     admissionStatus: 'PENDING',
     enrollmentDate: new Date().toISOString().slice(0, 10),
+    applicationNumber: '',
     meritNumber: '',
     regNumber: '',
+    aadharNumber: '',
+    apaarId: '',
   };
 }
 
@@ -623,6 +632,24 @@ export function EnrollStudent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.course, form.year, form.academicYear, editId, prevSourceStudent]);
 
+  // Auto-preview application number for new enrollments.
+  // Application number is always auto-generated (not editable), per (academicYear, course).
+  useEffect(() => {
+    if (editId) return;
+    const { course, academicYear } = form;
+    if (!course || !academicYear) return;
+
+    let cancelled = false;
+    peekNextDefaultAppNumber(academicYear as import('../types').AcademicYear, course as import('../types').Course)
+      .then((preview) => {
+        if (cancelled) return;
+        setForm((prev) => ({ ...prev, applicationNumber: preview }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.course, form.academicYear, editId]);
+
   // Debounced search across previous-year students
   useEffect(() => {
     if (editId) return;
@@ -804,7 +831,7 @@ export function EnrollStudent() {
     })[0] ?? student;
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id: _id, createdAt: _c, updatedAt: _u, meritNumber: _m, ...rest } = latest;
+    const { id: _id, createdAt: _c, updatedAt: _u, meritNumber: _m, applicationNumber: _an, ...rest } = latest;
     // Convert DOB from YYYY-MM-DD to DD/MM/YYYY if needed
     let dob = rest.dateOfBirth;
     if (dob && /^\d{4}-\d{2}-\d{2}$/.test(dob)) {
@@ -814,6 +841,7 @@ export function EnrollStudent() {
     setForm({
       ...rest,
       dateOfBirth: dob,
+      applicationNumber: '',
       meritNumber: '',
       admissionStatus: 'PENDING',
       enrollmentDate: new Date().toISOString().slice(0, 10),
@@ -881,12 +909,12 @@ export function EnrollStudent() {
         }
         navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
-        const { meritNumber, regNumber } = await addStudent(form);
+        const { meritNumber, regNumber, applicationNumber } = await addStudent(form);
         allStudentsDupRef.current = null; // invalidate so next check sees the new entry
         setForm(emptyForm(settings?.currentAcademicYear));
         setPrevSourceStudent(null);
         setShowPreview(false);
-        setSuccessMsg(`Student enrolled successfully! Merit No: ${meritNumber} · Reg No: ${regNumber}`);
+        setSuccessMsg(`Student enrolled successfully! App No: ${applicationNumber} · Merit No: ${meritNumber} · Reg No: ${regNumber}`);
         topRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (err: unknown) {
@@ -1209,6 +1237,25 @@ export function EnrollStudent() {
                 error={displayErrors['annualIncome']}
                 placeholder="0"
               />
+              <div className="lg:col-span-2">
+                <Input
+                  label="Aadhar Number"
+                  value={form.aadharNumber}
+                  onChange={handleTextChange('aadharNumber')}
+                  error={displayErrors['aadharNumber']}
+                  placeholder="XXXX XXXX XXXX"
+                  maxLength={14}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <Input
+                  label="APAAR ID"
+                  value={form.apaarId}
+                  onChange={handleTextChange('apaarId')}
+                  error={displayErrors['apaarId']}
+                  placeholder="APAAR ID"
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -1545,6 +1592,25 @@ export function EnrollStudent() {
                 uppercase
                 placeholder="Auto-assigned if blank"
               />
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">
+                  Application Number
+                </label>
+                {editId ? (
+                  <input
+                    readOnly
+                    value={form.applicationNumber || 'Not assigned'}
+                    className="block w-full rounded-md border border-violet-200 px-3 py-2 text-sm bg-violet-100/60 text-gray-600 cursor-not-allowed font-mono tracking-wider"
+                  />
+                ) : (
+                  <input
+                    readOnly
+                    value={form.applicationNumber}
+                    placeholder="Auto-generated on enrollment"
+                    className="block w-full rounded-md border border-violet-200 px-3 py-2 text-sm bg-violet-100/60 text-gray-500 cursor-not-allowed font-mono tracking-wider"
+                  />
+                )}
+              </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">
                   Merit Number

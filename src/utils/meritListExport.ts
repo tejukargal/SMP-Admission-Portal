@@ -1,7 +1,26 @@
-import { jsPDF } from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import type { Student } from '../types';
+
+/** Structural type satisfied by both Student and MeritListStudent. */
+interface MeritRow {
+  studentNameSSLC: string;
+  fatherName: string;
+  gender: string;
+  dateOfBirth: string;
+  category: string;
+  annualIncome: number;
+  mathsScienceMaxTotal: number;
+  mathsScienceObtainedTotal: number;
+  sslcMaxTotal: number;
+  sslcObtainedTotal: number;
+  meritNumber: string;
+}
+
+export interface MeritExportOptions {
+  /** ISO timestamp — used as the notice-board date in the PDF header. Defaults to now. */
+  savedAt?: string;
+  /** e.g. "Merit List Phase 1" — shown in the PDF info row. */
+  phaseLabel?: string;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -9,210 +28,248 @@ import type { Student } from '../types';
 export function fmtDate(dateStr: string | undefined | null): string {
   if (!dateStr) return '—';
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return dateStr; // already in another format, return as-is
+  if (!m) return dateStr;
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
-export function sslcPct(s: Student): number {
+/** Converts YYYY-MM-DD → DD-MM-YY (2-digit year, official roster format). */
+export function fmtDOB(dateStr: string | undefined | null): string {
+  if (!dateStr) return '—';
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return dateStr;
+  return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+}
+
+/** BOY → M, GIRL → F */
+export function fmtGender(gender: string): string {
+  return gender === 'BOY' ? 'M' : gender === 'GIRL' ? 'F' : gender;
+}
+
+export function sslcPct(s: MeritRow): number {
   if (!s.sslcMaxTotal || s.sslcMaxTotal === 0) return 0;
   return (s.sslcObtainedTotal / s.sslcMaxTotal) * 100;
 }
 
-export function sortByMerit(students: Student[]): Student[] {
+export function sortByMerit<T extends MeritRow>(students: T[]): T[] {
   return [...students].sort((a, b) => sslcPct(b) - sslcPct(a));
 }
 
-// ── PDF ───────────────────────────────────────────────────────────────────────
+// ── PDF (HTML print — supports Kannada Unicode) ───────────────────────────────
 
-const FONT_SIZE = 8.5;
-const CELL_PAD  = { top: 2.8, right: 3, bottom: 2.8, left: 3 };
-const PAD_H     = CELL_PAD.left + CELL_PAD.right;
-
-interface ColDef {
-  header: string;
-  halign: 'left' | 'center' | 'right';
-  get: (s: Student, i: number) => string | number;
-}
-
-const COLUMNS: ColDef[] = [
-  { header: 'Sl',              halign: 'center', get: (_s, i) => i + 1 },
-  { header: 'Academic Year',   halign: 'center', get: (s)    => s.academicYear },
-  { header: 'Name',            halign: 'left',   get: (s)    => s.studentNameSSLC },
-  { header: 'Father',          halign: 'left',   get: (s)    => s.fatherName || '—' },
-  { header: 'Year',            halign: 'center', get: (s)    => s.year },
-  { header: 'Course',          halign: 'center', get: (s)    => s.course },
-  { header: 'Gender',          halign: 'center', get: (s)    => s.gender },
-  { header: 'SSLC Total',      halign: 'right',  get: (s)    => `${s.sslcObtainedTotal}/${s.sslcMaxTotal}` },
-  { header: 'Percentage',      halign: 'right',  get: (s)    => `${sslcPct(s).toFixed(2)}%` },
-  { header: 'Enrolled On',     halign: 'center', get: (s)    => fmtDate(s.enrollmentDate) },
-];
-
-// Columns that should auto-size to content (everything except Name & Father)
-const FLEX_COLS = new Set(['Name', 'Father']);
-
-export function exportMeritListPdf(students: Student[], academicYear: string | null): void {
-  const margin      = 10;
-  const LANDSCAPE_W = 297 - margin * 2;  // 277mm
-
+export function exportMeritListPdf(
+  students: MeritRow[],
+  academicYear: string | null,
+  options: MeritExportOptions = {},
+): void {
   const sorted = sortByMerit(students);
 
-  const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  measureDoc.setFontSize(FONT_SIZE);
+  const refDate = options.savedAt ? new Date(options.savedAt) : new Date();
+  const dd  = String(refDate.getDate()).padStart(2, '0');
+  const mm  = String(refDate.getMonth() + 1).padStart(2, '0');
+  const yy  = String(refDate.getFullYear()).slice(2);
+  const todayFmt = `${dd}-${mm}-${yy}`;
 
-  // Measure fixed-width columns
-  let fixedTotal = 0;
-  const flexCount = COLUMNS.filter((c) => FLEX_COLS.has(c.header)).length;
+  const esc = (s: string | number | undefined | null): string =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 
-  const colWidths: number[] = COLUMNS.map((col) => {
-    if (FLEX_COLS.has(col.header)) return 0; // filled below
+  const fmtIncome = (v: number | undefined | null): string => {
+    if (!v && v !== 0) return '—';
+    return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
 
-    measureDoc.setFont('helvetica', 'bold');
-    let w = measureDoc.getTextWidth(col.header);
-    measureDoc.setFont('helvetica', 'normal');
-    for (let i = 0; i < sorted.length; i++) {
-      const cw = measureDoc.getTextWidth(String(col.get(sorted[i], i)));
-      if (cw > w) w = cw;
-    }
-    const colW = w + PAD_H + 2;
-    fixedTotal += colW;
-    return colW;
-  });
+  const rows = sorted.map((s, idx) => `
+    <tr class="${idx % 2 === 1 ? 'alt' : ''}">
+      <td class="c">${idx + 1}</td>
+      <td class="c">${esc(s.meritNumber || String(idx + 1))}</td>
+      <td class="l name">${esc(s.studentNameSSLC)}</td>
+      <td class="c">${fmtGender(s.gender)}</td>
+      <td class="l father">${esc(s.fatherName || '—')}</td>
+      <td class="c">${fmtDOB(s.dateOfBirth)}</td>
+      <td class="c">${esc(s.category)}</td>
+      <td class="r">${fmtIncome(s.annualIncome)}</td>
+      <td class="c">${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}</td>
+      <td class="r">${s.mathsScienceMaxTotal ? ((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2) : '—'}</td>
+      <td class="c">${s.sslcMaxTotal}</td>
+      <td class="c">${s.sslcObtainedTotal}</td>
+      <td class="r">${sslcPct(s).toFixed(2)}</td>
+    </tr>`).join('');
 
-  // Flex columns share remaining space equally (min 28mm each)
-  const flexW = Math.max((LANDSCAPE_W - fixedTotal) / flexCount, 28);
-  COLUMNS.forEach((col, idx) => {
-    if (FLEX_COLS.has(col.header)) colWidths[idx] = flexW;
-  });
+  const ayDisplay = academicYear ?? '';
 
-  const tableWidth = colWidths.reduce((s, w) => s + w, 0);
+  const html = `<!DOCTYPE html>
+<html lang="kn">
+<head>
+<meta charset="UTF-8">
+<title>Merit List – ${esc(ayDisplay)}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans Kannada', 'Arial Unicode MS', Arial, sans-serif; font-size: 11pt; color: #000; background: #fff; }
 
-  const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
+  /* ── Institution header ── */
+  .inst-header { text-align: center; line-height: 1.6; border-bottom: 2pt solid #000; padding-bottom: 6pt; margin-bottom: 6pt; }
+  .ih-govt   { font-size: 11pt; }
+  .ih-dept   { font-size: 10pt; }
+  .ih-comm   { font-size: 10pt; }
+  .ih-college{ font-size: 15pt; font-weight: bold; }
+  .ih-addr   { font-size: 10pt; font-weight: bold; }
 
-  // Title
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(15, 23, 42);
-  doc.text('SMP Admissions — Merit List (Pending)', margin, 13);
+  /* ── Title block ── */
+  .title-block { border: 1pt solid #000; text-align: center; padding: 5pt 8pt; margin-bottom: 5pt; }
+  .tb-main { font-size: 12pt; font-weight: bold; line-height: 1.55; }
+  .tb-year { font-size: 14pt; font-weight: bold; margin-top: 4pt; }
 
-  // Subtitle
-  const dateStr = new Date().toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-  const chips: string[] = [];
-  if (academicYear) chips.push(`AY ${academicYear}`);
-  chips.push(`${sorted.length} student${sorted.length !== 1 ? 's' : ''}`);
-  chips.push('Sorted by SSLC % (highest first)');
+  /* ── Info row ── */
+  .info-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6pt; font-size: 10.5pt; font-weight: bold; }
 
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(chips.join('  ·  '), margin, 19.5);
-  doc.text(`Generated ${dateStr}`, pageW - margin, 19.5, { align: 'right' });
-  doc.setTextColor(0);
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+  th, td { border: 0.5pt solid #444; padding: 5.5pt 4pt; vertical-align: middle; }
+  thead tr { background: #d8d8d8; }
+  thead th { font-weight: bold; text-align: center; font-size: 10pt; line-height: 1.45; }
+  .alt { background: #f5f5f5; }
+  .c { text-align: center; white-space: nowrap; }
+  .l { text-align: left; }
+  .r { text-align: right; white-space: nowrap; }
+  .name   { max-width: 120pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .father { max-width: 100pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.2);
-  doc.line(margin, 22, pageW - margin, 22);
+  /* ── Footer ── */
+  .footer { margin-top: 7pt; font-size: 9pt; color: #555; display: flex; justify-content: space-between; }
 
-  const rows    = sorted.map((s, i) => COLUMNS.map((c) => c.get(s, i)));
-  const headers = [COLUMNS.map((c) => c.header)];
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
 
-  const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
-  COLUMNS.forEach((col, idx) => {
-    columnStyles[idx] = { cellWidth: colWidths[idx], halign: col.halign };
-  });
+<!-- Institution header -->
+<div class="inst-header">
+  <div class="ih-govt">ಕರ್ನಾಟಕ ಸರ್ಕಾರ</div>
+  <div class="ih-dept">ಕರ್ನಾಟಕ ತಾಂತ್ರಿಕ ಶಿಕ್ಷಣ ಇಲಾಖೆ</div>
+  <div class="ih-comm">ಕಾಲೇಜು ಮತ್ತು ತಾಂತ್ರಿಕ ಶಿಕ್ಷಣ ಆಯುಕ್ತಾಲಯ</div>
+  <div class="ih-college">ಸಂಜಯ ಮೆಮೋರಿಯಲ್ ಪಾಲಿಟೆಕ್ನಿಕ್</div>
+  <div class="ih-addr">ಸಾಗರ– 577401</div>
+</div>
 
-  autoTable(doc, {
-    startY: 25,
-    margin: { left: margin, right: margin, top: margin, bottom: 12 },
-    head: headers,
-    body: rows,
-    tableWidth,
-    styles: {
-      fontSize: FONT_SIZE,
-      cellPadding: CELL_PAD,
-      valign: 'middle',
-      overflow: 'ellipsize',
-      lineColor: [226, 232, 240],
-      lineWidth: 0.15,
-    },
-    headStyles: {
-      fillColor: [30, 64, 175],
-      textColor: 255,
-      fontStyle: 'bold',
-      fontSize: FONT_SIZE,
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
-    columnStyles,
-    didDrawPage: (data) => {
-      const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
-        .internal.getNumberOfPages();
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text(
-        `Page ${data.pageNumber} of ${total}`,
-        pageW - margin,
-        pageH - 4,
-        { align: 'right' },
-      );
-      doc.setTextColor(0);
-    },
-  });
+<!-- Title block -->
+<div class="title-block">
+  <div class="tb-main">ಮೆರಿಟ್ ಮತ್ತು ರೋಷ್ಟರ್ ಅನುಗುಣವಾಗಿ ಆಫ್ ಲೈನ್ ಮುಖಾಂತರ ಪ್ರಥಮ ಸೆಮೆಸ್ಟರ್ ಇಂಜಿನಿಯರಿಂಗ್ ಡಿಪ್ಲೊಮಾ ಪ್ರವೇಶ ಪ್ರಕ್ರಿಯೆ</div>
+  <div class="tb-year">ಸಾಲು-${esc(ayDisplay)}</div>
+</div>
 
-  const ay = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
-  doc.save(`merit_list_${ay}.pdf`);
+<!-- Info row -->
+<div class="info-row">
+  <span>${esc(options.phaseLabel ?? 'ಅರ್ಹ ಅಭ್ಯರ್ಥಿಗಳ ಮೆರಿಟ್ ಪಟ್ಟಿ')} &nbsp;(${sorted.length} ಅಭ್ಯರ್ಥಿಗಳು)</span>
+  <span>ಸೂಚನಾ ಫಲಕದಲ್ಲಿ ಪ್ರಕಟಿಸಿದ ದಿನಾಂಕ: ${todayFmt}</span>
+</div>
+
+<!-- Merit table -->
+<table>
+  <thead>
+    <tr>
+      <th style="width:18pt">ಕ್ರ.ಸಂ</th>
+      <th style="width:24pt">ಮೆರಿಟ್<br>ನಂ.</th>
+      <th>ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+      <th style="width:18pt">ಲಿಂಗ</th>
+      <th>ತಂದೆಯ ಹೆಸರು</th>
+      <th style="width:40pt">ಹುಟ್ಟಿದ<br>ದಿನಾಂಕ</th>
+      <th style="width:30pt">ಅರ್ಹ<br>ಪ್ರವರ್ಗ</th>
+      <th style="width:55pt">ಆದಾಯ</th>
+      <th style="width:36pt">ಗ+ವಿ<br>ಅಂಕ</th>
+      <th style="width:30pt">ಗ+ವಿ<br>ಶೇಕಡಾ</th>
+      <th style="width:28pt">ಗರಿಷ್ಠ<br>ಅಂಕ</th>
+      <th style="width:28pt">ಗಳಿಸಿದ<br>ಅಂಕ</th>
+      <th style="width:30pt">ಶೇಕಡಾ</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div class="footer">
+  <span>ಸಂಜಯ ಮೆಮೋರಿಯಲ್ ಪಾಲಿಟೆಕ್ನಿಕ್, ಸಾಗರ – 577401</span>
+  <span>Sorted by SSLC % (highest first) &nbsp;·&nbsp; Generated: ${todayFmt}</span>
+</div>
+
+<script>
+  window.onload = function () {
+    window.print();
+    window.addEventListener('afterprint', function () { window.close(); });
+  };
+</script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    win.addEventListener('afterprint', () => URL.revokeObjectURL(url));
+  } else {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
 }
 
 // ── Excel ─────────────────────────────────────────────────────────────────────
 
-export function exportMeritListExcel(students: Student[], academicYear: string | null): void {
+export function exportMeritListExcel(students: MeritRow[], academicYear: string | null): void {
   const sorted = sortByMerit(students);
 
   const header = [
-    'Sl', 'Academic Year', 'Name (SSLC)', 'Father Name',
-    'Year', 'Course', 'Gender',
-    'SSLC Max', 'SSLC Obtained', 'Percentage', 'Enrolled On',
+    'Sl', 'Merit No.', 'Name (SSLC)', 'Gender',
+    'Father Name', 'Date of Birth', 'Category', 'Annual Income',
+    'M+S Marks', 'M+S %',
+    'SSLC Max', 'SSLC Obtained', 'SSLC %',
   ];
 
-  const rows = sorted.map((s, i) => [
-    i + 1,
-    s.academicYear,
-    s.studentNameSSLC,
-    s.fatherName || '',
-    s.year,
-    s.course,
-    s.gender,
-    s.sslcMaxTotal,
-    s.sslcObtainedTotal,
-    parseFloat(sslcPct(s).toFixed(2)),
-    fmtDate(s.enrollmentDate),
-  ]);
+  const rows = sorted.map((s, i) => {
+    const msPct = s.mathsScienceMaxTotal
+      ? parseFloat(((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2))
+      : 0;
+    return [
+      i + 1,
+      s.meritNumber || i + 1,
+      s.studentNameSSLC,
+      fmtGender(s.gender),
+      s.fatherName || '',
+      fmtDOB(s.dateOfBirth),
+      s.category,
+      s.annualIncome || 0,
+      `${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}`,
+      msPct,
+      s.sslcMaxTotal,
+      s.sslcObtainedTotal,
+      parseFloat(sslcPct(s).toFixed(2)),
+    ];
+  });
 
-  const wsData = [header, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
 
-  // Column widths
   ws['!cols'] = [
-    { wch: 5 },   // Sl
-    { wch: 13 },  // Academic Year
-    { wch: 30 },  // Name
+    { wch: 5  },  // Sl
+    { wch: 10 },  // Merit No.
+    { wch: 28 },  // Name
+    { wch: 8  },  // Gender
     { wch: 25 },  // Father
-    { wch: 10 },  // Year
-    { wch: 8 },   // Course
-    { wch: 8 },   // Gender
-    { wch: 10 },  // SSLC Max
+    { wch: 12 },  // DOB
+    { wch: 10 },  // Category
+    { wch: 15 },  // Income
+    { wch: 13 },  // M+S Marks
+    { wch: 10 },  // M+S %
+    { wch: 11 },  // SSLC Max
     { wch: 13 },  // SSLC Obtained
-    { wch: 12 },  // Percentage
-    { wch: 14 },  // Enrolled On
+    { wch: 10 },  // SSLC %
   ];
 
   const wb = XLSX.utils.book_new();
-  const sheetName = academicYear ? `Merit ${academicYear}` : 'Merit List';
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.utils.book_append_sheet(wb, ws, academicYear ? `Merit ${academicYear}` : 'Merit List');
 
   const ay = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
   XLSX.writeFile(wb, `merit_list_${ay}.xlsx`);

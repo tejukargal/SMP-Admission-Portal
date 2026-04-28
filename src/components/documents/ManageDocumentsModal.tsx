@@ -19,10 +19,8 @@ const DOC_PALETTE: Record<string, { bg: string; border: string; text: string }> 
   sslcMarksCard:           { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-700'   },
   transferCertificate:     { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700'  },
   studyCertificate:        { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700' },
-  characterConduct:        { bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700'   },
   casteCertificate:        { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700' },
   incomeCertificate:       { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-700'   },
-  physicalFitness:         { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-700'    },
   aadharCopy:              { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
   eligibilityCertificate:  { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
   passportPhotos:          { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700'   },
@@ -198,7 +196,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
   const skeletonGrid = (
     <div className="grid grid-cols-4 gap-3 p-5">
       {Array.from({ length: REQUIRED_DOCS.length }).map((_, i) => (
-        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-2.5 h-[90px] flex flex-col">
+        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-2.5 h-[114px] flex flex-col">
           <div className="skeleton h-2.5 w-3/4 rounded mb-1" />
           <div className="skeleton h-2.5 w-1/2 rounded" />
           <div className="flex-1 flex items-center justify-center">
@@ -304,13 +302,13 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                     <div
                       key={key}
                       style={{ animation: `modal-enter 0.2s ease-out ${idx * 28}ms both` }}
-                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[96px] select-none transition-shadow duration-150 hover:shadow-md cursor-context-menu ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50' : ''}`}
+                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[114px] select-none transition-shadow duration-150 hover:shadow-md cursor-context-menu ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50' : ''}`}
                       onDoubleClick={() => setDetailDoc({ key, focusRemarks: false })}
                       onContextMenu={(e) => handleDocContextMenu(e, key)}
                       title="Double-click for details · Right-click for options"
                     >
                       {/* Document label */}
-                      <p className={`text-[11px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
+                      <p className={`text-[15px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
                         {label}
                       </p>
 
@@ -324,19 +322,19 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                           onClick={(e) => { e.stopPropagation(); toggleSubmitted(key); }}
                           className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
                         >
-                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
+                          <div className={`w-[28px] h-[28px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
                             ${isSubmitted
                               ? 'bg-emerald-500 border-emerald-500 shadow-emerald-200'
                               : `bg-white/70 ${pal.border} group-hover:border-emerald-400 group-hover:bg-white`}
                             ${isNotRequired ? 'opacity-40' : ''}`}
                           >
                             {isSubmitted && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
                             )}
                           </div>
-                          <span className={`text-[9px] font-bold tracking-wide leading-none transition-colors ${isSubmitted ? pal.text : 'text-gray-400 group-hover:text-gray-500'}`}>
+                          <span className={`text-[10px] font-bold tracking-wide leading-none transition-colors ${isSubmitted ? pal.text : 'text-gray-400 group-hover:text-gray-500'}`}>
                             SUBM
                           </span>
                         </button>
@@ -348,19 +346,19 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                           onClick={(e) => { e.stopPropagation(); toggleReturned(key); }}
                           className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
                         >
-                          <div className={`w-[22px] h-[22px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
+                          <div className={`w-[28px] h-[28px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
                             ${isReturned
                               ? 'bg-blue-500 border-blue-500 shadow-blue-200'
                               : 'bg-white/70 border-blue-200 group-hover:border-blue-400 group-hover:bg-white'}
                             ${(!isSubmitted || isNotRequired) ? 'opacity-30' : ''}`}
                           >
                             {isReturned && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
                             )}
                           </div>
-                          <span className={`text-[9px] font-bold tracking-wide leading-none transition-colors ${isReturned ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                          <span className={`text-[10px] font-bold tracking-wide leading-none transition-colors ${isReturned ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
                             RETD
                           </span>
                         </button>

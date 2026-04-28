@@ -43,6 +43,72 @@ const YEAR_NUM: Partial<Record<string, string>> = {
   '3RD YEAR': '3',
 };
 
+// ── Application number generation ──────────────────────────────────────────
+// Format: {startYY}{endYY}{course}{serial4}
+// e.g. CE, 2026-27 → "2627CE0001"
+
+function appCounterDocId(academicYear: AcademicYear, course: Course): string {
+  return `${academicYear}__appseq__${course}`;
+}
+
+function buildAppPrefix(academicYear: AcademicYear, course: Course): string {
+  const parts = academicYear.split('-');
+  const startYY = parts[0].slice(-2);
+  const endYY = parts[1];
+  return `${startYY}${endYY}${course}`;
+}
+
+function buildDefaultAppNumber(prefix: string, seq: number): string {
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+async function ensureAppCounter(
+  academicYear: AcademicYear,
+  course: Course,
+): Promise<void> {
+  const counterRef = doc(db, COUNTERS_COLLECTION, appCounterDocId(academicYear, course));
+  const snap = await getDoc(counterRef);
+  if (snap.exists()) return;
+
+  const prefix = buildAppPrefix(academicYear, course);
+  const q = query(
+    collection(db, STUDENTS_COLLECTION),
+    where('academicYear', '==', academicYear),
+    where('course', '==', course),
+  );
+  const studentsSnap = await getDocs(q);
+  let maxSerial = 0;
+  for (const d of studentsSnap.docs) {
+    const an = (d.data() as Record<string, unknown>).applicationNumber;
+    if (typeof an === 'string' && an.startsWith(prefix)) {
+      const serial = parseInt(an.slice(prefix.length), 10);
+      if (!isNaN(serial) && serial > maxSerial) maxSerial = serial;
+    }
+  }
+
+  await runTransaction(db, async (tx) => {
+    const snap2 = await tx.get(counterRef);
+    if (!snap2.exists()) {
+      tx.set(counterRef, { seq: maxSerial, academicYear, course });
+    }
+  });
+}
+
+/**
+ * Returns the next application number for the given (academicYear, course)
+ * WITHOUT committing — used for form preview only.
+ */
+export async function peekNextDefaultAppNumber(
+  academicYear: AcademicYear,
+  course: Course,
+): Promise<string> {
+  await ensureAppCounter(academicYear, course);
+  const counterRef = doc(db, COUNTERS_COLLECTION, appCounterDocId(academicYear, course));
+  const snap = await getDoc(counterRef);
+  const seq = ((snap.data() as { seq: number } | undefined)?.seq ?? 0) + 1;
+  return buildDefaultAppNumber(buildAppPrefix(academicYear, course), seq);
+}
+
 function buildRegPrefix(academicYear: AcademicYear, course: Course, year: Year): string {
   const yearNum = YEAR_NUM[year] ?? '0';
   const yearCode = academicYear.split('-')[0].slice(-2); // "2026-27" → "26"
@@ -169,51 +235,66 @@ async function ensureCounter(academicYear: AcademicYear): Promise<void> {
  */
 export async function addStudent(
   data: StudentFormData,
-): Promise<{ id: string; meritNumber: string; regNumber: string }> {
+): Promise<{ id: string; meritNumber: string; regNumber: string; applicationNumber: string }> {
   await ensureCounter(data.academicYear);
 
   const shouldAutoReg = isAutoRegNumber(data.regNumber, data.course);
   if (shouldAutoReg) {
     await ensureRegCounter(data.academicYear, data.course, data.year);
   }
+  await ensureAppCounter(data.academicYear, data.course);
 
   const now = new Date().toISOString();
   const counterRef = doc(db, COUNTERS_COLLECTION, data.academicYear);
   const regCounterRef = shouldAutoReg
     ? doc(db, COUNTERS_COLLECTION, regCounterDocId(data.academicYear, data.course, data.year))
     : null;
+  const appCounterRef = doc(db, COUNTERS_COLLECTION, appCounterDocId(data.academicYear, data.course));
   // Pre-generate the document ID so we can set it inside the transaction.
   const newStudentRef = doc(collection(db, STUDENTS_COLLECTION));
 
-  const { meritNumber, regNumber } = await runTransaction(db, async (tx) => {
+  const { meritNumber, regNumber, applicationNumber } = await runTransaction(db, async (tx) => {
+    // ── All reads first (Firestore transaction requirement) ────────────────
     const counterSnap = await tx.get(counterRef);
+    const regSnap = regCounterRef ? await tx.get(regCounterRef) : null;
+    const appSnap = await tx.get(appCounterRef);
+
+    // ── Derive values ──────────────────────────────────────────────────────
     const seq = ((counterSnap.data() as { seq: number } | undefined)?.seq ?? 0) + 1;
     const merit = String(seq).padStart(3, '0') + buildMeritSuffix(data.academicYear);
 
     let assignedReg = data.regNumber;
-    if (shouldAutoReg && regCounterRef) {
-      const regSnap = await tx.get(regCounterRef);
-      const regSeq = ((regSnap.data() as { seq: number } | undefined)?.seq ?? 0) + 1;
+    let regSeq: number | null = null;
+    if (shouldAutoReg && regCounterRef && regSnap) {
+      regSeq = ((regSnap.data() as { seq: number } | undefined)?.seq ?? 0) + 1;
       assignedReg = buildDefaultRegNumber(
         buildRegPrefix(data.academicYear, data.course, data.year),
         regSeq,
       );
-      tx.set(regCounterRef, { seq: regSeq, academicYear: data.academicYear, course: data.course, year: data.year });
     }
 
+    const appSeq = ((appSnap.data() as { seq: number } | undefined)?.seq ?? 0) + 1;
+    const assignedApp = buildDefaultAppNumber(buildAppPrefix(data.academicYear, data.course), appSeq);
+
+    // ── All writes after reads ─────────────────────────────────────────────
+    if (shouldAutoReg && regCounterRef && regSeq !== null) {
+      tx.set(regCounterRef, { seq: regSeq, academicYear: data.academicYear, course: data.course, year: data.year });
+    }
+    tx.set(appCounterRef, { seq: appSeq, academicYear: data.academicYear, course: data.course });
     tx.set(counterRef, { seq, academicYear: data.academicYear });
     tx.set(newStudentRef, {
       ...data,
       regNumber: assignedReg,
       meritNumber: merit,
+      applicationNumber: assignedApp,
       createdAt: now,
       updatedAt: now,
     });
 
-    return { meritNumber: merit, regNumber: assignedReg };
+    return { meritNumber: merit, regNumber: assignedReg, applicationNumber: assignedApp };
   });
 
-  return { id: newStudentRef.id, meritNumber, regNumber };
+  return { id: newStudentRef.id, meritNumber, regNumber, applicationNumber };
 }
 
 export async function getStudent(id: string): Promise<Student | null> {
@@ -330,6 +411,7 @@ export async function getStudentsByAcademicYear(
  */
 export async function resetAcademicYearCounters(academicYear: AcademicYear): Promise<void> {
   const regPrefix = `${academicYear}__regseq__`;
+  const appPrefix = `${academicYear}__appseq__`;
   const regSnap = await getDocs(
     query(
       collection(db, COUNTERS_COLLECTION),
@@ -338,11 +420,20 @@ export async function resetAcademicYearCounters(academicYear: AcademicYear): Pro
     )
   );
 
+  const appSnap = await getDocs(
+    query(
+      collection(db, COUNTERS_COLLECTION),
+      where(documentId(), '>=', appPrefix),
+      where(documentId(), '<=', appPrefix + ''),
+    )
+  );
+
   const deletes: Promise<void>[] = [
     deleteDoc(doc(db, COUNTERS_COLLECTION, academicYear)),
     deleteDoc(doc(db, COUNTERS_COLLECTION, `${academicYear}__tc`)),
     deleteDoc(doc(db, 'receiptCounters', academicYear)),
     ...regSnap.docs.map((d) => deleteDoc(d.ref)),
+    ...appSnap.docs.map((d) => deleteDoc(d.ref)),
   ];
   await Promise.all(deletes);
 }

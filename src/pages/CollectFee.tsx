@@ -73,7 +73,6 @@ export function CollectFee() {
   const [genderFilter, setGenderFilter] = useState<Gender | ''>('');
   const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
   const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
-  const [admStatusFilter, setAdmStatusFilter] = useState('');
   const [feeStatusFilter, setFeeStatusFilter] = useState<'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES'>('ALL');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -164,13 +163,12 @@ export function CollectFee() {
   }, [feeRecords]);
 
   const filteredStudents = useMemo(() => {
-    let result = allStudents;
+    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
     if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
-    if (admStatusFilter) result = result.filter((s) => s.admissionStatus === admStatusFilter);
     if (feeStatusFilter === 'PAID')
       result = result.filter((s) => paidStudents.has(s.id));
     if (feeStatusFilter === 'NOT_PAID')
@@ -211,7 +209,7 @@ export function CollectFee() {
   }, [
     allStudents, allottedByKey, overrideTotalByStudent, totalPaidByStudent,
     courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter,
-    admStatusFilter, feeStatusFilter, debouncedSearch, paidStudents,
+    feeStatusFilter, debouncedSearch, paidStudents,
   ]);
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredStudents]);
@@ -225,7 +223,7 @@ export function CollectFee() {
 
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!admTypeFilter || !!admCatFilter || !!admStatusFilter || feeStatusFilter !== 'ALL';
+    !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
 
   function clearFilters() {
     setSearchTerm('');
@@ -234,32 +232,36 @@ export function CollectFee() {
     setGenderFilter('');
     setAdmTypeFilter('');
     setAdmCatFilter('');
-    setAdmStatusFilter('');
     setFeeStatusFilter('ALL');
   }
 
+  const confirmedStudents = useMemo(
+    () => allStudents.filter((s) => s.admissionStatus === 'CONFIRMED'),
+    [allStudents],
+  );
+
   const stats = useMemo(() => {
-    if (!allStudents.length) return null;
+    if (!confirmedStudents.length) return null;
     const yearCount: Record<string, number> = {};
     const courseCount: Record<string, number> = {};
-    for (const s of allStudents) {
+    for (const s of confirmedStudents) {
       yearCount[s.year] = (yearCount[s.year] ?? 0) + 1;
       courseCount[s.course] = (courseCount[s.course] ?? 0) + 1;
     }
-    const paidCount = allStudents.filter((s) => paidStudents.has(s.id)).length;
-    const unpaidCount = allStudents.length - paidCount;
-    const duesCount = allStudents.filter((s) => {
+    const paidCount = confirmedStudents.filter((s) => paidStudents.has(s.id)).length;
+    const unpaidCount = confirmedStudents.length - paidCount;
+    const duesCount = confirmedStudents.filter((s) => {
       const allotted = getAllotted(s);
       const paid = totalPaidByStudent.get(s.id) ?? 0;
       return allotted !== null && paid < allotted;
     }).length;
-    const noDuesCount = allStudents.filter((s) => {
+    const noDuesCount = confirmedStudents.filter((s) => {
       const allotted = getAllotted(s);
       const paid = totalPaidByStudent.get(s.id) ?? 0;
       return allotted !== null && paid >= allotted;
     }).length;
-    return { yearCount, courseCount, total: allStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
-  }, [allStudents, feeRecords, allottedByKey, overrideTotalByStudent, totalPaidByStudent]);
+    return { yearCount, courseCount, total: confirmedStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
+  }, [confirmedStudents, feeRecords, allottedByKey, overrideTotalByStudent, totalPaidByStudent]);
 
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
@@ -467,12 +469,6 @@ export function CollectFee() {
             <option value="GM">GM</option>
             <option value="SNQ">SNQ</option>
             <option value="OTHERS">OTHERS</option>
-          </select>
-          <select className={`${fs} w-[80px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
-            <option value="">Status</option>
-            <option value="PROVISIONAL">PROVISIONAL</option>
-            <option value="CONFIRMED">CONFIRMED</option>
-            <option value="CANCELLED">CANCELLED</option>
           </select>
           <select
             className={`${fs} w-[90px] shrink-0`}
