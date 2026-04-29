@@ -459,6 +459,20 @@ export function Dashboard() {
     [allStudents]
   );
 
+  const admissionPendingStats = useMemo(() => {
+    const currentYear = settings?.currentAcademicYear;
+    if (!currentYear) return null;
+    const pending = allStudents.filter((s) =>
+      s.academicYear === currentYear &&
+      !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+    );
+    const byCourse: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const s of pending) {
+      if (s.course in byCourse) byCourse[s.course]++;
+    }
+    return { total: pending.length, byCourse, academicYear: currentYear };
+  }, [allStudents, settings]);
+
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
     !!genderFilter || !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
@@ -703,6 +717,58 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ── Pending Admissions strip ───────────────────────────────────── */}
+      {admissionPendingStats && (
+        <div
+          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-100 flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-amber-50 transition-colors group"
+          style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.03)' }}
+          onClick={() => void navigate('/admissions')}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/80 shrink-0 whitespace-nowrap">
+            Pending Admissions
+          </span>
+          <span className="text-[10px] text-amber-300 font-medium shrink-0">·</span>
+          <span className="text-[10px] font-semibold text-amber-500/70 shrink-0 whitespace-nowrap">
+            {admissionPendingStats.academicYear}
+          </span>
+
+          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
+
+          {/* Total pending */}
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide">Total</span>
+            <span className="text-sm font-black tabular-nums text-amber-700">
+              <AnimNum value={admissionPendingStats.total} />
+            </span>
+          </div>
+
+          <span className="text-amber-200 text-xs select-none shrink-0">·</span>
+
+          {/* Per-course counts */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {COURSES.map((course) => {
+              const c = courseConfig[course];
+              const count = admissionPendingStats.byCourse[course];
+              return (
+                <div
+                  key={course}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded border ${c.border} bg-white/70 shrink-0 ${count === 0 ? 'opacity-30' : ''}`}
+                >
+                  <span className={`text-[9px] font-bold ${c.textColor}`}>{course}</span>
+                  <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
+                    <AnimNum value={count} />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <span className="ml-auto text-[10px] text-amber-400 group-hover:text-amber-600 font-semibold shrink-0 transition-colors whitespace-nowrap">
+            View →
+          </span>
+        </div>
+      )}
 
       {/* ── Content ────────────────────────────────────────────────────── */}
       {error ? (

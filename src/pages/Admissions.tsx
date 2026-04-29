@@ -3,19 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useMeritListSnapshots } from '../hooks/useMeritListSnapshots';
-import { updateStudentStatus } from '../services/studentService';
+import { updateStudentStatus, updateStudentAllottedCategory } from '../services/studentService';
 import { saveMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/common/Button';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
+import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
 import { exportMeritListPdf, exportMeritListExcel, sortByMerit, sslcPct, fmtDOB, fmtGender } from '../utils/meritListExport';
 import type { Student, AcademicYear, Course, MeritListSnapshot } from '../types';
 
 type Tab = 'pending' | 'cancelled' | 'merit' | 'saved';
+type QuotaFilter = 'aided' | 'unaided' | 'all';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const AIDED_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS'];
+const UNAIDED_COURSES: Course[] = ['EE'];
 
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
@@ -41,6 +45,8 @@ export function Admissions() {
   const [activeTab, setActiveTab] = useState<Tab>('pending');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('aided');
+  const [courseFilter, setCourseFilter] = useState<Course | 'ALL'>('ALL');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState('');
   const [toastError, setToastError] = useState(false);
@@ -67,29 +73,50 @@ export function Admissions() {
     );
   }
 
+  function matchesQuotaCourse(s: Student): boolean {
+    if (quotaFilter === 'aided' && !AIDED_COURSES.includes(s.course)) return false;
+    if (quotaFilter === 'unaided' && !UNAIDED_COURSES.includes(s.course)) return false;
+    if (courseFilter !== 'ALL' && s.course !== courseFilter) return false;
+    return true;
+  }
+
+  function handleQuotaChange(q: QuotaFilter) {
+    setQuotaFilter(q);
+    setCourseFilter('ALL');
+  }
+
   // Pending = anything that is not CONFIRMED or CANCELLED (includes PENDING, empty, legacy values)
   const pendingStudents = useMemo(() => {
     let list = allStudents.filter((s) =>
-      !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+      !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '') &&
+      matchesQuotaCourse(s)
     );
     if (debouncedSearch.trim()) list = list.filter((s) => matchesSearch(s, debouncedSearch.trim()));
     return sortStudents(list);
-  }, [allStudents, debouncedSearch]);
+  }, [allStudents, debouncedSearch, quotaFilter, courseFilter]);
 
   const cancelledStudents = useMemo(() => {
-    let list = allStudents.filter((s) => s.admissionStatus?.trim() === 'CANCELLED');
+    let list = allStudents.filter((s) =>
+      s.admissionStatus?.trim() === 'CANCELLED' && matchesQuotaCourse(s)
+    );
     if (debouncedSearch.trim()) list = list.filter((s) => matchesSearch(s, debouncedSearch.trim()));
     return sortStudents(list);
-  }, [allStudents, debouncedSearch]);
+  }, [allStudents, debouncedSearch, quotaFilter, courseFilter]);
 
-  // Merit list = pending students sorted by SSLC % desc (search applies too)
+  // Merit list = pending students sorted by SSLC % desc (search + quota/course apply)
   const meritStudents = useMemo(() => {
     let list = allStudents.filter((s) =>
-      !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
+      !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '') &&
+      matchesQuotaCourse(s)
     );
     if (debouncedSearch.trim()) list = list.filter((s) => matchesSearch(s, debouncedSearch.trim()));
     return sortByMerit(list);
-  }, [allStudents, debouncedSearch]);
+  }, [allStudents, debouncedSearch, quotaFilter, courseFilter]);
+
+  const availableCourses: Course[] =
+    quotaFilter === 'aided' ? AIDED_COURSES :
+    quotaFilter === 'unaided' ? UNAIDED_COURSES :
+    COURSES;
 
   const courseStats = useMemo(() =>
     COURSES.map((course) => ({
@@ -246,6 +273,31 @@ export function Admissions() {
     }
   }
 
+  // ── Allotted category ────────────────────────────────────────────────────
+  const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
+  const [savingAllottedCat, setSavingAllottedCat] = useState(false);
+
+  async function handleConfirmClick(student: Student) {
+    await handleAction(student, 'CONFIRMED');
+    setAllottedCatStudent(student);
+  }
+
+  async function handleSaveAllottedCat(allottedCategory: string) {
+    if (!allottedCatStudent) return;
+    setSavingAllottedCat(true);
+    try {
+      await updateStudentAllottedCategory(allottedCatStudent.id, allottedCategory);
+      setAllottedCatStudent(null);
+      setToastError(false);
+      setToastMsg(`Allotted category saved for ${allottedCatStudent.studentNameSSLC}.`);
+    } catch {
+      setToastError(true);
+      setToastMsg('Failed to save allotted category. Please try again.');
+    } finally {
+      setSavingAllottedCat(false);
+    }
+  }
+
   const isLoading = settingsLoading || loading;
   if (isLoading) return <PageSpinner />;
 
@@ -284,24 +336,6 @@ export function Admissions() {
           Students →
         </Button>
 
-        <div className="relative shrink-0">
-          <input
-            type="text"
-            placeholder="Search name / father / mobile…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-52 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-6"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none text-sm"
-            >
-              ×
-            </button>
-          )}
-        </div>
-
         {/* Toast */}
         {toastMsg && (
           <div
@@ -324,6 +358,78 @@ export function Admissions() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Filter bar: Search · Quota · Course */}
+      <div className="flex-shrink-0 flex items-center gap-3 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2 flex-wrap">
+        {/* Search */}
+        <div className="relative shrink-0">
+          <input
+            type="text"
+            placeholder="Search name / father / mobile…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-52 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-6"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none text-sm"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+
+        {/* Quota filter */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quota</span>
+          {(['aided', 'unaided', 'all'] as const).map((q) => (
+            <button
+              key={q}
+              onClick={() => handleQuotaChange(q)}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                quotaFilter === q
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {q === 'aided' ? 'Aided' : q === 'unaided' ? 'UnAided' : 'All'}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+
+        {/* Course filter */}
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Course</span>
+          <button
+            onClick={() => setCourseFilter('ALL')}
+            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+              courseFilter === 'ALL'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All
+          </button>
+          {availableCourses.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCourseFilter(c)}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                courseFilter === c
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Course-wise stats strip */}
@@ -672,7 +778,7 @@ export function Admissions() {
                               className="!bg-green-600 !hover:bg-green-700 border-transparent text-white"
                               loading={actionLoading === student.id}
                               disabled={actionLoading !== null && actionLoading !== student.id}
-                              onClick={() => void handleAction(student, 'CONFIRMED')}
+                              onClick={() => void handleConfirmClick(student)}
                             >
                               Confirm
                             </Button>
@@ -779,6 +885,15 @@ export function Admissions() {
       <ManageDocumentsModal
         student={docsModalStudent}
         onClose={() => setDocsModalStudent(null)}
+      />
+    )}
+
+    {allottedCatStudent && (
+      <AllottedCategoryModal
+        student={allottedCatStudent}
+        saving={savingAllottedCat}
+        onSave={(cat) => void handleSaveAllottedCat(cat)}
+        onSkip={() => setAllottedCatStudent(null)}
       />
     )}
     </>

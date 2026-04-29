@@ -65,11 +65,14 @@ export interface Student {
   regNumber: string;
   aadharNumber: string;
   apaarId: string;
+  allottedCategory?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt'>;
+// allottedCategory is intentionally excluded — it's set post-confirmation via its own service call,
+// not through the enrollment form, so normal edits must never accidentally clear it.
+export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory'>;
 
 // ─── Fee types ────────────────────────────────────────────────────────────────
 

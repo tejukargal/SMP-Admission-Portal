@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
-import { deleteStudent } from '../services/studentService';
+import { deleteStudent, updateStudentAllottedCategory } from '../services/studentService';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
@@ -17,6 +17,7 @@ import { StudyCertificateModal } from '../components/common/StudyCertificateModa
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
+import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
 
@@ -106,6 +107,8 @@ export function Students() {
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
+  const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
+  const [savingAllottedCat, setSavingAllottedCat] = useState(false);
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -302,6 +305,21 @@ export function Students() {
         setSavingExcel(false);
       }
     }, 0);
+  }
+
+  async function handleSaveAllottedCat(allottedCategory: string) {
+    if (!allottedCatStudent) return;
+    setSavingAllottedCat(true);
+    try {
+      await updateStudentAllottedCategory(allottedCatStudent.id, allottedCategory);
+      refetch();
+      setAllottedCatStudent(null);
+      setToastMsg(`Allotted category saved for ${allottedCatStudent.studentNameSSLC}.`);
+    } catch {
+      // keep modal open on error
+    } finally {
+      setSavingAllottedCat(false);
+    }
   }
 
   const isLoading = settingsLoading || loading;
@@ -538,6 +556,7 @@ export function Students() {
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
                 {isAdmin && (
@@ -560,6 +579,31 @@ export function Students() {
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.gender}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admType || '—'}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admCat || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {student.allottedCategory ? (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          student.allottedCategory !== student.category
+                            ? 'bg-amber-50 border-amber-200 text-amber-700'
+                            : 'bg-gray-50 border-gray-200 text-gray-600'
+                        }`}
+                        title={student.allottedCategory !== student.category ? `Claimed: ${student.category}` : undefined}
+                      >
+                        {student.allottedCategory}
+                      </span>
+                    ) : (
+                      isAdmin ? (
+                        <button
+                          onClick={() => setAllottedCatStudent(student)}
+                          className="text-[10px] text-blue-500 hover:text-blue-700 font-medium underline underline-offset-2 cursor-pointer"
+                        >
+                          Set
+                        </button>
+                      ) : (
+                        <span className="text-gray-300 text-[10px]">—</span>
+                      )
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.studentMobile}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span
@@ -600,7 +644,7 @@ export function Students() {
 
               {hasMore && (
                 <tr>
-                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-2.5 text-center">
+                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-2.5 text-center">
                     <button
                       className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
@@ -673,6 +717,26 @@ export function Students() {
               </span>
               View Details
             </button>
+            {isAdmin && (
+              <button
+                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                onClick={() => { setAllottedCatStudent(contextMenu.student); setContextMenu(null); }}
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                </span>
+                <span>Allotted Category</span>
+                {contextMenu.student.allottedCategory ? (
+                  <span className="ml-auto text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                    {contextMenu.student.allottedCategory}
+                  </span>
+                ) : (
+                  <span className="ml-auto text-[10px] font-semibold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">
+                    Not set
+                  </span>
+                )}
+              </button>
+            )}
             <div className="my-1 h-px bg-gray-100 mx-3" />
             {isAdmin && (
               <button
@@ -801,6 +865,15 @@ export function Students() {
       <ProvisionalCertificateModal
         student={pcStudent}
         onClose={() => setPcStudent(null)}
+      />
+    )}
+
+    {allottedCatStudent && (
+      <AllottedCategoryModal
+        student={allottedCatStudent}
+        saving={savingAllottedCat}
+        onSave={(cat) => void handleSaveAllottedCat(cat)}
+        onSkip={() => setAllottedCatStudent(null)}
       />
     )}
     </>
