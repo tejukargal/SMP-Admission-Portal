@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
@@ -16,6 +16,7 @@ import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
+import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
@@ -109,9 +110,11 @@ export function Students() {
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
+  const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -120,14 +123,28 @@ export function Students() {
     return () => window.removeEventListener('keydown', onKey);
   }, [contextMenu]);
 
+  // After every render where the menu is present, measure its real size and
+  // clamp to viewport — direct DOM mutation avoids a state-update re-render loop.
+  useLayoutEffect(() => {
+    const el = contextMenuRef.current;
+    if (!el || !contextMenu) return;
+    const GAP = 6;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    let x = contextMenu.x;
+    let y = contextMenu.y;
+    if (x + w > window.innerWidth  - GAP) x = window.innerWidth  - w - GAP;
+    if (y + h > window.innerHeight - GAP) y = window.innerHeight - h - GAP;
+    if (x < GAP) x = GAP;
+    if (y < GAP) y = GAP;
+    el.style.left       = `${x}px`;
+    el.style.top        = `${y}px`;
+    el.style.visibility = 'visible';
+  }, [contextMenu]);
+
   function handleContextMenu(e: React.MouseEvent, student: Student) {
     e.preventDefault();
     e.stopPropagation();
-    const MENU_W = 190;
-    const MENU_H = 250;
-    const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
-    const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
-    setContextMenu({ x, y, student });
+    setContextMenu({ x: e.clientX, y: e.clientY, student });
   }
 
   // Single unfiltered fetch — all filtering done client-side
@@ -693,37 +710,38 @@ export function Students() {
           onClick={() => setContextMenu(null)}
           onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
         />
-        {/* Menu */}
+        {/* Menu — initially hidden; useLayoutEffect repositions then reveals */}
         <div
-          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
-          style={{ left: contextMenu.x, top: contextMenu.y, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          ref={contextMenuRef}
+          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[205px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+          <div className="px-3 pt-2 pb-1.5 border-b border-gray-100 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
               {contextMenu.student.studentNameSSLC.charAt(0)}
             </span>
-            <span className="text-[12px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
+            <span className="text-[11px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
           </div>
           {/* Items */}
-          <div className="py-1.5">
+          <div className="py-1">
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setDetailStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
               </span>
               View Details
             </button>
             {isAdmin && (
               <button
-                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { setAllottedCatStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
                 </span>
                 <span>Allotted Category</span>
                 {contextMenu.student.allottedCategory ? (
@@ -737,71 +755,80 @@ export function Students() {
                 )}
               </button>
             )}
-            <div className="my-1 h-px bg-gray-100 mx-3" />
+            <div className="my-0.5 h-px bg-gray-100 mx-2.5" />
             {isAdmin && (
               <button
-                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { navigate('/fees', { state: { prefillStudent: contextMenu.student.studentNameSSLC } }); setContextMenu(null); }}
               >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 </span>
                 Collect Fee
               </button>
             )}
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
               </span>
               Manage Documents
             </button>
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setPrintProfileStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               </span>
               Print Profile
             </button>
-            <div className="my-1 h-px bg-gray-100 mx-3" />
+            <div className="my-0.5 h-px bg-gray-100 mx-2.5" />
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setAnsLetterStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               </span>
               ANS Letter
             </button>
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setAdmOrderStudent(contextMenu.student); setContextMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              </span>
+              Admission Order
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               </span>
               Study Certificate
             </button>
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </span>
               Transfer Certificate
             </button>
             {contextMenu.student.year === '3RD YEAR' && (
               <button
-                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                 </span>
                 Provisional Certificate
               </button>
@@ -874,6 +901,13 @@ export function Students() {
         saving={savingAllottedCat}
         onSave={(cat) => void handleSaveAllottedCat(cat)}
         onSkip={() => setAllottedCatStudent(null)}
+      />
+    )}
+
+    {admOrderStudent && (
+      <AdmissionOrderModal
+        student={admOrderStudent}
+        onClose={() => setAdmOrderStudent(null)}
       />
     )}
     </>

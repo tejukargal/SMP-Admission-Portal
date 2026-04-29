@@ -432,26 +432,32 @@ export function Admissions() {
         </div>
       </div>
 
-      {/* Course-wise stats strip */}
+      {/* Course-wise stats cards */}
       {allStudents.length > 0 && (
-        <div className="flex-shrink-0 flex items-center gap-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2 overflow-x-auto">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mr-3 shrink-0">Course</span>
-          {courseStats.map(({ course, pending, cancelled }, i) => {
+        <div className="flex-shrink-0 flex gap-2 overflow-x-auto pb-0.5">
+          {courseStats.map(({ course, pending, cancelled }) => {
             const isEmpty = pending === 0 && cancelled === 0;
             return (
-              <div key={course} className={`flex items-center gap-1.5 shrink-0 ${isEmpty ? 'opacity-35' : ''}`}>
-                <span className="text-xs font-bold text-gray-700 w-7">{course}</span>
-                <span className="inline-flex items-center gap-0.5 bg-yellow-50 border border-yellow-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums whitespace-nowrap">
-                  <span className="text-yellow-600 font-medium">P</span>
-                  <span className="font-bold text-yellow-800">{pending}</span>
-                </span>
-                <span className="inline-flex items-center gap-0.5 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 text-[10px] tabular-nums whitespace-nowrap">
-                  <span className="text-red-600 font-medium">C</span>
-                  <span className="font-bold text-red-800">{cancelled}</span>
-                </span>
-                {i < courseStats.length - 1 && (
-                  <span className="text-gray-200 text-xs select-none mx-1.5">|</span>
-                )}
+              <div
+                key={course}
+                className={`flex-shrink-0 rounded-xl border border-gray-200 bg-white overflow-hidden transition-opacity ${isEmpty ? 'opacity-35' : ''}`}
+                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+              >
+                {/* Course label header */}
+                <div className="px-2 py-0.5 bg-gray-50 border-b border-gray-200 text-center">
+                  <span className="text-[10px] font-bold tracking-widest text-gray-500 uppercase">{course}</span>
+                </div>
+                {/* Pending | Cancelled columns */}
+                <div className="flex divide-x divide-gray-100">
+                  <div className="flex flex-col items-center justify-center px-2.5 py-1.5 min-w-[46px]">
+                    <span className="text-sm font-bold text-amber-500 tabular-nums leading-none">{pending}</span>
+                    <span className="text-[8px] font-semibold text-amber-400 uppercase tracking-wide mt-1">Pending</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center px-2.5 py-1.5 min-w-[46px]">
+                    <span className="text-sm font-bold text-red-400 tabular-nums leading-none">{cancelled}</span>
+                    <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide mt-1">Cancelled</span>
+                  </div>
+                </div>
               </div>
             );
           })}
