@@ -461,6 +461,40 @@ export function Admissions() {
               </div>
             );
           })}
+
+          {/* Divider */}
+          <div className="flex-shrink-0 self-stretch w-px bg-gray-200 mx-0.5" />
+
+          {/* Total card */}
+          {(() => {
+            const totalPending   = courseStats.reduce((s, c) => s + c.pending,   0);
+            const totalCancelled = courseStats.reduce((s, c) => s + c.cancelled, 0);
+            const totalEnrolled  = allStudents.filter(s => s.admissionStatus?.trim() === 'CONFIRMED').length;
+            return (
+              <div
+                className="flex-shrink-0 rounded-xl border border-blue-200 bg-blue-50 overflow-hidden"
+                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+              >
+                <div className="px-2 py-0.5 bg-blue-100 border-b border-blue-200 text-center">
+                  <span className="text-[10px] font-bold tracking-widest text-blue-600 uppercase">Total</span>
+                </div>
+                <div className="flex divide-x divide-blue-100">
+                  <div className="flex flex-col items-center justify-center px-2.5 py-1.5 min-w-[46px]">
+                    <span className="text-sm font-bold text-amber-500 tabular-nums leading-none">{totalPending}</span>
+                    <span className="text-[8px] font-semibold text-amber-400 uppercase tracking-wide mt-1">Pending</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center px-2.5 py-1.5 min-w-[46px]">
+                    <span className="text-sm font-bold text-red-400 tabular-nums leading-none">{totalCancelled}</span>
+                    <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide mt-1">Cancelled</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center px-2.5 py-1.5 min-w-[46px]">
+                    <span className="text-sm font-bold text-green-500 tabular-nums leading-none">{totalEnrolled}</span>
+                    <span className="text-[8px] font-semibold text-green-400 uppercase tracking-wide mt-1">Enrolled</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

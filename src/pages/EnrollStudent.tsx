@@ -429,6 +429,7 @@ export function EnrollStudent() {
   type CasteEntry = { caste: string; category: Category };
   const casteIndexRef = useRef<CasteEntry[] | null>(null);
   const casteSuggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const casteLingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [casteSuggestions, setCasteSuggestions] = useState<CasteEntry[]>([]);
   const [casteOpen, setCasteOpen] = useState(false);
   const [casteHighlight, setCasteHighlight] = useState(-1);
@@ -442,6 +443,7 @@ export function EnrollStudent() {
   async function loadCasteIndex() {
     if (casteIndexRef.current !== null) return;
     const all = await getAllStudents();
+    all.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
     const seen = new Set<string>();
     const index: CasteEntry[] = [];
     for (const s of all) {
@@ -459,18 +461,25 @@ export function EnrollStudent() {
     handleFieldChange('caste', val);
     setCasteHighlight(-1);
     if (casteSuggestTimer.current) clearTimeout(casteSuggestTimer.current);
+    if (casteLingerTimer.current) clearTimeout(casteLingerTimer.current);
     if (!val.trim()) { setCasteSuggestions([]); setCasteOpen(false); return; }
     casteSuggestTimer.current = setTimeout(() => {
       const q = val.trim();
       const index = casteIndexRef.current;
       if (!index) { setCasteSuggestions([]); return; }
-      const matches = index.filter(item => item.caste.includes(q) && item.caste !== q).slice(0, 2);
+      const matches = index.filter(item => item.caste.includes(q)).slice(0, 3);
       setCasteSuggestions(matches);
-      setCasteOpen(matches.length > 0);
+      if (matches.length > 0) {
+        setCasteOpen(true);
+        casteLingerTimer.current = setTimeout(() => setCasteOpen(false), 10000);
+      } else {
+        setCasteOpen(false);
+      }
     }, 150);
   }
 
   function handleCastePick(item: CasteEntry) {
+    if (casteLingerTimer.current) clearTimeout(casteLingerTimer.current);
     handleFieldChange('caste', item.caste);
     handleFieldChange('category', item.category);
     setCasteSuggestions([]);
@@ -1072,7 +1081,7 @@ export function EnrollStudent() {
                     />
                     <button
                       type="button"
-                      onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); setCasteSuggestions([]); setCasteOpen(false); }}
+                      onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); if (casteLingerTimer.current) clearTimeout(casteLingerTimer.current); setCasteSuggestions([]); setCasteOpen(false); }}
                       className="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors"
                     >
                       Reset Fields
@@ -1199,7 +1208,7 @@ export function EnrollStudent() {
                   onChange={handleCasteChange}
                   onKeyDown={handleCasteKeyDown}
                   onFocus={() => void loadCasteIndex()}
-                  onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); setCasteOpen(false); setCasteHighlight(-1); }}
+                  onBlur={() => { casteSuggestTimer.current && clearTimeout(casteSuggestTimer.current); casteLingerTimer.current && clearTimeout(casteLingerTimer.current); setCasteOpen(false); setCasteHighlight(-1); }}
                   placeholder="CASTE"
                   style={{ textTransform: 'uppercase' }}
                   className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors ${displayErrors['caste'] ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
