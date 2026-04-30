@@ -84,7 +84,7 @@ export function exportMeritListPdf(
   const rows = sorted.map((s, idx) => `
     <tr class="${idx % 2 === 1 ? 'alt' : ''}">
       <td class="c">${idx + 1}</td>
-      <td class="c">${esc(s.meritNumber || String(idx + 1))}</td>
+      <td class="c merit-no">${idx + 1}</td>
       <td class="l name">${esc(s.studentNameSSLC)}</td>
       <td class="c">${fmtGender(s.gender)}</td>
       <td class="l father">${esc(s.fatherName || '—')}</td>
@@ -106,7 +106,16 @@ export function exportMeritListPdf(
 <meta charset="UTF-8">
 <title>Merit List – ${esc(ayDisplay)}</title>
 <style>
-  @page { size: A4 landscape; margin: 8mm 12mm; }
+  @page {
+    size: A4 landscape;
+    margin: 8mm 12mm 14mm;
+    @bottom-right {
+      content: "Page " counter(page) " / " counter(pages);
+      font-size: 9pt;
+      color: #555;
+      font-family: 'Noto Sans Kannada', Arial, sans-serif;
+    }
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Noto Sans Kannada', 'Arial Unicode MS', Arial, sans-serif; font-size: 11pt; color: #000; background: #fff; }
 
@@ -127,14 +136,15 @@ export function exportMeritListPdf(
   .info-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6pt; font-size: 10.5pt; font-weight: bold; }
 
   /* ── Table ── */
-  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
-  th, td { border: 0.5pt solid #444; padding: 5.5pt 4pt; vertical-align: middle; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5pt; }
+  th, td { border: 0.5pt solid #444; padding: 7.5pt 4pt; vertical-align: middle; }
   thead tr { background: #d8d8d8; }
-  thead th { font-weight: bold; text-align: center; font-size: 10pt; line-height: 1.45; }
+  thead th { font-weight: bold; text-align: center; font-size: 11pt; line-height: 1.45; }
   .alt { background: #f5f5f5; }
   .c { text-align: center; white-space: nowrap; }
   .l { text-align: left; }
   .r { text-align: right; white-space: nowrap; }
+  .merit-no { font-weight: bold; font-size: 12.5pt; }
   .name   { max-width: 120pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .father { max-width: 100pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

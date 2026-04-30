@@ -655,7 +655,7 @@ export function Admissions() {
                       {sortByMerit(selectedSnapshot.students).map((student, idx) => (
                         <tr key={idx} className="hover:bg-gray-50 transition-colors">
                           <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                          <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap font-medium">{student.meritNumber || idx + 1}</td>
+                          <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                           <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
                           <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap">{fmtGender(student.gender)}</td>
                           <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.fatherName || '—'}</td>
@@ -731,7 +731,7 @@ export function Admissions() {
               {meritStudents.map((student, idx) => (
                 <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap font-medium">{student.meritNumber || idx + 1}</td>
+                  <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
                   <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap">{fmtGender(student.gender)}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.fatherName || '—'}</td>
