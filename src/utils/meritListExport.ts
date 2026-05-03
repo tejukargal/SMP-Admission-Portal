@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 /** Structural type satisfied by both Student and MeritListStudent. */
 interface MeritRow {
@@ -13,6 +13,9 @@ interface MeritRow {
   sslcMaxTotal: number;
   sslcObtainedTotal: number;
   meritNumber: string;
+  applicationNumber?: string;
+  studentMobile?: string;
+  fatherMobile?: string;
 }
 
 export interface MeritExportOptions {
@@ -227,60 +230,236 @@ export function exportMeritListPdf(
   }
 }
 
-// ── Excel ─────────────────────────────────────────────────────────────────────
+// ── Excel (ExcelJS — styled) ──────────────────────────────────────────────────
 
-export function exportMeritListExcel(students: MeritRow[], academicYear: string | null): void {
+const TOTAL_COLS = 16;
+const LAST_COL   = 'P'; // column 16
+
+const thinBorder: Partial<ExcelJS.Borders> = {
+  top:    { style: 'thin' },
+  left:   { style: 'thin' },
+  bottom: { style: 'thin' },
+  right:  { style: 'thin' },
+};
+
+const headerFill: ExcelJS.Fill = {
+  type: 'pattern', pattern: 'solid',
+  fgColor: { argb: 'FFD8D8D8' },
+};
+
+
+export async function exportMeritListExcel(
+  students: MeritRow[],
+  academicYear: string | null,
+): Promise<void> {
   const sorted = sortByMerit(students);
 
-  const header = [
-    'Sl', 'Merit No.', 'Name (SSLC)', 'Gender',
-    'Father Name', 'Date of Birth', 'Category', 'Annual Income',
-    'M+S Marks', 'M+S %',
-    'SSLC Max', 'SSLC Obtained', 'SSLC %',
+  const now    = new Date();
+  const dd     = String(now.getDate()).padStart(2, '0');
+  const mm     = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy   = now.getFullYear();
+  const todayFmt = `${dd}/${mm}/${yyyy}`;
+  const ayDisplay = academicYear ?? '';
+
+  // ── Workbook ────────────────────────────────────────────────────────────────
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SMP Admissions';
+
+  const ws = wb.addWorksheet(
+    academicYear ? `Merit ${academicYear}` : 'Merit List',
+    {
+      pageSetup: {
+        orientation:        'landscape',
+        paperSize:          9,   // A4
+        horizontalCentered: true,
+      },
+    },
+  );
+
+  ws.pageSetup.margins = {
+    left: 0.50, right: 0.50,
+    top:  0.60, bottom: 0.60,
+    header: 0.30, footer: 0.30,
+  };
+
+  // ── Column widths ────────────────────────────────────────────────────────────
+
+  ws.columns = [
+    { width: 5  },   // A  Sl
+    { width: 9  },   // B  Merit No.
+    { width: 16 },   // C  Application No.
+    { width: 32 },   // D  Name (SSLC)
+    { width: 9  },   // E  Gender
+    { width: 28 },   // F  Father Name
+    { width: 13 },   // G  DOB
+    { width: 12 },   // H  Category
+    { width: 14 },   // I  Annual Income
+    { width: 14 },   // J  Student Mobile
+    { width: 14 },   // K  Father Mobile
+    { width: 13 },   // L  M+S Marks
+    { width: 10 },   // M  M+S %
+    { width: 11 },   // N  SSLC Max
+    { width: 14 },   // O  SSLC Obtained
+    { width: 10 },   // P  SSLC %
   ];
 
-  const rows = sorted.map((s, i) => {
+  // ── Helper: add a full-width merged title row ────────────────────────────────
+
+  const addTitle = (
+    text: string,
+    fontSize: number,
+    bold: boolean,
+    height = 16,
+    bottomBorder = false,
+  ): ExcelJS.Row => {
+    const row = ws.addRow([text]);
+    ws.mergeCells(`A${row.number}:${LAST_COL}${row.number}`);
+    row.height = height;
+    const cell = row.getCell(1);
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.font = { name: 'Arial', size: fontSize, bold };
+    if (bottomBorder) cell.border = { bottom: { style: 'medium' } };
+    return row;
+  };
+
+  // ── Institution header ────────────────────────────────────────────────────────
+
+  addTitle('GOVERNMENT OF KARNATAKA',                                    10, false, 18);
+  addTitle('DEPARTMENT OF TECHNICAL EDUCATION',                          10, false, 18);
+  addTitle('COMMISSIONER FOR COLLEGIATE AND TECHNICAL EDUCATION',        10, false, 18);
+  addTitle('SANJAY MEMORIAL POLYTECHNIC',                                16, true,  26);
+  addTitle('SAGAR – 577401',                                             11, true,  18, true);
+
+  ws.addRow([]);           // blank separator
+
+  // ── Title block (bordered box) ────────────────────────────────────────────────
+
+  const tb1 = addTitle(
+    'MERIT LIST FOR FIRST SEMESTER ENGINEERING DIPLOMA ADMISSION THROUGH OFFLINE PROCESS AS PER MERIT AND ROSTER',
+    11, true, 36,
+  );
+  const tb2 = addTitle(`Academic Year: ${ayDisplay}`, 13, true, 28);
+
+  // draw box border around the title block rows
+  for (const row of [tb1, tb2]) {
+    row.getCell(1).border = {
+      top:    { style: 'medium' },
+      left:   { style: 'medium' },
+      bottom: { style: 'medium' },
+      right:  { style: 'medium' },
+    };
+  }
+
+  ws.addRow([]);           // blank separator
+
+  // ── Info row ─────────────────────────────────────────────────────────────────
+  // Left side: label + count  |  Right side: date
+
+  const infoRow = ws.addRow([
+    `Eligible Candidates Merit List   (${sorted.length} candidates)`,
+    ...Array(TOTAL_COLS - 2).fill(''),
+    `Date: ${todayFmt}`,
+  ]);
+  infoRow.height = 20;
+  infoRow.getCell(1).font            = { bold: true, size: 10 };
+  infoRow.getCell(1).alignment       = { horizontal: 'left', vertical: 'middle' };
+  infoRow.getCell(TOTAL_COLS).font   = { bold: true, size: 10 };
+  infoRow.getCell(TOTAL_COLS).alignment = { horizontal: 'right', vertical: 'middle' };
+
+  ws.addRow([]);           // blank separator
+
+  // ── Column header row ────────────────────────────────────────────────────────
+
+  const headerRow = ws.addRow([
+    'Sl', 'Merit\nNo.', 'App.\nNo.', 'Name (SSLC)', 'Gender',
+    'Father Name', 'Date of\nBirth', 'Category', 'Annual\nIncome',
+    'Student\nMobile', 'Father\nMobile',
+    'M+S\nMarks', 'M+S\n%',
+    'SSLC\nMax', 'SSLC\nObtained', 'SSLC\n%',
+  ]);
+  headerRow.height = 42;
+  headerRow.eachCell({ includeEmpty: true }, cell => {
+    cell.fill      = headerFill;
+    cell.font      = { name: 'Arial', bold: true, size: 11 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border    = thinBorder;
+  });
+
+  // Repeat column header when printing
+  ws.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
+
+  // ── Data rows ────────────────────────────────────────────────────────────────
+
+  sorted.forEach((s, i) => {
     const msPct = s.mathsScienceMaxTotal
       ? parseFloat(((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2))
       : 0;
-    return [
+
+    const dataRow = ws.addRow([
       i + 1,
-      s.meritNumber || i + 1,
+      i + 1,
+      s.applicationNumber || '',
       s.studentNameSSLC,
       fmtGender(s.gender),
       s.fatherName || '',
       fmtDOB(s.dateOfBirth),
       s.category,
       s.annualIncome || 0,
+      s.studentMobile || '',
+      s.fatherMobile || '',
       `${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}`,
       msPct,
       s.sslcMaxTotal,
       s.sslcObtainedTotal,
       parseFloat(sslcPct(s).toFixed(2)),
-    ];
+    ]);
+
+    dataRow.height = 23;
+
+    if (i % 2 === 1) {
+      dataRow.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+      });
+    }
+
+    dataRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      cell.font   = { name: 'Arial', size: 11 };
+      cell.border = thinBorder;
+      // Merit No. bold
+      if (colNum === 2) cell.font = { name: 'Arial', size: 11, bold: true };
+      // Alignment: name columns left, income/percentage right, others center
+      if (colNum === 4 || colNum === 6) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      } else if (colNum === 9 || colNum === 13 || colNum === 16) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+    });
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  // ── Footer note ──────────────────────────────────────────────────────────────
 
-  ws['!cols'] = [
-    { wch: 5  },  // Sl
-    { wch: 10 },  // Merit No.
-    { wch: 28 },  // Name
-    { wch: 8  },  // Gender
-    { wch: 25 },  // Father
-    { wch: 12 },  // DOB
-    { wch: 10 },  // Category
-    { wch: 15 },  // Income
-    { wch: 13 },  // M+S Marks
-    { wch: 10 },  // M+S %
-    { wch: 11 },  // SSLC Max
-    { wch: 13 },  // SSLC Obtained
-    { wch: 10 },  // SSLC %
-  ];
+  ws.addRow([]);
+  const footerRow = ws.addRow([
+    `Sorted by SSLC % (highest first)  ·  Generated: ${todayFmt}  ·  ${sorted.length} candidates`,
+  ]);
+  ws.mergeCells(`A${footerRow.number}:${LAST_COL}${footerRow.number}`);
+  footerRow.getCell(1).font      = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF555555' } };
+  footerRow.getCell(1).alignment = { horizontal: 'center' };
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, academicYear ? `Merit ${academicYear}` : 'Merit List');
+  // ── Download ─────────────────────────────────────────────────────────────────
 
-  const ay = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
-  XLSX.writeFile(wb, `merit_list_${ay}.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob   = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href    = url;
+  const ay  = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
+  a.download = `merit_list_${ay}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

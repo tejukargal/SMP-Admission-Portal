@@ -564,13 +564,6 @@ export function EnrollStudent() {
     return { ...warnings, ...errors };
   }, [editId, form, errors]);
 
-  // Staff cannot access edit mode — redirect to students list.
-  // Guard on role !== null so we don't redirect before auth has resolved.
-  useEffect(() => {
-    if (editId && role !== null && !isAdmin) {
-      navigate('/students', { replace: true });
-    }
-  }, [editId, role, isAdmin, navigate]);
 
   useEffect(() => {
     if (!editId && settings?.currentAcademicYear) {

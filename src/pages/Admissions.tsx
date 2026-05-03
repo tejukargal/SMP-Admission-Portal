@@ -204,10 +204,9 @@ export function Admissions() {
 
   function handleSnapshotExportExcel(snap: MeritListSnapshot) {
     setSnapshotExportingExcel(true);
-    setTimeout(() => {
-      try { exportMeritListExcel(snap.students, snap.academicYear); }
-      finally { setSnapshotExportingExcel(false); }
-    }, 0);
+    exportMeritListExcel(snap.students, snap.academicYear)
+      .catch(() => {})
+      .finally(() => setSnapshotExportingExcel(false));
   }
 
   // ── Context menu ─────────────────────────────────────────────────────────
@@ -226,7 +225,7 @@ export function Admissions() {
     e.preventDefault();
     e.stopPropagation();
     const MENU_W = 215;
-    const MENU_H = 175;
+    const MENU_H = 210;
     const x = e.clientX + MENU_W > window.innerWidth ? e.clientX - MENU_W : e.clientX;
     const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
     setContextMenu({ x, y, student });
@@ -245,10 +244,9 @@ export function Admissions() {
 
   function handleExportExcel() {
     setExportingExcel(true);
-    setTimeout(() => {
-      try { exportMeritListExcel(meritStudents, academicYear); }
-      finally { setExportingExcel(false); }
-    }, 0);
+    exportMeritListExcel(meritStudents, academicYear)
+      .catch(() => {})
+      .finally(() => setExportingExcel(false));
   }
 
   async function handleAction(
@@ -879,6 +877,20 @@ export function Admissions() {
           </div>
           {/* Items */}
           <div className="py-1.5">
+            {contextMenu.student.admissionStatus === 'PENDING' && (
+              <>
+                <button
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-violet-50/70 hover:text-violet-800 flex items-center gap-2.5 transition-colors duration-100"
+                  onClick={() => { navigate(`/enroll?edit=${contextMenu.student.id}`); setContextMenu(null); }}
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-100 group-hover:text-violet-600 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </span>
+                  Edit Enrollment
+                </button>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+              </>
+            )}
             <button
               className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
               onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
