@@ -35,7 +35,7 @@ const YEAR_LABELS: Record<string, string> = {
   '3RD YEAR': '3rd Year',
 };
 
-function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: string): string {
+function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: string, isLast: boolean): string {
   const submittedCount = REQUIRED_DOCS.filter(({ key }) => docs[key].submitted).length;
   const total = REQUIRED_DOCS.length;
   const allSubmitted = submittedCount === total;
@@ -45,10 +45,10 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
     const statusCell = entry.submitted
       ? `<td class="td-status submitted">&#10003; Submitted</td>
          <td class="td-date">${esc(formatDate(entry.submittedOn))}</td>`
-      : `<td class="td-status pending">&#9744; Not Submitted</td>
+      : `<td class="td-status pending">&#9744; Pending</td>
          <td class="td-date td-dash">—</td>`;
     const remarksCell = entry.submitted && entry.returned
-      ? `<td class="td-remarks">Returned on ${esc(formatDate(entry.returnedOn))}</td>`
+      ? `<td class="td-remarks">Returned ${esc(formatDate(entry.returnedOn))}</td>`
       : entry.remarks
       ? `<td class="td-remarks">${esc(entry.remarks)}</td>`
       : `<td class="td-remarks td-dash">—</td>`;
@@ -62,13 +62,15 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
       </tr>`;
   }).join('');
 
+  const cutBorderStyle = isLast ? '' : 'border-bottom: 1.2pt dashed #666;';
+
   return `
-  <div class="copy">
+  <div class="copy" style="${cutBorderStyle}">
 
     <!-- Header -->
     <div class="header">
       <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
-      <div class="college-sub">(Approved by AICTE, New Delhi and running with Grant-In-Aid of State Govt. of Karnataka)</div>
+      <div class="college-sub">(Approved by AICTE, New Delhi &amp; running with Grant-In-Aid of State Govt. of Karnataka)</div>
       <div class="college-addr">Ikkeri Road, Sagar – 577 401, Shivamogga Dist., Karnataka &nbsp;|&nbsp; Ph: 9449685992 &nbsp;|&nbsp; Inst. Code: 308</div>
     </div>
 
@@ -100,7 +102,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
         </div>
       </div>
       <div class="submitted-badge ${allSubmitted ? 'badge-green' : submittedCount === 0 ? 'badge-red' : 'badge-yellow'}">
-        ${submittedCount} / ${total} Submitted
+        ${submittedCount} / ${total}<br>Submitted
       </div>
     </div>
 
@@ -111,7 +113,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
           <th class="th-num">#</th>
           <th class="th-doc">Document</th>
           <th class="th-status">Status</th>
-          <th class="th-date">Date Submitted</th>
+          <th class="th-date">Date</th>
           <th class="th-remarks">Remarks</th>
         </tr>
       </thead>
@@ -122,7 +124,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
 
     <!-- Acknowledgement note -->
     <div class="ack-note">
-      I acknowledge that the above details of documents submitted / pending are true and correct. I understand that all original documents must be submitted within the stipulated time. The institution reserves the right to withhold results/certificates until all required documents are received.
+      I acknowledge that the above details are true and correct. All original documents must be submitted within the stipulated time. The institution reserves the right to withhold results/certificates until all required documents are received.
     </div>
 
     <!-- Signatures -->
@@ -153,84 +155,84 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 <meta charset="UTF-8">
 <title>Document Acknowledgement – ${esc(student.studentNameSSLC)}</title>
 <style>
-  @page { size: A4; margin: 7mm 10mm; }
+  /* Zero-margin page so each copy owns exactly half the A4 sheet */
+  @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Times New Roman', Times, serif;
-    font-size: 8.5pt;
+    font-size: 8pt;
     color: #000;
     background: #fff;
+    width: 210mm;
+    height: 297mm;
   }
 
-  /* ── Copy box ── */
+  /* ── Each copy occupies exactly half an A4 page ── */
   .copy {
-    border: 1.5pt solid #000;
-    padding: 7pt 12pt 7pt;
-  }
-
-  /* ── Cut line ── */
-  .cut-line {
-    text-align: center;
-    font-size: 7pt;
-    color: #555;
-    letter-spacing: 1pt;
-    margin: 3pt 0;
-    border-top: 1pt dashed #888;
-    padding-top: 2.5pt;
+    width: 210mm;
+    height: 148.5mm;
+    padding: 5.5mm 10mm 5mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   /* ── Header ── */
   .header {
     text-align: center;
     border-bottom: 1pt solid #000;
-    padding-bottom: 4pt;
-    margin-bottom: 4pt;
+    padding-bottom: 3pt;
+    margin-bottom: 3pt;
+    flex-shrink: 0;
   }
-  .college-name { font-size: 14pt; font-weight: bold; letter-spacing: 0.3pt; line-height: 1.2; }
-  .college-sub  { font-size: 6.5pt; margin: 1.5pt 0; color: #222; }
-  .college-addr { font-size: 7.5pt; font-weight: bold; }
+  .college-name { font-size: 12.5pt; font-weight: bold; letter-spacing: 0.2pt; line-height: 1.15; }
+  .college-sub  { font-size: 6pt; margin: 1pt 0; color: #222; }
+  .college-addr { font-size: 7pt; font-weight: bold; }
 
   /* ── Title row ── */
   .title-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 4pt;
+    margin-bottom: 3pt;
+    flex-shrink: 0;
   }
-  .doc-title  { font-size: 10pt; font-weight: bold; text-decoration: underline; }
-  .copy-label { font-size: 7.5pt; font-style: italic; font-weight: bold; border: 0.5pt solid #555; padding: 1pt 5pt; border-radius: 2pt; }
-  .doc-date   { font-size: 7.5pt; }
+  .doc-title  { font-size: 9.5pt; font-weight: bold; text-decoration: underline; }
+  .copy-label { font-size: 7pt; font-style: italic; font-weight: bold; border: 0.5pt solid #555; padding: 1pt 4pt; border-radius: 2pt; }
+  .doc-date   { font-size: 7pt; }
 
   /* ── Student info ── */
   .student-info {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #f5f5f5;
+    background: #f4f4f4;
     border: 0.5pt solid #ccc;
     border-radius: 2pt;
-    padding: 4pt 8pt;
-    margin-bottom: 5pt;
+    padding: 3pt 7pt;
+    margin-bottom: 4pt;
     gap: 8pt;
+    flex-shrink: 0;
   }
   .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.5pt 18pt;
+    gap: 1pt 16pt;
     flex: 1;
   }
   .info-field { display: flex; gap: 3pt; align-items: baseline; }
-  .info-lbl   { font-size: 6.5pt; color: #555; white-space: nowrap; min-width: 70pt; }
+  .info-lbl   { font-size: 6pt; color: #555; white-space: nowrap; min-width: 68pt; }
   .info-lbl::after { content: ':'; }
-  .info-val   { font-size: 7.5pt; font-weight: bold; }
+  .info-val   { font-size: 7pt; font-weight: bold; }
 
   .submitted-badge {
-    font-size: 8pt;
+    font-size: 7.5pt;
     font-weight: bold;
-    padding: 3pt 8pt;
+    padding: 2pt 7pt;
     border-radius: 3pt;
     white-space: nowrap;
     text-align: center;
+    line-height: 1.3;
   }
   .badge-green  { background: #dcfce7; border: 0.5pt solid #4ade80; color: #166534; }
   .badge-yellow { background: #fef9c3; border: 0.5pt solid #fde047; color: #854d0e; }
@@ -240,31 +242,32 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 5pt;
-    font-size: 7.5pt;
+    margin-bottom: 4pt;
+    font-size: 7pt;
+    flex-shrink: 0;
   }
   th, td { border: 0.5pt solid #ccc; }
   thead th {
     background: #e8e8e8;
     font-weight: bold;
-    font-size: 7pt;
-    padding: 2.5pt 4pt;
+    font-size: 6.5pt;
+    padding: 2pt 3pt;
     text-align: left;
   }
-  .th-num    { width: 14pt; text-align: center; }
+  .th-num    { width: 17pt; text-align: center; }
   .th-doc    { width: auto; }
-  .th-status { width: 68pt; }
-  .th-date   { width: 60pt; }
-  .th-remarks{ width: 70pt; }
+  .th-status { width: 70pt; }
+  .th-date   { width: 55pt; }
+  .th-remarks{ width: 76pt; }
 
-  tbody td { padding: 2pt 4pt; vertical-align: middle; }
+  tbody td { padding: 5pt 3pt; vertical-align: middle; }
   .row-alt { background: #f9f9f9; }
 
-  .td-num    { text-align: center; color: #888; font-size: 7pt; }
+  .td-num    { text-align: center; color: #888; font-size: 6.5pt; }
   .td-doc    { font-weight: 500; }
   .td-status { font-weight: bold; white-space: nowrap; }
-  .td-date   { font-size: 7pt; white-space: nowrap; }
-  .td-remarks{ font-size: 7pt; color: #555; }
+  .td-date   { font-size: 6.5pt; white-space: nowrap; }
+  .td-remarks{ font-size: 6.5pt; color: #555; }
   .td-dash   { color: #bbb; text-align: center; }
 
   .submitted { color: #166534; }
@@ -272,28 +275,31 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 
   /* ── Acknowledgement note ── */
   .ack-note {
-    font-size: 6.5pt;
-    line-height: 1.55;
+    font-size: 6pt;
+    line-height: 1.5;
     border: 0.5pt solid #aaa;
-    padding: 3pt 7pt;
-    margin-bottom: 5pt;
+    padding: 2.5pt 6pt;
+    margin-bottom: 4pt;
     color: #222;
+    flex-shrink: 0;
   }
 
-  /* ── Signatures ── */
+  /* ── Signatures — pinned to the bottom; gap above gives writing space ── */
   .sigs {
     display: flex;
     justify-content: space-between;
     gap: 10pt;
+    margin-top: auto;
+    flex-shrink: 0;
   }
   .sig-block {
     flex: 1;
     text-align: center;
-    font-size: 7pt;
+    font-size: 6.5pt;
   }
   .sig-line {
     border-top: 0.5pt solid #000;
-    margin: 14pt auto 2pt;
+    margin: 12pt auto 2pt;
     width: 90%;
   }
 
@@ -304,11 +310,8 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 </head>
 <body>
 
-  ${buildCopy(student, docs, 'Student Copy', today)}
-
-  <div class="cut-line">✂ &nbsp;&nbsp; CUT HERE &nbsp;&nbsp; ✂</div>
-
-  ${buildCopy(student, docs, 'Office Copy', today)}
+  ${buildCopy(student, docs, 'Student Copy', today, false)}
+  ${buildCopy(student, docs, 'Office Copy',  today, true)}
 
   <script>
     window.onload = function () {

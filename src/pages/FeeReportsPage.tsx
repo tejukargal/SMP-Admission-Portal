@@ -1682,8 +1682,11 @@ export function FeeReportsPage() {
   // ── All students as fee rows ──────────────────────────────────────────────
   // Override takes precedence over structure per student.
   // Fine allotted: max(base fine, total fine paid) so fine payments never produce negative balance.
+  // Only CONFIRMED students appear in student-based tabs (Statistics, Fee List, Dues, Course & Year, Consolidated).
+  // Cancelled students with paid fees still appear in receipt-based tabs (Daily Collections, Datewise Headwise, Bank Remittance)
+  // because those tabs consume raw feeRecords directly, not this list.
   const allStudentRows = useMemo((): StudentFeeRow[] =>
-    allStudents.map((s) => {
+    allStudents.filter((s) => s.admissionStatus?.trim() === 'CONFIRMED').map((s) => {
       const override = overrideByStudent.get(s.id);
       const key      = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
       const finePaid = finePaidByStudent.get(s.id) ?? 0;

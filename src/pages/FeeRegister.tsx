@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -470,6 +470,24 @@ export function FeeRegister() {
       document.removeEventListener('keydown', onKey);
     };
   }, [ctxMenu, closeCtx]);
+
+  // After every render where the menu is present, clamp it to the viewport
+  // using direct DOM mutation to avoid a state-update re-render loop.
+  useLayoutEffect(() => {
+    const el = ctxRef.current;
+    if (!el || !ctxMenu) return;
+    const GAP = 6;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    let x = ctxMenu.x;
+    let y = ctxMenu.y;
+    if (x + w > window.innerWidth  - GAP) x = window.innerWidth  - w - GAP;
+    if (y + h > window.innerHeight - GAP) y = window.innerHeight - h - GAP;
+    if (x < GAP) x = GAP;
+    if (y < GAP) y = GAP;
+    el.style.left       = `${x}px`;
+    el.style.top        = `${y}px`;
+    el.style.visibility = 'visible';
+  }, [ctxMenu]);
 
   // Default to current academic year once settings load
   useEffect(() => {
@@ -1101,7 +1119,7 @@ export function FeeRegister() {
           <div
             ref={ctxRef}
             className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
-            style={{ top: ctxMenu.y, left: ctxMenu.x, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+            style={{ top: ctxMenu.y, left: ctxMenu.x, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           >
             {/* Header */}
             <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
