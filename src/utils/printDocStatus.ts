@@ -162,7 +162,7 @@ export function printDocStatus(rows: DocStatusRow[]): void {
   }
 
   /* Data cells */
-  tbody td { padding: 2pt 3pt; vertical-align: middle; }
+  tbody td { padding: 4.5pt 3pt; vertical-align: middle; }
   tbody tr:nth-child(even) { background: #f7f7f7; }
 
   .td-num    { text-align: center; color: #888; font-size: 7pt; }
@@ -175,15 +175,15 @@ export function printDocStatus(rows: DocStatusRow[]): void {
   .td-count.none { color: #991b1b; }
 
   /* Checkbox cells */
-  .td-doc { text-align: center; padding: 1.5pt 1pt; }
+  .td-doc { text-align: center; padding: 3pt 1pt; }
   .box {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 9pt;
-    height: 9pt;
-    border-radius: 1.5pt;
-    font-size: 6.5pt;
+    width: 11pt;
+    height: 11pt;
+    border-radius: 2pt;
+    font-size: 7.5pt;
     font-weight: bold;
     line-height: 1;
   }

@@ -10,17 +10,19 @@ interface Props {
   onClose: () => void;
 }
 
-type FilterMode = 'any' | 'none';
+type FilterMode    = 'all' | 'partial' | 'full' | 'none';
+type AdmStatus     = '' | 'CONFIRMED' | 'PENDING' | 'CANCELLED';
 
 export function MissingDocsModal({ students, onManage, onClose }: Props) {
   const [docMap, setDocMap] = useState<Map<string, DocRecord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const [filterMode, setFilterMode] = useState<FilterMode>('any');
-  const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState('');
+  const [filterMode,      setFilterMode]      = useState<FilterMode>('all');
+  const [admStatusFilter, setAdmStatusFilter] = useState<AdmStatus>('');
+  const [search,          setSearch]          = useState('');
+  const [courseFilter,    setCourseFilter]    = useState('');
+  const [yearFilter,      setYearFilter]      = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -28,9 +30,7 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
       .then((records) => {
         if (!cancelled) {
           const map = new Map<string, DocRecord>();
-          for (const r of records) {
-            map.set(r.studentId, mergeWithDefaults(r.docs));
-          }
+          for (const r of records) map.set(r.studentId, mergeWithDefaults(r.docs));
           setDocMap(map);
         }
       })
@@ -48,15 +48,28 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
   const enriched = useMemo(() => {
     return students
       .map((s) => {
-        const docs = docMap.get(s.id) ?? mergeWithDefaults({});
-        const missing = REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired && !docs[key].submitted).map(({ label }) => label);
+        const docs          = docMap.get(s.id) ?? mergeWithDefaults({});
+        const missing       = REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired && !docs[key].submitted).map(({ label }) => label);
         const requiredTotal = REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired).length;
         const submittedCount = requiredTotal - missing.length;
         return { student: s, docs, missing, submittedCount, requiredTotal };
       })
-      .filter(({ missing, requiredTotal }) =>
-        filterMode === 'none' ? missing.length === requiredTotal : missing.length > 0
-      )
+      // Admission status filter
+      .filter(({ student: s }) => {
+        if (!admStatusFilter) return true;
+        const status = s.admissionStatus?.trim() ?? '';
+        if (admStatusFilter === 'PENDING') return !['CONFIRMED', 'CANCELLED'].includes(status);
+        return status === admStatusFilter;
+      })
+      // Submission mode filter
+      .filter(({ missing, submittedCount }) => {
+        if (filterMode === 'all')     return true;
+        if (filterMode === 'full')    return missing.length === 0;
+        if (filterMode === 'partial') return submittedCount > 0 && missing.length > 0;
+        if (filterMode === 'none')    return submittedCount === 0;
+        return true;
+      })
+      // Search
       .filter(({ student: s }) => {
         const q = search.trim().toUpperCase();
         if (!q) return true;
@@ -65,13 +78,14 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
           s.regNumber?.toUpperCase().includes(q)
         );
       })
+      // Course / Year
       .filter(({ student: s }) => {
         if (courseFilter && s.course !== courseFilter) return false;
         if (yearFilter   && s.year   !== yearFilter)   return false;
         return true;
       })
       .sort((a, b) => a.submittedCount - b.submittedCount);
-  }, [students, docMap, filterMode, search, courseFilter, yearFilter]);
+  }, [students, docMap, filterMode, admStatusFilter, search, courseFilter, yearFilter]);
 
   const completeCount = !loading
     ? students.filter((s) => {
@@ -80,15 +94,33 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
       }).length
     : 0;
 
+  const subtitleText = loading
+    ? 'Loading records…'
+    : filterMode === 'full'
+    ? `${enriched.length} student${enriched.length !== 1 ? 's' : ''} — fully submitted`
+    : filterMode === 'partial'
+    ? `${enriched.length} student${enriched.length !== 1 ? 's' : ''} — partially submitted`
+    : filterMode === 'none'
+    ? `${enriched.length} student${enriched.length !== 1 ? 's' : ''} — none submitted`
+    : `${enriched.length} of ${students.length} student${students.length !== 1 ? 's' : ''} shown`;
+
   const tableHeader = (
     <tr>
       <th className="px-3 py-2.5 text-left font-semibold text-gray-400 bg-gray-50 w-8 border-b border-gray-200">#</th>
       <th className="px-3 py-2.5 text-left font-semibold text-gray-600 bg-gray-50 border-b border-gray-200">Student</th>
       <th className="px-3 py-2.5 text-left font-semibold text-gray-600 bg-gray-50 w-28 border-b border-gray-200">Course / Year</th>
+      <th className="px-3 py-2.5 text-left font-semibold text-gray-500 bg-gray-50 w-24 border-b border-gray-200">Adm. Status</th>
       <th className="px-3 py-2.5 text-center font-semibold text-amber-700 bg-amber-50/80 w-28 whitespace-nowrap border-b border-amber-100">Submitted</th>
       <th className="px-3 py-2.5 text-left font-semibold text-red-600 bg-red-50/70 border-b border-red-100">Pending Documents</th>
     </tr>
   );
+
+  const modeButtons: { mode: FilterMode; label: string; activeClass: string }[] = [
+    { mode: 'all',     label: 'All',                activeClass: 'bg-slate-700 text-white'   },
+    { mode: 'full',    label: 'Fully Submitted',    activeClass: 'bg-emerald-600 text-white'  },
+    { mode: 'partial', label: 'Partially Submitted', activeClass: 'bg-amber-500 text-white'   },
+    { mode: 'none',    label: 'None Submitted',     activeClass: 'bg-red-600 text-white'      },
+  ];
 
   return (
     <div
@@ -99,7 +131,7 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
       <div className="absolute inset-0 bg-black/50" />
       <div
         className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ width: '920px', maxWidth: '100%', height: '84vh', animation: 'modal-enter 0.22s ease-out' }}
+        style={{ width: '960px', maxWidth: '100%', height: '84vh', animation: 'modal-enter 0.22s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
 
@@ -113,11 +145,7 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
             </span>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-white tracking-tight">Document Status</h2>
-              <p className="text-[11px] text-white/55 mt-0.5">
-                {loading
-                  ? 'Loading records…'
-                  : `${enriched.length} student${enriched.length !== 1 ? 's' : ''} with pending documents`}
-              </p>
+              <p className="text-[11px] text-white/55 mt-0.5">{subtitleText}</p>
             </div>
           </div>
           {!loading && (
@@ -128,14 +156,6 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                   {completeCount} complete
-                </span>
-              )}
-              {enriched.length > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full text-[10px] font-semibold px-2.5 py-1 bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                  </svg>
-                  {enriched.length} pending
                 </span>
               )}
             </div>
@@ -149,7 +169,8 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
         </div>
 
         {/* ── Filters ── */}
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2.5 shrink-0 flex-wrap bg-gray-50/50">
+        <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2.5 shrink-0 bg-gray-50/50">
+
           {/* Search */}
           <div className="relative">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -186,20 +207,31 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
             <option value="3RD YEAR">3rd Year</option>
           </select>
 
-          {/* Mode toggle */}
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs bg-white ml-1">
-            <button
-              onClick={() => setFilterMode('any')}
-              className={`px-3 py-1.5 transition-colors ${filterMode === 'any' ? 'bg-slate-700 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              Any Missing
-            </button>
-            <button
-              onClick={() => setFilterMode('none')}
-              className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${filterMode === 'none' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              None Submitted
-            </button>
+          {/* Admission status */}
+          <select
+            className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-slate-300 cursor-pointer"
+            value={admStatusFilter}
+            onChange={(e) => setAdmStatusFilter(e.target.value as AdmStatus)}
+          >
+            <option value="">All Adm. Status</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="PENDING">Pending</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+
+          {/* Submission mode toggle */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs bg-white ml-auto">
+            {modeButtons.map(({ mode, label, activeClass }, i) => (
+              <button
+                key={mode}
+                onClick={() => setFilterMode(mode)}
+                className={`px-3 py-1.5 transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
+                  filterMode === mode ? activeClass : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -217,6 +249,7 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                       <div className="skeleton h-2.5 w-16" />
                     </td>
                     <td className="px-3 py-3"><div className="skeleton h-3 w-16" /></td>
+                    <td className="px-3 py-3"><div className="skeleton h-4 w-16 rounded-full" /></td>
                     <td className="px-3 py-3 text-center"><div className="skeleton h-5 w-16 mx-auto rounded-full" /></td>
                     <td className="px-3 py-3">
                       <div className="flex gap-1">
@@ -246,73 +279,93 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                 </svg>
               </span>
               <div className="text-center">
-                <p className="text-sm font-semibold text-gray-700">All documents accounted for</p>
-                <p className="text-xs text-gray-400 mt-1">Every student has submitted all required documents.</p>
+                <p className="text-sm font-semibold text-gray-700">No students match the current filters</p>
+                <p className="text-xs text-gray-400 mt-1">Try changing the submission mode or clearing other filters.</p>
               </div>
             </div>
           ) : (
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10">{tableHeader}</thead>
               <tbody className="divide-y divide-gray-100">
-                {enriched.map(({ student, missing, submittedCount, requiredTotal }, idx) => (
-                  <tr
-                    key={student.id}
-                    className="hover:bg-gray-50/70 transition-colors cursor-pointer select-none"
-                    onDoubleClick={() => onManage(student)}
-                    title="Double-click to manage documents"
-                  >
-                    <td className="px-3 py-2.5 text-gray-400 font-mono">{idx + 1}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="font-semibold text-gray-900">{student.studentNameSSLC}</div>
-                      <div className="text-gray-400 text-[10px] mt-0.5 font-mono">{student.regNumber || '—'}</div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold text-gray-600 border-gray-200 bg-white">
-                          {student.course}
-                        </span>
-                        <span className="text-gray-400 text-[10px]">
-                          {student.year === '1ST YEAR' ? '1st' : student.year === '2ND YEAR' ? '2nd' : '3rd'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center bg-amber-50/30">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          submittedCount === requiredTotal ? 'bg-emerald-100 text-emerald-700' :
-                          submittedCount === 0             ? 'bg-red-100 text-red-600'         :
-                                                             'bg-amber-100 text-amber-700'
-                        }`}>
-                          {submittedCount} / {requiredTotal}
-                        </span>
-                        <div className="w-12 h-1 rounded-full bg-gray-200 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              submittedCount === requiredTotal ? 'bg-emerald-500' :
-                              submittedCount === 0             ? 'bg-red-400'     :
-                                                                 'bg-amber-400'
-                            }`}
-                            style={{ width: `${requiredTotal > 0 ? (submittedCount / requiredTotal) * 100 : 0}%` }}
-                          />
+                {enriched.map(({ student, missing, submittedCount, requiredTotal }, idx) => {
+                  const status = student.admissionStatus?.trim() ?? '';
+                  const statusCls =
+                    status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    status === 'CANCELLED' ? 'bg-red-50 text-red-600 border-red-200' :
+                                            'bg-amber-50 text-amber-700 border-amber-200';
+                  const statusLabel =
+                    status === 'CONFIRMED' ? 'Confirmed' :
+                    status === 'CANCELLED' ? 'Cancelled' : 'Pending';
+
+                  return (
+                    <tr
+                      key={student.id}
+                      className="hover:bg-gray-50/70 transition-colors cursor-pointer select-none"
+                      onDoubleClick={() => onManage(student)}
+                      title="Double-click to manage documents"
+                    >
+                      <td className="px-3 py-2.5 text-gray-400 font-mono">{idx + 1}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="font-semibold text-gray-900">{student.studentNameSSLC}</div>
+                        <div className="text-gray-400 text-[10px] mt-0.5 font-mono">{student.regNumber || '—'}</div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] font-bold text-gray-600 border-gray-200 bg-white">
+                            {student.course}
+                          </span>
+                          <span className="text-gray-400 text-[10px]">
+                            {student.year === '1ST YEAR' ? '1st' : student.year === '2ND YEAR' ? '2nd' : '3rd'}
+                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 bg-red-50/20">
-                      <div className="flex flex-wrap gap-1">
-                        {missing.slice(0, 4).map((m) => (
-                          <span key={m} className="bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded-md text-[10px] whitespace-nowrap font-medium">
-                            {m}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusCls}`}>
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-center bg-amber-50/30">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            submittedCount === requiredTotal ? 'bg-emerald-100 text-emerald-700' :
+                            submittedCount === 0             ? 'bg-red-100 text-red-600'         :
+                                                               'bg-amber-100 text-amber-700'
+                          }`}>
+                            {submittedCount} / {requiredTotal}
                           </span>
-                        ))}
-                        {missing.length > 4 && (
-                          <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-md text-[10px] font-medium">
-                            +{missing.length - 4} more
-                          </span>
+                          <div className="w-12 h-1 rounded-full bg-gray-200 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                submittedCount === requiredTotal ? 'bg-emerald-500' :
+                                submittedCount === 0             ? 'bg-red-400'     :
+                                                                   'bg-amber-400'
+                              }`}
+                              style={{ width: `${requiredTotal > 0 ? (submittedCount / requiredTotal) * 100 : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 bg-red-50/20">
+                        {missing.length === 0 ? (
+                          <span className="text-emerald-600 text-[10px] font-medium">All documents submitted</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {missing.slice(0, 4).map((m) => (
+                              <span key={m} className="bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded-md text-[10px] whitespace-nowrap font-medium">
+                                {m}
+                              </span>
+                            ))}
+                            {missing.length > 4 && (
+                              <span className="bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded-md text-[10px] font-medium">
+                                +{missing.length - 4} more
+                              </span>
+                            )}
+                          </div>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -332,9 +385,25 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                 <div className="text-[9px] text-gray-400 mt-0.5">all docs in</div>
               </div>
               <div className="flex-1 min-w-[80px] rounded-xl bg-amber-50 border border-amber-100 px-3 py-2">
-                <div className="text-[9px] text-amber-500 font-semibold uppercase tracking-wider">Pending</div>
-                <div className="text-sm font-bold text-amber-700 mt-0.5">{enriched.length}</div>
+                <div className="text-[9px] text-amber-500 font-semibold uppercase tracking-wider">Partial</div>
+                <div className="text-sm font-bold text-amber-700 mt-0.5">
+                  {students.filter((s) => {
+                    const docs = docMap.get(s.id) ?? mergeWithDefaults({});
+                    const sub = REQUIRED_DOCS.filter(({ key }) => docs[key].submitted).length;
+                    return sub > 0 && sub < REQUIRED_DOCS.length;
+                  }).length}
+                </div>
                 <div className="text-[9px] text-gray-400 mt-0.5">need follow-up</div>
+              </div>
+              <div className="flex-1 min-w-[80px] rounded-xl bg-red-50 border border-red-100 px-3 py-2">
+                <div className="text-[9px] text-red-400 font-semibold uppercase tracking-wider">None</div>
+                <div className="text-sm font-bold text-red-600 mt-0.5">
+                  {students.filter((s) => {
+                    const docs = docMap.get(s.id) ?? mergeWithDefaults({});
+                    return REQUIRED_DOCS.every(({ key }) => !docs[key].submitted);
+                  }).length}
+                </div>
+                <div className="text-[9px] text-gray-400 mt-0.5">no docs yet</div>
               </div>
             </div>
           )}
