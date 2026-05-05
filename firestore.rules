@@ -148,6 +148,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Public meta (pre-aggregated stats readable by anyone) ────────────
+    // Only the publicStats document lives here; written by authenticated users,
+    // read publicly so the login screen can display enrollment statistics.
+    match /meta/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
     // ── Admin Config (API keys, SMS config, etc.) ─────────────────────────
     match /adminConfig/{docId} {
       allow read, write: if isAdmin();

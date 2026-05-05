@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useTransition } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
@@ -6,6 +6,9 @@ import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
+import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
+import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
+import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { exportSummaryReport, exportCategoryReport } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
@@ -226,6 +229,36 @@ export function Dashboard() {
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
+
+  // ── Certificate context menu (search results) ────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement>(null);
+  const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
+  const [tcStudent, setTcStudent] = useState<Student | null>(null);
+  const [pcStudent, setPcStudent] = useState<Student | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setCtxMenu(null); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ctxMenu]);
+
+  useLayoutEffect(() => {
+    const el = ctxMenuRef.current;
+    if (!el || !ctxMenu) return;
+    const GAP = 6;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    let x = ctxMenu.x;
+    let y = ctxMenu.y;
+    if (x + w > window.innerWidth  - GAP) x = window.innerWidth  - w - GAP;
+    if (y + h > window.innerHeight - GAP) y = window.innerHeight - h - GAP;
+    if (x < GAP) x = GAP;
+    if (y < GAP) y = GAP;
+    el.style.left       = `${x}px`;
+    el.style.top        = `${y}px`;
+    el.style.visibility = 'visible';
+  }, [ctxMenu]);
 
   const {
     searchTerm,
@@ -520,6 +553,7 @@ export function Dashboard() {
     '3RD YEAR': { label: '3rd Year', bg: 'bg-teal-50',     border: 'border-teal-200',     textColor: 'text-teal-700',     barFill: 'bg-teal-400'     },
   };
 
+
   if (loading) return <LoadingGate />;
 
   return (
@@ -812,7 +846,11 @@ export function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-emerald-50/50">
                       {group.records.map((s) => (
-                        <tr key={s.id} className="hover:bg-emerald-50/40 transition-colors">
+                        <tr
+                          key={s.id}
+                          className="hover:bg-emerald-50/40 transition-colors cursor-context-menu"
+                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
+                        >
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.year}</td>
                           <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.course}</td>
@@ -1218,6 +1256,80 @@ export function Dashboard() {
       <StudentDetailModal
         student={feeHistoryStudent}
         onClose={() => setFeeHistoryStudent(null)}
+      />
+    )}
+
+    {/* ── Certificate context menu ──────────────────────────────────────── */}
+    {ctxMenu && (
+      <>
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setCtxMenu(null)}
+          onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }}
+        />
+        <div
+          ref={ctxMenuRef}
+          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[200px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {/* Header */}
+          <div className="px-3 pt-2 pb-1.5 border-b border-gray-100">
+            <p className="text-[11px] font-semibold text-gray-800 truncate">{ctxMenu.student.studentNameSSLC}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{ctxMenu.student.course} · {ctxMenu.student.year} · {ctxMenu.student.academicYear}</p>
+          </div>
+          {/* Items */}
+          <div className="py-1">
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setStudyCertStudent(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              </span>
+              Study Certificate
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setTcStudent(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </span>
+              Transfer Certificate
+            </button>
+            {ctxMenu.student.year === '3RD YEAR' && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100"
+                onClick={() => { setPcStudent(ctxMenu.student); setCtxMenu(null); }}
+              >
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </span>
+                Provisional Certificate
+              </button>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+
+    {studyCertStudent && (
+      <StudyCertificateModal
+        student={studyCertStudent}
+        onClose={() => setStudyCertStudent(null)}
+      />
+    )}
+    {tcStudent && (
+      <TransferCertificateModal
+        student={tcStudent}
+        onClose={() => setTcStudent(null)}
+      />
+    )}
+    {pcStudent && (
+      <ProvisionalCertificateModal
+        student={pcStudent}
+        onClose={() => setPcStudent(null)}
       />
     )}
 

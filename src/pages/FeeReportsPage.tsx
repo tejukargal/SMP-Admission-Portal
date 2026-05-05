@@ -23,7 +23,9 @@ import { SMP_FEE_HEADS } from '../types';
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'datewise-headwise' | 'bank-remittance';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
-const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const AIDED_COURSES: Course[]   = ['CE', 'ME', 'EC', 'CS'];
+const UNAIDED_COURSES: Course[] = ['EE'];
 const YEARS:   Year[]   = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
@@ -1625,6 +1627,7 @@ export function FeeReportsPage() {
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
+  const [aidedFilter,     setAidedFilter]     = useState<'AIDED' | 'UNAIDED' | ''>('');
   const [courseFilter,    setCourseFilter]    = useState<Course | ''>('');
   const [yearFilter,      setYearFilter]      = useState<Year | ''>('');
   const [admTypeFilter,   setAdmTypeFilter]   = useState<AdmType | ''>('');
@@ -1732,6 +1735,8 @@ export function FeeReportsPage() {
   // ── Filtered rows ─────────────────────────────────────────────────────────
   const filteredRows = useMemo((): StudentFeeRow[] => {
     let rows = allStudentRows;
+    if (aidedFilter === 'AIDED')   rows = rows.filter((r) => (AIDED_COURSES as Course[]).includes(r.student.course));
+    if (aidedFilter === 'UNAIDED') rows = rows.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.student.course));
     if (courseFilter)  rows = rows.filter((r) => r.student.course  === courseFilter);
     if (yearFilter)    rows = rows.filter((r) => r.student.year    === yearFilter);
     if (admTypeFilter) rows = rows.filter((r) => r.student.admType === admTypeFilter);
@@ -1747,21 +1752,21 @@ export function FeeReportsPage() {
       if (c !== 0) return c;
       return a.student.studentNameSSLC.localeCompare(b.student.studentNameSSLC);
     });
-  }, [allStudentRows, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
+  }, [allStudentRows, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
 
   // ── Filtered fee records (Consolidated tab) ───────────────────────────────
   const filteredFeeRecords = useMemo(() => {
-    if (!courseFilter && !yearFilter && !admTypeFilter && !admCatFilter && feeStatusFilter === 'ALL')
+    if (!aidedFilter && !courseFilter && !yearFilter && !admTypeFilter && !admCatFilter && feeStatusFilter === 'ALL')
       return feeRecords;
     const ids = new Set(filteredRows.map((r) => r.student.id));
     return feeRecords.filter((r) => ids.has(r.studentId));
-  }, [feeRecords, filteredRows, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
+  }, [feeRecords, filteredRows, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
 
   const hasActiveFilters =
-    !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
+    !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
 
   function clearFilters() {
-    setCourseFilter(''); setYearFilter(''); setAdmTypeFilter(''); setAdmCatFilter('');
+    setAidedFilter(''); setCourseFilter(''); setYearFilter(''); setAdmTypeFilter(''); setAdmCatFilter('');
     setFeeStatusFilter('ALL');
   }
 
@@ -1789,6 +1794,11 @@ export function FeeReportsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
+        <select value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+          <option value="">Aided &amp; Unaided</option>
+          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+          <option value="UNAIDED">Unaided (EE)</option>
+        </select>
         <select value={courseFilter}    onChange={(e) => setCourseFilter(e.target.value as Course | '')}    className={fs}>
           <option value="">All Courses</option>
           {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}

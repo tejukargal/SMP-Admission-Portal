@@ -12,6 +12,8 @@ import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } fro
 import { PageSpinner } from '../components/common/PageSpinner';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const AIDED_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS'];
+const UNAIDED_COURSES: Course[] = ['EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
 const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
@@ -427,6 +429,7 @@ export function FeeRegister() {
   const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
+  const [aidedFilter, setAidedFilter] = useState<'AIDED' | 'UNAIDED' | ''>('');
   const [courseFilter, setCourseFilter] = useState<Course | ''>('');
   const [yearFilter, setYearFilter] = useState<Year | ''>('');
   const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
@@ -533,6 +536,8 @@ export function FeeRegister() {
   // Apply filters
   const filteredRecords = useMemo(() => {
     let result = sortedRecords;
+    if (aidedFilter === 'AIDED')    result = result.filter((r) => (AIDED_COURSES as Course[]).includes(r.course));
+    if (aidedFilter === 'UNAIDED')  result = result.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.course));
     if (courseFilter)       result = result.filter((r) => r.course       === courseFilter);
     if (yearFilter)         result = result.filter((r) => r.year         === yearFilter);
     if (admTypeFilter)      result = result.filter((r) => r.admType      === admTypeFilter);
@@ -550,7 +555,7 @@ export function FeeRegister() {
       );
     }
     return result;
-  }, [sortedRecords, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, dateFilter, debouncedSearch]);
+  }, [sortedRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, dateFilter, debouncedSearch]);
 
   // Reset visible window whenever filters change
   useEffect(() => {
@@ -564,10 +569,11 @@ export function FeeRegister() {
 
   const hasMore = visibleCount < filteredRecords.length;
 
-  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter || !!dateFilter;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter || !!dateFilter;
 
   function clearFilters() {
     setSearchTerm('');
+    setAidedFilter('');
     setCourseFilter('');
     setYearFilter('');
     setAdmTypeFilter('');
@@ -680,7 +686,7 @@ export function FeeRegister() {
           </button>
           {hasActiveFilters && (
             <span className="rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5 border border-orange-200">
-              {[searchTerm, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, dateFilter].filter(Boolean).length} active
+              {[searchTerm, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, paymentModeFilter, dateFilter].filter(Boolean).length} active
             </span>
           )}
           {(showFatherName || showSMPDetails || showSVKDetails) && (
@@ -693,7 +699,7 @@ export function FeeRegister() {
               onClick={clearFilters}
               className="ml-auto rounded-full border border-orange-300 px-2.5 py-0.5 text-[10px] text-orange-700 bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors font-medium"
             >
-              ✕ Clear
+              ✕ Clear filters
             </button>
           )}
         </div>
@@ -721,6 +727,11 @@ export function FeeRegister() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-44 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400 bg-white text-gray-700 placeholder:text-gray-400"
             />
+            <select className={fs} value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')}>
+              <option value="">Aided &amp; Unaided</option>
+              <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+              <option value="UNAIDED">Unaided (EE)</option>
+            </select>
             <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
               <option value="">All Courses</option>
               {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
