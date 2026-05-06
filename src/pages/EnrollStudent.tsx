@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
@@ -440,6 +440,18 @@ export function EnrollStudent() {
   const [talukOpen, setTalukOpen] = useState(false);
   const [talukHighlight, setTalukHighlight] = useState(-1);
 
+  // Annual income: raw digit string is source of truth for the formatted display
+  const [incomeRaw, setIncomeRaw] = useState(
+    form.annualIncome > 0 ? String(form.annualIncome) : ''
+  );
+  // Sync rawDigits when form resets or loads (edit mode)
+  useEffect(() => {
+    setIncomeRaw(form.annualIncome > 0 ? String(form.annualIncome) : '');
+  }, [form.annualIncome]);
+  const incomeDisplay = incomeRaw
+    ? parseInt(incomeRaw, 10).toLocaleString('en-IN')
+    : '';
+
   async function loadCasteIndex() {
     if (casteIndexRef.current !== null) return;
     const all = await getAllStudents();
@@ -812,6 +824,32 @@ export function EnrollStudent() {
 
   function handleNumberChange(field: keyof StudentFormData) {
     return (e: ChangeEvent<HTMLInputElement>) => handleFieldChange(field, Number(e.target.value));
+  }
+
+  function handleIncomeKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.metaKey || e.ctrlKey || e.key === 'Tab' || e.key === 'Enter' || e.key.startsWith('Arrow') || e.key.startsWith('F')) return;
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      const newRaw = incomeRaw + e.key;
+      setIncomeRaw(newRaw);
+      handleFieldChange('annualIncome', parseInt(newRaw, 10));
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      const newRaw = incomeRaw.slice(0, -1);
+      setIncomeRaw(newRaw);
+      handleFieldChange('annualIncome', newRaw ? parseInt(newRaw, 10) : 0);
+    } else {
+      e.preventDefault();
+    }
+  }
+
+  function handleIncomePaste(e: ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const digits = e.clipboardData.getData('text').replace(/[^0-9]/g, '');
+    if (digits) {
+      setIncomeRaw(digits);
+      handleFieldChange('annualIncome', parseInt(digits, 10));
+    }
   }
 
   function handleSelectChange(field: keyof StudentFormData) {
@@ -1251,10 +1289,12 @@ export function EnrollStudent() {
               />
               <Input
                 label="Annual Income (₹)"
-                type="number"
-                min={0}
-                value={form.annualIncome}
-                onChange={handleNumberChange('annualIncome')}
+                type="text"
+                inputMode="numeric"
+                value={incomeDisplay}
+                onChange={() => {}}
+                onKeyDown={handleIncomeKeyDown}
+                onPaste={handleIncomePaste}
                 error={displayErrors['annualIncome']}
                 placeholder="0"
               />
