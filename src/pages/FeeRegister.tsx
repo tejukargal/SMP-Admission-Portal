@@ -17,7 +17,7 @@ const UNAIDED_COURSES: Course[] = ['EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
 const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
-const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI'];
+const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI', 'SPLIT'];
 const PAGE_SIZE = 100;
 
 const COURSE_COLORS: Record<Course, string> = {
@@ -158,6 +158,8 @@ function FeeReceiptDetailModal({ record, isAdmin, onClose, onEdit, onDelete, onF
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
       mode === 'UPI'
         ? 'bg-violet-50 text-violet-700 border-violet-200'
+        : mode === 'SPLIT'
+        ? 'bg-teal-50 text-teal-700 border-teal-200'
         : 'bg-amber-50 text-amber-700 border-amber-200'
     }`}>
       {mode ?? record.paymentMode}
@@ -942,6 +944,8 @@ export function FeeRegister() {
                         className={`inline-flex items-center justify-center w-12 py-0.5 rounded-full text-[10px] font-semibold border ${
                           record.paymentMode === 'UPI'
                             ? 'bg-violet-100 text-violet-700 border-violet-200'
+                            : record.paymentMode === 'SPLIT'
+                            ? 'bg-teal-100 text-teal-700 border-teal-200'
                             : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}
                       >

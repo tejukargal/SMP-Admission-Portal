@@ -13,6 +13,8 @@ import {
 import { db } from '../config/firebase';
 import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmType, AdmCat, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
+
+const AIDED_COURSES = new Set<Course>(['CE', 'ME', 'EC', 'CS']);
 import { getFeeStructure } from './feeStructureService';
 
 const COL = 'feeRecords';
@@ -110,141 +112,145 @@ export async function getFeeRecordsByAcademicYear(
 
 const SVK_RPT_PREFIX = 'SVK DVP ';
 
-// ── Atomic receipt number counters ────────────────────────────────────────
+// ── Receipt number counters ────────────────────────────────────────────────────
 //
 // Counter documents live at receiptCounters/{academicYear}.
-// Each document stores the highest number issued so far for each receipt type.
+// Aided courses (CE, ME, EC, CS) share one series; unaided (EE) has its own.
+// This applies to SMP, SVK, and Additional receipts independently.
 //
-// Using Firestore transactions guarantees two concurrent users always receive
-// different numbers, eliminating the race condition of the previous scan approach
-// (where both users could read the same max and generate the same receipt number).
+// Design:
+//  • peekNextReceiptNumbers()  – reads the current max and returns max+1, NO write.
+//    Called when the modal opens so the user sees the suggested next number.
+//  • updateReceiptCounters()   – called AFTER a successful save; updates
+//    max(current, usedNumber) in a transaction so the counter always reflects
+//    the highest receipt number ever written.
 //
-// On first use for a new academic year the counter document is seeded by scanning
-// existing fee records — exactly the same computation as the legacy logic — then
-// subsequent calls atomically increment the stored counter.
+// This means cancelling the modal never wastes a receipt number.
 
 const RECEIPT_COUNTERS_COL = 'receiptCounters';
 
 interface ReceiptCounterDoc {
-  smp: number;
-  smpPadLen: number;
-  svk: number;
-  svkPadLen: number;
-  additional: number;
+  smpAided: number;    smpAidedPadLen: number;
+  smpUnaided: number;  smpUnaidedPadLen: number;
+  svk: number;         svkPadLen: number;   // shared across all courses
+  additional: number;                        // shared across all courses
 }
 
-/** Scans existing fee records to derive initial counter values (same logic as legacy functions). */
-async function _buildInitialCounterData(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
+/** Scans existing records and builds initial counter values.
+ *  SMP is split by aided/unaided; SVK and Additional are shared series. */
+async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
   const records = await getFeeRecordsByAcademicYear(academicYear);
-  let smp = 0, smpPadLen = 1;
-  let svk = 0, svkPadLen = 1;
-  let additional = 0;
+  const c: ReceiptCounterDoc = {
+    smpAided: 0,    smpAidedPadLen: 1,
+    smpUnaided: 0,  smpUnaidedPadLen: 1,
+    svk: 0,         svkPadLen: 1,
+    additional: 0,
+  };
   for (const r of records) {
-    const n = parseInt(r.receiptNumber, 10);
-    if (!isNaN(n) && n > smp) { smp = n; smpPadLen = r.receiptNumber.length; }
+    const aided = AIDED_COURSES.has(r.course);
+    const smpN = parseInt(r.receiptNumber ?? '', 10);
+    if (!isNaN(smpN)) {
+      if (aided  && smpN > c.smpAided)   { c.smpAided   = smpN; c.smpAidedPadLen   = (r.receiptNumber ?? '').length; }
+      if (!aided && smpN > c.smpUnaided) { c.smpUnaided = smpN; c.smpUnaidedPadLen = (r.receiptNumber ?? '').length; }
+    }
     const svkRpt = r.svkReceiptNumber ?? '';
     if (svkRpt.startsWith(SVK_RPT_PREFIX)) {
       const numPart = svkRpt.slice(SVK_RPT_PREFIX.length);
-      const sn = parseInt(numPart, 10);
-      if (!isNaN(sn) && sn > svk) { svk = sn; svkPadLen = numPart.length; }
+      const svkN = parseInt(numPart, 10);
+      if (!isNaN(svkN) && svkN > c.svk) { c.svk = svkN; c.svkPadLen = numPart.length; }
     }
-    const addlRpt = r.additionalReceiptNumber ?? '';
-    if (addlRpt) {
-      const an = parseInt(addlRpt, 10);
-      if (!isNaN(an) && an > additional) additional = an;
-    }
+    const addN = parseInt(r.additionalReceiptNumber ?? '', 10);
+    if (!isNaN(addN) && addN > c.additional) c.additional = addN;
   }
-  return { smp, smpPadLen, svk, svkPadLen, additional };
+  return c;
 }
 
 /**
- * Ensures the receiptCounters document for this academic year exists.
- * On first use: seeds from existing records via a create-if-not-exists transaction
- * so concurrent callers can never overwrite each other.
+ * Ensures the counter document exists in the new aided/unaided format.
+ * If the document is missing OR has the old single-series format, it is rebuilt
+ * by scanning all existing fee records for this academic year.
  */
-async function _ensureReceiptCounterDoc(academicYear: AcademicYear): Promise<void> {
+async function _ensureCounterDoc(academicYear: AcademicYear): Promise<void> {
   const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
   const snap = await getDoc(ref);
-  if (snap.exists()) return;
-  const initialData = await _buildInitialCounterData(academicYear);
+  const isCurrentFormat = (data: Record<string, unknown> | undefined) =>
+    data?.smpAided !== undefined && data?.svk !== undefined;
+  if (snap.exists() && isCurrentFormat(snap.data())) return;
+  const initial = await _buildCounterFromRecords(academicYear);
   await runTransaction(db, async (tx) => {
     const check = await tx.get(ref);
-    if (!check.exists()) tx.set(ref, initialData);
+    if (!check.exists() || !isCurrentFormat(check.data())) tx.set(ref, initial);
   });
 }
 
 /**
- * Returns the next SMP receipt number for a given academic year.
- * Finds the highest numeric receipt number saved so far and increments by 1.
+ * Reads the current counter and returns the NEXT suggested receipt numbers
+ * for each type, based on the course's aided/unaided classification.
+ * Does NOT modify the counter — calling this on modal open never wastes numbers.
  */
-export async function getNextReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  await _ensureReceiptCounterDoc(academicYear);
-  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.data() as ReceiptCounterDoc;
-    const next = data.smp + 1;
-    tx.update(ref, { smp: next });
-    return String(next).padStart(data.smpPadLen ?? 1, '0');
-  });
+export async function peekNextReceiptNumbers(
+  academicYear: AcademicYear,
+  course: Course,
+): Promise<{ smp: string; svk: string; additional: string }> {
+  await _ensureCounterDoc(academicYear);
+  const snap = await getDoc(doc(db, RECEIPT_COUNTERS_COL, academicYear));
+  const d = snap.data() as ReceiptCounterDoc;
+  const aided = AIDED_COURSES.has(course);
+
+  const smpMax = aided ? (d.smpAided   ?? 0) : (d.smpUnaided ?? 0);
+  const smpPad = aided ? (d.smpAidedPadLen ?? 1) : (d.smpUnaidedPadLen ?? 1);
+
+  return {
+    smp:        String(smpMax + 1).padStart(smpPad, '0'),
+    svk:        `${SVK_RPT_PREFIX}${String((d.svk ?? 0) + 1).padStart(d.svkPadLen ?? 1, '0')}`,
+    additional: String((d.additional ?? 0) + 1).padStart(4, '0'),
+  };
 }
 
 /**
- * Returns the next Additional Fee receipt number for a given academic year.
- * Format: 4-digit zero-padded (e.g. "0001", "0002", ...).
+ * Called after a fee record is successfully saved. Updates the counter document
+ * to max(current, usedNumber) for each receipt type, so the next peek returns
+ * the correct next-in-sequence number regardless of manual overrides.
+ * Skips any receipt type whose string is empty or non-numeric.
  */
-export async function getNextAdditionalReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  await _ensureReceiptCounterDoc(academicYear);
+export async function updateReceiptCounters(
+  academicYear: AcademicYear,
+  course: Course,
+  used: { smp: string; svk: string; additional: string },
+): Promise<void> {
+  await _ensureCounterDoc(academicYear);
   const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.data() as ReceiptCounterDoc;
-    const next = data.additional + 1;
-    tx.update(ref, { additional: next });
-    return String(next).padStart(4, '0');
-  });
-}
+  const aided = AIDED_COURSES.has(course);
 
-/**
- * Returns the next SVK receipt number for a given academic year.
- * SVK receipt numbers follow the format "SVK DVP {n}" preserving zero-padding.
- */
-export async function getNextSvkReceiptNumber(academicYear: AcademicYear): Promise<string> {
-  await _ensureReceiptCounterDoc(academicYear);
-  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
-  return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const data = snap.data() as ReceiptCounterDoc;
-    const next = data.svk + 1;
-    tx.update(ref, { svk: next });
-    return `${SVK_RPT_PREFIX}${String(next).padStart(data.svkPadLen ?? 1, '0')}`;
-  });
-}
+  const smpN   = parseInt(used.smp, 10);
+  const svkStr = used.svk.startsWith(SVK_RPT_PREFIX) ? used.svk.slice(SVK_RPT_PREFIX.length) : used.svk;
+  const svkN   = parseInt(svkStr, 10);
+  const addN   = parseInt(used.additional, 10);
 
-/**
- * Returns all three receipt numbers for a given academic year in one atomic
- * transaction, eliminating the contention caused by three separate concurrent
- * transactions targeting the same counter document.
- */
-export async function getNextAllReceiptNumbers(academicYear: AcademicYear): Promise<{
-  smp: string;
-  svk: string;
-  additional: string;
-}> {
-  await _ensureReceiptCounterDoc(academicYear);
-  const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
-  return runTransaction(db, async (tx) => {
+  await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
-    const data = snap.data() as ReceiptCounterDoc;
-    const nextSmp = data.smp + 1;
-    const nextSvk = data.svk + 1;
-    const nextAdditional = data.additional + 1;
-    tx.update(ref, { smp: nextSmp, svk: nextSvk, additional: nextAdditional });
-    return {
-      smp: String(nextSmp).padStart(data.smpPadLen ?? 1, '0'),
-      svk: `${SVK_RPT_PREFIX}${String(nextSvk).padStart(data.svkPadLen ?? 1, '0')}`,
-      additional: String(nextAdditional).padStart(4, '0'),
-    };
+    const d = snap.data() as ReceiptCounterDoc;
+    const updates: Partial<ReceiptCounterDoc> = {};
+
+    if (aided) {
+      if (!isNaN(smpN) && smpN > d.smpAided) {
+        updates.smpAided = smpN;
+        updates.smpAidedPadLen = used.smp.length;
+      }
+    } else {
+      if (!isNaN(smpN) && smpN > d.smpUnaided) {
+        updates.smpUnaided = smpN;
+        updates.smpUnaidedPadLen = used.smp.length;
+      }
+    }
+
+    if (!isNaN(svkN) && svkN > d.svk) {
+      updates.svk = svkN;
+      updates.svkPadLen = svkStr.length;
+    }
+    if (!isNaN(addN) && addN > d.additional) updates.additional = addN;
+
+    if (Object.keys(updates).length > 0) tx.update(ref, updates);
   });
 }
 

@@ -148,6 +148,9 @@ export interface FeeRecord {
   smpPaymentMode?: PaymentMode;     // payment mode for SMP component
   svkPaymentMode?: PaymentMode;     // payment mode for SVK component
   additionalPaymentMode?: PaymentMode; // payment mode for Additional Fee component
+  smpSplit?: SplitPayment;          // cash/upi split amounts for SMP (when smpPaymentMode === 'SPLIT')
+  svkSplit?: SplitPayment;          // cash/upi split amounts for SVK (when svkPaymentMode === 'SPLIT')
+  additionalSplit?: SplitPayment;   // cash/upi split amounts for Additional (when additionalPaymentMode === 'SPLIT')
   remarks: string;
   smp: SMPHeads;            // paid amounts per SMP head
   svk: number;              // SVK base paid
@@ -156,7 +159,12 @@ export interface FeeRecord {
   updatedAt: string;
 }
 
-export type PaymentMode = 'CASH' | 'UPI';
+export type PaymentMode = 'CASH' | 'UPI' | 'SPLIT';
+
+export interface SplitPayment {
+  cash: number;
+  upi: number;
+}
 
 export type FeeRecordFormData = Omit<FeeRecord, 'id' | 'createdAt' | 'updatedAt'>;
 

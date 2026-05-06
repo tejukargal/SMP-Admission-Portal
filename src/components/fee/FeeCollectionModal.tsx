@@ -3,7 +3,8 @@ import { getFeeStructure } from '../../services/feeStructureService';
 import {
   getFeeRecordsByStudent,
   saveFeeRecord,
-  getNextAllReceiptNumbers,
+  peekNextReceiptNumbers,
+  updateReceiptCounters,
 } from '../../services/feeRecordService';
 import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
 import { getFineSchedule } from '../../services/fineScheduleService';
@@ -18,6 +19,7 @@ import type {
   FeeAdditionalHead,
   FinePeriod,
   PaymentMode,
+  SplitPayment,
   StudentFeeOverride,
 } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
@@ -88,6 +90,9 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const [smpPaymentMode, setSmpPaymentMode] = useState<PaymentMode>('CASH');
   const [svkPaymentMode, setSvkPaymentMode] = useState<PaymentMode>('CASH');
   const [additionalPaymentMode, setAdditionalPaymentMode] = useState<PaymentMode>('CASH');
+  const [smpSplit, setSmpSplit] = useState<SplitPayment>({ cash: 0, upi: 0 });
+  const [svkSplit, setSvkSplit] = useState<SplitPayment>({ cash: 0, upi: 0 });
+  const [additionalSplit, setAdditionalSplit] = useState<SplitPayment>({ cash: 0, upi: 0 });
   const [fineSchedule, setFineSchedule] = useState<FinePeriod[]>([]);
   const [remarks, setRemarks] = useState('');
 
@@ -125,7 +130,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         student.admCat
       ),
       getFeeRecordsByStudent(student.id, academicYear),
-      getNextAllReceiptNumbers(academicYear),
+      peekNextReceiptNumbers(academicYear, student.course),
       getFineSchedule(academicYear),
       getFeeOverride(student.id, academicYear),
     ])
@@ -290,12 +295,52 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const grandTotal = totalPrevious + grandNow;
   const balance = grandAllotted - grandTotal;
 
+  // ── Split payment helpers ─────────────────────────────────────────────────
+  const splitNote = useMemo(() => {
+    const parts: string[] = [];
+    if (smpPaymentMode === 'SPLIT' && smpNowTotal > 0 && (smpSplit.cash > 0 || smpSplit.upi > 0)) {
+      parts.push(`SMP: ₹${smpSplit.cash.toLocaleString()} Cash + ₹${smpSplit.upi.toLocaleString()} UPI`);
+    }
+    if (svkPaymentMode === 'SPLIT' && svkNowTotal > 0 && (svkSplit.cash > 0 || svkSplit.upi > 0)) {
+      parts.push(`SVK: ₹${svkSplit.cash.toLocaleString()} Cash + ₹${svkSplit.upi.toLocaleString()} UPI`);
+    }
+    if (additionalPaymentMode === 'SPLIT' && additionalNowTotal > 0 && (additionalSplit.cash > 0 || additionalSplit.upi > 0)) {
+      parts.push(`Addl: ₹${additionalSplit.cash.toLocaleString()} Cash + ₹${additionalSplit.upi.toLocaleString()} UPI`);
+    }
+    return parts.join('; ');
+  }, [smpPaymentMode, svkPaymentMode, additionalPaymentMode, smpNowTotal, svkNowTotal, additionalNowTotal, smpSplit, svkSplit, additionalSplit]);
+
+  const isSplitValid =
+    (smpPaymentMode !== 'SPLIT' || smpNowTotal === 0 || smpSplit.cash + smpSplit.upi === smpNowTotal) &&
+    (svkPaymentMode !== 'SPLIT' || svkNowTotal === 0 || svkSplit.cash + svkSplit.upi === svkNowTotal) &&
+    (additionalPaymentMode !== 'SPLIT' || additionalNowTotal === 0 || additionalSplit.cash + additionalSplit.upi === additionalNowTotal);
+
   // ── Save (this installment only — not cumulative) ─────────────────────────
   async function handleSave() {
     if (!date) return;
     setSaving(true);
     setSaveError(null);
     try {
+      // Validate split amounts
+      if (smpPaymentMode === 'SPLIT' && smpNowTotal > 0 && smpSplit.cash + smpSplit.upi !== smpNowTotal) {
+        setSaveError(`SMP split (₹${smpSplit.cash} Cash + ₹${smpSplit.upi} UPI) must equal ₹${smpNowTotal}`);
+        return;
+      }
+      if (svkPaymentMode === 'SPLIT' && svkNowTotal > 0 && svkSplit.cash + svkSplit.upi !== svkNowTotal) {
+        setSaveError(`SVK split (₹${svkSplit.cash} Cash + ₹${svkSplit.upi} UPI) must equal ₹${svkNowTotal}`);
+        return;
+      }
+      if (additionalPaymentMode === 'SPLIT' && additionalNowTotal > 0 && additionalSplit.cash + additionalSplit.upi !== additionalNowTotal) {
+        setSaveError(`Additional split (₹${additionalSplit.cash} Cash + ₹${additionalSplit.upi} UPI) must equal ₹${additionalNowTotal}`);
+        return;
+      }
+
+      const combinedRemarks = [splitNote, remarks].filter(Boolean).join('; ');
+
+      const usedSmpReceipt  = smpNowTotal        > 0 ? receiptNo           : '';
+      const usedSvkReceipt  = svkNowTotal        > 0 ? svkReceiptNo        : '';
+      const usedAddReceipt  = additionalNowTotal  > 0 ? additionalReceiptNo : '';
+
       await saveFeeRecord({
         studentId: student.id,
         studentName: student.studentNameSSLC,
@@ -307,19 +352,28 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         admType: student.admType,
         academicYear,
         date,
-        receiptNumber: smpNowTotal > 0 ? receiptNo : '',
-        svkReceiptNumber: svkNowTotal > 0 ? svkReceiptNo : '',
-        additionalReceiptNumber: additionalNowTotal > 0 ? additionalReceiptNo : '',
+        receiptNumber: usedSmpReceipt,
+        svkReceiptNumber: usedSvkReceipt,
+        additionalReceiptNumber: usedAddReceipt,
         // Primary paymentMode = SMP mode if SMP paid, else SVK, else Additional (backward compat)
         paymentMode: smpNowTotal > 0 ? smpPaymentMode : svkNowTotal > 0 ? svkPaymentMode : additionalPaymentMode,
-        ...(smpNowTotal > 0 ? { smpPaymentMode } : {}),
-        ...(svkNowTotal > 0 ? { svkPaymentMode } : {}),
-        ...(additionalNowTotal > 0 ? { additionalPaymentMode } : {}),
-        remarks,
+        ...(smpNowTotal > 0 ? { smpPaymentMode, ...(smpPaymentMode === 'SPLIT' ? { smpSplit } : {}) } : {}),
+        ...(svkNowTotal > 0 ? { svkPaymentMode, ...(svkPaymentMode === 'SPLIT' ? { svkSplit } : {}) } : {}),
+        ...(additionalNowTotal > 0 ? { additionalPaymentMode, ...(additionalPaymentMode === 'SPLIT' ? { additionalSplit } : {}) } : {}),
+        remarks: combinedRemarks,
         smp: smpNow,
         svk: svkNow,
         additionalPaid: additionalNow,
       });
+
+      // Update counters to reflect the highest receipt numbers now in use.
+      // This runs after save so cancelling the modal never wastes a number.
+      await updateReceiptCounters(academicYear, student.course, {
+        smp:        usedSmpReceipt,
+        svk:        usedSvkReceipt,
+        additional: usedAddReceipt,
+      });
+
       onSaved();
       onClose();
     } catch (err: unknown) {
@@ -900,102 +954,219 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       onChange={(e) => setDate(e.target.value)}
                       className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
-                    <div className="w-[104px] shrink-0" />
+                    <div className="w-[144px] shrink-0" />
                   </div>
 
-                  {/* SMP Receipt + mode */}
+                  {/* SMP Receipt + mode + optional split */}
                   {smpNowTotal > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="w-36 shrink-0 text-[11px] font-semibold text-blue-600/80">
-                        SMP Receipt No
-                      </span>
-                      <input
-                        type="text"
-                        value={receiptNo}
-                        onChange={(e) => setReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented"
-                        className="flex-1 rounded-md border border-blue-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
-                      />
-                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
-                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setSmpPaymentMode(mode)}
-                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
-                              smpPaymentMode === mode
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-white text-gray-400 border-gray-200 hover:border-blue-400 hover:text-blue-600'
-                            }`}
-                          >
-                            {mode}
-                          </button>
-                        ))}
+                    <div>
+                      <div className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="w-36 shrink-0 text-[11px] font-semibold text-blue-600/80">
+                          SMP Receipt No
+                        </span>
+                        <input
+                          type="text"
+                          value={receiptNo}
+                          onChange={(e) => setReceiptNo(e.target.value)}
+                          placeholder="Auto-incremented"
+                          className="flex-1 rounded-md border border-blue-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                        />
+                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
+                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setSmpPaymentMode(mode)}
+                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
+                                smpPaymentMode === mode
+                                  ? mode === 'SPLIT'
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                              }`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {smpPaymentMode === 'SPLIT' && (
+                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                          <div className="w-36 shrink-0" />
+                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                            <span className="shrink-0">Cash ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={smpSplit.cash === 0 ? '' : smpSplit.cash}
+                              onChange={(e) => setSmpSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={smpSplit.upi === 0 ? '' : smpSplit.upi}
+                              onChange={(e) => setSmpSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            {(smpSplit.cash > 0 || smpSplit.upi > 0) && (
+                              <span className={`shrink-0 font-semibold ${smpSplit.cash + smpSplit.upi === smpNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {smpSplit.cash + smpSplit.upi === smpNowTotal ? `= ₹${smpNowTotal.toLocaleString()} ✓` : `≠ ₹${smpNowTotal.toLocaleString()}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-[144px] shrink-0" />
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* SVK Receipt + mode */}
+                  {/* SVK Receipt + mode + optional split */}
                   {svkNowTotal > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="w-36 shrink-0 text-[11px] font-semibold text-purple-600/80">
-                        SVK Receipt No
-                      </span>
-                      <input
-                        type="text"
-                        value={svkReceiptNo}
-                        onChange={(e) => setSvkReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented"
-                        className="flex-1 rounded-md border border-purple-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
-                      />
-                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
-                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setSvkPaymentMode(mode)}
-                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
-                              svkPaymentMode === mode
-                                ? 'bg-purple-600 text-white border-purple-600'
-                                : 'bg-white text-gray-400 border-gray-200 hover:border-purple-400 hover:text-purple-600'
-                            }`}
-                          >
-                            {mode}
-                          </button>
-                        ))}
+                    <div>
+                      <div className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="w-36 shrink-0 text-[11px] font-semibold text-purple-600/80">
+                          SVK Receipt No
+                        </span>
+                        <input
+                          type="text"
+                          value={svkReceiptNo}
+                          onChange={(e) => setSvkReceiptNo(e.target.value)}
+                          placeholder="Auto-incremented"
+                          className="flex-1 rounded-md border border-purple-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
+                        />
+                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
+                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setSvkPaymentMode(mode)}
+                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
+                                svkPaymentMode === mode
+                                  ? mode === 'SPLIT'
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'bg-purple-600 text-white border-purple-600'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-purple-400 hover:text-purple-600'
+                              }`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {svkPaymentMode === 'SPLIT' && (
+                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                          <div className="w-36 shrink-0" />
+                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                            <span className="shrink-0">Cash ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={svkSplit.cash === 0 ? '' : svkSplit.cash}
+                              onChange={(e) => setSvkSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={svkSplit.upi === 0 ? '' : svkSplit.upi}
+                              onChange={(e) => setSvkSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            {(svkSplit.cash > 0 || svkSplit.upi > 0) && (
+                              <span className={`shrink-0 font-semibold ${svkSplit.cash + svkSplit.upi === svkNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {svkSplit.cash + svkSplit.upi === svkNowTotal ? `= ₹${svkNowTotal.toLocaleString()} ✓` : `≠ ₹${svkNowTotal.toLocaleString()}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-[144px] shrink-0" />
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Additional Receipt + mode */}
+                  {/* Additional Receipt + mode + optional split */}
                   {additionalNowTotal > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="w-36 shrink-0 text-[11px] font-semibold text-emerald-600/80">
-                        Additional Receipt
-                      </span>
-                      <input
-                        type="text"
-                        value={additionalReceiptNo}
-                        onChange={(e) => setAdditionalReceiptNo(e.target.value)}
-                        placeholder="Auto-incremented"
-                        className="flex-1 rounded-md border border-emerald-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
-                      />
-                      <div className="flex items-center gap-1.5 shrink-0 w-[104px]">
-                        {(['CASH', 'UPI'] as PaymentMode[]).map((mode) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            onClick={() => setAdditionalPaymentMode(mode)}
-                            className={`flex-1 py-1 rounded-md text-[10px] font-bold text-center transition-colors cursor-pointer border ${
-                              additionalPaymentMode === mode
-                                ? 'bg-emerald-600 text-white border-emerald-600'
-                                : 'bg-white text-gray-400 border-gray-200 hover:border-emerald-400 hover:text-emerald-600'
-                            }`}
-                          >
-                            {mode}
-                          </button>
-                        ))}
+                    <div>
+                      <div className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="w-36 shrink-0 text-[11px] font-semibold text-emerald-600/80">
+                          Additional Receipt
+                        </span>
+                        <input
+                          type="text"
+                          value={additionalReceiptNo}
+                          onChange={(e) => setAdditionalReceiptNo(e.target.value)}
+                          placeholder="Auto-incremented"
+                          className="flex-1 rounded-md border border-emerald-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
+                        />
+                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
+                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setAdditionalPaymentMode(mode)}
+                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
+                                additionalPaymentMode === mode
+                                  ? mode === 'SPLIT'
+                                    ? 'bg-teal-600 text-white border-teal-600'
+                                    : 'bg-emerald-600 text-white border-emerald-600'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-emerald-400 hover:text-emerald-600'
+                              }`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {additionalPaymentMode === 'SPLIT' && (
+                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                          <div className="w-36 shrink-0" />
+                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                            <span className="shrink-0">Cash ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={additionalSplit.cash === 0 ? '' : additionalSplit.cash}
+                              onChange={(e) => setAdditionalSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={additionalSplit.upi === 0 ? '' : additionalSplit.upi}
+                              onChange={(e) => setAdditionalSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
+                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              placeholder="0"
+                            />
+                            {(additionalSplit.cash > 0 || additionalSplit.upi > 0) && (
+                              <span className={`shrink-0 font-semibold ${additionalSplit.cash + additionalSplit.upi === additionalNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {additionalSplit.cash + additionalSplit.upi === additionalNowTotal ? `= ₹${additionalNowTotal.toLocaleString()} ✓` : `≠ ₹${additionalNowTotal.toLocaleString()}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-[144px] shrink-0" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Split note preview (auto-generated, saved to remarks) */}
+                  {splitNote && (
+                    <div className="flex items-start gap-3 px-4 py-2 bg-teal-50/60 border-teal-100">
+                      <div className="w-36 shrink-0" />
+                      <div className="flex-1 text-[10px] text-teal-700 font-medium leading-relaxed">
+                        <span className="text-teal-400 font-semibold mr-1">Split:</span>{splitNote}
+                        <span className="text-teal-400 ml-1 font-normal">(auto-added to remarks)</span>
+                      </div>
+                      <div className="w-[144px] shrink-0" />
                     </div>
                   )}
 
@@ -1008,10 +1179,10 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
                       type="text"
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
-                      placeholder="Optional notes"
+                      placeholder={splitNote ? 'Optional additional notes' : 'Optional notes'}
                       className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                     />
-                    <div className="w-[104px] shrink-0" />
+                    <div className="w-[144px] shrink-0" />
                   </div>
 
                 </div>
@@ -1036,7 +1207,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
             size="sm"
             onClick={() => void handleSave()}
             loading={saving}
-            disabled={loadingData || !!loadError || !date || grandNow === 0}
+            disabled={loadingData || !!loadError || !date || grandNow === 0 || !isSplitValid}
           >
             {isUpdate ? 'Save Installment' : 'Save Fee Record'}
           </Button>

@@ -20,7 +20,7 @@ import {
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'datewise-headwise' | 'bank-remittance';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -41,6 +41,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'course-year',        label: 'Course & Year Wise'   },
   { id: 'consolidated',       label: 'Consolidated'         },
   { id: 'daily-collections',  label: 'Daily Collections'    },
+  { id: 'day-summary',        label: 'Day Summary'          },
   { id: 'datewise-headwise',  label: 'Datewise Headwise'    },
   { id: 'bank-remittance',    label: 'Bank Remittance'       },
 ];
@@ -551,9 +552,17 @@ function buildDailyCollections(records: FeeRecord[]): DayEntry[] {
     const svkMode = r.svkPaymentMode ?? r.paymentMode;
     const addMode = r.additionalPaymentMode ?? r.paymentMode;
 
-    if (smpMode === 'CASH') { e.smpCash += smpAmt; } else { e.smpUpi += smpAmt; }
-    if (svkMode === 'CASH') { e.svkCash += svkAmt; } else { e.svkUpi += svkAmt; }
-    if (addMode === 'CASH') { e.addCash += addAmt; } else { e.addUpi += addAmt; }
+    if (smpMode === 'CASH')  { e.smpCash += smpAmt; }
+    else if (smpMode === 'SPLIT') { e.smpCash += r.smpSplit?.cash ?? 0; e.smpUpi += r.smpSplit?.upi ?? 0; }
+    else                     { e.smpUpi  += smpAmt; }
+
+    if (svkMode === 'CASH')  { e.svkCash += svkAmt; }
+    else if (svkMode === 'SPLIT') { e.svkCash += r.svkSplit?.cash ?? 0; e.svkUpi += r.svkSplit?.upi ?? 0; }
+    else                     { e.svkUpi  += svkAmt; }
+
+    if (addMode === 'CASH')  { e.addCash += addAmt; }
+    else if (addMode === 'SPLIT') { e.addCash += r.additionalSplit?.cash ?? 0; e.addUpi += r.additionalSplit?.upi ?? 0; }
+    else                     { e.addUpi  += addAmt; }
 
     e.cashTotal = e.smpCash + e.svkCash + e.addCash;
     e.upiTotal  = e.smpUpi  + e.svkUpi  + e.addUpi;
@@ -639,12 +648,12 @@ function getRecordSplit(r: FeeRecord) {
   const svkMode = r.svkPaymentMode ?? r.paymentMode;
   const addMode = r.additionalPaymentMode ?? r.paymentMode;
   return {
-    smpCash: smpMode === 'CASH' ? smpAmt : 0,
-    smpUpi:  smpMode === 'UPI'  ? smpAmt : 0,
-    svkCash: svkMode === 'CASH' ? svkAmt : 0,
-    svkUpi:  svkMode === 'UPI'  ? svkAmt : 0,
-    addCash: addMode === 'CASH' ? addAmt : 0,
-    addUpi:  addMode === 'UPI'  ? addAmt : 0,
+    smpCash: smpMode === 'CASH' ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.cash ?? 0) : 0,
+    smpUpi:  smpMode === 'UPI'  ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.upi  ?? 0) : 0,
+    svkCash: svkMode === 'CASH' ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.cash ?? 0) : 0,
+    svkUpi:  svkMode === 'UPI'  ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.upi  ?? 0) : 0,
+    addCash: addMode === 'CASH' ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.cash ?? 0) : 0,
+    addUpi:  addMode === 'UPI'  ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.upi  ?? 0) : 0,
   };
 }
 
@@ -1009,6 +1018,180 @@ function DailyCollectionsTab({ feeRecords, academicYear }: { feeRecords: FeeReco
   );
 }
 
+// ── Tab: Day Summary ──────────────────────────────────────────────────────────
+function exportDaySummaryExcel(entries: DayEntry[], academicYear: string): void {
+  const header = [
+    'Date', 'Students',
+    'SMP Cash', 'SMP UPI',
+    'SVK Cash', 'SVK UPI',
+    'Add Cash', 'Add UPI',
+    'Day Total',
+  ];
+  const dataRows = entries.map((e) => [
+    e.dateLabel, e.studentCount,
+    e.smpCash || null, e.smpUpi || null,
+    e.svkCash || null, e.svkUpi || null,
+    e.addCash || null, e.addUpi || null,
+    e.dayTotal,
+  ]);
+  const tot = entries.reduce(
+    (a, e) => ({
+      studentCount: a.studentCount + e.studentCount,
+      smpCash: a.smpCash + e.smpCash, smpUpi: a.smpUpi + e.smpUpi,
+      svkCash: a.svkCash + e.svkCash, svkUpi: a.svkUpi + e.svkUpi,
+      addCash: a.addCash + e.addCash, addUpi: a.addUpi + e.addUpi,
+      dayTotal: a.dayTotal + e.dayTotal,
+    }),
+    { studentCount: 0, smpCash: 0, smpUpi: 0, svkCash: 0, svkUpi: 0, addCash: 0, addUpi: 0, dayTotal: 0 },
+  );
+  const totRow = [
+    'TOTAL', tot.studentCount,
+    tot.smpCash || null, tot.smpUpi || null,
+    tot.svkCash || null, tot.svkUpi || null,
+    tot.addCash || null, tot.addUpi || null,
+    tot.dayTotal,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Day Summary');
+  XLSX.writeFile(wb, `Day_Summary_${academicYear}.xlsx`);
+}
+
+function DaySummaryTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
+
+  const allDays = useMemo(() => buildDailyCollections(feeRecords), [feeRecords]);
+
+  const filteredDays = useMemo(() => {
+    let days = allDays;
+    if (dateFrom) days = days.filter((e) => e.dateKey >= dateFrom);
+    if (dateTo)   days = days.filter((e) => e.dateKey <= dateTo);
+    return days;
+  }, [allDays, dateFrom, dateTo]);
+
+  const totals = useMemo(
+    () =>
+      filteredDays.reduce(
+        (a, e) => ({
+          studentCount: a.studentCount + e.studentCount,
+          smpCash:  a.smpCash  + e.smpCash,  smpUpi:  a.smpUpi  + e.smpUpi,
+          svkCash:  a.svkCash  + e.svkCash,  svkUpi:  a.svkUpi  + e.svkUpi,
+          addCash:  a.addCash  + e.addCash,  addUpi:  a.addUpi  + e.addUpi,
+          dayTotal: a.dayTotal + e.dayTotal,
+        }),
+        { studentCount: 0, smpCash: 0, smpUpi: 0, svkCash: 0, svkUpi: 0, addCash: 0, addUpi: 0, dayTotal: 0 },
+      ),
+    [filteredDays],
+  );
+
+  const hasFilter = !!dateFrom || !!dateTo;
+
+  const n = (v: number) => (v > 0 ? fmt(v) : '—');
+
+  return (
+    <div className="space-y-4">
+      {/* Filters + export */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-gray-500 font-medium">From</span>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
+        <span className="text-xs text-gray-500 font-medium">To</span>
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} />
+        {hasFilter && (
+          <button
+            onClick={() => { setDateFrom(''); setDateTo(''); }}
+            className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
+          >
+            Clear
+          </button>
+        )}
+        <div className="ml-auto">
+          <Button variant="secondary" size="sm" onClick={() => exportDaySummaryExcel(filteredDays, academicYear)}>
+            Excel
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Cash',   value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', sub: 'SMP + SVK + Add (cash)' },
+          { label: 'Total UPI',    value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200',    sub: 'SMP + SVK + Add (UPI)'  },
+          { label: 'Grand Total',  value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200',    sub: 'Cash + UPI'             },
+          { label: 'Days Shown',   value: filteredDays.length,                                    color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200',  sub: `of ${allDays.length} total days` },
+        ].map((c) => (
+          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{c.label}</p>
+            <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <table className="w-full text-[10px] whitespace-nowrap">
+          <thead className="bg-slate-700 text-white">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold" rowSpan={2}>Date</th>
+              <th className="px-2 py-2 text-center font-semibold" rowSpan={2}>Students</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>SMP</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>SVK</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>Additional</th>
+              <th className="px-2 py-2 text-right font-semibold border-l border-white/30" rowSpan={2}>Day Total</th>
+            </tr>
+            <tr>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDays.map((e, i) => (
+              <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="px-3 py-1.5 font-medium text-slate-700">{e.dateLabel}</td>
+                <td className="px-2 py-1.5 text-center text-gray-600">{e.studentCount}</td>
+                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.smpCash)}</td>
+                <td className="px-2 py-1.5 text-right text-blue-700">{n(e.smpUpi)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.svkCash)}</td>
+                <td className="px-2 py-1.5 text-right text-blue-700">{n(e.svkUpi)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.addCash)}</td>
+                <td className="px-2 py-1.5 text-right text-blue-700">{n(e.addUpi)}</td>
+                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.dayTotal)}</td>
+              </tr>
+            ))}
+            {filteredDays.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-3 py-8 text-center text-xs text-gray-400">
+                  No collections found{hasFilter ? ' for the selected date range' : ''}.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {filteredDays.length > 0 && (
+            <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-[10px]">
+              <tr>
+                <td className="px-3 py-2 text-slate-700">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
+                <td className="px-2 py-2 text-center text-slate-700">{totals.studentCount}</td>
+                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.smpCash)}</td>
+                <td className="px-2 py-2 text-right text-blue-700">{n(totals.smpUpi)}</td>
+                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.svkCash)}</td>
+                <td className="px-2 py-2 text-right text-blue-700">{n(totals.svkUpi)}</td>
+                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.addCash)}</td>
+                <td className="px-2 py-2 text-right text-blue-700">{n(totals.addUpi)}</td>
+                <td className="px-2 py-2 text-right border-l border-slate-200 text-slate-900">{fmt(totals.dayTotal)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Datewise Consolidated Headwise ───────────────────────────────────────
 function DatewiseHeadwiseTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
   const entries: DatewiseHeadwiseEntry[] = useMemo(() => buildDatewiseHeadwise(feeRecords), [feeRecords]);
@@ -1142,18 +1325,22 @@ function buildDayChallans(records: FeeRecord[], dateKey: string): ChallanMap {
     const sbiId:    ChallanId = isAided ? 'sbi-aided'    : 'sbi-unaided';
     const canaraId: ChallanId = isAided ? 'canara-aided' : 'canara-unaided';
 
-    // SBI: SMP + Additional (modes tracked independently)
-    const sbiCash = (smpMode === 'CASH' ? smpAmt : 0) + (addMode === 'CASH' ? addAmt : 0);
-    const sbiUpi  = (smpMode === 'UPI'  ? smpAmt : 0) + (addMode === 'UPI'  ? addAmt : 0);
+    // SBI: SMP + Additional (modes tracked independently, split aware)
+    const smpCash = smpMode === 'CASH' ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.cash ?? 0) : 0;
+    const smpUpi  = smpMode === 'UPI'  ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.upi  ?? 0) : 0;
+    const addCash = addMode === 'CASH' ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.cash ?? 0) : 0;
+    const addUpi  = addMode === 'UPI'  ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.upi  ?? 0) : 0;
+    const sbiCash = smpCash + addCash;
+    const sbiUpi  = smpUpi  + addUpi;
     if (sbiCash + sbiUpi > 0) {
       const rpts = [r.receiptNumber, r.additionalReceiptNumber].filter(Boolean).join(' / ');
       map[sbiId].push({ id: r.id + '_sbi', studentName: r.studentName, regNumber: r.regNumber ?? '', course: r.course, year: r.year, receiptNos: rpts || '—', cashAmt: sbiCash, upiAmt: sbiUpi });
     }
 
-    // Canara: SVK only
+    // Canara: SVK only (split aware)
     if (svkAmt > 0) {
-      const canaraCash = svkMode === 'CASH' ? svkAmt : 0;
-      const canaraUpi  = svkMode === 'UPI'  ? svkAmt : 0;
+      const canaraCash = svkMode === 'CASH' ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.cash ?? 0) : 0;
+      const canaraUpi  = svkMode === 'UPI'  ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.upi  ?? 0) : 0;
       map[canaraId].push({ id: r.id + '_canara', studentName: r.studentName, regNumber: r.regNumber ?? '', course: r.course, year: r.year, receiptNos: r.svkReceiptNumber || '—', cashAmt: canaraCash, upiAmt: canaraUpi });
     }
   }
@@ -1866,6 +2053,7 @@ export function FeeReportsPage() {
           {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}            academicYear={academicYear} />}
           {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords} academicYear={academicYear} />}
           {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}         academicYear={academicYear} />}
+          {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={feeRecords}         academicYear={academicYear} />}
           {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords} academicYear={academicYear} />}
           {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}         academicYear={academicYear} />}
         </div>
