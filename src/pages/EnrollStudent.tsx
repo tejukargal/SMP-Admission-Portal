@@ -926,6 +926,20 @@ export function EnrollStudent() {
     }
   }
 
+  function normalizeDOB(val: string): string {
+    const parts = val.trim().split('/');
+    if (parts.length !== 3) return val;
+    const [rawD, rawM, rawY] = parts;
+    if (!rawD || !rawM || !rawY) return val;
+    const dd = rawD.padStart(2, '0');
+    const mm = rawM.padStart(2, '0');
+    const twoDigit = rawY.padStart(2, '0');
+    const yyyy = rawY.length <= 2
+      ? (parseInt(twoDigit, 10) >= 80 ? '19' : '20') + twoDigit
+      : rawY;
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSuccessMsg('');
@@ -1172,6 +1186,11 @@ export function EnrollStudent() {
                   }
                   if (val.length > 10) val = val.slice(0, 10);
                   handleFieldChange('dateOfBirth', val);
+                }}
+                onBlur={() => {
+                  if (form.dateOfBirth) {
+                    handleFieldChange('dateOfBirth', normalizeDOB(form.dateOfBirth));
+                  }
                 }}
                 error={displayErrors['dateOfBirth']}
                 placeholder="DD/MM/YYYY"
