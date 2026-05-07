@@ -61,7 +61,7 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
     <div
       onClick={onClick}
       className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer hover:shadow-md transition-all duration-150 hover:-translate-y-0.5' : ''}`}
-      style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04), 0 1px 2px -1px rgba(0,0,0,0.04)' }}
+      style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
     >
       {watermark && (
         <span
@@ -127,7 +127,7 @@ interface BreakdownItem {
 
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
-    <div className="bg-white/80 rounded-2xl border border-emerald-100 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+    <div className="bg-white/80 rounded-2xl border border-emerald-400 p-5" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
       <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-4">{title}</h4>
       <div className="space-y-3.5">
         {items.map((item) => {
@@ -180,36 +180,36 @@ function LoadingGate() {
   return (
     <div className="h-full flex flex-col gap-1.5 overflow-hidden" style={{ animation: 'page-enter 0.22s ease-out' }}>
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
-        <div className="flex-1 h-10 bg-white/60 rounded-2xl border border-emerald-100 animate-pulse" />
-        <div className="w-28 h-8 bg-white/60 rounded-xl border border-emerald-100 animate-pulse" />
+        <div className="flex-1 h-10 bg-white/60 rounded-2xl border border-emerald-300 animate-pulse" />
+        <div className="w-28 h-8 bg-white/60 rounded-xl border border-emerald-300 animate-pulse" />
       </div>
       <div className="flex-shrink-0 flex gap-2">
         {[80, 96, 80, 80, 80].map((w, i) => (
-          <div key={i} className="h-7 bg-white/60 rounded-lg border border-emerald-100 animate-pulse" style={{ width: w }} />
+          <div key={i} className="h-7 bg-white/60 rounded-lg border border-emerald-300 animate-pulse" style={{ width: w }} />
         ))}
       </div>
-      <div className="flex-shrink-0 h-9 bg-white/60 rounded-xl border border-emerald-100 animate-pulse" />
+      <div className="flex-shrink-0 h-9 bg-white/60 rounded-xl border border-emerald-300 animate-pulse" />
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="space-y-5">
           <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-2 rounded-2xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 h-24 animate-pulse" />
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 h-24 animate-pulse" />
+            <div className="col-span-2 rounded-2xl border border-sky-400 bg-sky-50 h-24 animate-pulse" />
+            <div className="rounded-2xl border border-sky-400 bg-sky-50 h-24 animate-pulse" />
+            <div className="rounded-2xl border border-rose-400 bg-rose-50 h-24 animate-pulse" />
           </div>
           <div className="space-y-2.5">
             <div className="h-3.5 w-20 bg-white/60 rounded animate-pulse" />
             <div className="grid grid-cols-5 gap-3">
               {['amber','green','sky','teal','violet'].map((c) => (
-                <div key={c} className={`rounded-2xl border border-${c}-200 bg-${c}-50 h-20 animate-pulse`} />
+                <div key={c} className={`rounded-2xl border border-${c}-400 bg-${c}-50 h-20 animate-pulse`} />
               ))}
             </div>
           </div>
           <div className="space-y-2.5">
             <div className="h-3.5 w-28 bg-white/60 rounded animate-pulse" />
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-lime-200 bg-lime-50 h-20 animate-pulse" />
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 h-20 animate-pulse" />
-              <div className="rounded-2xl border border-teal-200 bg-teal-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-lime-400 bg-lime-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-emerald-400 bg-emerald-50 h-20 animate-pulse" />
+              <div className="rounded-2xl border border-teal-400 bg-teal-50 h-20 animate-pulse" />
             </div>
           </div>
         </div>
@@ -540,17 +540,17 @@ export function Dashboard() {
 
   // ── Nature palette colour map ────────────────────────────────────────────
   const courseConfig: Record<Course, { bg: string; border: string; textColor: string; barFill: string }> = {
-    CE: { bg: 'bg-amber-50',   border: 'border-amber-200',   textColor: 'text-amber-700',   barFill: 'bg-amber-400'   },
-    ME: { bg: 'bg-green-50',   border: 'border-green-200',   textColor: 'text-green-700',   barFill: 'bg-green-400'   },
-    EC: { bg: 'bg-sky-50',     border: 'border-sky-200',     textColor: 'text-sky-700',     barFill: 'bg-sky-400'     },
-    CS: { bg: 'bg-teal-50',    border: 'border-teal-200',    textColor: 'text-teal-700',    barFill: 'bg-teal-400'    },
-    EE: { bg: 'bg-violet-50',  border: 'border-violet-200',  textColor: 'text-violet-700',  barFill: 'bg-violet-400'  },
+    CE: { bg: 'bg-amber-50',   border: 'border-amber-400',   textColor: 'text-amber-700',   barFill: 'bg-amber-400'   },
+    ME: { bg: 'bg-green-50',   border: 'border-green-400',   textColor: 'text-green-700',   barFill: 'bg-green-400'   },
+    EC: { bg: 'bg-sky-50',     border: 'border-sky-400',     textColor: 'text-sky-700',     barFill: 'bg-sky-400'     },
+    CS: { bg: 'bg-teal-50',    border: 'border-teal-400',    textColor: 'text-teal-700',    barFill: 'bg-teal-400'    },
+    EE: { bg: 'bg-violet-50',  border: 'border-violet-400',  textColor: 'text-violet-700',  barFill: 'bg-violet-400'  },
   };
 
   const yearConfig: Record<Year, { label: string; bg: string; border: string; textColor: string; barFill: string }> = {
-    '1ST YEAR': { label: '1st Year', bg: 'bg-lime-50',     border: 'border-lime-200',     textColor: 'text-lime-700',     barFill: 'bg-lime-400'     },
-    '2ND YEAR': { label: '2nd Year', bg: 'bg-emerald-50',  border: 'border-emerald-200',  textColor: 'text-emerald-700',  barFill: 'bg-emerald-400'  },
-    '3RD YEAR': { label: '3rd Year', bg: 'bg-teal-50',     border: 'border-teal-200',     textColor: 'text-teal-700',     barFill: 'bg-teal-400'     },
+    '1ST YEAR': { label: '1st Year', bg: 'bg-lime-50',     border: 'border-lime-400',     textColor: 'text-lime-700',     barFill: 'bg-lime-400'     },
+    '2ND YEAR': { label: '2nd Year', bg: 'bg-emerald-50',  border: 'border-emerald-400',  textColor: 'text-emerald-700',  barFill: 'bg-emerald-400'  },
+    '3RD YEAR': { label: '3rd Year', bg: 'bg-teal-50',     border: 'border-teal-400',     textColor: 'text-teal-700',     barFill: 'bg-teal-400'     },
   };
 
 
@@ -904,8 +904,8 @@ export function Dashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {/* Total card — hero with subtle gradient */}
               <div
-                className="col-span-2 rounded-2xl border border-sky-200 p-4 flex flex-col gap-1.5 relative overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 1px 3px 0 rgba(14,165,233,0.08)' }}
+                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.18)' }}
               >
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
                   ALL
@@ -921,7 +921,7 @@ export function Dashboard() {
                 value={stats.boys}
                 total={stats.total}
                 bg="bg-sky-50"
-                border="border-sky-200"
+                border="border-sky-400"
                 textColor="text-sky-700"
                 barFill="bg-sky-400"
                 watermark="B"
@@ -931,7 +931,7 @@ export function Dashboard() {
                 value={stats.girls}
                 total={stats.total}
                 bg="bg-rose-50"
-                border="border-rose-200"
+                border="border-rose-400"
                 textColor="text-rose-600"
                 barFill="bg-rose-400"
                 watermark="G"
@@ -1002,7 +1002,7 @@ export function Dashboard() {
                   const snqPending = Math.max(0, 3 - snqConfirmed);
                   const regularFillPct = Math.min(100, Math.round((regularConfirmed / 60) * 100));
                   return (
-                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
                       <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
                       <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor}`}>{course}</span>
                       <div className="flex flex-col gap-1">

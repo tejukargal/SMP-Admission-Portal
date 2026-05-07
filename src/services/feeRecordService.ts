@@ -136,16 +136,35 @@ interface ReceiptCounterDoc {
   additional: number;                        // shared across all courses
 }
 
-/** Scans existing records and builds initial counter values.
- *  SMP is split by aided/unaided; SVK and Additional are shared series. */
-async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
-  const records = await getFeeRecordsByAcademicYear(academicYear);
-  const c: ReceiptCounterDoc = {
-    smpAided: 0,    smpAidedPadLen: 1,
-    smpUnaided: 0,  smpUnaidedPadLen: 1,
-    svk: 0,         svkPadLen: 1,
+/** Returns the highest receipt numbers found across ALL academic years' counter docs.
+ *  Used to seed a new year's counter so receipt numbers never reset between years. */
+async function _getGlobalCounterMax(): Promise<ReceiptCounterDoc> {
+  const snapshot = await getDocs(collection(db, RECEIPT_COUNTERS_COL));
+  const result: ReceiptCounterDoc = {
+    smpAided: 0, smpAidedPadLen: 1,
+    smpUnaided: 0, smpUnaidedPadLen: 1,
+    svk: 0, svkPadLen: 1,
     additional: 0,
   };
+  for (const snap of snapshot.docs) {
+    const d = snap.data() as Partial<ReceiptCounterDoc>;
+    if ((d.smpAided   ?? 0) > result.smpAided)   { result.smpAided   = d.smpAided!;   result.smpAidedPadLen   = d.smpAidedPadLen   ?? 1; }
+    if ((d.smpUnaided ?? 0) > result.smpUnaided) { result.smpUnaided = d.smpUnaided!; result.smpUnaidedPadLen = d.smpUnaidedPadLen ?? 1; }
+    if ((d.svk        ?? 0) > result.svk)        { result.svk        = d.svk!;        result.svkPadLen        = d.svkPadLen        ?? 1; }
+    if ((d.additional ?? 0) > result.additional)   result.additional = d.additional!;
+  }
+  return result;
+}
+
+/** Scans existing records and builds initial counter values, seeded from the
+ *  global max across all years so receipt numbers never reset between years.
+ *  SMP is split by aided/unaided; SVK and Additional are shared series. */
+async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
+  const [records, globalMax] = await Promise.all([
+    getFeeRecordsByAcademicYear(academicYear),
+    _getGlobalCounterMax(),
+  ]);
+  const c: ReceiptCounterDoc = { ...globalMax };
   for (const r of records) {
     const aided = AIDED_COURSES.has(r.course);
     const smpN = parseInt(r.receiptNumber ?? '', 10);
