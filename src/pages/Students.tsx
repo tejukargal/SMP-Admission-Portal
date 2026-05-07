@@ -3,9 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
-import { deleteStudent, updateStudentAllottedCategory } from '../services/studentService';
+import { updateStudentAllottedCategory } from '../services/studentService';
 import { Button } from '../components/common/Button';
-import { Modal } from '../components/common/Modal';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
@@ -93,12 +92,6 @@ export function Students() {
     const t = setTimeout(() => setToastMsg(''), 3500);
     return () => clearTimeout(t);
   }, [toastMsg]);
-
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; student: Student | null }>({
-    open: false,
-    student: null,
-  });
-  const [deleting, setDeleting] = useState(false);
 
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
@@ -216,28 +209,6 @@ export function Students() {
     }
     return { yearCount, courseCount, total: confirmed.length };
   }, [allStudents]);
-
-  function openDeleteModal(student: Student) {
-    setDeleteModal({ open: true, student });
-  }
-
-  function closeDeleteModal() {
-    setDeleteModal({ open: false, student: null });
-  }
-
-  async function handleDelete() {
-    if (!deleteModal.student) return;
-    setDeleting(true);
-    try {
-      await deleteStudent(deleteModal.student.id);
-      closeDeleteModal();
-      refetch();
-    } catch {
-      // keep modal open on failure
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   function handleSavePdf() {
     setSavingPdf(true);
@@ -637,23 +608,13 @@ export function Students() {
                   </td>
                   {isAdmin && (
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <div className="flex gap-1.5">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => void navigate(`/enroll?edit=${student.id}`, { state: { student } })}
-                        >
-                          Edit
-                        </Button>
-
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => openDeleteModal(student)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void navigate(`/enroll?edit=${student.id}`, { state: { student } })}
+                      >
+                        Edit
+                      </Button>
                     </td>
                   )}
                 </tr>
@@ -683,22 +644,6 @@ export function Students() {
         </div>
       )}
 
-      <Modal
-        open={deleteModal.open}
-        title="Delete Student"
-        message={
-          <>
-            Are you sure you want to delete{' '}
-            <strong>{deleteModal.student?.studentNameSSLC}</strong>? This will also permanently
-            delete all their fee records, fee overrides, and document tracking. This action cannot
-            be undone.
-          </>
-        }
-        confirmLabel="Delete"
-        loading={deleting}
-        onConfirm={() => void handleDelete()}
-        onCancel={closeDeleteModal}
-      />
     </div>
 
     {/* ── Context menu — rendered outside animated div to avoid transform containing-block bug ── */}
