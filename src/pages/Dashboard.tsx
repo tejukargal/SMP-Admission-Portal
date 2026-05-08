@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef, useTransition } 
 import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
+import { useFeeRecords } from '../hooks/useFeeRecords';
 import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -492,6 +493,42 @@ export function Dashboard() {
     [allStudents]
   );
 
+  // Fee records for the date-wise admission table — scoped to the selected (or current) academic year
+  const feeAcademicYear = (academicYearFilter || settings?.currentAcademicYear || null) as import('../types').AcademicYear | null;
+  const { records: feeRecords } = useFeeRecords(feeAcademicYear);
+
+  const dateTable = useMemo(() => {
+    if (!feeRecords.length) return [];
+    // Only count students visible under current filters (confirmed by default)
+    const confirmedIds = new Set(
+      (admStatusFilter ? filteredStudents : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED'))
+        .map((s) => s.id)
+    );
+    // Per student: keep only the earliest payment date (first installment)
+    const firstPayment = new Map<string, { date: string; course: Course }>();
+    for (const r of feeRecords) {
+      if (!confirmedIds.has(r.studentId) || !r.date) continue;
+      const existing = firstPayment.get(r.studentId);
+      if (!existing || r.date < existing.date) {
+        firstPayment.set(r.studentId, { date: r.date.split('T')[0], course: r.course });
+      }
+    }
+    // Group by date → count per course
+    const dateMap = new Map<string, Record<Course, number>>();
+    for (const { date, course } of firstPayment.values()) {
+      if (!dateMap.has(date)) dateMap.set(date, { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 });
+      const row = dateMap.get(date)!;
+      if (course in row) row[course as Course]++;
+    }
+    return Array.from(dateMap.entries())
+      .map(([date, byCourse]) => ({
+        date,
+        byCourse,
+        total: (Object.values(byCourse) as number[]).reduce((a, b) => a + b, 0),
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [feeRecords, filteredStudents, admStatusFilter]);
+
   const admissionPendingStats = useMemo(() => {
     const currentYear = settings?.currentAcademicYear;
     if (!currentYear) return null;
@@ -755,8 +792,8 @@ export function Dashboard() {
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
-          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-100 flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-amber-50 transition-colors group"
-          style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.03)' }}
+          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-300 flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-amber-50 transition-colors group"
+          style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
           onClick={() => void navigate('/admissions')}
         >
           <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/80 shrink-0 whitespace-nowrap">
@@ -1039,7 +1076,7 @@ export function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — all 3 years */}
-              <div className="bg-white/80 rounded-2xl border border-emerald-100 p-4" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+              <div className="bg-white/80 rounded-2xl border border-emerald-400 p-4" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                 {/* Header + legend */}
                 <div className="flex items-start justify-between mb-3">
                   <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 leading-tight">
@@ -1146,7 +1183,7 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                  <div className="bg-white/80 rounded-2xl border border-emerald-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div className="px-4 py-2.5 border-b border-emerald-50">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category-wise Count</p>
                     </div>
@@ -1205,7 +1242,7 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-sky-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+                  <div className="bg-white/80 rounded-2xl border border-sky-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div className="px-4 py-2.5 border-b border-sky-50">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Admission Type-wise Count</p>
                     </div>
@@ -1245,6 +1282,67 @@ export function Dashboard() {
               })()}
 
             </div>
+
+            {/* Date-wise Admission Course-wise Counts */}
+            {(() => {
+              const grandTotal = dateTable.reduce((a, r) => a + r.total, 0);
+              const grandByCourse = COURSES.reduce((acc, c) => {
+                acc[c] = dateTable.reduce((a, r) => a + r.byCourse[c], 0);
+                return acc;
+              }, {} as Record<Course, number>);
+              const tc = 'px-2 py-1 text-right tabular-nums';
+              const tl = 'px-2 py-1 text-left';
+              function fmtDate(iso: string) {
+                const [y, m, d] = iso.split('-');
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `${d} ${months[parseInt(m) - 1]} ${y}`;
+              }
+              return (
+                <div className="bg-white/80 rounded-2xl border border-violet-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                  <div className="px-4 py-2.5 border-b border-violet-50 flex items-baseline gap-2 flex-wrap">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Date-wise Admissions — Course Count</p>
+                    {feeAcademicYear && (
+                      <span className="text-[10px] font-semibold text-violet-500/70 whitespace-nowrap">
+                        {feeAcademicYear}{!academicYearFilter ? ' (current year)' : ''}
+                      </span>
+                    )}
+                  </div>
+                  {dateTable.length === 0 ? (
+                    <p className="px-4 py-6 text-xs text-gray-400 text-center">No admission fee payments recorded for this selection.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] border-collapse">
+                        <thead>
+                          <tr style={{ background: 'linear-gradient(90deg, #4c1d95, #5b21b6)' }}>
+                            {['Date', ...COURSES, 'Total'].map((h) => (
+                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dateTable.map((r, i) => (
+                            <tr key={r.date} className={`border-b border-violet-50 hover:bg-violet-50/40 transition-colors ${i % 2 === 1 ? 'bg-violet-50/20' : ''}`}>
+                              <td className={tl + ' font-medium text-gray-700 whitespace-nowrap'}>{fmtDate(r.date)}</td>
+                              {COURSES.map((c) => (
+                                <td key={c} className={tc + ' text-gray-700'}>{r.byCourse[c]}</td>
+                              ))}
+                              <td className={tc + ' font-semibold text-gray-800'}>{r.total}</td>
+                            </tr>
+                          ))}
+                          <tr className="text-white font-bold" style={{ background: '#2e1065' }}>
+                            <td className={tl}>GRAND TOTAL</td>
+                            {COURSES.map((c) => (
+                              <td key={c} className={tc}>{grandByCourse[c]}</td>
+                            ))}
+                            <td className={tc}>{grandTotal}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
           </div>
         </div>
