@@ -17,10 +17,10 @@ import {
   exportCourseYearExcel, exportConsolidatedExcel,
   exportDatewiseHeadwiseExcel,
 } from '../utils/feeReportExcel';
-import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord } from '../types';
+import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -44,6 +44,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'day-summary',        label: 'Day Summary'          },
   { id: 'datewise-headwise',  label: 'Datewise Headwise'    },
   { id: 'bank-remittance',    label: 'Bank Remittance'       },
+  { id: 'fee-distribution',   label: 'Fee Distribution'     },
 ];
 
 function fmt(n: number): string {
@@ -1809,6 +1810,668 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
   );
 }
 
+// ── Tab: Fee Distribution ─────────────────────────────────────────────────────
+
+interface FeeDistRow {
+  slNo: number;
+  feeType: string;
+  studentCount: number;
+  feeAmountPerStudent: number;
+  totalCollected: number;
+  toGov: number;
+  toSVK: number;
+  toSMP: number;
+}
+
+function calcDistribution(
+  ss: Student[],
+  isAided: boolean,
+  structMap: Map<string, FeeStructure>,
+  finePaidMap: Map<string, number>,
+): FeeDistRow[] {
+  // Look up the saved fee structure for each student using normalized group keys,
+  // matching the SMP Students Statistics Summary groupings (Regular/Lateral/SNQ per year).
+  // Only admType is normalised (REPEATER/EXTERNAL/etc. → REGULAR; LATERAL stays LATERAL).
+  // admCat is kept as-is so OTHERS students still find their OTHERS structure; GM is the fallback.
+  const headMap = new Map<string, Record<SMPFeeHead, number>>();
+  for (const s of ss) {
+    const normAdmType = s.admType === 'LATERAL' ? 'LATERAL' : 'REGULAR';
+    const st = structMap.get(`${s.course}__${s.year}__${normAdmType}__${s.admCat}`)
+            ?? structMap.get(`${s.course}__${s.year}__${normAdmType}__GM`);
+    if (st) headMap.set(s.id, st.smp);
+  }
+
+  function amt(s: Student, k: SMPFeeHead): number {
+    return headMap.get(s.id)?.[k] ?? 0;
+  }
+
+  const rows: FeeDistRow[] = [];
+  let n = 1;
+
+  // ── Tuition fees by year group ──
+  // 1st Yr: 1ST YEAR non-SNQ + LATERAL 2ND YEAR non-SNQ (both pay 1st yr tuition rate)
+  const t1 = ss.filter(s =>
+    (s.year === '1ST YEAR' && s.admCat !== 'SNQ') ||
+    (s.year === '2ND YEAR' && s.admType === 'LATERAL' && s.admCat !== 'SNQ'),
+  );
+  const t1tot = t1.reduce((a, s) => a + amt(s, 'tuition'), 0);
+  if (t1.length > 0 && t1tot > 0) {
+    rows.push({
+      slNo: n++, feeType: 'Tuition Fee 1st Yr',
+      studentCount: t1.length, feeAmountPerStudent: Math.round(t1tot / t1.length),
+      totalCollected: t1tot,
+      toGov: isAided ? t1tot / 2 : 0,
+      toSVK: isAided ? t1tot / 2 : t1tot,
+      toSMP: 0,
+    });
+  }
+
+  // 2nd Yr: 2ND YEAR non-LATERAL non-SNQ
+  const t2 = ss.filter(s => s.year === '2ND YEAR' && s.admType !== 'LATERAL' && s.admCat !== 'SNQ');
+  const t2tot = t2.reduce((a, s) => a + amt(s, 'tuition'), 0);
+  if (t2.length > 0 && t2tot > 0) {
+    rows.push({
+      slNo: n++, feeType: 'Tuition Fee 2nd Yr',
+      studentCount: t2.length, feeAmountPerStudent: Math.round(t2tot / t2.length),
+      totalCollected: t2tot,
+      toGov: isAided ? t2tot / 2 : 0,
+      toSVK: isAided ? t2tot / 2 : t2tot,
+      toSMP: 0,
+    });
+  }
+
+  // 3rd Yr: 3RD YEAR non-SNQ (includes LATERAL 3rd yr counted as regular)
+  const t3 = ss.filter(s => s.year === '3RD YEAR' && s.admCat !== 'SNQ');
+  const t3tot = t3.reduce((a, s) => a + amt(s, 'tuition'), 0);
+  if (t3.length > 0 && t3tot > 0) {
+    rows.push({
+      slNo: n++, feeType: 'Tuition Fee 3rd Yr',
+      studentCount: t3.length, feeAmountPerStudent: Math.round(t3tot / t3.length),
+      totalCollected: t3tot,
+      toGov: isAided ? t3tot / 2 : 0,
+      toSVK: isAided ? t3tot / 2 : t3tot,
+      toSMP: 0,
+    });
+  }
+
+  // ── Other SMP fee heads ──
+  // Order matches reference HTML: dvp, adm, lab, rr, mag, idCard, sports, ass, lib, swf, twf, nss
+  const otherHeads: { key: SMPFeeHead; label: string; libOnly?: true }[] = [
+    { key: 'dvp',    label: 'DVP' },
+    { key: 'adm',    label: 'ADMISSION' },
+    { key: 'lab',    label: 'LAB' },
+    { key: 'rr',     label: 'RR' },
+    { key: 'mag',    label: 'MAGAZINE' },
+    { key: 'idCard', label: 'ID CARD' },
+    { key: 'sports', label: 'SPORTS' },
+    { key: 'ass',    label: 'ASSOCIATION' },
+    { key: 'lib',    label: 'LIBRARY', libOnly: true },
+    { key: 'swf',    label: 'SWF' },
+    { key: 'twf',    label: 'TWF' },
+    { key: 'nss',    label: 'NSS' },
+  ];
+
+  for (const h of otherHeads) {
+    // Library: only 1ST YEAR + LATERAL 2ND YEAR (all admCats)
+    const eligible = h.libOnly
+      ? ss.filter(s => s.year === '1ST YEAR' || (s.year === '2ND YEAR' && s.admType === 'LATERAL'))
+      : ss;
+    const tot = eligible.reduce((a, s) => a + amt(s, h.key), 0);
+    if (eligible.length > 0 && tot > 0) {
+      let toGov = 0, toSVK = 0, toSMP = 0;
+      if (isAided) {
+        if (h.key === 'dvp' || h.key === 'adm') {
+          toGov = tot / 2; toSVK = tot / 2;
+        } else if (h.key === 'lab' || h.key === 'rr' || h.key === 'mag' || h.key === 'idCard') {
+          toGov = tot / 2; toSMP = tot / 2;
+        } else {
+          toSMP = tot;
+        }
+      } else {
+        if (h.key === 'dvp' || h.key === 'adm') toSVK = tot;
+        else toSMP = tot;
+      }
+      rows.push({
+        slNo: n++, feeType: h.label,
+        studentCount: eligible.length, feeAmountPerStudent: Math.round(tot / eligible.length),
+        totalCollected: tot, toGov, toSVK, toSMP,
+      });
+    }
+  }
+
+  // ── Fine — from paid fee records, 100% to Government ──
+  let fineCount = 0, fineTot = 0;
+  for (const s of ss) {
+    const f = finePaidMap.get(s.id) ?? 0;
+    if (f > 0) { fineCount++; fineTot += f; }
+  }
+  if (fineTot > 0) {
+    rows.push({
+      slNo: n++, feeType: 'FINE',
+      studentCount: fineCount, feeAmountPerStudent: Math.round(fineTot / fineCount),
+      totalCollected: fineTot, toGov: fineTot, toSVK: 0, toSMP: 0,
+    });
+  }
+
+  return rows;
+}
+
+function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColor: string }) {
+  const totals = dist.reduce(
+    (a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }),
+    { tot: 0, gov: 0, svk: 0, smp: 0 },
+  );
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <table className="w-full text-[10px]">
+        <thead className={`${headerColor} text-white`}>
+          <tr>
+            <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+            <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
+            <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
+            <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
+            <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Fee Remittance (₹)</th>
+          </tr>
+          <tr>
+            <th className="px-2 py-1 text-right font-semibold border-l border-white/30">To Govt.</th>
+            <th className="px-2 py-1 text-right font-semibold">To SVK</th>
+            <th className="px-2 py-1 text-right font-semibold">To SMP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dist.map((r, i) => (
+            <tr key={r.slNo} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <td className="px-2 py-1.5 text-center text-gray-400">{r.slNo}</td>
+              <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
+              <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
+              <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
+              <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+              <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
+              <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
+            </tr>
+          ))}
+          {dist.length === 0 && (
+            <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">No data for the selected filters.</td></tr>
+          )}
+        </tbody>
+        {dist.length > 0 && (
+          <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tr>
+              <td className="px-2 py-2" colSpan={4}>GRAND TOTAL</td>
+              <td className="px-2 py-2 text-right">{fmt(totals.tot)}</td>
+              <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.gov)}</td>
+              <td className="px-2 py-2 text-right">{fmt(totals.svk)}</td>
+              <td className="px-2 py-2 text-right">{fmt(totals.smp)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+function FeeDistributionTab({
+  students,
+  feeStructures,
+  feeRecords,
+  academicYear: _academicYear,
+}: {
+  students: Student[];
+  feeStructures: FeeStructure[];
+  feeRecords: FeeRecord[];
+  academicYear: string;
+}) {
+  type DistCourseType = '' | 'Aided' | 'Unaided';
+  type TableView = 'all' | 'studentstats' | 'summary' | 'aided' | 'unaided' | 'combined';
+
+  const [courseTypeFilter, setCourseTypeFilter] = useState<DistCourseType>('');
+  const [yearFilter2,      setYearFilter2]      = useState<Year | ''>('');
+  const [courseFilter2,    setCourseFilter2]    = useState<Course | ''>('');
+  const [admTypeFilter2,   setAdmTypeFilter2]   = useState<'' | 'REGULAR' | 'LATERAL' | 'REPEATER' | 'SNQ'>('');
+  const [tableView,        setTableView]        = useState<TableView>('all');
+
+  // ── Look-up maps ──
+  const structMap = useMemo(() => {
+    const m = new Map<string, FeeStructure>();
+    for (const s of feeStructures) {
+      m.set(`${s.course}__${s.year}__${s.admType}__${s.admCat}`, s);
+    }
+    return m;
+  }, [feeStructures]);
+
+  const finePaidMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of feeRecords) m.set(r.studentId, (m.get(r.studentId) ?? 0) + r.smp.fine);
+    return m;
+  }, [feeRecords]);
+
+  // ── CONFIRMED students only ──
+  const confirmedStudents = useMemo(
+    () => students.filter(s => s.admissionStatus?.trim() === 'CONFIRMED'),
+    [students],
+  );
+
+  // ── Apply own filters ──
+  const filteredStudents = useMemo(() => {
+    let ss = confirmedStudents;
+    if (courseTypeFilter === 'Aided')   ss = ss.filter(s => (AIDED_COURSES as Course[]).includes(s.course));
+    if (courseTypeFilter === 'Unaided') ss = ss.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course));
+    if (yearFilter2)    ss = ss.filter(s => s.year   === yearFilter2);
+    if (courseFilter2)  ss = ss.filter(s => s.course === courseFilter2);
+    if (admTypeFilter2) {
+      ss = ss.filter(s => {
+        if (admTypeFilter2 === 'SNQ')      return s.admCat === 'SNQ';
+        if (admTypeFilter2 === 'LATERAL')  return s.admType === 'LATERAL'  && s.admCat !== 'SNQ';
+        if (admTypeFilter2 === 'REPEATER') return s.admType === 'REPEATER' && s.admCat !== 'SNQ';
+        // REGULAR: REGULAR + EXTERNAL + SNQ-admType rows that aren't lateral/repeater
+        return s.admCat !== 'SNQ' && s.admType !== 'LATERAL' && s.admType !== 'REPEATER';
+      });
+    }
+    return ss;
+  }, [confirmedStudents, courseTypeFilter, yearFilter2, courseFilter2, admTypeFilter2]);
+
+  const aidedFiltered   = useMemo(() => filteredStudents.filter(s => (AIDED_COURSES as Course[]).includes(s.course)),   [filteredStudents]);
+  const unaidedFiltered = useMemo(() => filteredStudents.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course)), [filteredStudents]);
+
+  // ── Distribution calculations ──
+  const aidedDist   = useMemo(() => calcDistribution(aidedFiltered,   true,  structMap, finePaidMap), [aidedFiltered,   structMap, finePaidMap]);
+  const unaidedDist = useMemo(() => calcDistribution(unaidedFiltered, false, structMap, finePaidMap), [unaidedFiltered, structMap, finePaidMap]);
+
+  const aidedTotals   = useMemo(() => aidedDist.reduce(  (a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }), { tot: 0, gov: 0, svk: 0, smp: 0 }), [aidedDist]);
+  const unaidedTotals = useMemo(() => unaidedDist.reduce((a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }), { tot: 0, gov: 0, svk: 0, smp: 0 }), [unaidedDist]);
+  const grandTotals   = useMemo(() => ({
+    tot: aidedTotals.tot + unaidedTotals.tot,
+    gov: aidedTotals.gov + unaidedTotals.gov,
+    svk: aidedTotals.svk + unaidedTotals.svk,
+    smp: aidedTotals.smp + unaidedTotals.smp,
+  }), [aidedTotals, unaidedTotals]);
+
+  // ── Student statistics for summary table ──
+  const studentStats = useMemo(() => {
+    const allCourses = COURSES;
+    type YrStat = { reg: number; lat: number; snq: number; total: number };
+    const stats: Record<Course, { yr1: YrStat; yr2: YrStat; yr3: YrStat; grand: number }> = {} as never;
+    for (const c of allCourses) {
+      stats[c] = {
+        yr1: { reg: 0, lat: 0, snq: 0, total: 0 },
+        yr2: { reg: 0, lat: 0, snq: 0, total: 0 },
+        yr3: { reg: 0, lat: 0, snq: 0, total: 0 },
+        grand: 0,
+      };
+    }
+    for (const s of filteredStudents) {
+      if (!stats[s.course]) continue;
+      const yr = s.year === '1ST YEAR' ? 'yr1' : s.year === '2ND YEAR' ? 'yr2' : 'yr3';
+      const yrStat = stats[s.course][yr];
+      if (s.admCat === 'SNQ') {
+        yrStat.snq++;
+      } else if (s.admType === 'LATERAL' && s.year !== '3RD YEAR') {
+        yrStat.lat++;
+      } else {
+        yrStat.reg++;
+      }
+      yrStat.total++;
+      stats[s.course].grand++;
+    }
+    return stats;
+  }, [filteredStudents]);
+
+  const grandStatTotals = useMemo(() => {
+    const gt = { yr1: { reg: 0, snq: 0, total: 0 }, yr2: { reg: 0, lat: 0, snq: 0, total: 0 }, yr3: { reg: 0, snq: 0, total: 0 }, grand: 0 };
+    for (const c of COURSES) {
+      gt.yr1.reg   += studentStats[c].yr1.reg;
+      gt.yr1.snq   += studentStats[c].yr1.snq;
+      gt.yr1.total += studentStats[c].yr1.total;
+      gt.yr2.reg   += studentStats[c].yr2.reg;
+      gt.yr2.lat   += studentStats[c].yr2.lat;
+      gt.yr2.snq   += studentStats[c].yr2.snq;
+      gt.yr2.total += studentStats[c].yr2.total;
+      gt.yr3.reg   += studentStats[c].yr3.reg;
+      gt.yr3.snq   += studentStats[c].yr3.snq;
+      gt.yr3.total += studentStats[c].yr3.total;
+      gt.grand     += studentStats[c].grand;
+    }
+    return gt;
+  }, [studentStats]);
+
+  function clearFilters() {
+    setCourseTypeFilter('');
+    setYearFilter2('');
+    setCourseFilter2('');
+    setAdmTypeFilter2('');
+    setTableView('all');
+  }
+
+  // ── Excel export ──
+  function exportDistExcel() {
+    const wb = XLSX.utils.book_new();
+
+    // Student Statistics sheet
+    const statsRows: (string | number)[][] = [
+      ['Sl No', 'Course', '1st Yr Regular', '1st Yr SNQ', '1st Yr Total', '2nd Yr Regular', '2nd Yr Lateral', '2nd Yr SNQ', '2nd Yr Total', '3rd Yr Regular', '3rd Yr SNQ', '3rd Yr Total', 'Grand Total'],
+    ];
+    COURSES.forEach((c, i) => {
+      const st = studentStats[c];
+      const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
+      statsRows.push([i + 1, `${c} (${courseType})`, st.yr1.reg, st.yr1.snq, st.yr1.total, st.yr2.reg, st.yr2.lat, st.yr2.snq, st.yr2.total, st.yr3.reg, st.yr3.snq, st.yr3.total, st.grand]);
+    });
+    statsRows.push(['', 'GRAND TOTAL', grandStatTotals.yr1.reg, grandStatTotals.yr1.snq, grandStatTotals.yr1.total, grandStatTotals.yr2.reg, grandStatTotals.yr2.lat, grandStatTotals.yr2.snq, grandStatTotals.yr2.total, grandStatTotals.yr3.reg, grandStatTotals.yr3.snq, grandStatTotals.yr3.total, grandStatTotals.grand]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(statsRows), 'Student Statistics');
+
+    // Summary sheet
+    const sumRows: (string | number)[][] = [
+      ['Course Type', 'Total Students', 'Total Fee Allotted', 'To Government', 'To SVK Management', 'To SMP'],
+      ['Aided Courses (CE, ME, EC, CS)', aidedFiltered.length, aidedTotals.tot, aidedTotals.gov, aidedTotals.svk, aidedTotals.smp],
+      ['Unaided Course (EE)', unaidedFiltered.length, unaidedTotals.tot, unaidedTotals.gov, unaidedTotals.svk, unaidedTotals.smp],
+      ['GRAND TOTAL', filteredStudents.length, grandTotals.tot, grandTotals.gov, grandTotals.svk, grandTotals.smp],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Distribution Summary');
+
+    // Aided sheet
+    const aidedRows: (string | number)[][] = [['Sl No', 'Fee Type', 'Students', 'Fee Amount', 'Total Allotted', 'To Govt', 'To SVK', 'To SMP']];
+    aidedDist.forEach(r => aidedRows.push([r.slNo, r.feeType, r.studentCount, r.feeAmountPerStudent, r.totalCollected, r.toGov, r.toSVK, r.toSMP]));
+    aidedRows.push(['', 'GRAND TOTAL', '', '', aidedTotals.tot, aidedTotals.gov, aidedTotals.svk, aidedTotals.smp]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aidedRows), 'Aided Courses');
+
+    // Unaided sheet
+    const unaidedRows: (string | number)[][] = [['Sl No', 'Fee Type', 'Students', 'Fee Amount', 'Total Allotted', 'To Govt', 'To SVK', 'To SMP']];
+    unaidedDist.forEach(r => unaidedRows.push([r.slNo, r.feeType, r.studentCount, r.feeAmountPerStudent, r.totalCollected, r.toGov, r.toSVK, r.toSMP]));
+    unaidedRows.push(['', 'GRAND TOTAL', '', '', unaidedTotals.tot, unaidedTotals.gov, unaidedTotals.svk, unaidedTotals.smp]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(unaidedRows), 'Unaided Course');
+
+    // Combined sheet
+    const combinedRows: (string | number)[][] = [['Sl No', 'Course Type', 'Fee Type', 'Students', 'Fee Amount', 'Total Allotted', 'To Govt', 'To SVK', 'To SMP']];
+    let cn = 1;
+    aidedDist.forEach(r => combinedRows.push([cn++, 'Aided', r.feeType, r.studentCount, r.feeAmountPerStudent, r.totalCollected, r.toGov, r.toSVK, r.toSMP]));
+    unaidedDist.forEach(r => combinedRows.push([cn++, 'Unaided', r.feeType, r.studentCount, r.feeAmountPerStudent, r.totalCollected, r.toGov, r.toSVK, r.toSMP]));
+    combinedRows.push(['', '', 'GRAND TOTAL', '', '', grandTotals.tot, grandTotals.gov, grandTotals.svk, grandTotals.smp]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(combinedRows), 'Combined');
+
+    XLSX.writeFile(wb, `SMP_Fee_Distribution_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  const show = (v: TableView) => tableView === 'all' || tableView === v;
+
+  return (
+    <div className="space-y-5">
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Students',    value: filteredStudents.length.toString(),    color: 'text-blue-700',  bg: 'bg-blue-50',  border: 'border-blue-200'  },
+          { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),                 color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200'  },
+          { label: 'To Government',     value: fmt(grandTotals.gov),                  color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
+          { label: 'To SVK Management', value: fmt(grandTotals.svk),                  color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
+          { label: 'To SMP',            value: fmt(grandTotals.smp),                  color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200'  },
+          { label: 'Aided Students',    value: aidedFiltered.length.toString(),        color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+          { label: 'Unaided Students',  value: unaidedFiltered.length.toString(),      color: 'text-amber-700', bg: 'bg-amber-50',  border: 'border-amber-200' },
+        ].map(c => (
+          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{c.label}</p>
+            <p className={`text-lg font-bold ${c.color}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <select value={courseTypeFilter} onChange={e => setCourseTypeFilter(e.target.value as DistCourseType)} className={fs}>
+          <option value="">All Courses</option>
+          <option value="Aided">Aided (CE, ME, EC, CS)</option>
+          <option value="Unaided">Unaided (EE)</option>
+        </select>
+        <select value={yearFilter2} onChange={e => setYearFilter2(e.target.value as Year | '')} className={fs}>
+          <option value="">All Years</option>
+          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={courseFilter2} onChange={e => setCourseFilter2(e.target.value as Course | '')} className={fs}>
+          <option value="">All Courses</option>
+          {COURSES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={admTypeFilter2} onChange={e => setAdmTypeFilter2(e.target.value as typeof admTypeFilter2)} className={fs}>
+          <option value="">All Adm Types</option>
+          <option value="REGULAR">Regular</option>
+          <option value="LATERAL">Lateral</option>
+          <option value="REPEATER">Repeater</option>
+          <option value="SNQ">SNQ</option>
+        </select>
+        <select value={tableView} onChange={e => setTableView(e.target.value as TableView)} className={fs}>
+          <option value="all">All Tables</option>
+          <option value="studentstats">Student Statistics Only</option>
+          <option value="summary">Summary Only</option>
+          <option value="aided">Aided Distribution Only</option>
+          <option value="unaided">Unaided Distribution Only</option>
+          <option value="combined">Combined Distribution Only</option>
+        </select>
+        <button
+          onClick={clearFilters}
+          className="px-3 py-1.5 rounded border text-xs font-medium transition-colors border-gray-200 bg-white text-gray-400 hover:border-gray-300"
+        >
+          Clear Filters
+        </button>
+        <div className="flex gap-2 ml-auto">
+          <Button variant="secondary" size="sm" onClick={exportDistExcel}>Excel</Button>
+        </div>
+      </div>
+
+      {/* ── Student Statistics Summary ── */}
+      {show('studentstats') && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700">SMP Students Statistics Summary</h2>
+          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+            <table className="w-full text-[10px]">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+                  <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>1st Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>2nd Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>3rd Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" rowSpan={2}>Grand Total</th>
+                </tr>
+                <tr>
+                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold">SNQ</th>
+                  <th className="px-2 py-1 font-semibold">Total</th>
+                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold">Lateral</th>
+                  <th className="px-2 py-1 font-semibold">SNQ</th>
+                  <th className="px-2 py-1 font-semibold">Total</th>
+                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold">SNQ</th>
+                  <th className="px-2 py-1 font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COURSES.map((c, i) => {
+                  const st = studentStats[c];
+                  const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
+                  return (
+                    <tr key={c} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-semibold">{c} <span className="text-gray-400 font-normal">({courseType})</span></td>
+                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr1.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center">{st.yr1.snq || '—'}</td>
+                      <td className="px-2 py-1.5 text-center font-semibold">{st.yr1.total || '—'}</td>
+                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr2.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center">{st.yr2.lat || '—'}</td>
+                      <td className="px-2 py-1.5 text-center">{st.yr2.snq || '—'}</td>
+                      <td className="px-2 py-1.5 text-center font-semibold">{st.yr2.total || '—'}</td>
+                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr3.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center">{st.yr3.snq || '—'}</td>
+                      <td className="px-2 py-1.5 text-center font-semibold">{st.yr3.total || '—'}</td>
+                      <td className="px-2 py-1.5 text-center font-bold border-l border-gray-100">{st.grand || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+                <tr>
+                  <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
+                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr1.reg}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr1.snq}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr1.total}</td>
+                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr2.reg}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr2.lat}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr2.snq}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr2.total}</td>
+                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr3.reg}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr3.snq}</td>
+                  <td className="px-2 py-2 text-center">{grandStatTotals.yr3.total}</td>
+                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.grand}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fee Distribution Summary ── */}
+      {show('summary') && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
+          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+            <table className="w-full text-[10px]">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  <th className="px-2 py-1.5 font-semibold">Course Type</th>
+                  <th className="px-2 py-1.5 text-center font-semibold">Students</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Total Fee Allotted</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">To Government</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">To SVK Management</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">To SMP</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-indigo-50">
+                  <td className="px-2 py-1.5 font-semibold">Aided Courses (CE, ME, EC, CS)</td>
+                  <td className="px-2 py-1.5 text-center">{aidedFiltered.length}</td>
+                  <td className="px-2 py-1.5 text-right">{fmt(aidedTotals.tot)}</td>
+                  <td className="px-2 py-1.5 text-right text-red-700">{fmt(aidedTotals.gov)}</td>
+                  <td className="px-2 py-1.5 text-right text-violet-700">{fmt(aidedTotals.svk)}</td>
+                  <td className="px-2 py-1.5 text-right text-green-700">{fmt(aidedTotals.smp)}</td>
+                </tr>
+                <tr className="bg-amber-50">
+                  <td className="px-2 py-1.5 font-semibold">Unaided Course (EE)</td>
+                  <td className="px-2 py-1.5 text-center">{unaidedFiltered.length}</td>
+                  <td className="px-2 py-1.5 text-right">{fmt(unaidedTotals.tot)}</td>
+                  <td className="px-2 py-1.5 text-right text-red-700">{fmt(unaidedTotals.gov)}</td>
+                  <td className="px-2 py-1.5 text-right text-violet-700">{fmt(unaidedTotals.svk)}</td>
+                  <td className="px-2 py-1.5 text-right text-green-700">{fmt(unaidedTotals.smp)}</td>
+                </tr>
+              </tbody>
+              <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+                <tr>
+                  <td className="px-2 py-2">GRAND TOTAL</td>
+                  <td className="px-2 py-2 text-center">{filteredStudents.length}</td>
+                  <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
+                  <td className="px-2 py-2 text-right text-red-700">{fmt(grandTotals.gov)}</td>
+                  <td className="px-2 py-2 text-right text-violet-700">{fmt(grandTotals.svk)}</td>
+                  <td className="px-2 py-2 text-right text-green-700">{fmt(grandTotals.smp)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Aided Courses Fee Remittance Abstract ── */}
+      {show('aided') && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)</h2>
+          <RemittanceTable dist={aidedDist} headerColor="bg-indigo-600" />
+        </div>
+      )}
+
+      {/* ── Unaided Course Fee Remittance Abstract ── */}
+      {show('unaided') && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Unaided Course (EE)</h2>
+          <RemittanceTable dist={unaidedDist} headerColor="bg-amber-600" />
+        </div>
+      )}
+
+      {/* ── Combined Fee Remittance Abstract ── */}
+      {show('combined') && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700">Combined Fee Remittance Abstract (Aided &amp; Unaided)</h2>
+          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+            <table className="w-full text-[10px]">
+              <thead className="bg-gray-700 text-white">
+                <tr>
+                  <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+                  <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
+                  <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
+                  <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
+                  <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
+                  <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Fee Remittance (₹)</th>
+                </tr>
+                <tr>
+                  <th className="px-2 py-1 text-right font-semibold border-l border-white/30">To Govt.</th>
+                  <th className="px-2 py-1 text-right font-semibold">To SVK</th>
+                  <th className="px-2 py-1 text-right font-semibold">To SMP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {aidedDist.map((r, i) => (
+                  <tr key={`a-${r.slNo}`} className={i % 2 === 0 ? 'bg-indigo-50/40' : 'bg-white'}>
+                    <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                    <td className="px-2 py-1.5 font-medium text-indigo-700">Aided</td>
+                    <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
+                    <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
+                    <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
+                    <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
+                  </tr>
+                ))}
+                {unaidedDist.map((r, i) => (
+                  <tr key={`u-${r.slNo}`} className={i % 2 === 0 ? 'bg-amber-50/40' : 'bg-white'}>
+                    <td className="px-2 py-1.5 text-center text-gray-400">{aidedDist.length + i + 1}</td>
+                    <td className="px-2 py-1.5 font-medium text-amber-700">Unaided</td>
+                    <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
+                    <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
+                    <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
+                    <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
+                  </tr>
+                ))}
+                {aidedDist.length === 0 && unaidedDist.length === 0 && (
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">No data for the selected filters.</td></tr>
+                )}
+              </tbody>
+              {(aidedDist.length > 0 || unaidedDist.length > 0) && (
+                <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+                  <tr>
+                    <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
+                    <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
+                    <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(grandTotals.gov)}</td>
+                    <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
+                    <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Distribution Rules legend */}
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 text-[10px] text-gray-500 space-y-1">
+        <p className="font-semibold text-gray-600 text-xs mb-1">Distribution Rules</p>
+        <p><span className="font-medium text-indigo-700">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP | Fine → 100% Govt</p>
+        <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP | Fine → 100% Govt</p>
+        <p className="text-gray-400">Library fee applies only to 1st Year students and Lateral entry 2nd Year students. Fine is based on actual paid amounts from fee records.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export function FeeReportsPage() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -2056,6 +2719,7 @@ export function FeeReportsPage() {
           {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={feeRecords}         academicYear={academicYear} />}
           {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords} academicYear={academicYear} />}
           {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}         academicYear={academicYear} />}
+          {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
         </div>
       )}
     </div>

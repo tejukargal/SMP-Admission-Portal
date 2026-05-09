@@ -154,10 +154,13 @@ export function FeeStructurePage() {
     getAllFeeStructures().then(setAllStructures).catch(() => {});
   }, [listTick]);
 
-  // Group by academic year, sorted latest → oldest
+  // Group by academic year, sorted latest → oldest; filtered to selectedYear when set
   const structuresByYear = useMemo(() => {
+    const source = selectedYear
+      ? allStructures.filter(s => s.academicYear === selectedYear)
+      : allStructures;
     const grouped = new Map<AcademicYear, FeeStructure[]>();
-    for (const s of allStructures) {
+    for (const s of source) {
       const list = grouped.get(s.academicYear) ?? [];
       list.push(s);
       grouped.set(s.academicYear, list);
@@ -174,7 +177,7 @@ export function FeeStructurePage() {
         return YEARS.indexOf(a.year) - YEARS.indexOf(b.year);
       }),
     }));
-  }, [allStructures]);
+  }, [allStructures, selectedYear]);
 
   function loadStructure(s: FeeStructure) {
     setSelectedYear(s.academicYear);
