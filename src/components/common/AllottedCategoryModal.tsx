@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Student, Category } from '../../types';
 
 const CATEGORIES: Category[] = ['GM', 'SC', 'ST', 'C1', '2A', '2B', '3A', '3B'];
@@ -8,13 +8,22 @@ interface Props {
   saving: boolean;
   onSave: (allottedCategory: string) => void;
   onSkip: () => void;
+  suggestions?: string[];
 }
 
-export function AllottedCategoryModal({ student, saving, onSave, onSkip }: Props) {
+export function AllottedCategoryModal({ student, saving, onSave, onSkip, suggestions = [] }: Props) {
   const [value, setValue] = useState(student.allottedCategory ?? student.category);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const trimmed = value.trim();
   const differsFromClaimed = trimmed !== '' && trimmed !== student.category;
+
+  const filteredSuggestions = trimmed
+    ? suggestions.filter(
+        (s) => s.toUpperCase().includes(trimmed.toUpperCase()) && s.toUpperCase() !== trimmed.toUpperCase()
+      )
+    : [];
 
   return (
     <div
@@ -27,11 +36,11 @@ export function AllottedCategoryModal({ student, saving, onSave, onSkip }: Props
         aria-hidden="true"
       />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4"
         style={{ animation: 'modal-enter 0.2s ease-out' }}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(90deg, #eff6ff, #f5f3ff)' }}>
+        <div className="px-5 py-4 border-b border-gray-100 rounded-t-2xl" style={{ background: 'linear-gradient(90deg, #eff6ff, #f5f3ff)' }}>
           <h3 className="text-sm font-bold text-gray-800">Allotted Category</h3>
           <p className="text-[11px] text-gray-500 mt-0.5 truncate">
             {student.studentNameSSLC}
@@ -82,34 +91,48 @@ export function AllottedCategoryModal({ student, saving, onSave, onSkip }: Props
             {/* Manual entry */}
             <div className="relative">
               <input
+                ref={inputRef}
                 type="text"
                 value={value}
-                onChange={(e) => setValue(e.target.value.toUpperCase())}
+                onChange={(e) => { setValue(e.target.value.toUpperCase()); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
                 placeholder="e.g. GMR, GMW, SCW…"
                 maxLength={10}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-800 uppercase placeholder:normal-case placeholder:font-normal placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {value && (
                 <button
-                  onClick={() => setValue('')}
+                  onClick={() => { setValue(''); inputRef.current?.focus(); }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-sm leading-none cursor-pointer"
                   tabIndex={-1}
                 >
                   ×
                 </button>
               )}
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <ul className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  {filteredSuggestions.map((s) => (
+                    <li
+                      key={s}
+                      onMouseDown={() => { setValue(s); setShowSuggestions(false); }}
+                      className="px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                    >
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
-            {differsFromClaimed && trimmed && (
-              <p className="mt-2 text-[10px] text-amber-600 font-medium">
-                Allotted ({trimmed}) differs from claimed ({student.category})
-              </p>
-            )}
+            <p className={`mt-2 text-[10px] font-medium ${differsFromClaimed && trimmed ? 'text-amber-600' : 'invisible'}`}>
+              Allotted ({trimmed || student.allottedCategory || student.category}) differs from claimed ({student.category})
+            </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3 rounded-b-2xl">
           <button
             onClick={onSkip}
             className="text-xs text-gray-400 hover:text-gray-600 font-medium transition-colors cursor-pointer"

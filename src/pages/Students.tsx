@@ -846,6 +846,11 @@ export function Students() {
         saving={savingAllottedCat}
         onSave={(cat) => void handleSaveAllottedCat(cat)}
         onSkip={() => setAllottedCatStudent(null)}
+        suggestions={[...new Set(
+          allStudents
+            .map((s) => s.allottedCategory?.trim() ?? '')
+            .filter(Boolean)
+        )]}
       />
     )}
 

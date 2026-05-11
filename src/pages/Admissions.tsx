@@ -45,7 +45,7 @@ export function Admissions() {
   const [activeTab, setActiveTab] = useState<Tab>('pending');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('aided');
+  const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all');
   const [courseFilter, setCourseFilter] = useState<Course | 'ALL'>('ALL');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState('');
@@ -946,6 +946,11 @@ export function Admissions() {
         saving={savingAllottedCat}
         onSave={(cat) => void handleSaveAllottedCat(cat)}
         onSkip={() => setAllottedCatStudent(null)}
+        suggestions={[...new Set(
+          allStudents
+            .map((s) => s.allottedCategory?.trim() ?? '')
+            .filter(Boolean)
+        )]}
       />
     )}
     </>

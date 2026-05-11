@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Student } from '../../types';
-import { buildStudyCertHTML, generateStudyCertificate, type CertificateType } from '../../utils/studyCertificate';
+import { buildStudyCertHTML, generateStudyCertificate, type CertificateType, type StudyCertOptions } from '../../utils/studyCertificate';
 
 interface Props {
   student: Student;
@@ -31,6 +31,9 @@ const OPTIONS: { type: CertificateType; label: string; desc: string; icon: strin
 export function StudyCertificateModal({ student, onClose }: Props) {
   const [selected, setSelected] = useState<CertificateType>('STUDYING');
   const [previewHtml, setPreviewHtml] = useState('');
+  const [includeCaste, setIncludeCaste] = useState(false);
+  const [casteName, setCasteName] = useState(student.caste ?? '');
+  const [casteCategory, setCasteCategory] = useState(student.allottedCategory ?? student.category ?? '');
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -38,12 +41,16 @@ export function StudyCertificateModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  function casteOpts(): StudyCertOptions {
+    return { includeCaste, casteName, casteCategory };
+  }
+
   function handlePreview() {
-    setPreviewHtml(buildStudyCertHTML(student, selected));
+    setPreviewHtml(buildStudyCertHTML(student, selected, casteOpts()));
   }
 
   function handlePrint() {
-    generateStudyCertificate(student, selected);
+    generateStudyCertificate(student, selected, casteOpts());
     onClose();
   }
 
@@ -219,6 +226,58 @@ export function StudyCertificateModal({ student, onClose }: Props) {
           })}
         </div>
 
+        {/* Caste / Category clause */}
+        <div className="px-5 pb-4">
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Toggle row */}
+            <button
+              type="button"
+              onClick={() => setIncludeCaste((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+            >
+              <div>
+                <p className="text-xs font-semibold text-gray-700">Include Caste &amp; Category</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Adds a line about the student's caste and category</p>
+              </div>
+              <div className={`relative w-8 h-4.5 rounded-full transition-colors flex-shrink-0 ${includeCaste ? 'bg-blue-600' : 'bg-gray-300'}`} style={{ height: '18px', width: '32px' }}>
+                <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${includeCaste ? 'translate-x-[14px]' : 'translate-x-0.5'}`} />
+              </div>
+            </button>
+
+            {/* Editable fields — shown when toggled on */}
+            {includeCaste && (
+              <div className="px-3 py-3 border-t border-gray-200 space-y-2.5 bg-white">
+                <p className="text-[10px] text-gray-400 italic">
+                  Preview: <span className="text-gray-600 not-italic">"{casteName || '…'} caste under {casteCategory || '…'} category as per our records."</span>
+                </p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Caste Name</label>
+                    <input
+                      type="text"
+                      value={casteName}
+                      onChange={(e) => setCasteName(e.target.value)}
+                      placeholder="e.g. Vokkaliga"
+                      className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="w-28">
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={casteCategory}
+                      onChange={(e) => setCasteCategory(e.target.value.toUpperCase())}
+                      placeholder="e.g. 3A"
+                      maxLength={10}
+                      className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-xs text-gray-800 uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="px-5 pb-5 flex justify-end gap-2">
           <button
@@ -229,7 +288,8 @@ export function StudyCertificateModal({ student, onClose }: Props) {
           </button>
           <button
             onClick={handlePreview}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5"
+            disabled={includeCaste && (!casteName.trim() || !casteCategory.trim())}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <polyline points="6 9 6 2 18 2 18 9"/>

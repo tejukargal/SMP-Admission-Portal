@@ -53,8 +53,17 @@ export function sslcPct(s: MeritRow): number {
   return (s.sslcObtainedTotal / s.sslcMaxTotal) * 100;
 }
 
+function msPct(s: MeritRow): number {
+  if (!s.mathsScienceMaxTotal || s.mathsScienceMaxTotal === 0) return 0;
+  return (s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100;
+}
+
 export function sortByMerit<T extends MeritRow>(students: T[]): T[] {
-  return [...students].sort((a, b) => sslcPct(b) - sslcPct(a));
+  return [...students].sort((a, b) => {
+    const pctDiff = sslcPct(b) - sslcPct(a);
+    if (pctDiff !== 0) return pctDiff;
+    return msPct(b) - msPct(a);
+  });
 }
 
 // ── PDF (HTML print — supports Kannada Unicode) ───────────────────────────────

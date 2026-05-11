@@ -36,7 +36,13 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function buildStudyCertHTML(student: Student, certType: CertificateType): string {
+export interface StudyCertOptions {
+  includeCaste?: boolean;
+  casteName?: string;
+  casteCategory?: string;
+}
+
+export function buildStudyCertHTML(student: Student, certType: CertificateType, opts: StudyCertOptions = {}): string {
   const today        = formatToday();
   const courseFull   = COURSE_NAMES[student.course] ?? student.course;
   const yearFigure   = YEAR_FIGURES[student.year] ?? student.year;
@@ -53,6 +59,10 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType):
 
 
   const refNumber = `SMP/ADM/${student.academicYear}/`;
+
+  const casteClause = opts.includeCaste && opts.casteName && opts.casteCategory
+    ? `<p class="cert-para">${pronoun} belongs to <span class="hl">${esc(opts.casteName.trim())}</span> caste under <span class="hl">${esc(opts.casteCategory.trim())}</span> category as per our records.</p>`
+    : '';
 
   // Only show reg number when it matches the real format: 308XX99999 (9–10 chars)
   const isRealRegNo = /^\d{3}[A-Z]{2}\d{4,5}$/.test(regNo);
@@ -252,7 +262,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType):
     <p class="cert-para">
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       were satisfactory.
-    </p>` : isLeft ? `
+    </p>
+    ${casteClause}` : isLeft ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -264,7 +275,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType):
     <p class="cert-para">
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       were satisfactory.
-    </p>` : `
+    </p>
+    ${casteClause}` : `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -276,7 +288,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType):
     <p class="cert-para">
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       are satisfactory.
-    </p>`}
+    </p>
+    ${casteClause}`}
 
     <!-- Seal -->
     <div class="seal-circle">SEAL</div>
@@ -306,8 +319,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType):
 </html>`;
 }
 
-export function generateStudyCertificate(student: Student, certType: CertificateType): void {
-  const base = buildStudyCertHTML(student, certType);
+export function generateStudyCertificate(student: Student, certType: CertificateType, opts: StudyCertOptions = {}): void {
+  const base = buildStudyCertHTML(student, certType, opts);
   const html = base.replace('</body>', `<script>
   window.onload = function () {
     window.print();
