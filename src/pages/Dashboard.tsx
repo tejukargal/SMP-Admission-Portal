@@ -230,6 +230,8 @@ export function Dashboard() {
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
+  const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
+  const [totalModal, setTotalModal] = useState(false);
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -410,6 +412,17 @@ export function Dashboard() {
       '2ND YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
       '3RD YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
     };
+    const emptyCourseyear = (): Record<Course, Record<Year, number>> => ({
+      CE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      ME: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      EC: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      CS: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+      EE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
+    });
+    const byGenderByCourseByYear: Record<string, Record<Course, Record<Year, number>>> = {
+      BOY:  emptyCourseyear(),
+      GIRL: emptyCourseyear(),
+    };
 
     for (const s of filteredStudents) {
       const status = s.admissionStatus?.trim() || 'PENDING';
@@ -436,6 +449,7 @@ export function Dashboard() {
       if (s.admType in byAdmType) byAdmType[s.admType]++;
       if (s.course in byCourseByYear && s.year in byCourseByYear[s.course]) byCourseByYear[s.course][s.year]++;
       if (s.year in byYearByCourse && s.course in byYearByCourse[s.year]) byYearByCourse[s.year][s.course]++;
+      if (s.gender in byGenderByCourseByYear) byGenderByCourseByYear[s.gender][s.course as Course][s.year as Year]++;
 
       if (s.year === '1ST YEAR' && s.course in firstYearSeats) {
         if (s.admType === 'REGULAR' && s.admCat === 'GM') {
@@ -467,7 +481,7 @@ export function Dashboard() {
       }
     }
 
-    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats };
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, byGenderByCourseByYear };
   }, [filteredStudents, admStatusFilter]);
 
   const activeSource = useMemo(
@@ -935,13 +949,14 @@ export function Dashboard() {
 
         /* ── Metric cards ───────────────────────────────────────────── */
         <div className="flex-1 min-h-0 overflow-auto pb-4">
-          <div className="space-y-3 min-w-0">
+          <div className="space-y-3 min-w-0 mt-2">
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {/* Total card — hero with subtle gradient */}
               <div
-                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden"
+                onClick={() => setTotalModal(true)}
+                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-150 hover:-translate-y-0.5"
                 style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.18)' }}
               >
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
@@ -962,6 +977,7 @@ export function Dashboard() {
                 textColor="text-sky-700"
                 barFill="bg-sky-400"
                 watermark="B"
+                onClick={() => setGenderModal('BOY')}
               />
               <StatCard
                 label="Girls"
@@ -972,6 +988,7 @@ export function Dashboard() {
                 textColor="text-rose-600"
                 barFill="bg-rose-400"
                 watermark="G"
+                onClick={() => setGenderModal('GIRL')}
               />
             </div>
 
@@ -1505,6 +1522,157 @@ export function Dashboard() {
                         {grand[key]}
                       </td>
                     ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* Total enrolled — year × course modal */}
+    {totalModal && (() => {
+      const YEAR_LABELS: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
+      const rows = YEARS.map((yr) => {
+        const cells = COURSES.map((c) => stats.byYearByCourse[yr][c]);
+        const total = cells.reduce((a, v) => a + v, 0);
+        return { yr, cells, total };
+      });
+      const grandCols = COURSES.map((_, ci) => rows.reduce((a, r) => a + r.cells[ci], 0));
+      const grandTotal = rows.reduce((a, r) => a + r.total, 0);
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setTotalModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-sky-400 bg-sky-50 shadow-2xl w-full max-w-lg mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            {/* Header */}
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-sky-400 relative overflow-hidden">
+              <span aria-hidden="true" className="absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.07]">ALL</span>
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border border-sky-400 bg-white/70 text-sky-700">Total</span>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Year &amp; Course-wise</p>
+              </div>
+              <button
+                onClick={() => setTotalModal(false)}
+                className="relative z-10 rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer"
+                aria-label="Close"
+              >×</button>
+            </div>
+            {/* Table */}
+            <div className="p-4">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-sky-50">
+                    <th className="px-3 py-2 text-left font-semibold text-sky-700 border-b-2 border-sky-400">Year</th>
+                    {COURSES.map((c) => (
+                      <th key={c} className="px-3 py-2 text-right font-semibold text-gray-500 border-b-2 border-sky-400">{c}</th>
+                    ))}
+                    <th className="px-3 py-2 text-right font-semibold text-sky-700 border-b-2 border-l-2 border-sky-400">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={row.yr} className={`${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} hover:bg-white/80 transition-colors`}>
+                      <td className="px-3 py-2.5 font-semibold text-gray-700 border-b border-sky-400/40">{YEAR_LABELS[row.yr]}</td>
+                      {row.cells.map((v, ci) => (
+                        <td key={ci} className="px-3 py-2.5 text-right tabular-nums text-gray-700 border-b border-sky-400/40">
+                          {v > 0 ? v : <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 border-b border-l-2 border-sky-400/40">
+                        {row.total > 0 ? row.total : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-sky-50 border-t-2 border-sky-400">
+                    <td className="px-3 py-2.5 font-bold text-sky-700 text-xs uppercase tracking-wide">Total</td>
+                    {grandCols.map((v, ci) => (
+                      <td key={ci} className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm">{v}</td>
+                    ))}
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm border-l-2 border-sky-400">{grandTotal}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* Gender distribution modal */}
+    {genderModal && (() => {
+      const isBoy   = genderModal === 'BOY';
+      const label   = isBoy ? 'Boys' : 'Girls';
+      const wm      = isBoy ? 'B' : 'G';
+      const bg      = isBoy ? 'bg-sky-50'      : 'bg-rose-50';
+      const brd     = isBoy ? 'border-sky-400' : 'border-rose-400';
+      const textCol = isBoy ? 'text-sky-700'   : 'text-rose-600';
+      const data    = stats.byGenderByCourseByYear[genderModal];
+      const YEAR_LABELS: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
+      const rows = COURSES.map((course) => {
+        const yr1 = data[course]['1ST YEAR'];
+        const yr2 = data[course]['2ND YEAR'];
+        const yr3 = data[course]['3RD YEAR'];
+        return { course, yr1, yr2, yr3, total: yr1 + yr2 + yr3 };
+      });
+      const grand = rows.reduce((a, r) => ({ yr1: a.yr1 + r.yr1, yr2: a.yr2 + r.yr2, yr3: a.yr3 + r.yr3, total: a.total + r.total }), { yr1: 0, yr2: 0, yr3: 0, total: 0 });
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setGenderModal(null)} aria-hidden="true" />
+          <div className={`relative rounded-2xl border-2 ${brd} ${bg} shadow-2xl w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            {/* Header */}
+            <div className={`px-5 py-3.5 flex items-center justify-between border-b ${brd} relative overflow-hidden`}>
+              <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${textCol} opacity-[0.07]`}>
+                {wm}
+              </span>
+              <div className="flex items-center gap-2.5">
+                <span className={`px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border ${brd} bg-white/70 ${textCol}`}>
+                  {label}
+                </span>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Course &amp; Year-wise</p>
+              </div>
+              <button
+                onClick={() => setGenderModal(null)}
+                className="relative z-10 rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer"
+                aria-label="Close"
+              >×</button>
+            </div>
+            {/* Table */}
+            <div className="p-4">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className={bg}>
+                    <th className={`px-3 py-2 text-left font-semibold ${textCol} border-b-2 ${brd}`}>Course</th>
+                    {(['1ST YEAR', '2ND YEAR', '3RD YEAR'] as Year[]).map((yr) => (
+                      <th key={yr} className={`px-3 py-2 text-right font-semibold text-gray-500 border-b-2 ${brd}`}>{YEAR_LABELS[yr]}</th>
+                    ))}
+                    <th className={`px-3 py-2 text-right font-semibold ${textCol} border-b-2 border-l-2 ${brd}`}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={row.course} className={`${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} hover:bg-white/80 transition-colors`}>
+                      <td className={`px-3 py-2.5 font-semibold text-gray-700 border-b ${brd}/40`}>{row.course}</td>
+                      {[row.yr1, row.yr2, row.yr3].map((v, j) => (
+                        <td key={j} className={`px-3 py-2.5 text-right tabular-nums border-b ${brd}/40 text-gray-700`}>
+                          {v > 0 ? v : <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                      <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${textCol} border-b border-l-2 ${brd}/40`}>
+                        {row.total > 0 ? row.total : <span className="text-gray-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className={`${bg} border-t-2 ${brd}`}>
+                    <td className={`px-3 py-2.5 font-bold ${textCol} text-xs uppercase tracking-wide`}>Total</td>
+                    {[grand.yr1, grand.yr2, grand.yr3].map((v, j) => (
+                      <td key={j} className={`px-3 py-2.5 text-right tabular-nums font-bold ${textCol} text-sm`}>{v}</td>
+                    ))}
+                    <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${textCol} text-sm border-l-2 ${brd}`}>{grand.total}</td>
                   </tr>
                 </tfoot>
               </table>
