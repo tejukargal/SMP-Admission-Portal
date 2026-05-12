@@ -11,6 +11,7 @@ import { PageSpinner } from '../components/common/PageSpinner';
 import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
+import { EnrollmentBreakdownModal } from '../components/student/EnrollmentBreakdownModal';
 import { exportMeritListPdf, exportMeritListExcel, sortByMerit, sslcPct, fmtDOB, fmtGender } from '../utils/meritListExport';
 import type { Student, AcademicYear, Course, MeritListSnapshot } from '../types';
 
@@ -231,6 +232,8 @@ export function Admissions() {
     setContextMenu({ x, y, student });
   }
 
+  const [showEnrollmentLog, setShowEnrollmentLog] = useState(false);
+
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
@@ -428,6 +431,18 @@ export function Admissions() {
             </button>
           ))}
         </div>
+
+        {allStudents.length > 0 && (
+          <>
+            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            <button
+              onClick={() => setShowEnrollmentLog(true)}
+              className="rounded border border-sky-200 px-2.5 py-1 text-xs text-sky-700 bg-sky-50 hover:bg-sky-100 hover:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-400 transition-colors font-medium shrink-0"
+            >
+              Enrollment Log
+            </button>
+          </>
+        )}
       </div>
 
       {/* Course-wise stats cards */}
@@ -951,6 +966,14 @@ export function Admissions() {
             .map((s) => s.allottedCategory?.trim() ?? '')
             .filter(Boolean)
         )]}
+      />
+    )}
+
+    {showEnrollmentLog && (
+      <EnrollmentBreakdownModal
+        students={allStudents}
+        academicYear={academicYear}
+        onClose={() => setShowEnrollmentLog(false)}
       />
     )}
     </>
