@@ -861,7 +861,7 @@ export function Dashboard() {
       ) : isSearchMode ? (
 
         /* ── Search results ─────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto space-y-3">
+        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin">
           {studentGroups.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-gray-400">
               No students found.
@@ -948,7 +948,7 @@ export function Dashboard() {
       ) : (
 
         /* ── Metric cards ───────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto pb-4">
+        <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin">
           <div className="space-y-3 min-w-0 mt-2">
 
             {/* Overview row */}
@@ -1100,7 +1100,7 @@ export function Dashboard() {
                     Course-wise<br />
                     <span className="text-gray-300 font-medium normal-case tracking-normal">confirmed · 63 seats ref</span>
                   </h4>
-                  <div className="flex flex-col gap-1 items-end">
+                  <div className="flex flex-row gap-2.5 items-center">
                     {YEARS.map((yr) => {
                       const y = yearConfig[yr];
                       return (

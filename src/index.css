@@ -151,7 +151,7 @@
   display: none;
 }
 
-/* ── Thin emerald scrollbar ─────────────────────────────────────────────── */
+/* ── Thin emerald scrollbar (horizontal) ─────────────────────────────────── */
 .scroll-emerald {
   scrollbar-width: thin;
   scrollbar-color: #a7f3d0 transparent;
@@ -169,5 +169,25 @@
   border-radius: 99px;
 }
 .scroll-emerald::-webkit-scrollbar-thumb:hover {
+  background: #34d399;
+}
+
+/* ── Thin vertical scrollbar (pushed to viewport-right edge) ─────────────── */
+.scroll-y-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #a7f3d0 transparent;
+  margin-right: -3px;
+}
+.scroll-y-thin::-webkit-scrollbar {
+  width: 3px;
+}
+.scroll-y-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-y-thin::-webkit-scrollbar-thumb {
+  background: #a7f3d0;
+  border-radius: 99px;
+}
+.scroll-y-thin::-webkit-scrollbar-thumb:hover {
   background: #34d399;
 }
