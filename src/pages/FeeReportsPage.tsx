@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -39,12 +39,12 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'fee-list',           label: 'Fee List'             },
   { id: 'dues',               label: 'Dues Report'          },
   { id: 'course-year',        label: 'Course & Year Wise'   },
-  { id: 'consolidated',       label: 'Consolidated'         },
   { id: 'daily-collections',  label: 'Daily Collections'    },
   { id: 'day-summary',        label: 'Day Summary'          },
   { id: 'datewise-headwise',  label: 'Datewise Headwise'    },
   { id: 'bank-remittance',    label: 'Bank Remittance'       },
   { id: 'fee-distribution',   label: 'Fee Distribution'     },
+  { id: 'consolidated',       label: 'Consolidated'         },
 ];
 
 function fmt(n: number): string {
@@ -226,7 +226,7 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
 }
 
 // ── Tab: Statistics ──────────────────────────────────────────────────────────────
-function StatisticsTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
+function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
   const total       = rows.length;
   const paidCount   = rows.filter((r) => r.paid > 0).length;
   const notPaid     = total - paidCount;
@@ -240,6 +240,7 @@ function StatisticsTab({ rows, academicYear }: { rows: StudentFeeRow[]; academic
 
   return (
     <div className="space-y-5">
+      <CommonFilters fp={fp} />
       {/* Count cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
@@ -301,7 +302,7 @@ function StatisticsTab({ rows, academicYear }: { rows: StudentFeeRow[]; academic
 }
 
 // ── Tab: Fee List ─────────────────────────────────────────────────────────────
-function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
+function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
   const totals = useMemo(() => ({
     smpAllt: rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
     svkAllt: rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
@@ -311,6 +312,7 @@ function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYea
 
   return (
     <div className="space-y-3">
+      <CommonFilters fp={fp} />
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">{rows.length} student{rows.length !== 1 ? 's' : ''}</p>
         <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
@@ -348,7 +350,7 @@ function FeeListTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYea
 }
 
 // ── Tab: Dues Report ──────────────────────────────────────────────────────────
-function DuesTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
+function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
   const dueRows = useMemo(() => rows.filter((r) => r.balance !== null && r.balance > 0), [rows]);
   const totals = useMemo(() => ({
     smpAllt: dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
@@ -359,6 +361,7 @@ function DuesTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: 
 
   return (
     <div className="space-y-3">
+      <CommonFilters fp={fp} />
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with outstanding balance</p>
         <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
@@ -396,7 +399,7 @@ function DuesTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: 
 }
 
 // ── Tab: Course & Year Wise ───────────────────────────────────────────────────
-function CourseYearTab({ rows, academicYear }: { rows: StudentFeeRow[]; academicYear: string }) {
+function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
   const breakdown = useMemo(() => buildBreakdown(rows), [rows]);
   const totals = useMemo(() => ({
     students: rows.length,
@@ -409,6 +412,7 @@ function CourseYearTab({ rows, academicYear }: { rows: StudentFeeRow[]; academic
 
   return (
     <div className="space-y-3">
+      <CommonFilters fp={fp} />
       <div className="flex justify-end">
         <ExportBar onPdf={() => exportCourseYearPdf(rows, academicYear)} onExcel={() => exportCourseYearExcel(rows, academicYear)} />
       </div>
@@ -418,7 +422,7 @@ function CourseYearTab({ rows, academicYear }: { rows: StudentFeeRow[]; academic
 }
 
 // ── Tab: Consolidated ──────────────────────────────────────────────────────────
-function ConsolidatedTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeRecord[]; academicYear: string; fp: CommonFilterProps }) {
   const { smpTotals, smpGrandTotal, svkTotal, additionalTotal } = useMemo(() => {
     const totals = {} as Record<string, number>;
     for (const { key } of SMP_FEE_HEADS) totals[key] = 0;
@@ -437,6 +441,7 @@ function ConsolidatedTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]
 
   return (
     <div className="space-y-3">
+      <CommonFilters fp={fp} />
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">{feeRecords.length} payment record{feeRecords.length !== 1 ? 's' : ''}</p>
         <ExportBar onPdf={() => exportConsolidatedPdf(feeRecords, academicYear)} onExcel={() => exportConsolidatedExcel(feeRecords, academicYear)} />
@@ -1194,7 +1199,7 @@ function DaySummaryTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; 
 }
 
 // ── Tab: Datewise Consolidated Headwise ───────────────────────────────────────
-function DatewiseHeadwiseTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+function DatewiseHeadwiseTab({ feeRecords, academicYear, fp }: { feeRecords: FeeRecord[]; academicYear: string; fp: CommonFilterProps }) {
   const entries: DatewiseHeadwiseEntry[] = useMemo(() => buildDatewiseHeadwise(feeRecords), [feeRecords]);
 
   const grandHeads = useMemo(() => {
@@ -1213,6 +1218,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear }: { feeRecords: FeeReco
 
   return (
     <div className="space-y-3">
+      <CommonFilters fp={fp} />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <p className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</p>
@@ -2472,6 +2478,81 @@ function FeeDistributionTab({
   );
 }
 
+// ── Shared filter props + component ───────────────────────────────────────────
+interface CommonFilterProps {
+  aidedFilter: 'AIDED' | 'UNAIDED' | '';
+  setAidedFilter: (v: 'AIDED' | 'UNAIDED' | '') => void;
+  courseFilter: Course | '';
+  setCourseFilter: (v: Course | '') => void;
+  yearFilter: Year | '';
+  setYearFilter: (v: Year | '') => void;
+  admTypeFilter: AdmType | '';
+  setAdmTypeFilter: (v: AdmType | '') => void;
+  admCatFilter: AdmCat | '';
+  setAdmCatFilter: (v: AdmCat | '') => void;
+  feeStatusFilter: FeeStatus;
+  setFeeStatusFilter: (v: FeeStatus) => void;
+  stats: { total: number; paidCount: number; notPaid: number; duesCount: number; noDuesCount: number };
+  hasActiveFilters: boolean;
+  clearFilters: () => void;
+}
+
+function CommonFilters({ fp }: { fp: CommonFilterProps }) {
+  return (
+    <div className="space-y-2 pb-3 mb-4 border-b border-gray-100">
+      {fp.stats.total > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-gray-400 bg-gray-100 text-gray-700"         onClick={() => fp.setFeeStatusFilter('ALL')} />
+          <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter === 'PAID'}         colorClass="border-green-400 bg-green-100 text-green-700"       onClick={() => fp.setFeeStatusFilter('PAID')} />
+          <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter === 'NOT_PAID'}     colorClass="border-red-400 bg-red-100 text-red-700"             onClick={() => fp.setFeeStatusFilter('NOT_PAID')} />
+          <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter === 'FEE_DUES'}     colorClass="border-amber-400 bg-amber-100 text-amber-700"       onClick={() => fp.setFeeStatusFilter('FEE_DUES')} />
+          <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-emerald-400 bg-emerald-100 text-emerald-700" onClick={() => fp.setFeeStatusFilter('NO_FEE_DUES')} />
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
+        <select value={fp.aidedFilter} onChange={(e) => fp.setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+          <option value="">Aided &amp; Unaided</option>
+          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+          <option value="UNAIDED">Unaided (EE)</option>
+        </select>
+        <select value={fp.courseFilter} onChange={(e) => fp.setCourseFilter(e.target.value as Course | '')} className={fs}>
+          <option value="">All Courses</option>
+          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={fp.yearFilter} onChange={(e) => fp.setYearFilter(e.target.value as Year | '')} className={fs}>
+          <option value="">All Years</option>
+          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={fp.admTypeFilter} onChange={(e) => fp.setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
+          <option value="">All Adm Types</option>
+          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={fp.admCatFilter} onChange={(e) => fp.setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
+          <option value="">All Adm Cats</option>
+          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={fp.feeStatusFilter} onChange={(e) => fp.setFeeStatusFilter(e.target.value as FeeStatus)} className={fs}>
+          <option value="ALL">All Fee Status</option>
+          <option value="PAID">Paid</option>
+          <option value="NOT_PAID">Not Paid</option>
+          <option value="FEE_DUES">Fee Dues</option>
+          <option value="NO_FEE_DUES">No Fee Dues</option>
+        </select>
+        <button
+          onClick={fp.clearFilters}
+          className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
+            fp.hasActiveFilters
+              ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
+              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+          }`}
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export function FeeReportsPage() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -2622,106 +2703,92 @@ export function FeeReportsPage() {
 
   const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading;
 
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  function scrollTabs(dir: 'left' | 'right') {
+    tabsScrollRef.current?.scrollBy({ left: dir === 'left' ? -160 : 160, behavior: 'smooth' });
+  }
+
+  const fp: CommonFilterProps = {
+    aidedFilter, setAidedFilter,
+    courseFilter, setCourseFilter,
+    yearFilter, setYearFilter,
+    admTypeFilter, setAdmTypeFilter,
+    admCatFilter, setAdmCatFilter,
+    feeStatusFilter, setFeeStatusFilter,
+    stats,
+    hasActiveFilters,
+    clearFilters,
+  };
+
   return (
-    <div className="p-4 space-y-4" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-bold text-gray-900">
-          Fee Reports {academicYear && <span className="text-gray-400 font-normal text-sm">— {academicYear}</span>}
-        </h1>
-      </div>
-
-      {/* Stat chips */}
-      {!loading && stats.total > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <Chip label="Total"       count={stats.total}       active={feeStatusFilter === 'ALL'}          colorClass="border-gray-400 bg-gray-100 text-gray-700"         onClick={() => setFeeStatusFilter('ALL')} />
-          <Chip label="Paid"        count={stats.paidCount}   active={feeStatusFilter === 'PAID'}         colorClass="border-green-400 bg-green-100 text-green-700"       onClick={() => setFeeStatusFilter('PAID')} />
-          <Chip label="Not Paid"    count={stats.notPaid}     active={feeStatusFilter === 'NOT_PAID'}     colorClass="border-red-400 bg-red-100 text-red-700"             onClick={() => setFeeStatusFilter('NOT_PAID')} />
-          <Chip label="Fee Dues"    count={stats.duesCount}   active={feeStatusFilter === 'FEE_DUES'}     colorClass="border-amber-400 bg-amber-100 text-amber-700"        onClick={() => setFeeStatusFilter('FEE_DUES')} />
-          <Chip label="No Fee Dues" count={stats.noDuesCount} active={feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-emerald-400 bg-emerald-100 text-emerald-700"  onClick={() => setFeeStatusFilter('NO_FEE_DUES')} />
+    <div style={{ animation: 'page-enter 0.22s ease-out' }}>
+      {/* Header — stays at top, not sticky */}
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+        <div>
+          <h1 className="text-base font-bold text-gray-900">Fee Reports</h1>
+          {academicYear && <p className="text-xs text-gray-400 mt-0.5">{academicYear}</p>}
         </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <select value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
-          <option value="">Aided &amp; Unaided</option>
-          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-          <option value="UNAIDED">Unaided (EE)</option>
-        </select>
-        <select value={courseFilter}    onChange={(e) => setCourseFilter(e.target.value as Course | '')}    className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={yearFilter}      onChange={(e) => setYearFilter(e.target.value as Year | '')}        className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={admTypeFilter}   onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-          <option value="">All Adm Types</option>
-          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={admCatFilter}    onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}   className={fs}>
-          <option value="">All Adm Cats</option>
-          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={feeStatusFilter} onChange={(e) => setFeeStatusFilter(e.target.value as FeeStatus)}  className={fs}>
-          <option value="ALL">All Fee Status</option>
-          <option value="PAID">Paid</option>
-          <option value="NOT_PAID">Not Paid</option>
-          <option value="FEE_DUES">Fee Dues</option>
-          <option value="NO_FEE_DUES">No Fee Dues</option>
-        </select>
-        <button
-          onClick={clearFilters}
-          className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
-            hasActiveFilters
-              ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
-              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
-          }`}
-        >
-          Clear Filters
-        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex -mb-px">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* Sticky tab bar */}
+      <div className="sticky -top-4 -mx-4 z-20 bg-white border-b border-gray-200" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div className="flex items-center gap-1 px-2 py-2">
+          {/* Left arrow */}
+          <button
+            type="button"
+            onClick={() => scrollTabs('left')}
+            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer text-base leading-none select-none"
+            aria-label="Scroll left"
+          >‹</button>
+
+          {/* Tabs — scrollable, no scrollbar */}
+          <div ref={tabsScrollRef} className="chips-scroll flex items-center gap-1 flex-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right arrow */}
+          <button
+            type="button"
+            onClick={() => scrollTabs('right')}
+            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer text-base leading-none select-none"
+            aria-label="Scroll right"
+          >›</button>
+        </div>
       </div>
 
       {/* Tab content */}
-      {loading ? (
-        <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
-      ) : !academicYear ? (
-        <p className="text-sm text-gray-400 py-8 text-center">No academic year configured.</p>
-      ) : (
-        <div>
-          {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'fee-list'          && <FeeListTab          rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'dues'              && <DuesTab             rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}            academicYear={academicYear} />}
-          {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords} academicYear={academicYear} />}
-          {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}         academicYear={academicYear} />}
-          {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={feeRecords}         academicYear={academicYear} />}
-          {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords} academicYear={academicYear} />}
-          {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}         academicYear={academicYear} />}
-          {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
-        </div>
-      )}
+      <div className="p-5">
+        {loading ? (
+          <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
+        ) : !academicYear ? (
+          <p className="text-sm text-gray-400 py-8 text-center">No academic year configured.</p>
+        ) : (
+          <>
+            {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}
+            {activeTab === 'fee-list'          && <FeeListTab          rows={filteredRows}             academicYear={academicYear} fp={fp} />}
+            {activeTab === 'dues'              && <DuesTab             rows={filteredRows}             academicYear={academicYear} fp={fp} />}
+            {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}
+            {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords}  academicYear={academicYear} fp={fp} />}
+            {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}          academicYear={academicYear} />}
+            {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={feeRecords}          academicYear={academicYear} />}
+            {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords}  academicYear={academicYear} fp={fp} />}
+            {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}          academicYear={academicYear} />}
+            {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }

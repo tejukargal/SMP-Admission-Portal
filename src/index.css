@@ -142,6 +142,14 @@
 .chip-glow-rose    { outline: 2px solid rgba(251,113,133,0); outline-offset: 2px; animation: chip-glow-rose    2.5s ease-in-out infinite; }
 .chip-glow-gray    { outline: 2px solid rgba(156,163,175,0); outline-offset: 2px; animation: chip-glow-gray    2.5s ease-in-out infinite; }
 
+/* ── Hidden scrollbar (scrollable but no visible bar) ───────────────────── */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Year chips scroll — hidden scrollbar, arrows handle navigation ─────── */
 .chips-scroll {
   overflow-x: auto;

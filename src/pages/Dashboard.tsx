@@ -423,6 +423,21 @@ export function Dashboard() {
       BOY:  emptyCourseyear(),
       GIRL: emptyCourseyear(),
     };
+    const byGenderByCategory: Record<string, Record<string, number>> = {
+      BOY:  { GM: 0, C1: 0, '2A': 0, '2B': 0, '3A': 0, '3B': 0, SC: 0, ST: 0 },
+      GIRL: { GM: 0, C1: 0, '2A': 0, '2B': 0, '3A': 0, '3B': 0, SC: 0, ST: 0 },
+    };
+    const emptyGenderCatPair = (): Record<Course, Record<Year, { boys: number; girls: number }>> => ({
+      CE: { '1ST YEAR': { boys: 0, girls: 0 }, '2ND YEAR': { boys: 0, girls: 0 }, '3RD YEAR': { boys: 0, girls: 0 } },
+      ME: { '1ST YEAR': { boys: 0, girls: 0 }, '2ND YEAR': { boys: 0, girls: 0 }, '3RD YEAR': { boys: 0, girls: 0 } },
+      EC: { '1ST YEAR': { boys: 0, girls: 0 }, '2ND YEAR': { boys: 0, girls: 0 }, '3RD YEAR': { boys: 0, girls: 0 } },
+      CS: { '1ST YEAR': { boys: 0, girls: 0 }, '2ND YEAR': { boys: 0, girls: 0 }, '3RD YEAR': { boys: 0, girls: 0 } },
+      EE: { '1ST YEAR': { boys: 0, girls: 0 }, '2ND YEAR': { boys: 0, girls: 0 }, '3RD YEAR': { boys: 0, girls: 0 } },
+    });
+    const byGenderByCatByCourseByYear: Record<string, Record<Course, Record<Year, { boys: number; girls: number }>>> = {
+      GM: emptyGenderCatPair(), C1: emptyGenderCatPair(), '2A': emptyGenderCatPair(), '2B': emptyGenderCatPair(),
+      '3A': emptyGenderCatPair(), '3B': emptyGenderCatPair(), SC: emptyGenderCatPair(), ST: emptyGenderCatPair(),
+    };
 
     for (const s of filteredStudents) {
       const status = s.admissionStatus?.trim() || 'PENDING';
@@ -450,6 +465,11 @@ export function Dashboard() {
       if (s.course in byCourseByYear && s.year in byCourseByYear[s.course]) byCourseByYear[s.course][s.year]++;
       if (s.year in byYearByCourse && s.course in byYearByCourse[s.year]) byYearByCourse[s.year][s.course]++;
       if (s.gender in byGenderByCourseByYear) byGenderByCourseByYear[s.gender][s.course as Course][s.year as Year]++;
+      if (s.gender in byGenderByCategory && s.category in byGenderByCategory[s.gender]) byGenderByCategory[s.gender][s.category]++;
+      if (s.category in byGenderByCatByCourseByYear) {
+        const pair = byGenderByCatByCourseByYear[s.category][s.course as Course]?.[s.year as Year];
+        if (pair) { if (s.gender === 'BOY') pair.boys++; else if (s.gender === 'GIRL') pair.girls++; }
+      }
 
       if (s.year === '1ST YEAR' && s.course in firstYearSeats) {
         if (s.admType === 'REGULAR' && s.admCat === 'GM') {
@@ -481,7 +501,7 @@ export function Dashboard() {
       }
     }
 
-    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, byGenderByCourseByYear };
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, byGenderByCourseByYear, byGenderByCategory, byGenderByCatByCourseByYear };
   }, [filteredStudents, admStatusFilter]);
 
   const activeSource = useMemo(
@@ -966,7 +986,22 @@ export function Dashboard() {
                 <p className="text-4xl font-black leading-none text-sky-700">
                   <AnimNum value={stats.total} />
                 </p>
-                <p className="text-xs text-sky-500/80 mt-auto font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-auto">
+                  <span className="text-xs text-sky-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</span>
+                  <span className="text-sky-300 text-xs select-none">·</span>
+                  {YEARS.map((yr, i) => {
+                    const y = yearConfig[yr];
+                    const pct = Math.round((stats.byYear[yr] / (COURSES.length * 60)) * 100);
+                    return (
+                      <span key={yr} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${y.border} bg-white/70 ${y.textColor}`}>
+                          {i + 1}Y
+                        </span>
+                        <span className="font-bold text-gray-600">{pct}%</span>
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
               <StatCard
                 label="Boys"
@@ -1300,15 +1335,178 @@ export function Dashboard() {
 
             </div>
 
-            {/* Date-wise Admission Course-wise Counts */}
+            {/* Gender stats — merged category+gender table + course-year-gender */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+              {/* Merged: Category-wise Gender Count by Year & Course */}
+              {(() => {
+                const CATS = ['GM','C1','2A','2B','3A','3B','SC','ST'] as const;
+                type CatPair = { boys: number; girls: number };
+                const tc = 'px-1.5 py-1 text-right tabular-nums text-[10px]';
+                const tl = 'px-1.5 py-1 text-left text-[10px]';
+
+                const rows = YEARS.flatMap((yr) => {
+                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  const sub: Record<string, CatPair> = Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }]));
+                  let subB = 0, subG = 0;
+                  const courseRows = COURSES.map((course) => {
+                    const cats: Record<string, CatPair> = {};
+                    let tB = 0, tG = 0;
+                    for (const cat of CATS) {
+                      const p = stats.byGenderByCatByCourseByYear[cat][course as Course][yr as Year];
+                      cats[cat] = p; tB += p.boys; tG += p.girls;
+                      sub[cat].boys += p.boys; sub[cat].girls += p.girls;
+                    }
+                    subB += tB; subG += tG;
+                    return { yrLabel, course, cats, tB, tG, isSubtotal: false };
+                  });
+                  return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', cats: sub, tB: subB, tG: subG, isSubtotal: true }];
+                });
+
+                const grand = { cats: Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }])) as Record<string, CatPair>, tB: 0, tG: 0 };
+                for (const r of rows.filter((r) => r.isSubtotal)) {
+                  for (const cat of CATS) { grand.cats[cat].boys += r.cats[cat].boys; grand.cats[cat].girls += r.cats[cat].girls; }
+                  grand.tB += r.tB; grand.tG += r.tG;
+                }
+
+                return (
+                  <div className="bg-white/80 rounded-2xl border border-rose-400 overflow-hidden flex flex-col h-full" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                    <div className="px-4 py-2.5 border-b border-rose-50 shrink-0">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category & Gender-wise Count</p>
+                    </div>
+                    <div className="overflow-x-auto flex-1">
+                      <table className="w-full h-full text-[10px] border-collapse">
+                        <thead>
+                          <tr style={{ background: 'linear-gradient(90deg, #9f1239, #be123c)' }}>
+                            <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Year</th>
+                            <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Course</th>
+                            {CATS.map((cat) => (
+                              <th key={cat} colSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">{cat}</th>
+                            ))}
+                            <th colSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">Total</th>
+                          </tr>
+                          <tr style={{ background: 'linear-gradient(90deg, #be123c, #e11d48)' }}>
+                            {[...CATS, 'T' as const].flatMap((cat) => [
+                              <th key={`${cat}-b`} className="px-1.5 py-0.5 text-[9px] text-white/80 font-medium text-right border-l border-rose-600">B</th>,
+                              <th key={`${cat}-g`} className="px-1.5 py-0.5 text-[9px] text-white/80 font-medium text-right">G</th>,
+                            ])}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, i) => r.isSubtotal ? (
+                            <tr key={i} className="text-white font-semibold" style={{ background: '#e11d48' }}>
+                              <td className={tl}>{r.yrLabel}</td>
+                              <td className={tl}>{r.course}</td>
+                              {CATS.flatMap((cat) => [
+                                <td key={`${cat}-b`} className={tc + ' border-l border-rose-300'}>{r.cats[cat].boys}</td>,
+                                <td key={`${cat}-g`} className={tc}>{r.cats[cat].girls}</td>,
+                              ])}
+                              <td className={tc + ' border-l border-rose-300'}>{r.tB}</td>
+                              <td className={tc}>{r.tG}</td>
+                            </tr>
+                          ) : (
+                            <tr key={i} className="border-b border-rose-50 hover:bg-rose-50/40 transition-colors">
+                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
+                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
+                              {CATS.flatMap((cat) => [
+                                <td key={`${cat}-b`} className={tc + ' text-gray-700 border-l border-rose-50'}>{r.cats[cat].boys}</td>,
+                                <td key={`${cat}-g`} className={tc + ' text-gray-700'}>{r.cats[cat].girls}</td>,
+                              ])}
+                              <td className={tc + ' text-gray-800 font-semibold border-l border-rose-100'}>{r.tB}</td>
+                              <td className={tc + ' text-gray-800 font-semibold'}>{r.tG}</td>
+                            </tr>
+                          ))}
+                          <tr className="text-white font-bold" style={{ background: '#4c0519' }}>
+                            <td className={tl}>GRAND TOTAL</td>
+                            <td className={tl} />
+                            {CATS.flatMap((cat) => [
+                              <td key={`${cat}-b`} className={tc + ' border-l border-rose-900'}>{grand.cats[cat].boys}</td>,
+                              <td key={`${cat}-g`} className={tc}>{grand.cats[cat].girls}</td>,
+                            ])}
+                            <td className={tc + ' border-l border-rose-900'}>{grand.tB}</td>
+                            <td className={tc}>{grand.tG}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Year & Course-wise Gender */}
+              {(() => {
+                const tc = 'px-2 py-1 text-right tabular-nums';
+                const tl = 'px-2 py-1 text-left';
+                const rows = YEARS.flatMap((yr) => {
+                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  const sub = { boys: 0, girls: 0, total: 0 };
+                  const courseRows = COURSES.map((course) => {
+                    const boys  = stats.byGenderByCourseByYear['BOY'][course][yr];
+                    const girls = stats.byGenderByCourseByYear['GIRL'][course][yr];
+                    const total = boys + girls;
+                    sub.boys += boys; sub.girls += girls; sub.total += total;
+                    return { yrLabel, course, boys, girls, total, isSubtotal: false };
+                  });
+                  return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', ...sub, isSubtotal: true }];
+                });
+                const grand = rows.filter((r) => r.isSubtotal).reduce(
+                  (acc, r) => ({ boys: acc.boys + r.boys, girls: acc.girls + r.girls, total: acc.total + r.total }),
+                  { boys: 0, girls: 0, total: 0 }
+                );
+                return (
+                  <div className="bg-white/80 rounded-2xl border border-teal-400 overflow-hidden h-full flex flex-col" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                    <div className="px-4 py-2.5 border-b border-teal-50 shrink-0">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Year & Course-wise Gender</p>
+                    </div>
+                    <div className="overflow-x-auto flex-1">
+                      <table className="w-full h-full text-[10px] border-collapse">
+                        <thead>
+                          <tr style={{ background: 'linear-gradient(90deg, #134e4a, #0f766e)' }}>
+                            {['Year', 'Course', 'Boys', 'Girls', 'Total'].map((h) => (
+                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="h-full">
+                          {rows.map((r, i) => {
+                            const c = courseConfig[r.course as Course];
+                            return r.isSubtotal ? (
+                              <tr key={i} className="font-semibold" style={{ background: '#ccfbf1', height: '1%' }}>
+                                <td className={tl + ' text-teal-700 font-bold'}>{r.yrLabel}</td>
+                                <td className={tl + ' text-teal-600'} />
+                                {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-teal-800'}>{v}</td>)}
+                              </tr>
+                            ) : (
+                              <tr key={i} className="border-b border-teal-50 hover:bg-teal-50/40 transition-colors" style={{ height: '1%' }}>
+                                <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
+                                <td className={tl + ` ${c.textColor} font-bold`}>{r.course}</td>
+                                {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                              </tr>
+                            );
+                          })}
+                          <tr className="text-white font-bold" style={{ background: '#042f2e', height: '1%' }}>
+                            <td className={tl}>GRAND TOTAL</td>
+                            <td className={tl} />
+                            {[grand.boys, grand.girls, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+
+            {/* Date-wise Admission Course-wise Counts — full width */}
             {(() => {
               const grandTotal = dateTable.reduce((a, r) => a + r.total, 0);
               const grandByCourse = COURSES.reduce((acc, c) => {
                 acc[c] = dateTable.reduce((a, r) => a + r.byCourse[c], 0);
                 return acc;
               }, {} as Record<Course, number>);
-              const tc = 'px-2 py-1 text-right tabular-nums';
-              const tl = 'px-2 py-1 text-left';
+              const tc = 'px-3 py-2.5 text-right tabular-nums text-[12px]';
+              const tl = 'px-3 py-2.5 text-left text-[12px]';
               function fmtDate(iso: string) {
                 const [y, m, d] = iso.split('-');
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1327,12 +1525,12 @@ export function Dashboard() {
                   {dateTable.length === 0 ? (
                     <p className="px-4 py-6 text-xs text-gray-400 text-center">No admission fee payments recorded for this selection.</p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px] border-collapse">
+                    <div className="overflow-x-auto overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(6 * 43px + 43px)' }}>
+                      <table className="w-full text-[12px] border-collapse">
                         <thead>
                           <tr style={{ background: 'linear-gradient(90deg, #4c1d95, #5b21b6)' }}>
                             {['Date', ...COURSES, 'Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
+                              <th key={h} className="px-3 py-2.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
                             ))}
                           </tr>
                         </thead>
