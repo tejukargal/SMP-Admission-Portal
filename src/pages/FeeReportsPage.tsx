@@ -6,6 +6,8 @@ import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import {
   exportStatsPdf, exportFeeListPdf, exportDuesPdf,
   exportCourseYearPdf, exportConsolidatedPdf,
@@ -1284,222 +1286,512 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp }: { feeRecords: Fee
 // ── Tab: Bank Remittance ──────────────────────────────────────────────────────
 
 const AIDED_COURSES_SET = new Set<Course>(['CE', 'ME', 'EC', 'CS']);
+
+interface RemittanceSummary {
+  smpCash: number; smpPay: number;
+  svkCash: number; svkPay: number;
+  rcCash:  number; rcPay:  number;
+  insCash: number; insPay: number;
+}
+
+function buildRemittanceSummaries(
+  records: FeeRecord[],
+  dateFrom?: string,
+  dateTo?: string,
+): { aided: RemittanceSummary; unaided: RemittanceSummary } {
+  const aided:   RemittanceSummary = { smpCash:0, smpPay:0, svkCash:0, svkPay:0, rcCash:0, rcPay:0, insCash:0, insPay:0 };
+  const unaided: RemittanceSummary = { smpCash:0, smpPay:0, svkCash:0, svkPay:0, rcCash:0, rcPay:0, insCash:0, insPay:0 };
+
+  for (const r of records) {
+    const d = r.date.slice(0, 10);
+    if (dateFrom && d < dateFrom) continue;
+    if (dateTo   && d > dateTo)   continue;
+
+    const bucket  = AIDED_COURSES_SET.has(r.course) ? aided : unaided;
+    const smpMode = r.smpPaymentMode        ?? r.paymentMode;
+    const svkMode = r.svkPaymentMode        ?? r.paymentMode;
+    const addMode = r.additionalPaymentMode ?? r.paymentMode;
+
+    // SMP
+    const smpAmt = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
+    bucket.smpCash += smpMode === 'CASH' ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.cash ?? 0) : 0;
+    bucket.smpPay  += smpMode === 'UPI'  ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.upi  ?? 0) : 0;
+
+    // SVK
+    bucket.svkCash += svkMode === 'CASH' ? r.svk : svkMode === 'SPLIT' ? (r.svkSplit?.cash ?? 0) : 0;
+    bucket.svkPay  += svkMode === 'UPI'  ? r.svk : svkMode === 'SPLIT' ? (r.svkSplit?.upi  ?? 0) : 0;
+
+    // Additional heads — Red Cross & Insurance (pro-rated for SPLIT mode)
+    const totalAdd = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+    if (totalAdd > 0) {
+      const splitCash = addMode === 'SPLIT' ? (r.additionalSplit?.cash ?? 0) : 0;
+      const splitUpi  = addMode === 'SPLIT' ? (r.additionalSplit?.upi  ?? 0) : 0;
+      for (const head of r.additionalPaid) {
+        const lbl   = head.label.toLowerCase();
+        const ratio = head.amount / totalAdd;
+        const cash  = addMode === 'CASH' ? head.amount : addMode === 'SPLIT' ? Math.round(splitCash * ratio) : 0;
+        const pay   = addMode === 'UPI'  ? head.amount : addMode === 'SPLIT' ? Math.round(splitUpi  * ratio) : 0;
+        if (lbl.includes('red cross') || lbl.includes('redcross')) { bucket.rcCash  += cash; bucket.rcPay  += pay; }
+        else if (lbl.includes('insur'))                            { bucket.insCash += cash; bucket.insPay += pay; }
+      }
+    }
+  }
+
+  return { aided, unaided };
+}
+
+function BankRemittanceTable({
+  aided, unaided, label,
+}: {
+  aided: RemittanceSummary;
+  unaided: RemittanceSummary;
+  label?: string;
+}) {
+  const rows = [
+    { name: 'SMP',       aidedCash: aided.smpCash, aidedPay: aided.smpPay, unaidedCash: unaided.smpCash, unaidedPay: unaided.smpPay },
+    { name: 'SVK',       aidedCash: aided.svkCash, aidedPay: aided.svkPay, unaidedCash: unaided.svkCash, unaidedPay: unaided.svkPay },
+    { name: 'Red Cross', aidedCash: aided.rcCash,  aidedPay: aided.rcPay,  unaidedCash: unaided.rcCash,  unaidedPay: unaided.rcPay  },
+    { name: 'Insurance', aidedCash: aided.insCash, aidedPay: aided.insPay, unaidedCash: unaided.insCash, unaidedPay: unaided.insPay },
+  ];
+
+  const totAidedCash   = rows.reduce((s, r) => s + r.aidedCash,   0);
+  const totAidedPay    = rows.reduce((s, r) => s + r.aidedPay,    0);
+  const totUnaidedCash = rows.reduce((s, r) => s + r.unaidedCash, 0);
+  const totUnaidedPay  = rows.reduce((s, r) => s + r.unaidedPay,  0);
+  const grandTotal     = totAidedCash + totAidedPay + totUnaidedCash + totUnaidedPay;
+
+  const cell = 'px-4 py-2.5 text-sm';
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden">
+      {label && (
+        <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead className="bg-gray-700 text-white">
+          <tr>
+            <th className="px-4 py-2 text-left font-semibold" rowSpan={2}>Fee Head</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-blue-800/60" colSpan={2}>Aided</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-indigo-800/60" colSpan={2}>Unaided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20" rowSpan={2}>Total</th>
+          </tr>
+          <tr>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-blue-900/40">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-blue-900/40">Pay</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-indigo-900/40">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-indigo-900/40">Pay</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((row, i) => {
+            const rowTotal = row.aidedCash + row.aidedPay + row.unaidedCash + row.unaidedPay;
+            return (
+              <tr key={row.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className={`${cell} font-semibold text-gray-700`}>{row.name}</td>
+                <td className={`${cell} text-right border-l border-gray-100 ${row.aidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.aidedCash > 0 ? fmt(row.aidedCash) : '—'}</td>
+                <td className={`${cell} text-right ${row.aidedPay > 0 ? 'text-blue-700 font-medium' : 'text-gray-300'}`}>{row.aidedPay > 0 ? fmt(row.aidedPay) : '—'}</td>
+                <td className={`${cell} text-right border-l border-gray-100 ${row.unaidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.unaidedCash > 0 ? fmt(row.unaidedCash) : '—'}</td>
+                <td className={`${cell} text-right ${row.unaidedPay > 0 ? 'text-blue-700 font-medium' : 'text-gray-300'}`}>{row.unaidedPay > 0 ? fmt(row.unaidedPay) : '—'}</td>
+                <td className={`${cell} text-right font-bold border-l border-gray-100 text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+          <tr>
+            <td className="px-4 py-2.5 font-bold">Total</td>
+            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totAidedCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${totAidedPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{totAidedPay > 0 ? fmt(totAidedPay) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totUnaidedCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{totUnaidedCash > 0 ? fmt(totUnaidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${totUnaidedPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{totUnaidedPay > 0 ? fmt(totUnaidedPay) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandTotal)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 const SBI_ACCOUNT    = '64049891981';
 const CANARA_ACCOUNT = '19032200004180';
 
-type ChallanId = 'sbi-aided' | 'sbi-unaided' | 'canara-aided' | 'canara-unaided';
-
-interface ChallanConfig {
-  id: ChallanId;
-  bank: string;
-  aidedType: 'Aided' | 'Unaided';
-  accountNo: string;
-  feeLabel: string;
-  courses: string;
-  hdrBg: string; accentBg: string; accentBorder: string; accentText: string; totalBg: string;
-}
-const CHALLAN_CONFIGS: ChallanConfig[] = [
-  { id: 'sbi-aided',      bank: 'SBI',    aidedType: 'Aided',   accountNo: SBI_ACCOUNT,    feeLabel: 'SMP Fee + Additional', courses: 'CE · ME · EC · CS', hdrBg: 'bg-blue-700',   accentBg: 'bg-blue-50',   accentBorder: 'border-blue-200',   accentText: 'text-blue-700',   totalBg: 'bg-blue-100'   },
-  { id: 'sbi-unaided',    bank: 'SBI',    aidedType: 'Unaided', accountNo: SBI_ACCOUNT,    feeLabel: 'SMP Fee + Additional', courses: 'EE',               hdrBg: 'bg-indigo-700', accentBg: 'bg-indigo-50', accentBorder: 'border-indigo-200', accentText: 'text-indigo-700', totalBg: 'bg-indigo-100' },
-  { id: 'canara-aided',   bank: 'Canara', aidedType: 'Aided',   accountNo: CANARA_ACCOUNT, feeLabel: 'SVK Fee',              courses: 'CE · ME · EC · CS', hdrBg: 'bg-emerald-700',accentBg: 'bg-emerald-50',accentBorder: 'border-emerald-200',accentText: 'text-emerald-700',totalBg: 'bg-emerald-100'},
-  { id: 'canara-unaided', bank: 'Canara', aidedType: 'Unaided', accountNo: CANARA_ACCOUNT, feeLabel: 'SVK Fee',              courses: 'EE',               hdrBg: 'bg-teal-700',   accentBg: 'bg-teal-50',   accentBorder: 'border-teal-200',   accentText: 'text-teal-700',   totalBg: 'bg-teal-100'   },
-];
-
-interface ChallanRow {
-  id: string;
-  studentName: string;
-  regNumber: string;
-  course: string;
-  year: string;
-  receiptNos: string;
-  cashAmt: number;
-  upiAmt: number;
-}
-type ChallanMap = Record<ChallanId, ChallanRow[]>;
-
-function buildDayChallans(records: FeeRecord[], dateKey: string): ChallanMap {
-  const map: ChallanMap = { 'sbi-aided': [], 'sbi-unaided': [], 'canara-aided': [], 'canara-unaided': [] };
-  for (const r of records) {
-    if (r.date.slice(0, 10) !== dateKey) continue;
-    const isAided  = AIDED_COURSES_SET.has(r.course);
-    const smpAmt   = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
-    const addAmt   = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
-    const svkAmt   = r.svk;
-    const smpMode  = r.smpPaymentMode  ?? r.paymentMode;
-    const addMode  = r.additionalPaymentMode ?? r.paymentMode;
-    const svkMode  = r.svkPaymentMode  ?? r.paymentMode;
-
-    const sbiId:    ChallanId = isAided ? 'sbi-aided'    : 'sbi-unaided';
-    const canaraId: ChallanId = isAided ? 'canara-aided' : 'canara-unaided';
-
-    // SBI: SMP + Additional (modes tracked independently, split aware)
-    const smpCash = smpMode === 'CASH' ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.cash ?? 0) : 0;
-    const smpUpi  = smpMode === 'UPI'  ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.upi  ?? 0) : 0;
-    const addCash = addMode === 'CASH' ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.cash ?? 0) : 0;
-    const addUpi  = addMode === 'UPI'  ? addAmt : addMode === 'SPLIT' ? (r.additionalSplit?.upi  ?? 0) : 0;
-    const sbiCash = smpCash + addCash;
-    const sbiUpi  = smpUpi  + addUpi;
-    if (sbiCash + sbiUpi > 0) {
-      const rpts = [r.receiptNumber, r.additionalReceiptNumber].filter(Boolean).join(' / ');
-      map[sbiId].push({ id: r.id + '_sbi', studentName: r.studentName, regNumber: r.regNumber ?? '', course: r.course, year: r.year, receiptNos: rpts || '—', cashAmt: sbiCash, upiAmt: sbiUpi });
-    }
-
-    // Canara: SVK only (split aware)
-    if (svkAmt > 0) {
-      const canaraCash = svkMode === 'CASH' ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.cash ?? 0) : 0;
-      const canaraUpi  = svkMode === 'UPI'  ? svkAmt : svkMode === 'SPLIT' ? (r.svkSplit?.upi  ?? 0) : 0;
-      map[canaraId].push({ id: r.id + '_canara', studentName: r.studentName, regNumber: r.regNumber ?? '', course: r.course, year: r.year, receiptNos: r.svkReceiptNumber || '—', cashAmt: canaraCash, upiAmt: canaraUpi });
-    }
-  }
-  return map;
-}
-
-interface RemittancePeriodRow {
-  dateKey: string; dateLabel: string;
-  totals: Record<ChallanId, { cash: number; upi: number; total: number }>;
-  dayTotal: number;
-}
-function buildPeriodRemittance(records: FeeRecord[], dateFrom: string, dateTo: string): RemittancePeriodRow[] {
-  const dateKeys = [...new Set(records.map((r) => r.date.slice(0, 10)))]
-    .filter((d) => (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo))
-    .sort();
-  return dateKeys.map((dateKey) => {
-    const challans = buildDayChallans(records, dateKey);
-    let dayTotal = 0;
-    const totals = {} as Record<ChallanId, { cash: number; upi: number; total: number }>;
-    for (const cfg of CHALLAN_CONFIGS) {
-      const cash = challans[cfg.id].reduce((s, r) => s + r.cashAmt, 0);
-      const upi  = challans[cfg.id].reduce((s, r) => s + r.upiAmt, 0);
-      totals[cfg.id] = { cash, upi, total: cash + upi };
-      dayTotal += cash + upi;
-    }
-    return { dateKey, dateLabel: formatDayLabel(dateKey), totals, dayTotal };
-  });
-}
-
-function exportRemittanceExcel(rows: RemittancePeriodRow[], academicYear: string): void {
-  const hdr = [
-    'Date',
-    'SBI Aided Cash', 'SBI Aided UPI', 'SBI Aided Total',
-    'SBI Unaided Cash', 'SBI Unaided UPI', 'SBI Unaided Total',
-    'Canara Aided Cash', 'Canara Aided UPI', 'Canara Aided Total',
-    'Canara Unaided Cash', 'Canara Unaided UPI', 'Canara Unaided Total',
-    'Day Total',
+function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary; unaided: RemittanceSummary }) {
+  // SBI Aided breakdown
+  const sbiAided = [
+    { head: 'SMP',       cash: aided.smpCash, pay: aided.smpPay  },
+    { head: 'Red Cross', cash: aided.rcCash,  pay: aided.rcPay   },
+    { head: 'Insurance', cash: aided.insCash, pay: aided.insPay  },
   ];
-  const data = rows.map((r) => [
-    r.dateLabel,
-    r.totals['sbi-aided'].cash    || null, r.totals['sbi-aided'].upi    || null, r.totals['sbi-aided'].total    || null,
-    r.totals['sbi-unaided'].cash  || null, r.totals['sbi-unaided'].upi  || null, r.totals['sbi-unaided'].total  || null,
-    r.totals['canara-aided'].cash || null, r.totals['canara-aided'].upi || null, r.totals['canara-aided'].total || null,
-    r.totals['canara-unaided'].cash || null, r.totals['canara-unaided'].upi || null, r.totals['canara-unaided'].total || null,
-    r.dayTotal || null,
-  ]);
-  const grand = rows.reduce((a, r) => {
-    for (const cfg of CHALLAN_CONFIGS) { a[cfg.id] = { cash: (a[cfg.id]?.cash ?? 0) + r.totals[cfg.id].cash, upi: (a[cfg.id]?.upi ?? 0) + r.totals[cfg.id].upi, total: (a[cfg.id]?.total ?? 0) + r.totals[cfg.id].total }; }
-    a.dayTotal = (a.dayTotal ?? 0) + r.dayTotal;
-    return a;
-  }, {} as Record<string, { cash: number; upi: number; total: number }> & { dayTotal?: number });
-  const totRow = [
-    'TOTAL',
-    grand['sbi-aided']?.cash || null,    grand['sbi-aided']?.upi || null,    grand['sbi-aided']?.total || null,
-    grand['sbi-unaided']?.cash || null,  grand['sbi-unaided']?.upi || null,  grand['sbi-unaided']?.total || null,
-    grand['canara-aided']?.cash || null, grand['canara-aided']?.upi || null, grand['canara-aided']?.total || null,
-    grand['canara-unaided']?.cash || null, grand['canara-unaided']?.upi || null, grand['canara-unaided']?.total || null,
-    grand.dayTotal || null,
-  ];
-  const ws = XLSX.utils.aoa_to_sheet([hdr, ...data, totRow]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Bank Remittance');
-  XLSX.writeFile(wb, `Bank_Remittance_${academicYear}.xlsx`);
-}
+  const sbiAidedCash = sbiAided.reduce((s, r) => s + r.cash, 0);
+  const sbiAidedPay  = sbiAided.reduce((s, r) => s + r.pay,  0);
 
-function ChallanPanel({ cfg, rows }: { cfg: ChallanConfig; rows: ChallanRow[] }) {
-  const cashTotal = rows.reduce((s, r) => s + r.cashAmt, 0);
-  const upiTotal  = rows.reduce((s, r) => s + r.upiAmt, 0);
-  const grandTotal = cashTotal + upiTotal;
-  const cell = 'px-2 py-1.5 text-[10px]';
+  // SBI Unaided breakdown
+  const sbiUnaided = [
+    { head: 'SMP',       cash: unaided.smpCash, pay: unaided.smpPay  },
+    { head: 'Red Cross', cash: unaided.rcCash,  pay: unaided.rcPay   },
+    { head: 'Insurance', cash: unaided.insCash, pay: unaided.insPay  },
+  ];
+  const sbiUnaidedCash = sbiUnaided.reduce((s, r) => s + r.cash, 0);
+  const sbiUnaidedPay  = sbiUnaided.reduce((s, r) => s + r.pay,  0);
+
+  const sbiCash = sbiAidedCash + sbiUnaidedCash;
+  const sbiPay  = sbiAidedPay  + sbiUnaidedPay;
+
+  // SVK
+  const svkAidedCash   = aided.svkCash;
+  const svkAidedPay    = aided.svkPay;
+  const svkUnaidedCash = unaided.svkCash;
+  const svkUnaidedPay  = unaided.svkPay;
+  const svkCash        = svkAidedCash + svkUnaidedCash;
+  const svkPay         = svkAidedPay  + svkUnaidedPay;
+
+  const grandCash = sbiCash + svkCash;
+  const grandPay  = sbiPay  + svkPay;
+
+  const detailCell = 'px-3 py-2 text-xs';
+  const subCell    = 'px-4 py-2 text-sm font-bold';
+
+  const moneyCls = (v: number, pos: string) => v > 0 ? pos : 'text-gray-300';
 
   return (
-    <div className={`rounded-xl border ${cfg.accentBorder} overflow-hidden flex flex-col`}>
-      {/* Challan header */}
-      <div className={`${cfg.hdrBg} px-3 py-2.5 flex items-start justify-between`}>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-white font-bold text-xs">{cfg.bank} Bank</span>
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cfg.aidedType === 'Aided' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'}`}>
-              {cfg.aidedType}
-            </span>
-          </div>
-          <p className="text-white/70 text-[9px] mt-0.5 font-mono">Acct: {cfg.accountNo}</p>
-          <p className="text-white/60 text-[9px]">{cfg.feeLabel} · {cfg.courses}</p>
-        </div>
-        <div className="text-right shrink-0 ml-3">
-          <p className="text-white font-bold text-sm">{fmt(grandTotal)}</p>
-          <p className="text-white/60 text-[9px]">{rows.length} payment{rows.length !== 1 ? 's' : ''}</p>
-        </div>
+    <div className="rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bank Account Summary</span>
       </div>
+      <table className="w-full text-sm">
+        <thead className="bg-gray-700 text-white">
+          <tr>
+            <th className="px-4 py-2 text-left font-semibold">Bank</th>
+            <th className="px-4 py-2 text-left font-semibold">Account No.</th>
+            <th className="px-4 py-2 text-left font-semibold">Challan</th>
+            <th className="px-4 py-2 text-left font-semibold">Fee Head</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Cash (Challan)</th>
+            <th className="px-4 py-2 text-right font-semibold">Pay (UPI)</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* ── SBI Aided detail rows ── */}
+          {sbiAided.map((row, i) => (
+            <tr key={'sbi-aided-' + row.head} className="bg-blue-50 border-b border-blue-100">
+              {i === 0 && (
+                <>
+                  <td className={`${subCell} text-blue-700`} rowSpan={sbiAided.length}>SBI Ppl</td>
+                  <td className={`${detailCell} font-mono text-gray-500`} rowSpan={sbiAided.length}>{SBI_ACCOUNT}</td>
+                  <td className={`${detailCell} font-semibold text-blue-600`} rowSpan={sbiAided.length}>Aided</td>
+                </>
+              )}
+              <td className={`${detailCell} pl-5 text-gray-600`}>{row.head}</td>
+              <td className={`${detailCell} text-right border-l border-blue-100 font-medium ${moneyCls(row.cash, 'text-emerald-700')}`}>{row.cash > 0 ? fmt(row.cash) : '—'}</td>
+              <td className={`${detailCell} text-right font-medium ${moneyCls(row.pay, 'text-blue-700')}`}>{row.pay > 0 ? fmt(row.pay) : '—'}</td>
+              <td className={`${detailCell} text-right font-semibold border-l border-blue-100 text-blue-600`}>{(row.cash + row.pay) > 0 ? fmt(row.cash + row.pay) : '—'}</td>
+            </tr>
+          ))}
+          {/* SBI Aided sub-total */}
+          <tr className="bg-blue-100 border-b border-blue-200">
+            <td className="px-4 py-1.5 text-xs font-bold text-blue-700 italic" colSpan={4}>Aided Sub-total</td>
+            <td className={`px-4 py-1.5 text-right text-xs font-bold border-l border-blue-200 ${moneyCls(sbiAidedCash, 'text-emerald-700')}`}>{sbiAidedCash > 0 ? fmt(sbiAidedCash) : '—'}</td>
+            <td className={`px-4 py-1.5 text-right text-xs font-bold ${moneyCls(sbiAidedPay, 'text-blue-700')}`}>{sbiAidedPay > 0 ? fmt(sbiAidedPay) : '—'}</td>
+            <td className="px-4 py-1.5 text-right text-xs font-bold border-l border-blue-200 text-blue-700">{(sbiAidedCash + sbiAidedPay) > 0 ? fmt(sbiAidedCash + sbiAidedPay) : '—'}</td>
+          </tr>
 
-      {/* Cash / UPI summary chips */}
-      <div className={`flex gap-3 px-3 py-2 ${cfg.accentBg} border-b ${cfg.accentBorder}`}>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-          <span className="text-[10px] font-semibold text-gray-600">Cash (challan):</span>
-          <span className={`text-[10px] font-bold ${cashTotal > 0 ? 'text-emerald-700' : 'text-gray-400'}`}>{cashTotal > 0 ? fmt(cashTotal) : '—'}</span>
-        </div>
-        <div className="w-px bg-gray-200" />
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-          <span className="text-[10px] font-semibold text-gray-600">UPI (auto-remitted):</span>
-          <span className={`text-[10px] font-bold ${upiTotal > 0 ? 'text-blue-700' : 'text-gray-400'}`}>{upiTotal > 0 ? fmt(upiTotal) : '—'}</span>
-        </div>
-      </div>
+          {/* ── SBI Unaided detail rows ── */}
+          {sbiUnaided.map((row, i) => (
+            <tr key={'sbi-unaided-' + row.head} className="bg-indigo-50/60 border-b border-indigo-100">
+              {i === 0 && (
+                <>
+                  <td className={`${subCell} text-blue-400`} rowSpan={sbiUnaided.length}></td>
+                  <td className={`${detailCell} font-mono text-gray-400`} rowSpan={sbiUnaided.length}>{SBI_ACCOUNT}</td>
+                  <td className={`${detailCell} font-semibold text-indigo-500`} rowSpan={sbiUnaided.length}>Unaided</td>
+                </>
+              )}
+              <td className={`${detailCell} pl-5 text-gray-600`}>{row.head}</td>
+              <td className={`${detailCell} text-right border-l border-indigo-100 font-medium ${moneyCls(row.cash, 'text-emerald-700')}`}>{row.cash > 0 ? fmt(row.cash) : '—'}</td>
+              <td className={`${detailCell} text-right font-medium ${moneyCls(row.pay, 'text-blue-700')}`}>{row.pay > 0 ? fmt(row.pay) : '—'}</td>
+              <td className={`${detailCell} text-right font-semibold border-l border-indigo-100 text-indigo-500`}>{(row.cash + row.pay) > 0 ? fmt(row.cash + row.pay) : '—'}</td>
+            </tr>
+          ))}
+          {/* SBI Unaided sub-total */}
+          <tr className="bg-indigo-100 border-b border-indigo-200">
+            <td className="px-4 py-1.5 text-xs font-bold text-indigo-700 italic" colSpan={4}>Unaided Sub-total</td>
+            <td className={`px-4 py-1.5 text-right text-xs font-bold border-l border-indigo-200 ${moneyCls(sbiUnaidedCash, 'text-emerald-700')}`}>{sbiUnaidedCash > 0 ? fmt(sbiUnaidedCash) : '—'}</td>
+            <td className={`px-4 py-1.5 text-right text-xs font-bold ${moneyCls(sbiUnaidedPay, 'text-blue-700')}`}>{sbiUnaidedPay > 0 ? fmt(sbiUnaidedPay) : '—'}</td>
+            <td className="px-4 py-1.5 text-right text-xs font-bold border-l border-indigo-200 text-indigo-700">{(sbiUnaidedCash + sbiUnaidedPay) > 0 ? fmt(sbiUnaidedCash + sbiUnaidedPay) : '—'}</td>
+          </tr>
+          {/* SBI Grand sub-total */}
+          <tr className="bg-blue-200 border-b-2 border-blue-400">
+            <td className="px-4 py-2 font-bold text-blue-900 text-xs uppercase tracking-wide" colSpan={4}>SBI Sub-total</td>
+            <td className={`px-4 py-2 text-right font-bold border-l border-blue-300 ${moneyCls(sbiCash, 'text-emerald-800')}`}>{sbiCash > 0 ? fmt(sbiCash) : '—'}</td>
+            <td className={`px-4 py-2 text-right font-bold ${moneyCls(sbiPay, 'text-blue-800')}`}>{sbiPay > 0 ? fmt(sbiPay) : '—'}</td>
+            <td className="px-4 py-2 text-right font-bold border-l border-blue-300 text-blue-900">{(sbiCash + sbiPay) > 0 ? fmt(sbiCash + sbiPay) : '—'}</td>
+          </tr>
 
-      {/* Student rows */}
-      <div className="overflow-auto flex-1" style={{ maxHeight: '220px' }}>
-        {rows.length === 0 ? (
-          <p className="px-3 py-4 text-[10px] text-gray-400 text-center">No remittance for this date.</p>
-        ) : (
-          <table className="w-full text-[10px]">
-            <thead className={`sticky top-0 z-10 ${cfg.hdrBg} text-white`}>
-              <tr>
-                <th className="px-2 py-1.5 text-center font-semibold w-7">Sl</th>
-                <th className="px-2 py-1.5 text-left font-semibold min-w-[120px]">Name</th>
-                <th className="px-2 py-1.5 text-left font-semibold">Reg No</th>
-                <th className="px-2 py-1.5 text-center font-semibold">Yr/Crs</th>
-                <th className="px-2 py-1.5 text-left font-semibold border-l border-white/30">Receipt</th>
-                <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30">Cash</th>
-                <th className="px-2 py-1.5 text-right font-semibold">UPI</th>
-                <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : `${cfg.accentBg}`}>
-                  <td className={`${cell} text-center text-gray-400`}>{i + 1}</td>
-                  <td className={`${cell} font-medium truncate max-w-[140px]`}>{r.studentName}</td>
-                  <td className={`${cell} text-gray-500 font-mono`}>{r.regNumber || '—'}</td>
-                  <td className={`${cell} text-center text-gray-600`}>{r.year.split(' ')[0]}/{r.course}</td>
-                  <td className={`${cell} font-mono border-l border-gray-100`}>{r.receiptNos}</td>
-                  <td className={`${cell} text-right font-medium border-l border-gray-100 ${r.cashAmt > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.cashAmt > 0 ? fmt(r.cashAmt) : '—'}</td>
-                  <td className={`${cell} text-right font-medium ${r.upiAmt > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{r.upiAmt > 0 ? fmt(r.upiAmt) : '—'}</td>
-                  <td className={`${cell} text-right font-bold border-l border-gray-100`}>{fmt(r.cashAmt + r.upiAmt)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className={`sticky bottom-0 z-10 ${cfg.totalBg} border-t-2 ${cfg.accentBorder} font-bold text-[10px]`}>
-              <tr>
-                <td className="px-2 py-1.5 text-center text-gray-400">—</td>
-                <td className="px-2 py-1.5" colSpan={4}>{rows.length} payment{rows.length !== 1 ? 's' : ''}</td>
-                <td className={`px-2 py-1.5 text-right border-l border-gray-200 ${cfg.accentText}`}>{cashTotal > 0 ? fmt(cashTotal) : '—'}</td>
-                <td className={`px-2 py-1.5 text-right ${cfg.accentText}`}>{upiTotal > 0 ? fmt(upiTotal) : '—'}</td>
-                <td className={`px-2 py-1.5 text-right border-l border-gray-200 ${cfg.accentText}`}>{fmt(grandTotal)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        )}
-      </div>
+          {/* ── SVK Aided ── */}
+          <tr className="bg-emerald-50 border-b border-emerald-100">
+            <td className={`${subCell} text-emerald-700`}>SVK Mgt</td>
+            <td className={`${detailCell} font-mono text-gray-500`}>{CANARA_ACCOUNT}</td>
+            <td className={`${detailCell} font-semibold text-emerald-600`}>Aided</td>
+            <td className={`${detailCell} pl-5 text-gray-600`}>SVK</td>
+            <td className={`${detailCell} text-right border-l border-emerald-100 font-medium ${moneyCls(svkAidedCash, 'text-emerald-700')}`}>{svkAidedCash > 0 ? fmt(svkAidedCash) : '—'}</td>
+            <td className={`${detailCell} text-right font-medium ${moneyCls(svkAidedPay, 'text-blue-700')}`}>{svkAidedPay > 0 ? fmt(svkAidedPay) : '—'}</td>
+            <td className={`${detailCell} text-right font-semibold border-l border-emerald-100 text-emerald-700`}>{(svkAidedCash + svkAidedPay) > 0 ? fmt(svkAidedCash + svkAidedPay) : '—'}</td>
+          </tr>
+          {/* ── SVK Unaided ── */}
+          <tr className="bg-emerald-50/60 border-b border-emerald-100">
+            <td className={`${subCell} text-emerald-300`}></td>
+            <td className={`${detailCell} font-mono text-gray-400`}>{CANARA_ACCOUNT}</td>
+            <td className={`${detailCell} font-semibold text-teal-500`}>Unaided</td>
+            <td className={`${detailCell} pl-5 text-gray-600`}>SVK</td>
+            <td className={`${detailCell} text-right border-l border-emerald-100 font-medium ${moneyCls(svkUnaidedCash, 'text-emerald-700')}`}>{svkUnaidedCash > 0 ? fmt(svkUnaidedCash) : '—'}</td>
+            <td className={`${detailCell} text-right font-medium ${moneyCls(svkUnaidedPay, 'text-blue-700')}`}>{svkUnaidedPay > 0 ? fmt(svkUnaidedPay) : '—'}</td>
+            <td className={`${detailCell} text-right font-semibold border-l border-emerald-100 text-teal-600`}>{(svkUnaidedCash + svkUnaidedPay) > 0 ? fmt(svkUnaidedCash + svkUnaidedPay) : '—'}</td>
+          </tr>
+          {/* SVK sub-total */}
+          <tr className="bg-emerald-200 border-b-2 border-emerald-400">
+            <td className="px-4 py-2 font-bold text-emerald-900 text-xs uppercase tracking-wide" colSpan={4}>SVK Sub-total</td>
+            <td className={`px-4 py-2 text-right font-bold border-l border-emerald-300 ${moneyCls(svkCash, 'text-emerald-800')}`}>{svkCash > 0 ? fmt(svkCash) : '—'}</td>
+            <td className={`px-4 py-2 text-right font-bold ${moneyCls(svkPay, 'text-blue-800')}`}>{svkPay > 0 ? fmt(svkPay) : '—'}</td>
+            <td className="px-4 py-2 text-right font-bold border-l border-emerald-300 text-emerald-900">{(svkCash + svkPay) > 0 ? fmt(svkCash + svkPay) : '—'}</td>
+          </tr>
+        </tbody>
+        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+          <tr>
+            <td className="px-4 py-2.5" colSpan={4}>Grand Total</td>
+            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${grandCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${grandPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{grandPay > 0 ? fmt(grandPay) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandCash + grandPay)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
+}
+
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+function exportRemittanceExcel(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1 — Fee Head Breakup
+  const feeRows: (string | number)[][] = [
+    ['Fee Head', 'Aided Cash', 'Aided Pay', 'Unaided Cash', 'Unaided Pay', 'Total'],
+    ['SMP',       aided.smpCash, aided.smpPay, unaided.smpCash, unaided.smpPay, aided.smpCash + aided.smpPay + unaided.smpCash + unaided.smpPay],
+    ['SVK',       aided.svkCash, aided.svkPay, unaided.svkCash, unaided.svkPay, aided.svkCash + aided.svkPay + unaided.svkCash + unaided.svkPay],
+    ['Red Cross', aided.rcCash,  aided.rcPay,  unaided.rcCash,  unaided.rcPay,  aided.rcCash  + aided.rcPay  + unaided.rcCash  + unaided.rcPay],
+    ['Insurance', aided.insCash, aided.insPay, unaided.insCash, unaided.insPay, aided.insCash + aided.insPay + unaided.insCash + unaided.insPay],
+  ];
+  const feeTotal = (k: keyof RemittanceSummary) => aided[k] + unaided[k];
+  feeRows.push(['Total',
+    feeTotal('smpCash') + feeTotal('rcCash') + feeTotal('insCash'),
+    feeTotal('smpPay')  + feeTotal('rcPay')  + feeTotal('insPay'),
+    feeTotal('smpCash') + feeTotal('rcCash') + feeTotal('insCash'),
+    feeTotal('smpPay')  + feeTotal('rcPay')  + feeTotal('insPay'),
+    ['smpCash','smpPay','svkCash','svkPay','rcCash','rcPay','insCash','insPay'].reduce((s, k) => s + aided[k as keyof RemittanceSummary] + unaided[k as keyof RemittanceSummary], 0),
+  ]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(feeRows), 'Fee Head Breakup');
+
+  // Sheet 2 — Bank Account Summary
+  const sbi = [
+    { challan: 'Aided',   head: 'SMP',       cash: aided.smpCash,   pay: aided.smpPay   },
+    { challan: 'Aided',   head: 'Red Cross',  cash: aided.rcCash,    pay: aided.rcPay    },
+    { challan: 'Aided',   head: 'Insurance',  cash: aided.insCash,   pay: aided.insPay   },
+    { challan: 'Unaided', head: 'SMP',        cash: unaided.smpCash, pay: unaided.smpPay },
+    { challan: 'Unaided', head: 'Red Cross',  cash: unaided.rcCash,  pay: unaided.rcPay  },
+    { challan: 'Unaided', head: 'Insurance',  cash: unaided.insCash, pay: unaided.insPay },
+  ];
+  const sbiAidedCash   = aided.smpCash   + aided.rcCash   + aided.insCash;
+  const sbiAidedPay    = aided.smpPay    + aided.rcPay    + aided.insPay;
+  const sbiUnaidedCash = unaided.smpCash + unaided.rcCash + unaided.insCash;
+  const sbiUnaidedPay  = unaided.smpPay  + unaided.rcPay  + unaided.insPay;
+  const sbiCash = sbiAidedCash + sbiUnaidedCash;
+  const sbiPay  = sbiAidedPay  + sbiUnaidedPay;
+  const svkCash = aided.svkCash + unaided.svkCash;
+  const svkPay  = aided.svkPay  + unaided.svkPay;
+
+  const bankRows: (string | number)[][] = [
+    ['Bank', 'Account No.', 'Challan', 'Fee Head', 'Cash (Challan)', 'Pay (UPI)', 'Total'],
+    ...sbi.map((r) => [SBI_ACCOUNT === r.challan ? 'SBI Ppl' : 'SBI Ppl', SBI_ACCOUNT, r.challan, r.head, r.cash || '', r.pay || '', (r.cash + r.pay) || '']),
+    ['SBI Aided Sub-total',   '', '', '', sbiAidedCash   || '', sbiAidedPay   || '', (sbiAidedCash   + sbiAidedPay)   || ''],
+    ['SBI Unaided Sub-total', '', '', '', sbiUnaidedCash || '', sbiUnaidedPay || '', (sbiUnaidedCash + sbiUnaidedPay) || ''],
+    ['SBI Sub-total',         '', '', '', sbiCash        || '', sbiPay        || '', (sbiCash        + sbiPay)        || ''],
+    ['SVK Mgt', CANARA_ACCOUNT, 'Aided',   'SVK', aided.svkCash   || '', aided.svkPay   || '', (aided.svkCash   + aided.svkPay)   || ''],
+    ['SVK Mgt', CANARA_ACCOUNT, 'Unaided', 'SVK', unaided.svkCash || '', unaided.svkPay || '', (unaided.svkCash + unaided.svkPay) || ''],
+    ['SVK Sub-total', '', '', '', svkCash || '', svkPay || '', (svkCash + svkPay) || ''],
+    ['Grand Total', '', '', '', (sbiCash + svkCash) || '', (sbiPay + svkPay) || '', (sbiCash + svkCash + sbiPay + svkPay) || ''],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bankRows), 'Bank Account Summary');
+
+  XLSX.writeFile(wb, `Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g, '_')}_${academicYear}.xlsx`);
+}
+
+function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const MARGIN = 14;
+
+  const dateStr = (() => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2,'0')}-${d.toLocaleString('en-US',{month:'short'})}-${String(d.getFullYear()).slice(2)}`;
+  })();
+
+  const HEAD: [number,number,number] = [55, 65, 81];   // gray-700
+  const WHITE: [number,number,number] = [255,255,255];
+  const NEAR_BLACK: [number,number,number] = [25,25,25];
+  const GRID: [number,number,number] = [210,215,220];
+  const BLUE: [number,number,number] = [29,78,216];
+  const BLUE_LIGHT: [number,number,number] = [239,246,255];
+  const INDIGO_LIGHT: [number,number,number] = [238,242,255];
+  const GREEN_LIGHT: [number,number,number] = [236,253,245];
+  const BLUE_SUB: [number,number,number] = [191,219,254];
+  const GREEN_SUB: [number,number,number] = [167,243,208];
+
+  const headStyles = { fillColor: HEAD, textColor: WHITE, fontStyle: 'bold' as const, fontSize: 8, cellPadding: { top:2, right:3, bottom:2, left:3 }, lineWidth: 0 };
+  const bodyStyles = { fontSize: 8, cellPadding: { top:2, right:3, bottom:2, left:3 }, fillColor: WHITE, textColor: NEAR_BLACK, lineColor: GRID, lineWidth: 0.18 };
+
+  // Title
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...NEAR_BLACK);
+  doc.text(`Bank Remittance — ${academicYear}`, W / 2, 12, { align: 'center' });
+  doc.setFontSize(9); doc.text(label, W / 2, 18, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120,120,120);
+  doc.text(`Generated: ${dateStr}`, W / 2, 23, { align: 'center' });
+  doc.setTextColor(...NEAR_BLACK);
+
+  const fmtN = (v: number) => v > 0 ? v.toLocaleString('en-IN') : '—';
+
+  // ── Table 1: Fee Head Breakup ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NEAR_BLACK);
+  doc.text('Fee Head Breakup', MARGIN, 28);
+
+  const feeHeads = [
+    { name: 'SMP',       aC: aided.smpCash, aP: aided.smpPay, uC: unaided.smpCash, uP: unaided.smpPay },
+    { name: 'SVK',       aC: aided.svkCash, aP: aided.svkPay, uC: unaided.svkCash, uP: unaided.svkPay },
+    { name: 'Red Cross', aC: aided.rcCash,  aP: aided.rcPay,  uC: unaided.rcCash,  uP: unaided.rcPay  },
+    { name: 'Insurance', aC: aided.insCash, aP: aided.insPay, uC: unaided.insCash, uP: unaided.insPay },
+  ];
+  const feeBody = feeHeads.map((r) => [r.name, fmtN(r.aC), fmtN(r.aP), fmtN(r.uC), fmtN(r.uP), fmtN(r.aC+r.aP+r.uC+r.uP)]);
+  const totAC = feeHeads.reduce((s,r)=>s+r.aC,0), totAP = feeHeads.reduce((s,r)=>s+r.aP,0);
+  const totUC = feeHeads.reduce((s,r)=>s+r.uC,0), totUP = feeHeads.reduce((s,r)=>s+r.uP,0);
+  feeBody.push(['Total', fmtN(totAC), fmtN(totAP), fmtN(totUC), fmtN(totUP), fmtN(totAC+totAP+totUC+totUP)]);
+
+  autoTable(doc, {
+    startY: 31, margin: { left: MARGIN, right: MARGIN },
+    head: [['Fee Head', 'Aided Cash', 'Aided Pay', 'Unaided Cash', 'Unaided Pay', 'Total']],
+    body: feeBody,
+    headStyles,
+    bodyStyles,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 32 },
+      1: { halign: 'right' }, 2: { halign: 'right' },
+      3: { halign: 'right' }, 4: { halign: 'right' },
+      5: { halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === feeBody.length - 1) {
+        data.cell.styles.fillColor = HEAD;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  // ── Table 2: Bank Account Summary ──
+  const afterFee = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NEAR_BLACK);
+  doc.text('Bank Account Summary', MARGIN, afterFee);
+
+  const sbiAidedCash   = aided.smpCash   + aided.rcCash   + aided.insCash;
+  const sbiAidedPay    = aided.smpPay    + aided.rcPay    + aided.insPay;
+  const sbiUnaidedCash = unaided.smpCash + unaided.rcCash + unaided.insCash;
+  const sbiUnaidedPay  = unaided.smpPay  + unaided.rcPay  + unaided.insPay;
+  const sbiCash = sbiAidedCash + sbiUnaidedCash;
+  const sbiPay  = sbiAidedPay  + sbiUnaidedPay;
+  const svkAC = aided.svkCash, svkAP = aided.svkPay;
+  const svkUC = unaided.svkCash, svkUP = unaided.svkPay;
+  const svkCash = svkAC + svkUC, svkPay = svkAP + svkUP;
+
+  const bankBody: (string | number)[][] = [
+    ['SBI Ppl', SBI_ACCOUNT,    'Aided',   'SMP',       fmtN(aided.smpCash), fmtN(aided.smpPay), fmtN(aided.smpCash+aided.smpPay)],
+    ['',        SBI_ACCOUNT,    '',        'Red Cross',  fmtN(aided.rcCash),  fmtN(aided.rcPay),  fmtN(aided.rcCash+aided.rcPay)],
+    ['',        SBI_ACCOUNT,    '',        'Insurance',  fmtN(aided.insCash), fmtN(aided.insPay), fmtN(aided.insCash+aided.insPay)],
+    ['',        'Aided Sub-total','',      '',           fmtN(sbiAidedCash),  fmtN(sbiAidedPay),  fmtN(sbiAidedCash+sbiAidedPay)],
+    ['',        SBI_ACCOUNT,    'Unaided', 'SMP',       fmtN(unaided.smpCash), fmtN(unaided.smpPay), fmtN(unaided.smpCash+unaided.smpPay)],
+    ['',        SBI_ACCOUNT,    '',        'Red Cross',  fmtN(unaided.rcCash),  fmtN(unaided.rcPay),  fmtN(unaided.rcCash+unaided.rcPay)],
+    ['',        SBI_ACCOUNT,    '',        'Insurance',  fmtN(unaided.insCash), fmtN(unaided.insPay), fmtN(unaided.insCash+unaided.insPay)],
+    ['',        'Unaided Sub-total','',   '',           fmtN(sbiUnaidedCash),  fmtN(sbiUnaidedPay),  fmtN(sbiUnaidedCash+sbiUnaidedPay)],
+    ['SBI Sub-total', '', '', '',         fmtN(sbiCash), fmtN(sbiPay),         fmtN(sbiCash+sbiPay)],
+    ['SVK Mgt', CANARA_ACCOUNT, 'Aided',  'SVK',        fmtN(svkAC), fmtN(svkAP), fmtN(svkAC+svkAP)],
+    ['',        CANARA_ACCOUNT, 'Unaided','SVK',         fmtN(svkUC), fmtN(svkUP), fmtN(svkUC+svkUP)],
+    ['SVK Sub-total', '', '', '',         fmtN(svkCash), fmtN(svkPay),         fmtN(svkCash+svkPay)],
+    ['Grand Total', '', '', '',           fmtN(sbiCash+svkCash), fmtN(sbiPay+svkPay), fmtN(sbiCash+svkCash+sbiPay+svkPay)],
+  ];
+
+  const sbiAidedRows   = [0,1,2];
+  const sbiAidedSubRow = 3;
+  const sbiUnaidedRows = [4,5,6];
+  const sbiUnaidedSubRow = 7;
+  const sbiSubRow = 8;
+  const svkRows = [9,10];
+  const svkSubRow = 11;
+  const grandRow = 12;
+
+  autoTable(doc, {
+    startY: afterFee + 2, margin: { left: MARGIN, right: MARGIN },
+    head: [['Bank', 'Account No.', 'Challan', 'Fee Head', 'Cash (Challan)', 'Pay (UPI)', 'Total']],
+    body: bankBody,
+    headStyles,
+    bodyStyles,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 22, fontStyle: 'bold' },
+      1: { cellWidth: 36, font: 'courier', fontSize: 7 },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 26 },
+      4: { halign: 'right' },
+      5: { halign: 'right' },
+      6: { halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell(data) {
+      if (data.section !== 'body') return;
+      const i = data.row.index;
+      if (sbiAidedRows.includes(i))   { data.cell.styles.fillColor = BLUE_LIGHT; }
+      if (sbiUnaidedRows.includes(i)) { data.cell.styles.fillColor = INDIGO_LIGHT; }
+      if (svkRows.includes(i))        { data.cell.styles.fillColor = GREEN_LIGHT; }
+      if (i === sbiAidedSubRow || i === sbiUnaidedSubRow) {
+        data.cell.styles.fillColor = BLUE_SUB;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = BLUE;
+      }
+      if (i === sbiSubRow || i === svkSubRow) {
+        data.cell.styles.fillColor = BLUE_SUB;
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = [30, 64, 175];
+      }
+      if (i === svkSubRow) {
+        data.cell.styles.fillColor = GREEN_SUB;
+        data.cell.styles.textColor = [6, 95, 70];
+      }
+      if (i === grandRow) {
+        data.cell.styles.fillColor = HEAD;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  // Footers
+  const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,160,160);
+    doc.text(`Bank Remittance ${academicYear}`, MARGIN, H - 5);
+    doc.text(`Page ${p} of ${pages}`, W - MARGIN, H - 5, { align: 'right' });
+  }
+
+  doc.save(`Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
 }
 
 function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
@@ -1513,38 +1805,34 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
   const [dateFrom,     setDateFrom]     = useState('');
   const [dateTo,       setDateTo]       = useState('');
 
-  // Keep selectedDate valid when feeRecords loads
   useEffect(() => {
     if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
       setSelectedDate(availableDates[availableDates.length - 1]);
     }
   }, [availableDates, selectedDate]);
 
-  const dayChallans = useMemo(() => buildDayChallans(feeRecords, selectedDate), [feeRecords, selectedDate]);
-
-  const periodRows = useMemo(
-    () => viewMode === 'period' ? buildPeriodRemittance(feeRecords, dateFrom, dateTo) : [],
-    [feeRecords, viewMode, dateFrom, dateTo],
-  );
-
   const dateIdx  = availableDates.indexOf(selectedDate);
   const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
   const nextDate = dateIdx !== -1 && dateIdx < availableDates.length - 1 ? availableDates[dateIdx + 1] : null;
 
-  const dayTotal = useMemo(
-    () => CHALLAN_CONFIGS.reduce((s, cfg) => s + dayChallans[cfg.id].reduce((t, r) => t + r.cashAmt + r.upiAmt, 0), 0),
-    [dayChallans],
+  const dailySummary = useMemo(
+    () => buildRemittanceSummaries(feeRecords, selectedDate, selectedDate),
+    [feeRecords, selectedDate],
   );
-  const dayCash = useMemo(
-    () => CHALLAN_CONFIGS.reduce((s, cfg) => s + dayChallans[cfg.id].reduce((t, r) => t + r.cashAmt, 0), 0),
-    [dayChallans],
-  );
-  const dayUpi = dayTotal - dayCash;
 
-  const periodGrand = useMemo(
-    () => periodRows.reduce((s, r) => s + r.dayTotal, 0),
-    [periodRows],
+  const periodSummary = useMemo(
+    () => viewMode === 'period' ? buildRemittanceSummaries(feeRecords, dateFrom || undefined, dateTo || undefined) : null,
+    [feeRecords, viewMode, dateFrom, dateTo],
   );
+
+  const exportLabel = useMemo(
+    () => viewMode === 'daily'
+      ? formatDayLabel(selectedDate)
+      : (dateFrom || dateTo) ? `${dateFrom || '…'} to ${dateTo || '…'}` : 'All Records',
+    [viewMode, selectedDate, dateFrom, dateTo],
+  );
+
+  const activeSummary = viewMode === 'daily' ? dailySummary : periodSummary;
 
   const tabCls = (active: boolean) =>
     `px-4 py-1.5 rounded-md text-xs font-semibold border transition-colors cursor-pointer ${
@@ -1553,33 +1841,21 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
 
   return (
     <div className="space-y-4">
-
-      {/* Top bar: view toggle + date navigation */}
+      {/* View toggle + date navigation + export buttons */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
-          <button className={tabCls(viewMode === 'daily')}  onClick={() => setViewMode('daily')}>Daily Challan</button>
-          <button className={tabCls(viewMode === 'period')} onClick={() => setViewMode('period')}>Period Summary</button>
+          <button className={tabCls(viewMode === 'daily')}  onClick={() => setViewMode('daily')}>Daily</button>
+          <button className={tabCls(viewMode === 'period')} onClick={() => setViewMode('period')}>Period</button>
         </div>
 
         {viewMode === 'daily' && (
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
-            {/* Summary badges */}
-            <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">Cash: {fmt(dayCash)}</span>
-            <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">UPI: {fmt(dayUpi)}</span>
-            <span className="text-[10px] text-gray-700 font-bold bg-gray-100 border border-gray-200 rounded-full px-2.5 py-0.5">Total: {fmt(dayTotal)}</span>
-            <div className="w-px h-4 bg-gray-300" />
-            {/* Date navigation */}
+          <div className="flex items-center gap-2">
             <button
               disabled={!prevDate}
               onClick={() => prevDate && setSelectedDate(prevDate)}
               className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >‹</button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className={fs}
-            />
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={fs} />
             <button
               disabled={!nextDate}
               onClick={() => nextDate && setSelectedDate(nextDate)}
@@ -1589,7 +1865,7 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
         )}
 
         {viewMode === 'period' && (
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-500 font-medium">From</span>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
             <span className="text-xs text-gray-500 font-medium">To</span>
@@ -1597,221 +1873,53 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
             {(dateFrom || dateTo) && (
               <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors">Clear</button>
             )}
-            <Button variant="secondary" size="sm" onClick={() => exportRemittanceExcel(periodRows, academicYear)}>Excel</Button>
+          </div>
+        )}
+
+        {/* Export buttons */}
+        {activeSummary && (
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              variant="secondary" size="sm"
+              onClick={() => exportRemittanceExcel(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
+            >Excel</Button>
+            <Button
+              variant="secondary" size="sm"
+              onClick={() => exportRemittancePdf(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
+            >PDF</Button>
           </div>
         )}
       </div>
 
-      {/* Bank account info bar */}
-      <div className="flex flex-wrap gap-3">
-        {[
-          { bank: 'SBI Bank', acct: SBI_ACCOUNT,    note: 'SMP + Additional · All Courses',    bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-800'    },
-          { bank: 'Canara Bank', acct: CANARA_ACCOUNT, note: 'SVK Fee · All Courses',           bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800' },
-        ].map((b) => (
-          <div key={b.bank} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${b.border} ${b.bg}`}>
-            <div>
-              <p className={`text-[10px] font-bold uppercase tracking-wide ${b.text}`}>{b.bank}</p>
-              <p className="text-[10px] font-mono text-gray-600">Acct: {b.acct}</p>
-            </div>
-            <div className="w-px h-7 bg-gray-200" />
-            <p className={`text-[10px] ${b.text} opacity-70`}>{b.note}</p>
-          </div>
-        ))}
-        <div className="ml-auto flex items-center gap-2 text-[10px] text-gray-400 self-center">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Cash = Challan deposit
-          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block ml-2" /> UPI = Auto-remitted
-        </div>
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-gray-400">
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Cash = Challan deposit</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Pay = UPI / auto-remitted</span>
+        <span className="text-gray-300">·</span>
+        <span>Aided: CE · ME · EC · CS &nbsp;|&nbsp; Unaided: EE</span>
       </div>
 
-      {/* ── Daily Challan View ── */}
-      {viewMode === 'daily' && (
+      {availableDates.length === 0 ? (
+        <p className="text-sm text-gray-400 py-8 text-center">No fee records found.</p>
+      ) : viewMode === 'daily' ? (
         <>
-          {availableDates.length === 0 ? (
-            <p className="text-sm text-gray-400 py-8 text-center">No fee records found.</p>
-          ) : (
-            <>
-              {/* 2×2 challan panels */}
-              <div className="grid grid-cols-2 gap-4">
-                {CHALLAN_CONFIGS.map((cfg) => (
-                  <ChallanPanel key={cfg.id} cfg={cfg} rows={dayChallans[cfg.id]} />
-                ))}
-              </div>
-
-              {/* Breakup Summary */}
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-4 py-2 bg-gray-100/80 border-b border-gray-200 flex items-center gap-2">
-                  <div className="w-1 h-4 rounded-full bg-gray-500 shrink-0" />
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Breakup Summary — {formatDayLabel(selectedDate)}</span>
-                </div>
-                <table className="w-full text-[10px]">
-                  <thead className="bg-gray-700 text-white">
-                    <tr>
-                      <th className="px-3 py-1.5 text-left font-semibold">Bank</th>
-                      <th className="px-3 py-1.5 text-left font-semibold">Challan Type</th>
-                      <th className="px-3 py-1.5 text-left font-semibold">Fee</th>
-                      <th className="px-3 py-1.5 text-center font-semibold">Courses</th>
-                      <th className="px-3 py-1.5 text-center font-semibold">Payments</th>
-                      <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Cash (Challan)</th>
-                      <th className="px-3 py-1.5 text-right font-semibold">UPI (Remitted)</th>
-                      <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(() => {
-                      // Build rows with bank subtotals
-                      const banks = [
-                        { bank: 'SBI', ids: ['sbi-aided', 'sbi-unaided'] as ChallanId[] },
-                        { bank: 'Canara', ids: ['canara-aided', 'canara-unaided'] as ChallanId[] },
-                      ];
-                      const elements: React.ReactNode[] = [];
-                      let grandCash = 0, grandUpi = 0;
-
-                      for (const { bank, ids } of banks) {
-                        let bankCash = 0, bankUpi = 0;
-                        for (const id of ids) {
-                          const cfg = CHALLAN_CONFIGS.find((c) => c.id === id)!;
-                          const rows = dayChallans[id];
-                          const cash = rows.reduce((s, r) => s + r.cashAmt, 0);
-                          const upi  = rows.reduce((s, r) => s + r.upiAmt, 0);
-                          const total = cash + upi;
-                          bankCash += cash; bankUpi += upi;
-                          elements.push(
-                            <tr key={id} className={`${cfg.accentBg} hover:brightness-95 transition-colors`}>
-                              <td className={`px-3 py-2 font-bold ${cfg.accentText}`}>{cfg.bank}</td>
-                              <td className="px-3 py-2 font-semibold text-gray-700">{cfg.aidedType}</td>
-                              <td className="px-3 py-2 text-gray-500">{cfg.feeLabel}</td>
-                              <td className="px-3 py-2 text-center text-gray-500">{cfg.courses}</td>
-                              <td className="px-3 py-2 text-center text-gray-600">{rows.length}</td>
-                              <td className={`px-3 py-2 text-right font-semibold border-l border-gray-100 ${cash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{cash > 0 ? fmt(cash) : '—'}</td>
-                              <td className={`px-3 py-2 text-right font-semibold ${upi > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{upi > 0 ? fmt(upi) : '—'}</td>
-                              <td className={`px-3 py-2 text-right font-bold border-l border-gray-100 ${cfg.accentText}`}>{total > 0 ? fmt(total) : '—'}</td>
-                            </tr>
-                          );
-                        }
-                        // Bank subtotal row
-                        const bankTotal = bankCash + bankUpi;
-                        grandCash += bankCash; grandUpi += bankUpi;
-                        elements.push(
-                          <tr key={bank + '_sub'} className="bg-gray-100 border-t border-gray-300">
-                            <td className="px-3 py-1.5 font-bold text-gray-700" colSpan={4}>{bank} Bank Sub-total</td>
-                            <td className="px-3 py-1.5 text-center font-bold text-gray-600">
-                              {ids.reduce((s, id) => s + dayChallans[id].length, 0)}
-                            </td>
-                            <td className={`px-3 py-1.5 text-right font-bold border-l border-gray-200 ${bankCash > 0 ? 'text-emerald-700' : 'text-gray-400'}`}>{bankCash > 0 ? fmt(bankCash) : '—'}</td>
-                            <td className={`px-3 py-1.5 text-right font-bold ${bankUpi > 0 ? 'text-blue-700' : 'text-gray-400'}`}>{bankUpi > 0 ? fmt(bankUpi) : '—'}</td>
-                            <td className="px-3 py-1.5 text-right font-bold text-gray-800 border-l border-gray-200">{bankTotal > 0 ? fmt(bankTotal) : '—'}</td>
-                          </tr>
-                        );
-                      }
-
-                      // Grand total row (appended after loop)
-                      elements.push(
-                        <tr key="grand" className="bg-gray-800">
-                          <td className="px-3 py-2 font-bold text-white" colSpan={4}>Grand Total</td>
-                          <td className="px-3 py-2 text-center font-bold text-white">
-                            {CHALLAN_CONFIGS.reduce((s, cfg) => s + dayChallans[cfg.id].length, 0)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-bold text-emerald-300 border-l border-white/10">{grandCash > 0 ? fmt(grandCash) : '—'}</td>
-                          <td className="px-3 py-2 text-right font-bold text-blue-300">{grandUpi > 0 ? fmt(grandUpi) : '—'}</td>
-                          <td className="px-3 py-2 text-right font-bold text-white border-l border-white/10">{fmt(grandCash + grandUpi)}</td>
-                        </tr>
-                      );
-
-                      return elements;
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+          <BankRemittanceTable
+            aided={dailySummary.aided}
+            unaided={dailySummary.unaided}
+            label={`Remittance — ${formatDayLabel(selectedDate)}`}
+          />
+          <BankAccountSummaryTable aided={dailySummary.aided} unaided={dailySummary.unaided} />
         </>
-      )}
-
-      {/* ── Period Summary View ── */}
-      {viewMode === 'period' && (
+      ) : periodSummary !== null ? (
         <>
-          {periodRows.length === 0 ? (
-            <p className="text-sm text-gray-400 py-8 text-center">No remittance records in the selected range.</p>
-          ) : (
-            <div className="space-y-3">
-              {/* Grand total summary chips */}
-              <div className="flex flex-wrap gap-2">
-                {CHALLAN_CONFIGS.map((cfg) => {
-                  const t = periodRows.reduce((a, r) => ({ cash: a.cash + r.totals[cfg.id].cash, upi: a.upi + r.totals[cfg.id].upi }), { cash: 0, upi: 0 });
-                  return (
-                    <div key={cfg.id} className={`rounded-lg border ${cfg.accentBorder} ${cfg.accentBg} px-3 py-2 min-w-[160px]`}>
-                      <p className={`text-[9px] font-bold uppercase tracking-wide ${cfg.accentText} mb-0.5`}>{cfg.bank} {cfg.aidedType}</p>
-                      <p className={`text-sm font-bold ${cfg.accentText}`}>{fmt(t.cash + t.upi)}</p>
-                      <p className="text-[9px] text-gray-500">Cash: {fmt(t.cash)} · UPI: {fmt(t.upi)}</p>
-                    </div>
-                  );
-                })}
-                <div className="rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 min-w-[140px]">
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500 mb-0.5">Grand Total</p>
-                  <p className="text-sm font-bold text-gray-800">{fmt(periodGrand)}</p>
-                  <p className="text-[9px] text-gray-500">{periodRows.length} day{periodRows.length !== 1 ? 's' : ''}</p>
-                </div>
-              </div>
-
-              {/* Period table */}
-              <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-                <table className="w-full text-[10px] whitespace-nowrap">
-                  <thead className="bg-gray-700 text-white">
-                    <tr>
-                      <th className="px-2 py-1.5 text-left font-semibold" rowSpan={2}>Date</th>
-                      {CHALLAN_CONFIGS.map((cfg) => (
-                        <th key={cfg.id} className="px-2 py-1.5 text-center font-semibold border-l border-white/20" colSpan={3}>{cfg.bank} {cfg.aidedType}</th>
-                      ))}
-                      <th className="px-2 py-1.5 text-right font-semibold border-l border-white/20" rowSpan={2}>Day Total</th>
-                    </tr>
-                    <tr>
-                      {CHALLAN_CONFIGS.map((cfg) => (
-                        <>{['Cash', 'UPI', 'Total'].map((h, i) => (
-                          <th key={cfg.id + h} className={`px-2 py-1 text-right font-semibold ${i === 0 ? 'border-l border-white/20' : ''} ${i === 2 ? 'bg-white/10' : ''}`}>{h}</th>
-                        ))}</>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {periodRows.map((row, i) => (
-                      <tr key={row.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-2 py-1.5 font-medium text-gray-700">{row.dateLabel}</td>
-                        {CHALLAN_CONFIGS.map((cfg) => {
-                          const t = row.totals[cfg.id];
-                          return (
-                            <>
-                              <td key={cfg.id+'c'} className={`px-2 py-1.5 text-right border-l border-gray-100 ${t.cash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{t.cash > 0 ? fmt(t.cash) : '—'}</td>
-                              <td key={cfg.id+'u'} className={`px-2 py-1.5 text-right ${t.upi > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{t.upi > 0 ? fmt(t.upi) : '—'}</td>
-                              <td key={cfg.id+'t'} className={`px-2 py-1.5 text-right font-semibold bg-gray-50/80 ${cfg.accentText}`}>{t.total > 0 ? fmt(t.total) : '—'}</td>
-                            </>
-                          );
-                        })}
-                        <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(row.dayTotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
-                    <tr>
-                      <td className="px-2 py-2">Total — {periodRows.length} day{periodRows.length !== 1 ? 's' : ''}</td>
-                      {CHALLAN_CONFIGS.map((cfg) => {
-                        const t = periodRows.reduce((a, r) => ({ cash: a.cash + r.totals[cfg.id].cash, upi: a.upi + r.totals[cfg.id].upi, total: a.total + r.totals[cfg.id].total }), { cash: 0, upi: 0, total: 0 });
-                        return (
-                          <>
-                            <td key={cfg.id+'c'} className="px-2 py-2 text-right text-emerald-700 border-l border-gray-200">{t.cash > 0 ? fmt(t.cash) : '—'}</td>
-                            <td key={cfg.id+'u'} className="px-2 py-2 text-right text-blue-700">{t.upi > 0 ? fmt(t.upi) : '—'}</td>
-                            <td key={cfg.id+'t'} className={`px-2 py-2 text-right ${cfg.accentText}`}>{t.total > 0 ? fmt(t.total) : '—'}</td>
-                          </>
-                        );
-                      })}
-                      <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(periodGrand)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
+          <BankRemittanceTable
+            aided={periodSummary.aided}
+            unaided={periodSummary.unaided}
+            label={dateFrom || dateTo ? `Period: ${dateFrom || '…'} → ${dateTo || '…'}` : 'All Records'}
+          />
+          <BankAccountSummaryTable aided={periodSummary.aided} unaided={periodSummary.unaided} />
         </>
-      )}
+      ) : null}
     </div>
   );
 }
