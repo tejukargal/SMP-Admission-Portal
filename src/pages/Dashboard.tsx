@@ -1505,8 +1505,8 @@ export function Dashboard() {
                 acc[c] = dateTable.reduce((a, r) => a + r.byCourse[c], 0);
                 return acc;
               }, {} as Record<Course, number>);
-              const tc = 'px-3 py-2.5 text-right tabular-nums text-[12px]';
-              const tl = 'px-3 py-2.5 text-left text-[12px]';
+              const tc = 'px-2 py-1 text-right tabular-nums';
+              const tl = 'px-2 py-1 text-left';
               function fmtDate(iso: string) {
                 const [y, m, d] = iso.split('-');
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1525,12 +1525,12 @@ export function Dashboard() {
                   {dateTable.length === 0 ? (
                     <p className="px-4 py-6 text-xs text-gray-400 text-center">No admission fee payments recorded for this selection.</p>
                   ) : (
-                    <div className="overflow-x-auto overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(6 * 43px + 43px)' }}>
-                      <table className="w-full text-[12px] border-collapse">
-                        <thead>
+                    <div className="overflow-x-auto overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(5 * 30px + 60px)' }}>
+                      <table className="w-full text-[10px] border-collapse">
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
                           <tr style={{ background: 'linear-gradient(90deg, #4c1d95, #5b21b6)' }}>
                             {['Date', ...COURSES, 'Total'].map((h) => (
-                              <th key={h} className="px-3 py-2.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
+                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1544,6 +1544,8 @@ export function Dashboard() {
                               <td className={tc + ' font-semibold text-gray-800'}>{r.total}</td>
                             </tr>
                           ))}
+                        </tbody>
+                        <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
                           <tr className="text-white font-bold" style={{ background: '#2e1065' }}>
                             <td className={tl}>GRAND TOTAL</td>
                             {COURSES.map((c) => (
@@ -1551,7 +1553,7 @@ export function Dashboard() {
                             ))}
                             <td className={tc}>{grandTotal}</td>
                           </tr>
-                        </tbody>
+                        </tfoot>
                       </table>
                     </div>
                   )}

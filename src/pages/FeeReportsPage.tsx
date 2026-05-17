@@ -22,7 +22,7 @@ import {
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -47,6 +47,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'bank-remittance',    label: 'Bank Remittance'       },
   { id: 'fee-distribution',   label: 'Fee Distribution'     },
   { id: 'consolidated',       label: 'Consolidated'         },
+  { id: 'fee-reg-1',          label: 'Fee Reg_1'            },
 ];
 
 function fmt(n: number): string {
@@ -2586,6 +2587,231 @@ function FeeDistributionTab({
   );
 }
 
+// ── Tab: Fee Reg_1 ───────────────────────────────────────────────────────────
+
+interface Reg1Row {
+  record: FeeRecord;
+  smpCash: number; smpPay: number;
+  svkCash: number; svkPay: number;
+  rcCash:  number; rcPay:  number;
+  insCash: number; insPay: number;
+  total:   number;
+}
+
+function FeeReg1Tab({
+  feeRecords, allStudents,
+}: {
+  feeRecords: FeeRecord[];
+  allStudents: Student[];
+}) {
+  const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
+  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [dateFrom,      setDateFrom]      = useState('');
+  const [dateTo,        setDateTo]        = useState('');
+
+  const studentMap = useMemo(
+    () => new Map(allStudents.map((s) => [s.id, s])),
+    [allStudents],
+  );
+
+  const rows = useMemo((): Reg1Row[] => {
+    let list = feeRecords;
+    if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
+    if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
+    if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
+    if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
+    if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
+    if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
+    if (dateFrom)      list = list.filter((r) => r.date.slice(0, 10) >= dateFrom);
+    if (dateTo)        list = list.filter((r) => r.date.slice(0, 10) <= dateTo);
+
+    return list.map((r): Reg1Row => {
+      const smpMode = r.smpPaymentMode        ?? r.paymentMode;
+      const svkMode = r.svkPaymentMode        ?? r.paymentMode;
+      const addMode = r.additionalPaymentMode ?? r.paymentMode;
+
+      const smpAmt  = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
+      const smpCash = smpMode === 'CASH' ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.cash ?? 0) : 0;
+      const smpPay  = smpMode === 'UPI'  ? smpAmt : smpMode === 'SPLIT' ? (r.smpSplit?.upi  ?? 0) : 0;
+
+      const svkCash = svkMode === 'CASH' ? r.svk : svkMode === 'SPLIT' ? (r.svkSplit?.cash ?? 0) : 0;
+      const svkPay  = svkMode === 'UPI'  ? r.svk : svkMode === 'SPLIT' ? (r.svkSplit?.upi  ?? 0) : 0;
+
+      let rcCash = 0, rcPay = 0, insCash = 0, insPay = 0;
+      const totalAdd = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+      if (totalAdd > 0) {
+        const splitCash = addMode === 'SPLIT' ? (r.additionalSplit?.cash ?? 0) : 0;
+        const splitUpi  = addMode === 'SPLIT' ? (r.additionalSplit?.upi  ?? 0) : 0;
+        for (const head of r.additionalPaid) {
+          const lbl   = head.label.toLowerCase();
+          const ratio = head.amount / totalAdd;
+          const cash  = addMode === 'CASH' ? head.amount : addMode === 'SPLIT' ? Math.round(splitCash * ratio) : 0;
+          const pay   = addMode === 'UPI'  ? head.amount : addMode === 'SPLIT' ? Math.round(splitUpi  * ratio) : 0;
+          if (lbl.includes('red cross') || lbl.includes('redcross')) { rcCash  += cash; rcPay  += pay; }
+          else if (lbl.includes('insur'))                            { insCash += cash; insPay += pay; }
+        }
+      }
+
+      const total = smpCash + smpPay + svkCash + svkPay + rcCash + rcPay + insCash + insPay;
+      return { record: r, smpCash, smpPay, svkCash, svkPay, rcCash, rcPay, insCash, insPay, total };
+    }).sort((a, b) => {
+      const d = a.record.date.localeCompare(b.record.date);
+      if (d !== 0) return d;
+      return a.record.receiptNumber.localeCompare(b.record.receiptNumber);
+    });
+  }, [feeRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
+
+  const totals = useMemo(() => rows.reduce(
+    (acc, r) => ({
+      smpCash: acc.smpCash + r.smpCash,
+      smpPay:  acc.smpPay  + r.smpPay,
+      svkCash: acc.svkCash + r.svkCash,
+      svkPay:  acc.svkPay  + r.svkPay,
+      rcCash:  acc.rcCash  + r.rcCash,
+      rcPay:   acc.rcPay   + r.rcPay,
+      insCash: acc.insCash + r.insCash,
+      insPay:  acc.insPay  + r.insPay,
+      total:   acc.total   + r.total,
+    }),
+    { smpCash: 0, smpPay: 0, svkCash: 0, svkPay: 0, rcCash: 0, rcPay: 0, insCash: 0, insPay: 0, total: 0 },
+  ), [rows]);
+
+  const hasActiveFilters = !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  function clearFilters() {
+    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
+    setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
+  }
+
+  const td  = 'px-2 py-1.5 text-right text-[10px] tabular-nums';
+  const tdL = 'px-2 py-1.5 text-left  text-[10px]';
+  const tdC = 'px-2 py-1.5 text-center text-[10px]';
+
+  return (
+    <div className="space-y-3">
+      {/* Filters */}
+      <div className="pb-3 mb-1 border-b border-gray-100">
+        <div className="flex flex-wrap gap-2 items-center">
+          <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+            <option value="">Aided &amp; Unaided</option>
+            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+            <option value="UNAIDED">Unaided (EE)</option>
+          </select>
+          <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
+            <option value="">All Courses</option>
+            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={yearFilter}    onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
+            <option value="">All Years</option>
+            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
+            <option value="">All Adm Types</option>
+            {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={admCatFilter}  onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
+            <option value="">All Adm Cats</option>
+            {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            className={fs} title="From date" />
+          <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
+            className={fs} title="To date" />
+          <button
+            onClick={clearFilters}
+            className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
+              hasActiveFilters
+                ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+            }`}
+          >Clear</button>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-500">{rows.length} record{rows.length !== 1 ? 's' : ''}</p>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <table className="w-full text-[10px] border-collapse">
+          <thead className="bg-indigo-700 text-white">
+            <tr>
+              <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+              <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Date</th>
+              <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Rpt No</th>
+              <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Name</th>
+              <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Course</th>
+              <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Year</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>SMP</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>SVK</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>RC</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>Ins</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap" rowSpan={2}>Total</th>
+              <th className="px-2 py-1.5 font-semibold border-l border-white/30" rowSpan={2}>Remarks</th>
+            </tr>
+            <tr>
+              {(['Cash','Pay','Cash','Pay','Cash','Pay','Cash','Pay'] as const).map((h, i) => (
+                <th key={i} className={`px-2 py-1 text-right text-[9px] font-semibold ${i % 2 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={16} className="px-4 py-8 text-center text-gray-400 text-xs">No records match the current filters.</td>
+              </tr>
+            ) : rows.map((r, i) => {
+              const student = studentMap.get(r.record.studentId);
+              const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+              const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              const dateStr = `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
+              return (
+                <tr key={r.record.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className={`${tdC} text-gray-400`}>{i + 1}</td>
+                  <td className={`${tdL} text-gray-500 whitespace-nowrap`}>{dateStr}</td>
+                  <td className={`${tdL} text-gray-600 whitespace-nowrap`}>{r.record.receiptNumber || '—'}</td>
+                  <td className={`${tdL} font-medium max-w-[130px] truncate`}>{student?.studentNameSSLC ?? r.record.studentName}</td>
+                  <td className={`${tdC} font-semibold`}>{r.record.course}</td>
+                  <td className={`${tdL} whitespace-nowrap`}>{r.record.year}</td>
+                  <td className={`${td} border-l border-gray-100 ${r.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smpCash > 0 ? fmt(r.smpCash) : '—'}</td>
+                  <td className={`${td} ${r.smpPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.smpPay  > 0 ? fmt(r.smpPay)  : '—'}</td>
+                  <td className={`${td} border-l border-gray-100 ${r.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.svkCash > 0 ? fmt(r.svkCash) : '—'}</td>
+                  <td className={`${td} ${r.svkPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.svkPay  > 0 ? fmt(r.svkPay)  : '—'}</td>
+                  <td className={`${td} border-l border-gray-100 ${r.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.rcCash  > 0 ? fmt(r.rcCash)  : '—'}</td>
+                  <td className={`${td} ${r.rcPay   > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.rcPay   > 0 ? fmt(r.rcPay)   : '—'}</td>
+                  <td className={`${td} border-l border-gray-100 ${r.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.insCash > 0 ? fmt(r.insCash) : '—'}</td>
+                  <td className={`${td} ${r.insPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.insPay  > 0 ? fmt(r.insPay)  : '—'}</td>
+                  <td className={`${td} border-l border-gray-100 font-semibold text-gray-800`}>{r.total > 0 ? fmt(r.total) : '—'}</td>
+                  <td className={`${tdL} border-l border-gray-100 text-gray-500 max-w-[160px] truncate`}>{r.record.remarks || '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="bg-indigo-800 text-white font-bold text-[10px]">
+              <tr>
+                <td className="px-2 py-2 text-center text-indigo-400">—</td>
+                <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
+                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.smpCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.smpPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.smpPay  > 0 ? fmt(totals.smpPay)  : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.svkCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.svkPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.svkPay  > 0 ? fmt(totals.svkPay)  : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.rcCash  > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.rcCash  > 0 ? fmt(totals.rcCash)  : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.rcPay   > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.rcPay   > 0 ? fmt(totals.rcPay)   : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.insCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.insCash > 0 ? fmt(totals.insCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.insPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.insPay  > 0 ? fmt(totals.insPay)  : '—'}</td>
+                <td className="px-2 py-2 text-right border-l border-indigo-700">{fmt(totals.total)}</td>
+                <td className="px-2 py-2 border-l border-indigo-700"></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Shared filter props + component ───────────────────────────────────────────
 interface CommonFilterProps {
   aidedFilter: 'AIDED' | 'UNAIDED' | '';
@@ -2894,6 +3120,7 @@ export function FeeReportsPage() {
             {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords}  academicYear={academicYear} fp={fp} />}
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}          academicYear={academicYear} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
+            {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={feeRecords} allStudents={allStudents} />}
           </>
         )}
       </div>
