@@ -10,7 +10,11 @@ import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
-import { exportSummaryReport, exportCategoryReport } from '../utils/dashboardReportPdf';
+import {
+  exportSummaryReport, exportCategoryReport,
+  exportGenderCourseYearReport, exportGenderCategoryReport,
+  exportDatewiseAdmissionsReport, exportFirstYearSeatsReport,
+} from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -54,9 +58,10 @@ interface StatCardProps {
   highlightBreakdown?: boolean;
   watermark?: string;
   onClick?: () => void;
+  onLabelDoubleClick?: () => void;
 }
 
-function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick }: StatCardProps) {
+function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick, onLabelDoubleClick }: StatCardProps) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div
@@ -73,11 +78,19 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
         </span>
       )}
       {highlightLabel ? (
-        <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${border} bg-white/70 ${textColor}`}>
+        <span
+          className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${border} bg-white/70 ${textColor} ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
+          onDoubleClick={onLabelDoubleClick ? (e) => { e.stopPropagation(); onLabelDoubleClick(); } : undefined}
+          title={onLabelDoubleClick ? 'Double-click to export PDF' : undefined}
+        >
           {label}
         </span>
       ) : (
-        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">
+        <p
+          className={`text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
+          onDoubleClick={onLabelDoubleClick ? (e) => { e.stopPropagation(); onLabelDoubleClick(); } : undefined}
+          title={onLabelDoubleClick ? 'Double-click to export PDF' : undefined}
+        >
           {label}
         </p>
       )}
@@ -158,19 +171,27 @@ function BreakdownPanel({ title, items, total }: { title: string; items: Breakdo
 }
 
 // ─── Section label ───────────────────────────────────────────────────────────
-function SectionLabel({ children, accent }: { children: React.ReactNode; accent?: { bar: string; text: string } }) {
+function SectionLabel({ children, accent, onDoubleClick }: { children: React.ReactNode; accent?: { bar: string; text: string }; onDoubleClick?: () => void }) {
   if (accent) {
     return (
       <div className="flex items-center gap-2.5 mb-1.5">
         <span className={`w-1 h-4 rounded-full shrink-0 ${accent.bar}`} />
-        <p className={`text-xs font-extrabold uppercase tracking-widest ${accent.text}`}>
+        <p
+          className={`text-xs font-extrabold uppercase tracking-widest ${accent.text} ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
+          onDoubleClick={onDoubleClick}
+          title={onDoubleClick ? 'Double-click to export PDF' : undefined}
+        >
           {children}
         </p>
       </div>
     );
   }
   return (
-    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-1.5">
+    <p
+      className={`text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-1.5 ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
+      onDoubleClick={onDoubleClick}
+      title={onDoubleClick ? 'Double-click to export PDF' : undefined}
+    >
       {children}
     </p>
   );
@@ -503,6 +524,13 @@ export function Dashboard() {
 
     return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, byGenderByCourseByYear, byGenderByCategory, byGenderByCatByCourseByYear };
   }, [filteredStudents, admStatusFilter]);
+
+  const confirmedStudents = useMemo(
+    () => admStatusFilter
+      ? filteredStudents
+      : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED'),
+    [filteredStudents, admStatusFilter],
+  );
 
   const activeSource = useMemo(
     () => (isSearchMode ? searchResults : filteredStudents),
@@ -982,7 +1010,11 @@ export function Dashboard() {
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
                   ALL
                 </span>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-sky-600/70">Total Enrolled</p>
+                <p
+                  className="text-[11px] font-bold uppercase tracking-widest text-sky-600/70 cursor-pointer select-none"
+                  onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
+                  title="Double-click to export PDF"
+                >Total Enrolled</p>
                 <p className="text-4xl font-black leading-none text-sky-700">
                   <AnimNum value={stats.total} />
                 </p>
@@ -1013,6 +1045,7 @@ export function Dashboard() {
                 barFill="bg-sky-400"
                 watermark="B"
                 onClick={() => setGenderModal('BOY')}
+                onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown')}
               />
               <StatCard
                 label="Girls"
@@ -1024,12 +1057,13 @@ export function Dashboard() {
                 barFill="bg-rose-400"
                 watermark="G"
                 onClick={() => setGenderModal('GIRL')}
+                onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown')}
               />
             </div>
 
             {/* By Course */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-emerald-500', text: 'text-emerald-700' }}>By Course</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-emerald-500', text: 'text-emerald-700' }} onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}>By Course</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -1047,6 +1081,7 @@ export function Dashboard() {
                       highlightLabel
                       watermark={course}
                       onClick={() => setCourseModalCourse(course)}
+                      onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`)}
                     />
                   );
                 })}
@@ -1055,11 +1090,12 @@ export function Dashboard() {
 
             {/* By Year of Study */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-teal-500', text: 'text-teal-700' }}>By Year of Study</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-teal-500', text: 'text-teal-700' }} onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}>By Year of Study</SectionLabel>
               <div className="grid grid-cols-3 gap-3">
                 {YEARS.map((year) => {
                   const y = yearConfig[year];
                   const wm = year === '1ST YEAR' ? '1st' : year === '2ND YEAR' ? '2nd' : '3rd';
+                  const yrShort = year === '1ST YEAR' ? '1st Yr' : year === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
                   return (
                     <StatCard
                       key={year}
@@ -1074,6 +1110,7 @@ export function Dashboard() {
                       highlightBreakdown
                       watermark={wm}
                       onClick={() => setYearModalYear(year)}
+                      onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.year === year), displayYear, `${yrShort} — Admission Type-wise Count`)}
                     />
                   );
                 })}
@@ -1082,7 +1119,7 @@ export function Dashboard() {
 
             {/* 1st Year Pending Seats */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }}>1st Year — Pending Seats</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }} onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}>1st Year — Pending Seats</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -1236,7 +1273,11 @@ export function Dashboard() {
                 const tl = 'px-2 py-1 text-left';
                 return (
                   <div className="bg-white/80 rounded-2xl border border-emerald-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div className="px-4 py-2.5 border-b border-emerald-50">
+                    <div
+                      className="px-4 py-2.5 border-b border-emerald-50 cursor-pointer select-none"
+                      onDoubleClick={() => exportCategoryReport(confirmedStudents, displayYear)}
+                      title="Double-click to export PDF"
+                    >
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
@@ -1295,7 +1336,11 @@ export function Dashboard() {
                 const tl = 'px-2 py-1 text-left';
                 return (
                   <div className="bg-white/80 rounded-2xl border border-sky-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div className="px-4 py-2.5 border-b border-sky-50">
+                    <div
+                      className="px-4 py-2.5 border-b border-sky-50 cursor-pointer select-none"
+                      onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}
+                      title="Double-click to export PDF"
+                    >
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Admission Type-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
@@ -1371,7 +1416,11 @@ export function Dashboard() {
 
                 return (
                   <div className="bg-white/80 rounded-2xl border border-rose-400 overflow-hidden flex flex-col h-full" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div className="px-4 py-2.5 border-b border-rose-50 shrink-0">
+                    <div
+                      className="px-4 py-2.5 border-b border-rose-50 shrink-0 cursor-pointer select-none"
+                      onDoubleClick={() => exportGenderCategoryReport(confirmedStudents, displayYear)}
+                      title="Double-click to export PDF"
+                    >
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category & Gender-wise Count</p>
                     </div>
                     <div className="overflow-x-auto flex-1">
@@ -1455,7 +1504,11 @@ export function Dashboard() {
                 );
                 return (
                   <div className="bg-white/80 rounded-2xl border border-teal-400 overflow-hidden h-full flex flex-col" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div className="px-4 py-2.5 border-b border-teal-50 shrink-0">
+                    <div
+                      className="px-4 py-2.5 border-b border-teal-50 shrink-0 cursor-pointer select-none"
+                      onDoubleClick={() => exportGenderCourseYearReport(confirmedStudents, displayYear)}
+                      title="Double-click to export PDF"
+                    >
                       <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Year & Course-wise Gender</p>
                     </div>
                     <div className="overflow-x-auto flex-1">
@@ -1514,7 +1567,11 @@ export function Dashboard() {
               }
               return (
                 <div className="bg-white/80 rounded-2xl border border-violet-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                  <div className="px-4 py-2.5 border-b border-violet-50 flex items-baseline gap-2 flex-wrap">
+                  <div
+                    className="px-4 py-2.5 border-b border-violet-50 flex items-baseline gap-2 flex-wrap cursor-pointer select-none"
+                    onDoubleClick={() => feeAcademicYear && exportDatewiseAdmissionsReport(dateTable, feeAcademicYear)}
+                    title="Double-click to export PDF"
+                  >
                     <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Date-wise Admissions — Course Count</p>
                     {feeAcademicYear && (
                       <span className="text-[10px] font-semibold text-violet-500/70 whitespace-nowrap">

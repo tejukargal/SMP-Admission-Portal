@@ -91,8 +91,8 @@ type Row = (string | number)[];
 
 // ── Summary Report — Year, Course & Admission Type ───────────────────────────
 
-export function exportSummaryReport(students: Student[], academicYear: string): void {
-  const doc  = buildDoc(academicYear, 'Year, Course & Admission Type-wise Student Count');
+export function exportSummaryReport(students: Student[], academicYear: string, subtitle?: string): void {
+  const doc  = buildDoc(academicYear, subtitle ?? 'Year, Course & Admission Type-wise Student Count');
   const body: Row[] = [];
   const subtotalRows: number[] = [];
 
@@ -188,8 +188,8 @@ function catRow(label1: string, label2: string, c: Record<CatKey, number>, total
   return [label1, label2, c.gm, c.c1, c.twoA, c.twoB, c.threeA, c.threeB, c.sc, c.st, total];
 }
 
-export function exportCategoryReport(students: Student[], academicYear: string): void {
-  const doc  = buildDoc(academicYear, 'Year, Course & Cat wise Student Count');
+export function exportCategoryReport(students: Student[], academicYear: string, subtitle?: string): void {
+  const doc  = buildDoc(academicYear, subtitle ?? 'Year, Course & Cat wise Student Count');
   const body: Row[] = [];
   const subtotalRows: number[] = [];
 
@@ -259,4 +259,281 @@ export function exportCategoryReport(students: Student[], academicYear: string):
 
   addFooters(doc, academicYear, 'Category Report');
   doc.save(`SMP_Category_Report_${dateStr().replace(/-/g, '_')}.pdf`);
+}
+
+// ── Year & Course-wise Gender Report ─────────────────────────────────────────
+
+export function exportGenderCourseYearReport(students: Student[], academicYear: string, subtitle?: string): void {
+  const doc  = buildDoc(academicYear, subtitle ?? 'Year & Course-wise Gender Count');
+  const body: Row[] = [];
+  const subtotalRows: number[] = [];
+
+  let gB = 0, gG = 0, gT = 0;
+
+  for (const yr of YEARS) {
+    const yrSt = students.filter((s) => s.year === yr);
+    let sB = 0, sG = 0, sT = 0;
+    for (const course of COURSES) {
+      const ss = yrSt.filter((s) => s.course === course);
+      const boys  = ss.filter((s) => s.gender === 'BOY').length;
+      const girls = ss.filter((s) => s.gender === 'GIRL').length;
+      body.push([YR_LABEL[yr], course, boys, girls, boys + girls]);
+      sB += boys; sG += girls; sT += boys + girls;
+    }
+    subtotalRows.push(body.length);
+    body.push([`${YR_LABEL[yr]} SUBTOTAL`, 'All', sB, sG, sT]);
+    gB += sB; gG += sG; gT += sT;
+  }
+
+  const grandIdx = body.length;
+  body.push(['GRAND TOTAL', '', gB, gG, gT]);
+
+  autoTable(doc, {
+    startY: 37,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Year', 'Course', 'Boys', 'Girls', 'Total']],
+    body,
+    headStyles: HEAD_STYLES,
+    bodyStyles: BODY_STYLES,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 30, halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 30, halign: 'center' },
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body') return;
+      const i = data.row.index;
+      if (i === grandIdx) {
+        data.cell.styles.fillColor = BLUE_GRAND;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      } else if (subtotalRows.includes(i)) {
+        data.cell.styles.fillColor = BLUE_SUB;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  addFooters(doc, academicYear, 'Gender Course Year Report');
+  doc.save(`SMP_Gender_Course_Year_${dateStr().replace(/-/g, '_')}.pdf`);
+}
+
+// ── Category & Gender Report ──────────────────────────────────────────────────
+
+export function exportGenderCategoryReport(students: Student[], academicYear: string): void {
+  const CATS = ['GM', 'C1', '2A', '2B', '3A', '3B', 'SC', 'ST'] as const;
+  type Cat = typeof CATS[number];
+
+  function catOf(s: Student): Cat {
+    return (CATS as readonly string[]).includes(s.category ?? '') ? s.category as Cat : 'GM';
+  }
+
+  type Pair = { b: number; g: number };
+  const zero = (): Record<Cat, Pair> =>
+    Object.fromEntries(CATS.map((c) => [c, { b: 0, g: 0 }])) as Record<Cat, Pair>;
+
+  const body: Row[] = [];
+  const subtotalRows: number[] = [];
+  const grandCats = zero();
+  let gB = 0, gG = 0;
+
+  for (const yr of YEARS) {
+    const yrSt = students.filter((s) => s.year === yr);
+    const subCats = zero();
+    let sB = 0, sG = 0;
+
+    for (const course of COURSES) {
+      const ss = yrSt.filter((s) => s.course === course);
+      const cats = zero();
+      let tB = 0, tG = 0;
+      for (const s of ss) {
+        const cat = catOf(s);
+        if (s.gender === 'BOY') { cats[cat].b++; tB++; } else { cats[cat].g++; tG++; }
+        subCats[cat].b += 0; // accumulated below
+      }
+      for (const cat of CATS) { subCats[cat].b += cats[cat].b; subCats[cat].g += cats[cat].g; }
+      sB += tB; sG += tG;
+      body.push([
+        YR_LABEL[yr], course,
+        ...CATS.flatMap((cat) => [cats[cat].b, cats[cat].g]),
+        tB, tG,
+      ]);
+    }
+
+    subtotalRows.push(body.length);
+    body.push([
+      `${YR_LABEL[yr]} SUB`, 'All',
+      ...CATS.flatMap((cat) => [subCats[cat].b, subCats[cat].g]),
+      sB, sG,
+    ]);
+    for (const cat of CATS) { grandCats[cat].b += subCats[cat].b; grandCats[cat].g += subCats[cat].g; }
+    gB += sB; gG += sG;
+  }
+
+  const grandIdx = body.length;
+  body.push(['GRAND TOTAL', '', ...CATS.flatMap((cat) => [grandCats[cat].b, grandCats[cat].g]), gB, gG]);
+
+  // Landscape for wide table
+  const docL = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const WL = docL.internal.pageSize.getWidth();
+  docL.setFont('helvetica', 'bold');
+  docL.setFontSize(13);
+  docL.setTextColor(...NEAR_BLACK);
+  docL.text(`SMP Admn Stats ${academicYear}`, WL / 2, 17, { align: 'center' });
+  docL.setFontSize(10);
+  docL.text('Category & Gender-wise Student Count', WL / 2, 25, { align: 'center' });
+  docL.setFont('helvetica', 'normal');
+  docL.setFontSize(7.5);
+  docL.setTextColor(120, 120, 120);
+  docL.text(`Generated: ${dateStr()}`, WL / 2, 32, { align: 'center' });
+  docL.setTextColor(...NEAR_BLACK);
+
+  const catHeaders = CATS.flatMap((cat) => [`${cat} B`, `${cat} G`]);
+  autoTable(docL, {
+    startY: 37,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Year', 'Course', ...catHeaders, 'Total B', 'Total G']],
+    body,
+    headStyles: { ...HEAD_STYLES, fontSize: 7 },
+    bodyStyles: { ...BODY_STYLES, fontSize: 7 },
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 18 },
+      1: { cellWidth: 14 },
+      ...Object.fromEntries(
+        Array.from({ length: CATS.length * 2 + 2 }, (_, i) => [i + 2, { cellWidth: 12, halign: 'center' as const }])
+      ),
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body') return;
+      const i = data.row.index;
+      if (i === grandIdx) {
+        data.cell.styles.fillColor = BLUE_GRAND;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      } else if (subtotalRows.includes(i)) {
+        data.cell.styles.fillColor = BLUE_SUB;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  addFooters(docL, academicYear, 'Category Gender Report');
+  docL.save(`SMP_Category_Gender_${dateStr().replace(/-/g, '_')}.pdf`);
+}
+
+// ── Date-wise Admissions Report ───────────────────────────────────────────────
+
+export function exportDatewiseAdmissionsReport(
+  dateTable: Array<{ date: string; byCourse: Record<string, number>; total: number }>,
+  academicYear: string,
+): void {
+  const doc = buildDoc(academicYear, 'Date-wise Admissions — Course Count');
+
+  function fmtDate(iso: string): string {
+    const [y, m, d] = iso.split('-');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d} ${months[parseInt(m) - 1]} ${y}`;
+  }
+
+  const body: Row[] = dateTable.map((r) => [
+    fmtDate(r.date),
+    ...COURSES.map((c) => r.byCourse[c] ?? 0),
+    r.total,
+  ]);
+
+  const grandByCourse = COURSES.map((c) => dateTable.reduce((a, r) => a + (r.byCourse[c] ?? 0), 0));
+  const grandTotal    = dateTable.reduce((a, r) => a + r.total, 0);
+  const grandIdx      = body.length;
+  body.push(['GRAND TOTAL', ...grandByCourse, grandTotal]);
+
+  autoTable(doc, {
+    startY: 37,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Date', ...COURSES, 'Total']],
+    body,
+    headStyles: HEAD_STYLES,
+    bodyStyles: BODY_STYLES,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 36 },
+      ...Object.fromEntries(
+        COURSES.map((_, i) => [i + 1, { cellWidth: 22, halign: 'center' as const }])
+      ),
+      [COURSES.length + 1]: { cellWidth: 24, halign: 'center' as const },
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.row.index !== grandIdx) return;
+      data.cell.styles.fillColor = BLUE_GRAND;
+      data.cell.styles.textColor = WHITE;
+      data.cell.styles.fontStyle = 'bold';
+    },
+  });
+
+  addFooters(doc, academicYear, 'Datewise Admissions');
+  doc.save(`SMP_Datewise_Admissions_${dateStr().replace(/-/g, '_')}.pdf`);
+}
+
+// ── 1st Year Pending Seats Report ─────────────────────────────────────────────
+
+export function exportFirstYearSeatsReport(
+  seats: Record<string, { regularConfirmed: number; snqConfirmed: number }>,
+  academicYear: string,
+): void {
+  const doc = buildDoc(academicYear, '1st Year — Pending Seats');
+  const TOTAL_REGULAR = 60;
+  const TOTAL_SNQ = 3;
+
+  const body: Row[] = COURSES.map((course) => {
+    const s = seats[course] ?? { regularConfirmed: 0, snqConfirmed: 0 };
+    return [
+      course,
+      s.regularConfirmed,
+      Math.max(0, TOTAL_REGULAR - s.regularConfirmed),
+      s.snqConfirmed,
+      Math.max(0, TOTAL_SNQ - s.snqConfirmed),
+    ];
+  });
+
+  const totRegFilled  = COURSES.reduce((a, c) => a + (seats[c]?.regularConfirmed ?? 0), 0);
+  const totSnqFilled  = COURSES.reduce((a, c) => a + (seats[c]?.snqConfirmed   ?? 0), 0);
+  const grandIdx = body.length;
+  body.push([
+    'TOTAL',
+    totRegFilled,
+    Math.max(0, COURSES.length * TOTAL_REGULAR - totRegFilled),
+    totSnqFilled,
+    Math.max(0, COURSES.length * TOTAL_SNQ - totSnqFilled),
+  ]);
+
+  autoTable(doc, {
+    startY: 37,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Course', 'Reg Filled', 'Reg Pending', 'SNQ Filled', 'SNQ Pending']],
+    body,
+    headStyles: HEAD_STYLES,
+    bodyStyles: BODY_STYLES,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 28 },
+      1: { cellWidth: 30, halign: 'center' },
+      2: { cellWidth: 30, halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 30, halign: 'center' },
+    },
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.row.index !== grandIdx) return;
+      data.cell.styles.fillColor = BLUE_GRAND;
+      data.cell.styles.textColor = WHITE;
+      data.cell.styles.fontStyle = 'bold';
+    },
+  });
+
+  addFooters(doc, academicYear, '1st Year Seats');
+  doc.save(`SMP_1stYear_Seats_${dateStr().replace(/-/g, '_')}.pdf`);
 }

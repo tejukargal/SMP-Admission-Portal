@@ -195,7 +195,8 @@ export function CollectFee() {
           s.studentNameAadhar.toUpperCase().includes(search);
         const matchMobile =
           s.fatherMobile?.includes(search) || s.studentMobile?.includes(search);
-        return matchName || matchMobile;
+        const matchReg = !!s.regNumber?.toUpperCase().includes(search);
+        return matchName || matchMobile || matchReg;
       });
     }
     // Sort: Year → Course → Name (same as Students page)
