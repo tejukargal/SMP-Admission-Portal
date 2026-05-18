@@ -66,7 +66,7 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer hover:shadow-md transition-all duration-150 hover:-translate-y-0.5' : ''}`}
+      className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
       style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
     >
       {watermark && (
@@ -997,14 +997,14 @@ export function Dashboard() {
 
         /* ── Metric cards ───────────────────────────────────────────── */
         <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin">
-          <div className="space-y-3 min-w-0 mt-2">
+          <div className="space-y-3 min-w-0 mt-2 px-2">
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {/* Total card — hero with subtle gradient */}
               <div
                 onClick={() => setTotalModal(true)}
-                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-150 hover:-translate-y-0.5"
+                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                 style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.18)' }}
               >
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
