@@ -857,7 +857,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
   );
 }
 
-function DailyCollectionsTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; showAllYears: boolean }) {
   const [dateFrom,    setDateFrom]    = useState('');
   const [dateTo,      setDateTo]      = useState('');
   const [modeFilter,  setModeFilter]  = useState<'ALL' | 'CASH' | 'UPI'>('ALL');
@@ -935,6 +935,11 @@ function DailyCollectionsTab({ feeRecords, academicYear }: { feeRecords: FeeReco
           >
             Clear
           </button>
+        )}
+        {showAllYears && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+            Incl. Prior Year Dues
+          </span>
         )}
         <div className="ml-auto">
           <Button variant="secondary" size="sm" onClick={() => exportDailyCollectionsExcel(filteredDays, academicYear)}>
@@ -1066,7 +1071,7 @@ function exportDaySummaryExcel(entries: DayEntry[], academicYear: string): void 
   XLSX.writeFile(wb, `Day_Summary_${academicYear}.xlsx`);
 }
 
-function DaySummaryTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; showAllYears: boolean }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
 
@@ -1113,6 +1118,11 @@ function DaySummaryTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; 
           >
             Clear
           </button>
+        )}
+        {showAllYears && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+            Incl. Prior Year Dues
+          </span>
         )}
         <div className="ml-auto">
           <Button variant="secondary" size="sm" onClick={() => exportDaySummaryExcel(filteredDays, academicYear)}>
@@ -1202,7 +1212,7 @@ function DaySummaryTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; 
 }
 
 // ── Tab: Datewise Consolidated Headwise ───────────────────────────────────────
-function DatewiseHeadwiseTab({ feeRecords, academicYear, fp }: { feeRecords: FeeRecord[]; academicYear: string; fp: CommonFilterProps }) {
+function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; fp: CommonFilterProps; showAllYears: boolean }) {
   const entries: DatewiseHeadwiseEntry[] = useMemo(() => buildDatewiseHeadwise(feeRecords), [feeRecords]);
 
   const grandHeads = useMemo(() => {
@@ -1228,6 +1238,11 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp }: { feeRecords: Fee
           {grandTotal > 0 && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-700">
               Total: {fmt(grandTotal)}
+            </span>
+          )}
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
             </span>
           )}
         </div>
@@ -1795,7 +1810,7 @@ function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummar
   doc.save(`Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
 }
 
-function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord[]; academicYear: string }) {
+function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; showAllYears: boolean }) {
   const availableDates = useMemo(
     () => [...new Set(feeRecords.map((r) => r.date.slice(0, 10)))].sort(),
     [feeRecords],
@@ -1893,11 +1908,16 @@ function BankRemittanceTab({ feeRecords, academicYear }: { feeRecords: FeeRecord
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-400">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Cash = Challan deposit</span>
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Pay = UPI / auto-remitted</span>
         <span className="text-gray-300">·</span>
         <span>Aided: CE · ME · EC · CS &nbsp;|&nbsp; Unaided: EE</span>
+        {showAllYears && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+            Incl. Prior Year Dues
+          </span>
+        )}
       </div>
 
       {availableDates.length === 0 ? (
@@ -2599,10 +2619,11 @@ interface Reg1Row {
 }
 
 function FeeReg1Tab({
-  feeRecords, allStudents,
+  feeRecords, allStudents, showAllYears,
 }: {
   feeRecords: FeeRecord[];
   allStudents: Student[];
+  showAllYears: boolean;
 }) {
   const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
   const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
@@ -2727,6 +2748,11 @@ function FeeReg1Tab({
                 : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
             }`}
           >Clear</button>
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
+            </span>
+          )}
         </div>
       </div>
 
@@ -2899,9 +2925,18 @@ export function FeeReportsPage() {
   const [admCatFilter,    setAdmCatFilter]    = useState<AdmCat | ''>('');
   const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatus>('ALL');
   const [activeTab,       setActiveTab]       = useState<TabId>('statistics');
+  const [showAllYears,    setShowAllYears]    = useState(false);
+
+  const DATE_TAB_IDS = new Set<TabId>(['daily-collections', 'day-summary', 'datewise-headwise', 'bank-remittance', 'fee-reg-1']);
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords,   loading: feeLoading       } = useFeeRecords(academicYear);
+  // Fetches all payments whose date falls within the current financial year (Apr–Mar),
+  // including prior-year dues collected this year. Only subscribes when toggle is on.
+  const { records: allYearsRecords, loading: allYearsLoading } = useFeeRecords(
+    showAllYears ? academicYear : null,
+    { mode: 'by-date' },
+  );
   const { overrides: feeOverrides, loading: overridesLoading } = useFeeOverrides(academicYear);
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
 
@@ -3027,6 +3062,24 @@ export function FeeReportsPage() {
     return feeRecords.filter((r) => ids.has(r.studentId));
   }, [feeRecords, filteredRows, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
 
+  // ── Records for date-based tabs (all-years toggle aware) ──────────────────
+  // When showAllYears is on: use allYearsRecords and filter by record's own fields
+  // (can't use student IDs since those students may belong to other academic years).
+  // When off: use current-year records via the existing paths.
+  const dateTabRecords = showAllYears ? allYearsRecords : feeRecords;
+
+  const dateTabFilteredRecords = useMemo(() => {
+    if (!showAllYears) return filteredFeeRecords;
+    let records = allYearsRecords;
+    if (aidedFilter === 'AIDED')   records = records.filter((r) => (AIDED_COURSES as Course[]).includes(r.course));
+    if (aidedFilter === 'UNAIDED') records = records.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.course));
+    if (courseFilter)  records = records.filter((r) => r.course  === courseFilter);
+    if (yearFilter)    records = records.filter((r) => r.year    === yearFilter);
+    if (admTypeFilter) records = records.filter((r) => r.admType === admTypeFilter);
+    if (admCatFilter)  records = records.filter((r) => r.admCat  === admCatFilter);
+    return records;
+  }, [showAllYears, allYearsRecords, filteredFeeRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
+
   const hasActiveFilters =
     !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
 
@@ -3035,7 +3088,7 @@ export function FeeReportsPage() {
     setFeeStatusFilter('ALL');
   }
 
-  const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading;
+  const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading || (showAllYears && allYearsLoading);
 
   const tabsScrollRef = useRef<HTMLDivElement>(null);
   function scrollTabs(dir: 'left' | 'right') {
@@ -3062,6 +3115,19 @@ export function FeeReportsPage() {
           <h1 className="text-base font-bold text-gray-900">Fee Reports</h1>
           {academicYear && <p className="text-xs text-gray-400 mt-0.5">{academicYear}</p>}
         </div>
+        {DATE_TAB_IDS.has(activeTab) && (
+          <button
+            onClick={() => setShowAllYears((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+              showAllYears
+                ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+            }`}
+            title={showAllYears ? 'Showing all payments collected in this financial year (incl. prior-year dues) — click to show current year only' : 'Click to also show prior-year dues collected in this financial year'}
+          >
+            {showAllYears ? 'Incl. Prior Dues' : 'Current Year Only'}
+          </button>
+        )}
       </div>
 
       {/* Sticky tab bar */}
@@ -3115,12 +3181,12 @@ export function FeeReportsPage() {
             {activeTab === 'dues'              && <DuesTab             rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'consolidated'      && <ConsolidatedTab     feeRecords={filteredFeeRecords}  academicYear={academicYear} fp={fp} />}
-            {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={feeRecords}          academicYear={academicYear} />}
-            {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={feeRecords}          academicYear={academicYear} />}
-            {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={filteredFeeRecords}  academicYear={academicYear} fp={fp} />}
-            {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={feeRecords}          academicYear={academicYear} />}
+            {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
+            {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
+            {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={dateTabFilteredRecords}  academicYear={academicYear} fp={fp} showAllYears={showAllYears} />}
+            {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
-            {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={feeRecords} allStudents={allStudents} />}
+            {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} />}
           </>
         )}
       </div>
