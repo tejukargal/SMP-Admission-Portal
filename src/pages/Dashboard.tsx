@@ -7,6 +7,7 @@ import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
+import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
@@ -253,6 +254,9 @@ export function Dashboard() {
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
   const [totalModal, setTotalModal] = useState(false);
+
+  // ── Collect Fee from dashboard search (admin only) ───────────────────────
+  const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -980,6 +984,15 @@ export function Dashboard() {
                                   Edit
                                 </Button>
                               )}
+                              {isAdmin && (
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => setCollectFeeStudent(s)}
+                                >
+                                  Collect Fee
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1628,6 +1641,17 @@ export function Dashboard() {
       <StudentDetailModal
         student={feeHistoryStudent}
         onClose={() => setFeeHistoryStudent(null)}
+      />
+    )}
+
+    {/* ── Collect Fee modal (admin, from dashboard search) ─────────────── */}
+    {collectFeeStudent && (
+      <FeeCollectionModal
+        student={collectFeeStudent}
+        academicYear={collectFeeStudent.academicYear}
+        receiptCounterYear={settings?.currentAcademicYear ?? collectFeeStudent.academicYear}
+        onClose={() => setCollectFeeStudent(null)}
+        onSaved={() => setCollectFeeStudent(null)}
       />
     )}
 

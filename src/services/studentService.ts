@@ -347,6 +347,13 @@ export async function deleteStudent(id: string): Promise<void> {
   }
 }
 
+export async function getStudentsByRegNumber(regNumber: string): Promise<Student[]> {
+  if (!regNumber) return [];
+  const q = query(collection(db, STUDENTS_COLLECTION), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+}
+
 export async function deleteStudentsByAcademicYear(
   academicYear: AcademicYear
 ): Promise<number> {

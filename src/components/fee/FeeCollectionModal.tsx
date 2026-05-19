@@ -54,6 +54,9 @@ function lookupFine(date: string, schedule: FinePeriod[]): number {
 interface Props {
   student: Student;
   academicYear: AcademicYear;
+  /** When set, receipt counters are read/written from this year instead of academicYear.
+   *  Use when collecting dues for a prior-year student from the current-year context. */
+  receiptCounterYear?: AcademicYear;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -61,7 +64,8 @@ interface Props {
 const ni =
   'w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors';
 
-export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: Props) {
+export function FeeCollectionModal({ student, academicYear, receiptCounterYear, onClose, onSaved }: Props) {
+  const counterYear = receiptCounterYear ?? academicYear;
   const [structure, setStructure] = useState<FeeStructure | null>(null);
   /** All prior payment records for this student in this year */
   const [priorPayments, setPriorPayments] = useState<FeeRecord[]>([]);
@@ -95,6 +99,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
   const [additionalSplit, setAdditionalSplit] = useState<SplitPayment>({ cash: 0, upi: 0 });
   const [fineSchedule, setFineSchedule] = useState<FinePeriod[]>([]);
   const [remarks, setRemarks] = useState('');
+
 
   // ── Cumulative paid so far (derived from priorPayments) ───────────────────
   const cumulativeSmp = useMemo<SMPHeads>(() => {
@@ -130,7 +135,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
         student.admCat
       ),
       getFeeRecordsByStudent(student.id, academicYear),
-      peekNextReceiptNumbers(academicYear, student.course),
+      peekNextReceiptNumbers(counterYear, student.course),
       getFineSchedule(academicYear),
       getFeeOverride(student.id, academicYear),
     ])
@@ -368,7 +373,7 @@ export function FeeCollectionModal({ student, academicYear, onClose, onSaved }: 
 
       // Update counters to reflect the highest receipt numbers now in use.
       // This runs after save so cancelling the modal never wastes a number.
-      await updateReceiptCounters(academicYear, student.course, {
+      await updateReceiptCounters(counterYear, student.course, {
         smp:        usedSmpReceipt,
         svk:        usedSvkReceipt,
         additional: usedAddReceipt,
