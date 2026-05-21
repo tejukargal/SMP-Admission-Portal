@@ -34,6 +34,9 @@ const Inquiries = lazy(() =>
 const FeeStructureView = lazy(() =>
   import('./pages/FeeStructureView').then((m) => ({ default: m.FeeStructureView }))
 );
+const StudentReports = lazy(() =>
+  import('./pages/StudentReports').then((m) => ({ default: m.StudentReports }))
+);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -63,6 +66,7 @@ function AppRoutes() {
         <Route path="/admissions" element={<Admissions />} />
         <Route path="/inquiries" element={<Inquiries />} />
         <Route path="/students" element={<Students />} />
+        <Route path="/student-reports" element={<StudentReports />} />
         <Route
           path="/fees"
           element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
