@@ -31,9 +31,6 @@ const Messaging = lazy(() =>
 const Inquiries = lazy(() =>
   import('./pages/Inquiries').then((m) => ({ default: m.Inquiries }))
 );
-const FeeStructureView = lazy(() =>
-  import('./pages/FeeStructureView').then((m) => ({ default: m.FeeStructureView }))
-);
 const StudentReports = lazy(() =>
   import('./pages/StudentReports').then((m) => ({ default: m.StudentReports }))
 );
@@ -72,7 +69,6 @@ function AppRoutes() {
           element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
         />
         <Route path="/fee-register" element={<FeeRegister />} />
-        <Route path="/fee-structure" element={<FeeStructureView />} />
         <Route
           path="/fee-reports"
           element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
+import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +19,7 @@ import {
   exportDatewiseAdmissionsReport, exportFirstYearSeatsReport,
 } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
+import { SMP_FEE_HEADS } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -258,6 +261,11 @@ export function Dashboard() {
   // ── Collect Fee from dashboard search (admin only) ───────────────────────
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
 
+  // ── Fee status for search result rows ────────────────────────────────────
+  type FeeStatus = 'collect' | 'dues' | 'no-dues';
+  const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
+  const [searchFeeLoading, setSearchFeeLoading] = useState(false);
+
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -401,6 +409,67 @@ export function Dashboard() {
     }
     return Array.from(map.values()).sort((a, b) => a.nameSSLC.localeCompare(b.nameSSLC));
   }, [searchResults]);
+
+  useEffect(() => {
+    if (!isSearchMode || searchResults.length === 0) {
+      setSearchFeeStatus(new Map());
+      return;
+    }
+    let cancelled = false;
+    setSearchFeeLoading(true);
+
+    async function loadFeeStatus() {
+      const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
+
+      const [allRecords, allStructures] = await Promise.all([
+        Promise.all(uniqueYears.map((y) => getFeeRecordsByAcademicYear(y))).then((arrs) => arrs.flat()),
+        Promise.all(uniqueYears.map((y) => getFeeStructuresByAcademicYear(y))).then((arrs) => arrs.flat()),
+      ]);
+
+      if (cancelled) return;
+
+      // Total paid per studentId (SMP + SVK + Additional)
+      const paidByStudent = new Map<string, number>();
+      for (const r of allRecords) {
+        const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (r.smp[key] ?? 0), 0);
+        const addlSum = r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+        paidByStudent.set(r.studentId, (paidByStudent.get(r.studentId) ?? 0) + smpSum + r.svk + addlSum);
+      }
+
+      // Total allotted per `${academicYear}__${course}__${year}__${admType}__${admCat}`
+      const allottedByKey = new Map<string, number>();
+      for (const fs of allStructures) {
+        const structKey = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
+        const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (fs.smp[k] ?? 0), 0);
+        const addlSum = fs.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        allottedByKey.set(structKey, smpSum + fs.svk + addlSum);
+      }
+
+      const statusMap = new Map<string, FeeStatus>();
+      for (const s of searchResults) {
+        const paid = paidByStudent.get(s.id) ?? 0;
+        const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+        const allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+        let status: FeeStatus;
+        if (allotted !== null && paid >= allotted) {
+          status = 'no-dues';
+        } else if (paid > 0) {
+          status = 'dues';
+        } else {
+          status = 'collect';
+        }
+        statusMap.set(s.id, status);
+      }
+
+      if (!cancelled) {
+        setSearchFeeStatus(statusMap);
+        setSearchFeeLoading(false);
+      }
+    }
+
+    loadFeeStatus().catch(() => { if (!cancelled) setSearchFeeLoading(false); });
+    return () => { cancelled = true; };
+  }, [isSearchMode, searchResults]);
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -984,15 +1053,29 @@ export function Dashboard() {
                                   Edit
                                 </Button>
                               )}
-                              {isAdmin && (
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => setCollectFeeStudent(s)}
-                                >
-                                  Collect Fee
-                                </Button>
-                              )}
+                              {isAdmin && (() => {
+                                const feeStatus = searchFeeLoading ? null : (searchFeeStatus.get(s.id) ?? 'collect');
+                                const baseClass = 'inline-flex items-center justify-center w-[98px] py-1 rounded-lg text-xs font-semibold border transition-colors shadow-sm';
+                                if (feeStatus === 'no-dues') {
+                                  return (
+                                    <span className={`${baseClass} text-emerald-700 bg-emerald-50 border-emerald-200 cursor-default`}>
+                                      No Dues
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    onClick={() => setCollectFeeStudent(s)}
+                                    className={`${baseClass} text-white border-transparent ${
+                                      feeStatus === 'dues'
+                                        ? 'bg-amber-500 hover:bg-amber-600'
+                                        : 'bg-emerald-600 hover:bg-emerald-700'
+                                    }`}
+                                  >
+                                    {feeStatus === 'dues' ? 'Collect Dues' : 'Collect Fee'}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>
@@ -1641,6 +1724,7 @@ export function Dashboard() {
       <StudentDetailModal
         student={feeHistoryStudent}
         onClose={() => setFeeHistoryStudent(null)}
+        defaultTab="fee"
       />
     )}
 

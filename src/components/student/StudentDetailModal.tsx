@@ -1033,10 +1033,11 @@ const TAB_COLORS: Record<Tab, string> = {
 interface Props {
   student: Student;
   onClose: () => void;
+  defaultTab?: Tab;
 }
 
-export function StudentDetailModal({ student, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
   // Fee history state — lazy-loaded on first visit to fee tab
   const [yearData, setYearData] = useState<YearData[]>([]);
@@ -1159,13 +1160,16 @@ export function StudentDetailModal({ student, onClose }: Props) {
       : 'from-emerald-600 to-emerald-800'
     : 'from-slate-700 to-slate-900';
 
-  const tabs: { id: Tab; label: string }[] = [
+  const allTabs: { id: Tab; label: string }[] = [
     { id: 'profile',   label: 'Profile' },
     { id: 'documents', label: 'Docs History' },
     { id: 'fee',       label: 'Fee History' },
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
   ];
+  const tabs = defaultTab === 'profile'
+    ? allTabs
+    : [allTabs.find((t) => t.id === defaultTab)!, ...allTabs.filter((t) => t.id !== defaultTab)];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">

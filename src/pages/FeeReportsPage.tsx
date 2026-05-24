@@ -4,6 +4,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
+import { FeeStructureView } from './FeeStructureView';
 import { Button } from '../components/common/Button';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
@@ -22,7 +23,7 @@ import {
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -48,6 +49,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'fee-distribution',   label: 'Fee Distribution'     },
   { id: 'consolidated',       label: 'Consolidated'         },
   { id: 'fee-reg-1',          label: 'Fee Reg_1'            },
+  { id: 'fee-structure',      label: 'Fee Structure'        },
 ];
 
 function fmt(n: number): string {
@@ -3187,6 +3189,7 @@ export function FeeReportsPage() {
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
             {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} />}
+            {activeTab === 'fee-structure'     && <FeeStructureView />}
           </>
         )}
       </div>
