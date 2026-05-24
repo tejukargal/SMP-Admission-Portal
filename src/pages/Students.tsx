@@ -556,7 +556,7 @@ export function Students() {
               {visibleStudents.map((student, idx) => (
                 <tr
                   key={student.id}
-                  className="hover:bg-emerald-50/40 transition-colors cursor-context-menu"
+                  className="hover:bg-emerald-100/70 transition-colors cursor-context-menu"
                   onContextMenu={(e) => handleContextMenu(e, student)}
                 >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
