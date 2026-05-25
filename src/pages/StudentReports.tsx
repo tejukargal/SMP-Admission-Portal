@@ -44,7 +44,7 @@ function exportWhatsappPdf(students: Student[], filters: {
   const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
   const title = filters.academicYear
     ? `SMP Admissions — Whatsapp Numbers List  (${filters.academicYear})`
@@ -60,21 +60,22 @@ function exportWhatsappPdf(students: Student[], filters: {
   chips.push(`${students.length} student${students.length !== 1 ? 's' : ''}`);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
-  doc.text(chips.join('  ·  '), MARGIN, 19.5);
-  doc.text(`Generated ${dateStr}`, W - MARGIN, 19.5, { align: 'right' });
+  doc.text(chips.join('  ·  '), MARGIN, 20);
+  doc.text(`Generated ${dateStr}`, W - MARGIN, 20, { align: 'right' });
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.2);
-  doc.line(MARGIN, 22, W - MARGIN, 22);
+  doc.line(MARGIN, 23, W - MARGIN, 23);
   doc.setTextColor(0);
 
   const HEAD: [number, number, number]  = [21, 128, 61];   // green-700
   const WHITE: [number, number, number] = [255, 255, 255];
   const GRID: [number, number, number]  = [210, 215, 220];
 
+  // Usable width = 210 - 12 - 12 = 186mm. Column widths sum to exactly 186mm.
   autoTable(doc, {
-    startY: 25,
+    startY: 26,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Sl', 'Student Name', 'Year', 'Course', 'Father Mobile', 'Student Mobile']],
     body: students.map((s, i) => [
@@ -87,20 +88,20 @@ function exportWhatsappPdf(students: Student[], filters: {
     ]),
     headStyles: {
       fillColor: HEAD, textColor: WHITE, fontStyle: 'bold',
-      fontSize: 8, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 },
+      fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
     },
     bodyStyles: {
-      fontSize: 8, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 },
+      fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
       lineColor: GRID, lineWidth: 0.18,
     },
     alternateRowStyles: { fillColor: [240, 253, 244] as [number, number, number] },
     columnStyles: {
-      0: { cellWidth: 9,  halign: 'center' },
-      1: { cellWidth: 68 },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 18, halign: 'center' },
-      4: { cellWidth: 30, font: 'courier', fontSize: 7.5 },
-      5: { cellWidth: 30, font: 'courier', fontSize: 7.5 },
+      0: { cellWidth: 8,  halign: 'center' },
+      1: { cellWidth: 72 },
+      2: { cellWidth: 24, halign: 'center' },
+      3: { cellWidth: 16, halign: 'center' },
+      4: { cellWidth: 33 },
+      5: { cellWidth: 33 },
     },
   });
 
@@ -109,7 +110,7 @@ function exportWhatsappPdf(students: Student[], filters: {
     doc.setPage(p);
     const H = doc.internal.pageSize.getHeight();
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
+    doc.setFontSize(7.5);
     doc.setTextColor(160, 160, 160);
     doc.text(`Whatsapp Numbers List — ${filters.academicYear ?? ''}`, MARGIN, H - 5);
     doc.text(`Page ${p} of ${totalPages}`, W - MARGIN, H - 5, { align: 'right' });
