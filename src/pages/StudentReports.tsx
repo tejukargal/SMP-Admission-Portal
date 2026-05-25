@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
@@ -11,6 +13,13 @@ import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, Academic
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
+type ReportType = 'snq-allotment' | 'whatsapp-numbers';
+
+const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
+  { value: 'snq-allotment',   label: 'List for SNQ Allotment'  },
+  { value: 'whatsapp-numbers', label: 'Whatsapp Numbers List'  },
+];
+
 const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function sortStudents(students: Student[]): Student[] {
@@ -21,16 +30,111 @@ function sortStudents(students: Student[]): Student[] {
   });
 }
 
+function exportWhatsappPdf(students: Student[], filters: {
+  academicYear: string | null;
+  courseFilter: string;
+  yearFilter: string;
+  admTypeFilter: string;
+  admCatFilter: string;
+  searchTerm: string;
+}): void {
+  const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W      = doc.internal.pageSize.getWidth();
+  const MARGIN = 12;
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  const title = filters.academicYear
+    ? `SMP Admissions — Whatsapp Numbers List  (${filters.academicYear})`
+    : 'SMP Admissions — Whatsapp Numbers List';
+  doc.text(title, W / 2, 13, { align: 'center' });
+
+  const chips: string[] = [];
+  if (filters.courseFilter)  chips.push(filters.courseFilter);
+  if (filters.yearFilter)    chips.push(filters.yearFilter);
+  if (filters.admTypeFilter) chips.push(filters.admTypeFilter);
+  if (filters.admCatFilter)  chips.push(filters.admCatFilter);
+  if (filters.searchTerm)    chips.push(`"${filters.searchTerm}"`);
+  chips.push(`${students.length} student${students.length !== 1 ? 's' : ''}`);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(chips.join('  ·  '), MARGIN, 19.5);
+  doc.text(`Generated ${dateStr}`, W - MARGIN, 19.5, { align: 'right' });
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN, 22, W - MARGIN, 22);
+  doc.setTextColor(0);
+
+  const HEAD: [number, number, number]  = [21, 128, 61];   // green-700
+  const WHITE: [number, number, number] = [255, 255, 255];
+  const GRID: [number, number, number]  = [210, 215, 220];
+
+  autoTable(doc, {
+    startY: 25,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Sl', 'Student Name', 'Year', 'Course', 'Father Mobile', 'Student Mobile']],
+    body: students.map((s, i) => [
+      i + 1,
+      s.studentNameSSLC,
+      s.year,
+      s.course,
+      s.fatherMobile || '—',
+      s.studentMobile || '—',
+    ]),
+    headStyles: {
+      fillColor: HEAD, textColor: WHITE, fontStyle: 'bold',
+      fontSize: 8, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 },
+    },
+    bodyStyles: {
+      fontSize: 8, cellPadding: { top: 2.5, right: 3, bottom: 2.5, left: 3 },
+      lineColor: GRID, lineWidth: 0.18,
+    },
+    alternateRowStyles: { fillColor: [240, 253, 244] as [number, number, number] },
+    columnStyles: {
+      0: { cellWidth: 9,  halign: 'center' },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 30, font: 'courier', fontSize: 7.5 },
+      5: { cellWidth: 30, font: 'courier', fontSize: 7.5 },
+    },
+  });
+
+  const totalPages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(160, 160, 160);
+    doc.text(`Whatsapp Numbers List — ${filters.academicYear ?? ''}`, MARGIN, H - 5);
+    doc.text(`Page ${p} of ${totalPages}`, W - MARGIN, H - 5, { align: 'right' });
+  }
+
+  const parts = ['whatsapp_numbers'];
+  if (filters.academicYear) parts.push(filters.academicYear.replace(/[^0-9-]/g, ''));
+  if (filters.courseFilter) parts.push(filters.courseFilter);
+  if (filters.yearFilter)   parts.push(filters.yearFilter.replace(/\s+/g, ''));
+  doc.save(parts.join('_') + '.pdf');
+}
+
 export function StudentReports() {
-  const { role }                              = useAuth();
-  const isAdmin                               = role === 'admin';
+  const { role }                               = useAuth();
+  const isAdmin                                = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
   const { students: allStudents, loading, error } = useStudents(academicYear);
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
 
-  // Earliest fee payment date per student (mirrors Dashboard's dateTable logic)
+  // ── Report type ─────────────────────────────────────────────────────────────
+  const [reportType, setReportType] = useState<ReportType>('snq-allotment');
+
+  // Earliest fee payment date per student
   const firstPaymentDate = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of feeRecords) {
@@ -43,15 +147,15 @@ export function StudentReports() {
   }, [feeRecords]);
 
   // ── Filters ─────────────────────────────────────────────────────────────────
-  const [searchTerm,    setSearchTerm]    = useState('');
-  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
-  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
-  const [genderFilter,  setGenderFilter]  = useState<Gender | ''>('');
-  const [categoryFilter,setCategoryFilter]= useState<Category | ''>('');
-  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
-  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
-  const [dateFrom,      setDateFrom]      = useState('');
-  const [dateTo,        setDateTo]        = useState('');
+  const [searchTerm,     setSearchTerm]     = useState('');
+  const [courseFilter,   setCourseFilter]   = useState<Course | ''>('');
+  const [yearFilter,     setYearFilter]     = useState<Year | ''>('');
+  const [genderFilter,   setGenderFilter]   = useState<Gender | ''>('');
+  const [categoryFilter, setCategoryFilter] = useState<Category | ''>('');
+  const [admTypeFilter,  setAdmTypeFilter]  = useState<AdmType | ''>('');
+  const [admCatFilter,   setAdmCatFilter]   = useState<AdmCat | ''>('');
+  const [dateFrom,       setDateFrom]       = useState('');
+  const [dateTo,         setDateTo]         = useState('');
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [savingPdf,   setSavingPdf]   = useState(false);
@@ -105,7 +209,7 @@ export function StudentReports() {
     setDateFrom(''); setDateTo('');
   }
 
-  // ── Stats (from confirmed only) ──────────────────────────────────────────────
+  // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     const byYear: Record<string, number> = {};
@@ -117,89 +221,120 @@ export function StudentReports() {
     return { byYear, byCourse, total: confirmed.length };
   }, [allStudents]);
 
-  // ── Export PDF ───────────────────────────────────────────────────────────────
+  // ── Export: SNQ Allotment PDF ────────────────────────────────────────────────
   function handleExportPdf() {
     setSavingPdf(true);
     setTimeout(() => {
       try {
-        exportStudentReportPdf(filteredStudents, {
-          academicYear,
-          courseFilter,
-          yearFilter,
-          genderFilter,
-          categoryFilter,
-          admTypeFilter,
-          admCatFilter,
-          searchTerm: debouncedSearch,
-          dateFrom,
-          dateTo,
-        });
+        if (reportType === 'snq-allotment') {
+          exportStudentReportPdf(filteredStudents, {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            categoryFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+            dateFrom,
+            dateTo,
+          });
+        } else {
+          exportWhatsappPdf(filteredStudents, {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+          });
+        }
       } finally {
         setSavingPdf(false);
       }
     }, 0);
   }
 
-  // ── Export Excel ─────────────────────────────────────────────────────────────
+  // ── Export: Excel ─────────────────────────────────────────────────────────────
   function handleExportExcel() {
     setSavingExcel(true);
     setTimeout(() => {
       try {
-        const headers = [
-          'Sl No', 'Name (SSLC)', 'Father Name', 'Gender', 'Category',
-          'Course', 'Year', 'Adm Type', 'Adm Cat',
-          'Student Mobile', 'Father Mobile',
-          'SSLC Max', 'SSLC Total',
-          'Maths Max', 'Maths Obtained',
-          'Science Max', 'Science Obtained',
-          'M+S Max', 'M+S Obtained',
-          'Annual Income', 'Reg No', 'Merit No', 'Enrollment Date', 'Remarks',
-        ];
-        const rows = filteredStudents.map((s, i) => [
-          i + 1,
-          s.studentNameSSLC,
-          s.fatherName,
-          s.gender === 'BOY' ? 'B' : 'G',
-          s.category || '',
-          s.course,
-          s.year,
-          s.admType || '',
-          s.admCat || '',
-          s.studentMobile || '',
-          s.fatherMobile || '',
-          s.sslcMaxTotal ?? '',
-          s.sslcObtainedTotal ?? '',
-          s.mathsMax ?? '',
-          s.mathsObtained ?? '',
-          s.scienceMax ?? '',
-          s.scienceObtained ?? '',
-          s.mathsScienceMaxTotal ?? '',
-          s.mathsScienceObtainedTotal ?? '',
-          s.annualIncome ?? '',
-          s.regNumber || '',
-          s.meritNumber || '',
-          s.enrollmentDate || '',
-          '',
-        ]);
-
-        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        ws['!cols'] = [
-          { wch: 6 }, { wch: 26 }, { wch: 22 }, { wch: 7 }, { wch: 8 },
-          { wch: 7 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-          { wch: 14 }, { wch: 14 },
-          { wch: 10 }, { wch: 10 },
-          { wch: 10 }, { wch: 12 },
-          { wch: 11 }, { wch: 14 },
-          { wch: 9 },  { wch: 12 },
-          { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 12 },
-        ];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Student Report');
-        const parts = ['student_report'];
-        if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
-        if (courseFilter)   parts.push(courseFilter);
-        if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
-        XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        if (reportType === 'snq-allotment') {
+          const headers = [
+            'Sl No', 'Name (SSLC)', 'Father Name', 'Gender', 'Category',
+            'Course', 'Year', 'Adm Type', 'Adm Cat',
+            'Student Mobile', 'Father Mobile',
+            'SSLC Max', 'SSLC Total',
+            'Maths Max', 'Maths Obtained',
+            'Science Max', 'Science Obtained',
+            'M+S Max', 'M+S Obtained',
+            'Annual Income', 'Reg No', 'Merit No', 'Enrollment Date', 'Remarks',
+          ];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            s.studentNameSSLC,
+            s.fatherName,
+            s.gender === 'BOY' ? 'B' : 'G',
+            s.category || '',
+            s.course,
+            s.year,
+            s.admType || '',
+            s.admCat || '',
+            s.studentMobile || '',
+            s.fatherMobile || '',
+            s.sslcMaxTotal ?? '',
+            s.sslcObtainedTotal ?? '',
+            s.mathsMax ?? '',
+            s.mathsObtained ?? '',
+            s.scienceMax ?? '',
+            s.scienceObtained ?? '',
+            s.mathsScienceMaxTotal ?? '',
+            s.mathsScienceObtainedTotal ?? '',
+            s.annualIncome ?? '',
+            s.regNumber || '',
+            s.meritNumber || '',
+            s.enrollmentDate || '',
+            '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [
+            { wch: 6 }, { wch: 26 }, { wch: 22 }, { wch: 7 }, { wch: 8 },
+            { wch: 7 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+            { wch: 14 }, { wch: 14 },
+            { wch: 10 }, { wch: 10 },
+            { wch: 10 }, { wch: 12 },
+            { wch: 11 }, { wch: 14 },
+            { wch: 9 },  { wch: 12 },
+            { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 12 },
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Student Report');
+          const parts = ['student_report'];
+          if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter)   parts.push(courseFilter);
+          if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else {
+          const headers = ['Sl No', 'Student Name', 'Year', 'Course', 'Father Mobile', 'Student Mobile'];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            s.studentNameSSLC,
+            s.year,
+            s.course,
+            s.fatherMobile || '',
+            s.studentMobile || '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Whatsapp Numbers');
+          const parts = ['whatsapp_numbers'];
+          if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter)   parts.push(courseFilter);
+          if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        }
       } finally {
         setSavingExcel(false);
       }
@@ -299,6 +434,22 @@ export function StudentReports() {
       >
         <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
 
+          {/* Report type selector */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap select-none">Report</span>
+            <select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value as ReportType)}
+              className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer"
+            >
+              {REPORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <span className="text-gray-200 text-sm select-none">|</span>
+
           {/* Search */}
           <input
             type="text"
@@ -355,23 +506,25 @@ export function StudentReports() {
             <option value="OTHERS">OTHERS</option>
           </select>
 
-          {/* Date range */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Fee Paid Date</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
-            />
-            <span className="text-gray-300 text-xs">→</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
-            />
-          </div>
+          {/* Date range — only relevant for SNQ Allotment (fee paid date) */}
+          {reportType === 'snq-allotment' && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Fee Paid Date</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
+              />
+              <span className="text-gray-300 text-xs">→</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
+              />
+            </div>
+          )}
 
           {/* Action buttons */}
           {hasActiveFilters && (
@@ -430,7 +583,8 @@ export function StudentReports() {
         <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
           No students found{hasActiveFilters ? ' for the selected filters.' : '.'}
         </div>
-      ) : (
+      ) : reportType === 'snq-allotment' ? (
+        /* ── SNQ Allotment table ─────────────────────────────────────────── */
         <div
           className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col"
           style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
@@ -482,8 +636,47 @@ export function StudentReports() {
               ))}
             </tbody>
           </table>
-
           <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
+            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
+              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ── Whatsapp Numbers table ──────────────────────────────────────── */
+        <div
+          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-green-100 overflow-auto flex flex-col"
+          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+        >
+          <table className="min-w-full divide-y divide-green-50 text-xs">
+            <thead className="sticky top-0 z-10">
+              <tr style={{ background: 'linear-gradient(90deg, #f0fdf4, #dcfce7)' }}>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-green-200">#</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-green-200">Student Name</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-green-200">Year</th>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-green-200">Course</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-green-200">Father Mobile</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-green-200">Student Mobile</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-green-50/60">
+              {filteredStudents.map((s, idx) => (
+                <tr
+                  key={s.id}
+                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-green-50/50`}
+                >
+                  <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.fatherMobile || <span className="text-gray-300">—</span>}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || <span className="text-gray-300">—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-3 py-2 border-t border-green-50 text-xs text-gray-500 mt-auto">
             Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
