@@ -152,6 +152,7 @@ export interface FeeRecord {
   svkSplit?: SplitPayment;          // cash/upi split amounts for SVK (when svkPaymentMode === 'SPLIT')
   additionalSplit?: SplitPayment;   // cash/upi split amounts for Additional (when additionalPaymentMode === 'SPLIT')
   remarks: string;
+  isDueFee?: boolean;       // true when collected as a due/installment payment (prior payments existed)
   smp: SMPHeads;            // paid amounts per SMP head
   svk: number;              // SVK base paid
   additionalPaid: FeeAdditionalHead[];  // additional fee heads paid

@@ -78,11 +78,11 @@ function sortRecords(records: FeeRecord[]): FeeRecord[] {
   });
 }
 
-function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[], academicYear: string): void {
+function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[], academicYear: string, dueFeeIds: Set<string>): void {
   const smpHeaders = SMP_FEE_HEADS.map(({ label }) => label);
   const headers = [
     '#', 'Name', 'Father Name', 'Year', 'Course', 'Reg No',
-    'Adm Cat', 'Adm Type', 'Date', 'SMP Rpt', 'SVK Rpt', 'Mode', 'Remarks',
+    'Adm Cat', 'Adm Type', 'Date', 'SMP Rpt', 'SVK Rpt', 'Mode', 'Remarks', 'Due Fee',
     ...smpHeaders, 'SMP Total',
     'SVK', ...additionalHeadLabels, 'SVK Total',
     'Grand Total',
@@ -105,6 +105,7 @@ function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[
       r.svkReceiptNumber || '',
       r.paymentMode,
       r.remarks || '',
+      (r.isDueFee ?? (dueFeeIds.has(r.id) || r.academicYear !== academicYear)) ? 'Due Fee' : '',
       ...(SMP_FEE_HEADS as { key: SMPFeeHead }[]).map(({ key }) => r.smp[key] || 0),
       smpTotal,
       r.svk || 0,
@@ -535,6 +536,23 @@ export function FeeRegister() {
     return [...labels];
   }, [sortedRecords]);
 
+  // Derive due-fee record IDs for backward compat with records saved before isDueFee field was added.
+  // A record is considered a due-fee collection if the student already had an earlier record for the
+  // same academicYear in this dataset (sorted oldest-first, so the first seen per student is the initial payment).
+  const dueFeeIds = useMemo(() => {
+    const seen = new Set<string>(); // studentId__academicYear keys already encountered
+    const ids = new Set<string>();
+    for (const r of sortedRecords) {
+      const key = `${r.studentId}__${r.academicYear}`;
+      if (seen.has(key)) {
+        ids.add(r.id);
+      } else {
+        seen.add(key);
+      }
+    }
+    return ids;
+  }, [sortedRecords]);
+
   // Apply filters
   const filteredRecords = useMemo(() => {
     let result = sortedRecords;
@@ -654,7 +672,7 @@ export function FeeRegister() {
               <span className="font-bold tabular-nums text-emerald-900">₹{totals.grandTotal.toLocaleString()}</span>
             </div>
             <button
-              onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear)}
+              onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear, dueFeeIds)}
               disabled={filteredRecords.length === 0}
               className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-sm"
             >
@@ -822,7 +840,7 @@ export function FeeRegister() {
               {/* Group header */}
               <tr>
                 <th
-                  colSpan={showFatherName ? 13 : 12}
+                  colSpan={showFatherName ? 14 : 13}
                   className="px-3 py-2 text-left text-[10px] font-bold text-amber-900 uppercase tracking-wider border-r border-amber-300 bg-amber-200"
                 >
                   Student Info
@@ -863,7 +881,8 @@ export function FeeRegister() {
                 <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-12 bg-amber-100 text-[10px] uppercase tracking-wide">SMP Rpt</th>
                 <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-24 bg-amber-100 text-[10px] uppercase tracking-wide">SVK Rpt</th>
                 <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-14 bg-amber-100 text-[10px] uppercase tracking-wide">Mode</th>
-                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-28 bg-amber-100 border-r border-amber-300 text-[10px] uppercase tracking-wide">Remarks</th>
+                <th className="px-2 py-2 text-left font-semibold text-amber-900 whitespace-nowrap w-28 bg-amber-100 text-[10px] uppercase tracking-wide">Remarks</th>
+                <th className="px-2 py-2 text-center font-semibold text-amber-900 whitespace-nowrap w-20 bg-amber-100 border-r border-amber-300 text-[10px] uppercase tracking-wide">Due Fee</th>
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key, label }) => (
                   <th key={key} className="px-2 py-2 text-right font-semibold text-blue-800 whitespace-nowrap w-14 bg-blue-100 text-[10px] uppercase tracking-wide">
@@ -952,8 +971,15 @@ export function FeeRegister() {
                         {record.paymentMode}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap border-r border-gray-100 max-w-[7rem] truncate" title={record.remarks}>
+                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap max-w-[7rem] truncate" title={record.remarks}>
                       {record.remarks || <span className="text-gray-200">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-center whitespace-nowrap border-r border-gray-100">
+                      {(record.isDueFee ?? (dueFeeIds.has(record.id) || record.academicYear !== selectedYear)) && (
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                          Due Fee
+                        </span>
+                      )}
                     </td>
 
                     {/* SMP heads */}
@@ -1018,7 +1044,7 @@ export function FeeRegister() {
                 <tr>
                   <td
                     colSpan={
-                      (showFatherName ? 13 : 12) +
+                      (showFatherName ? 14 : 13) +
                       (showSMPDetails ? SMP_FEE_HEADS.length : 0) + 1 +
                       (showSVKDetails ? 1 + additionalHeadLabels.length : 0) + 1 +
                       1 + (isAdmin ? 1 : 0)
@@ -1042,7 +1068,7 @@ export function FeeRegister() {
                 <td className="px-2 py-2 text-amber-900 text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-amber-100" colSpan={2}>
                   Totals · {filteredRecords.length} records
                 </td>
-                <td colSpan={showFatherName ? 11 : 10} className="bg-amber-100 border-r border-amber-300" />
+                <td colSpan={showFatherName ? 12 : 11} className="bg-amber-100 border-r border-amber-300" />
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
                   <td key={key} className="px-2 py-2 text-right text-blue-800 whitespace-nowrap tabular-nums text-xs bg-blue-100">
