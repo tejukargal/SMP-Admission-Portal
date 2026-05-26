@@ -853,10 +853,10 @@ export function Dashboard() {
         <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1.5">
           <input
             type="text"
-            placeholder="Search name / reg / mobile…"
+            placeholder="Search"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            className="w-40 shrink-0 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
+            className="w-52 shrink-0 rounded-lg border border-emerald-300 px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150"
           />
           <select
             className={`${fs} w-[90px] shrink-0 ${isSearchMode ? 'opacity-40 cursor-not-allowed' : ''}`}

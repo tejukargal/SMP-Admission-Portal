@@ -7,17 +7,22 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentReportPdf } from '../utils/studentReportPdf';
+import { useAllStudents } from '../hooks/useAllStudents';
+import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
+import type { TCRecord } from '../services/tcService';
 import { PageSpinner } from '../components/common/PageSpinner';
+import { ACADEMIC_YEARS } from '../types';
 import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
-  { value: 'snq-allotment',   label: 'List for SNQ Allotment'  },
+  { value: 'snq-allotment',    label: 'List for SNQ Allotment' },
   { value: 'whatsapp-numbers', label: 'Whatsapp Numbers List'  },
+  { value: 'tc-issued',        label: 'TC Issued List'         },
 ];
 
 const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
@@ -131,6 +136,7 @@ export function StudentReports() {
 
   const { students: allStudents, loading, error } = useStudents(academicYear);
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
+  const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
 
   // ── Report type ─────────────────────────────────────────────────────────────
   const [reportType, setReportType] = useState<ReportType>('snq-allotment');
@@ -157,6 +163,7 @@ export function StudentReports() {
   const [admCatFilter,   setAdmCatFilter]   = useState<AdmCat | ''>('');
   const [dateFrom,       setDateFrom]       = useState('');
   const [dateTo,         setDateTo]         = useState('');
+  const [tcYearFilter,   setTcYearFilter]   = useState<string>('ALL');
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [savingPdf,   setSavingPdf]   = useState(false);
@@ -167,7 +174,7 @@ export function StudentReports() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // ── Filtered data ────────────────────────────────────────────────────────────
+  // ── Filtered data (SNQ Allotment & WhatsApp Numbers) ─────────────────────────
   const filteredStudents = useMemo(() => {
     let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)   result = result.filter((s) => s.course === courseFilter);
@@ -198,9 +205,75 @@ export function StudentReports() {
     return sortStudents(result);
   }, [allStudents, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch]);
 
+  // ── TC Issued rows ────────────────────────────────────────────────────────────
+  const tcRows = useMemo((): TcRow[] => {
+    if (reportType !== 'tc-issued') return [];
+    type S = Student & { tcHistory?: TCRecord[] };
+    let filtered = (allStudentsForTC as S[]).filter((s) => s.tcHistory && s.tcHistory.length > 0);
+    if (courseFilter)   filtered = filtered.filter((s) => s.course === courseFilter);
+    if (yearFilter)     filtered = filtered.filter((s) => s.year === yearFilter);
+    if (genderFilter)   filtered = filtered.filter((s) => s.gender === genderFilter);
+    if (categoryFilter) filtered = filtered.filter((s) => s.category === categoryFilter);
+    if (admTypeFilter)  filtered = filtered.filter((s) => s.admType === admTypeFilter);
+    if (admCatFilter)   filtered = filtered.filter((s) => s.admCat === admCatFilter);
+
+    const rows: TcRow[] = [];
+    for (const s of filtered) {
+      for (const tc of (s.tcHistory ?? [])) {
+        const tcAcademicYear = tc.tcNumber.includes('/')
+          ? tc.tcNumber.split('/').slice(1).join('/')
+          : '';
+        if (tcYearFilter !== 'ALL' && tcAcademicYear !== tcYearFilter) continue;
+        rows.push({
+          studentId: s.id,
+          studentName: s.studentNameSSLC,
+          course: s.course,
+          year: s.year,
+          category: s.category,
+          enrollmentYear: s.academicYear,
+          regNumber: s.regNumber ?? '',
+          tcId: tc.id,
+          tcNumber: tc.tcNumber,
+          dateOfAdmission: tc.dateOfAdmission,
+          dateOfLeaving: tc.dateOfLeaving,
+          semester: tc.semester,
+          lastExam: tc.lastExam,
+          result: tc.result,
+          isDuplicate: tc.isDuplicate,
+          issuedAt: tc.issuedAt,
+          tcAcademicYear,
+        });
+      }
+    }
+
+    const q = debouncedSearch.trim().toUpperCase();
+    const result = q
+      ? rows.filter((r) =>
+          r.studentName.toUpperCase().includes(q) ||
+          r.regNumber.toUpperCase().includes(q) ||
+          r.tcNumber.toUpperCase().includes(q)
+        )
+      : rows;
+    return result.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  }, [reportType, allStudentsForTC, tcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+
+  // ── TC stats (unfiltered counts for header chips) ─────────────────────────────
+  const tcStats = useMemo(() => {
+    if (reportType !== 'tc-issued') return null;
+    type S = Student & { tcHistory?: TCRecord[] };
+    const withTC = (allStudentsForTC as S[]).filter((s) => s.tcHistory && s.tcHistory.length > 0);
+    const totalTCs = withTC.reduce((sum, s) => sum + (s.tcHistory?.length ?? 0), 0);
+    const byCourse: Record<string, number> = {};
+    for (const s of withTC) {
+      byCourse[s.course] = (byCourse[s.course] ?? 0) + (s.tcHistory?.length ?? 0);
+    }
+    return { totalTCs, byCourse };
+  }, [reportType, allStudentsForTC]);
+
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo ||
+    (reportType === 'tc-issued' && tcYearFilter !== 'ALL');
 
   function clearFilters() {
     setSearchTerm(''); setDebouncedSearch('');
@@ -208,9 +281,10 @@ export function StudentReports() {
     setGenderFilter(''); setCategoryFilter('');
     setAdmTypeFilter(''); setAdmCatFilter('');
     setDateFrom(''); setDateTo('');
+    setTcYearFilter('ALL');
   }
 
-  // ── Stats ────────────────────────────────────────────────────────────────────
+  // ── Stats (SNQ Allotment & WhatsApp Numbers) ──────────────────────────────────
   const stats = useMemo(() => {
     const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     const byYear: Record<string, number> = {};
@@ -222,7 +296,7 @@ export function StudentReports() {
     return { byYear, byCourse, total: confirmed.length };
   }, [allStudents]);
 
-  // ── Export: SNQ Allotment PDF ────────────────────────────────────────────────
+  // ── Export: PDF ───────────────────────────────────────────────────────────────
   function handleExportPdf() {
     setSavingPdf(true);
     setTimeout(() => {
@@ -240,11 +314,22 @@ export function StudentReports() {
             dateFrom,
             dateTo,
           });
-        } else {
+        } else if (reportType === 'whatsapp-numbers') {
           exportWhatsappPdf(filteredStudents, {
             academicYear,
             courseFilter,
             yearFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+          });
+        } else if (reportType === 'tc-issued') {
+          exportTcIssuedPdf(tcRows, {
+            tcYearFilter,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            categoryFilter,
             admTypeFilter,
             admCatFilter,
             searchTerm: debouncedSearch,
@@ -316,7 +401,7 @@ export function StudentReports() {
           if (courseFilter)   parts.push(courseFilter);
           if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
-        } else {
+        } else if (reportType === 'whatsapp-numbers') {
           const headers = ['Sl No', 'Student Name', 'Year', 'Course', 'Father Mobile', 'Student Mobile'];
           const rows = filteredStudents.map((s, i) => [
             i + 1,
@@ -335,6 +420,42 @@ export function StudentReports() {
           if (courseFilter)   parts.push(courseFilter);
           if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'tc-issued') {
+          const headers = [
+            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Enrollment Year',
+            'Reg No', 'TC Number', 'Date of Admission', 'Date of Leaving',
+            'Semester', 'Last Exam', 'Result', 'Duplicate', 'Issued Date',
+          ];
+          const rows = tcRows.map((r, i) => [
+            i + 1,
+            r.studentName,
+            r.course,
+            r.year,
+            r.category,
+            r.enrollmentYear,
+            r.regNumber,
+            r.tcNumber,
+            r.dateOfAdmission,
+            r.dateOfLeaving,
+            r.semester,
+            r.lastExam,
+            r.result,
+            r.isDuplicate ? 'Yes' : 'No',
+            r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [
+            { wch: 6 }, { wch: 26 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 14 },
+            { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+            { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 16 },
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'TC Issued');
+          const parts = ['tc_issued'];
+          if (tcYearFilter !== 'ALL') parts.push(tcYearFilter.replace(/[^0-9-]/g, ''));
+          if (courseFilter)           parts.push(courseFilter);
+          if (yearFilter)             parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         }
       } finally {
         setSavingExcel(false);
@@ -342,8 +463,10 @@ export function StudentReports() {
     }, 0);
   }
 
-  const isLoading = settingsLoading || loading || feeLoading;
+  const isLoading = settingsLoading || loading || feeLoading || (reportType === 'tc-issued' && tcLoading);
   if (isLoading) return <PageSpinner />;
+
+  const activeCount = reportType === 'tc-issued' ? tcRows.length : filteredStudents.length;
 
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
@@ -352,12 +475,16 @@ export function StudentReports() {
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
         <div className="shrink-0">
           <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Reports</h2>
-          {academicYear && (
+          {academicYear && reportType !== 'tc-issued' && (
             <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
+          )}
+          {reportType === 'tc-issued' && (
+            <p className="text-[10px] text-gray-400 leading-tight">All Academic Years</p>
           )}
         </div>
 
-        {!isLoading && stats.total > 0 && (
+        {/* Stats chips — SNQ Allotment & WhatsApp Numbers */}
+        {reportType !== 'tc-issued' && !isLoading && stats.total > 0 && (
           <>
             <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
@@ -426,6 +553,53 @@ export function StudentReports() {
             </div>
           </>
         )}
+
+        {/* Stats chips — TC Issued List */}
+        {reportType === 'tc-issued' && !isLoading && tcStats && tcStats.totalTCs > 0 && (
+          <>
+            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
+
+              <div className="flex items-center gap-1 bg-white/80 border border-blue-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-blue-600 font-semibold">TCs Issued</span>
+                <span className="font-bold tabular-nums">{tcStats.totalTCs}</span>
+              </div>
+
+              <span className="text-blue-200 text-xs select-none shrink-0">·</span>
+
+              {COURSES.map((c) => {
+                const count  = tcStats.byCourse[c] ?? 0;
+                const active = courseFilter === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setCourseFilter(active ? '' : c)}
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      active
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : count === 0
+                        ? 'bg-white/50 border-gray-100 text-gray-300'
+                        : 'bg-white/80 border-blue-100 hover:border-blue-300 hover:bg-blue-50'
+                    }`}
+                  >
+                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
+                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
+                  </button>
+                );
+              })}
+
+              {hasActiveFilters && (
+                <>
+                  <span className="text-blue-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-blue-600 font-semibold">Filtered</span>
+                    <span className="font-bold tabular-nums">{tcRows.length}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Filters panel ──────────────────────────────────────────────────── */}
@@ -451,16 +625,36 @@ export function StudentReports() {
 
           <span className="text-gray-200 text-sm select-none">|</span>
 
+          {/* TC Year filter — only for TC Issued List */}
+          {reportType === 'tc-issued' && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">TC Year</span>
+                <select
+                  value={tcYearFilter}
+                  onChange={(e) => setTcYearFilter(e.target.value)}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
+                >
+                  <option value="ALL">All Academic Years</option>
+                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-gray-200 text-sm select-none">|</span>
+            </>
+          )}
+
           {/* Search */}
           <input
             type="text"
-            placeholder="Search name / reg / mobile…"
+            placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : 'Search name / reg / mobile…'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-44 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
+            className="w-48 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
           />
 
-          {/* Dropdowns */}
+          {/* Standard dropdowns */}
           <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
             <option value="">All Courses</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -537,7 +731,7 @@ export function StudentReports() {
             </button>
           )}
 
-          {filteredStudents.length > 0 && (
+          {activeCount > 0 && (
             <>
               <button
                 onClick={handleExportPdf}
@@ -574,8 +768,75 @@ export function StudentReports() {
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
-      {error ? (
+      {tcError && reportType === 'tc-issued' ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{tcError}</div>
+      ) : error && reportType !== 'tc-issued' ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+      ) : reportType === 'tc-issued' ? (
+        tcRows.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            No TC records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
+          </div>
+        ) : (
+          /* ── TC Issued List table ──────────────────────────────────────── */
+          <div
+            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-blue-100 overflow-auto flex flex-col"
+            style={{ boxShadow: '0 1px 4px 0 rgba(29,78,216,0.06)' }}
+          >
+            <table className="min-w-full divide-y divide-blue-50 text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'linear-gradient(90deg, #eff6ff, #dbeafe)' }}>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-blue-200">#</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-blue-200">Student Name</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-blue-200">Course</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-blue-200">Reg No</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">TC Number</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Date of Leaving</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Semester</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Result</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-blue-200">TC Year</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-blue-50/60">
+                {tcRows.map((r, idx) => (
+                  <tr
+                    key={`${r.studentId}-${r.tcId}`}
+                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-blue-50/40`}
+                  >
+                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                      {r.studentName}
+                      {r.isDuplicate && (
+                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
+                          DUP
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
+                    <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap tabular-nums">{r.tcNumber}</td>
+                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.dateOfLeaving || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.semester || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.result || '—'}</td>
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                      {r.tcAcademicYear ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 border border-blue-100 text-blue-700">
+                          {r.tcAcademicYear}
+                        </span>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-3 py-2 border-t border-blue-50 text-xs text-gray-500 mt-auto">
+              Showing {tcRows.length} TC record{tcRows.length !== 1 ? 's' : ''}
+              {hasActiveFilters && tcStats && tcStats.totalTCs > 0 && tcRows.length < tcStats.totalTCs && (
+                <span className="text-gray-400"> (filtered from {tcStats.totalTCs} total)</span>
+              )}
+            </div>
+          </div>
+        )
       ) : !academicYear ? (
         <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
           Please configure an academic year in Settings first.
