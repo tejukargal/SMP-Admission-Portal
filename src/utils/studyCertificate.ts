@@ -40,10 +40,52 @@ export interface StudyCertOptions {
   includeCaste?: boolean;
   casteName?: string;
   casteCategory?: string;
+  // Edit-mode overrides
+  customDate?: string;   // replaces today's date in the Ref row
+  customBody?: string;   // plain text; double-newlines = paragraph breaks
+  customExtra?: string;  // extra paragraphs appended after the body
+}
+
+/** Returns the default certificate body as plain text (for pre-filling the edit textarea). */
+export function getDefaultBodyText(student: Student, certType: CertificateType, opts: StudyCertOptions = {}): string {
+  const courseFull  = COURSE_NAMES[student.course] ?? student.course;
+  const yearFigure  = YEAR_FIGURES[student.year] ?? student.year;
+  const name        = student.studentNameSSLC.trim();
+  const father      = student.fatherName.trim();
+  const ay          = student.academicYear;
+  const regNo       = student.regNumber ?? '';
+  const isFemale    = student.gender === 'GIRL';
+  const salutation  = 'Kum.';
+  const sonDaughter = isFemale ? 'Daughter' : 'Son';
+  const pronoun     = isFemale ? 'She' : 'He';
+  const hisHer      = isFemale ? 'her' : 'his';
+  const isRealReg   = /^\d{3}[A-Z]{2}\d{4,5}$/.test(regNo);
+  const regClause   = isRealReg ? `, bearing Registration No. ${regNo},` : ',';
+
+  const isCompleted = certType === 'COMPLETED';
+  const isLeft      = certType === 'CANCELLED';
+
+  let para1: string;
+  if (isCompleted) {
+    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution. ${pronoun} has successfully completed the Three-Year Diploma in ${courseFull} during the Academic Year ${ay}.`;
+  } else if (isLeft) {
+    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution. ${pronoun} had studied up to the ${yearFigure} Year of Diploma in ${courseFull} during the Academic Year ${ay}.`;
+  } else {
+    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} is a bonafide student of this institution. ${pronoun} is currently studying in the ${yearFigure} Year of Diploma in ${courseFull} during the Academic Year ${ay}.`;
+  }
+
+  const conductVerb = (isCompleted || isLeft) ? 'were' : 'are';
+  const para2 = `During ${hisHer} stay in this institution ${hisHer} character and conduct ${conductVerb} satisfactory.`;
+
+  const parts = [para1, para2];
+  if (opts.includeCaste && opts.casteName && opts.casteCategory) {
+    parts.push(`${pronoun} belongs to ${opts.casteName.trim()} caste under ${opts.casteCategory.trim()} category as per our records.`);
+  }
+  return parts.join('\n\n');
 }
 
 export function buildStudyCertHTML(student: Student, certType: CertificateType, opts: StudyCertOptions = {}): string {
-  const today        = formatToday();
+  const today        = opts.customDate ?? formatToday();
   const courseFull   = COURSE_NAMES[student.course] ?? student.course;
   const yearFigure   = YEAR_FIGURES[student.year] ?? student.year;
   const studentName  = esc(student.studentNameSSLC.trim());
@@ -250,7 +292,9 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
   <div class="body">
     <div class="cert-title">Study Certificate</div>
 
-    ${isCompleted ? `
+    ${opts.customBody !== undefined
+      ? opts.customBody.split(/\n\n+/).filter(p => p.trim()).map(p => `<p class="cert-para">${esc(p.trim())}</p>`).join('\n    ')
+      : isCompleted ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -290,6 +334,7 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       are satisfactory.
     </p>
     ${casteClause}`}
+    ${opts.customExtra ? opts.customExtra.split(/\n\n+/).filter(p => p.trim()).map(p => `<p class="cert-para">${esc(p.trim())}</p>`).join('\n    ') : ''}
 
     <!-- Seal -->
     <div class="seal-circle">SEAL</div>
