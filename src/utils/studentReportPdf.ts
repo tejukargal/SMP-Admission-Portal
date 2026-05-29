@@ -152,6 +152,7 @@ export function exportStudentReportPdf(students: Student[], filters: StudentRepo
       overflow:    'ellipsize',
       lineColor:   [203, 213, 225],
       lineWidth:   0.18,
+      textColor:   [20, 20, 20] as [number, number, number],
     },
     headStyles: {
       fillColor:  [255, 230, 0],

@@ -82,18 +82,20 @@ export function exportTcIssuedPdf(rows: TcRow[], filters: {
       r.semester || '—',
       r.result || '—',
     ]),
+    styles: { overflow: 'ellipsize' },
     headStyles: {
       fillColor: HEAD, textColor: WHITE, fontStyle: 'bold',
       fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
     },
     bodyStyles: {
       fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
-      lineColor: GRID, lineWidth: 0.18,
+      lineColor: GRID, lineWidth: 0.18, textColor: [20, 20, 20] as [number, number, number],
     },
     alternateRowStyles: { fillColor: [239, 246, 255] as [number, number, number] },
+    // Usable width = 186mm. Columns: 13+47+14+22+26+25+22+17 = 186mm.
     columnStyles: {
-      0: { cellWidth: 8,  halign: 'center' },
-      1: { cellWidth: 52 },
+      0: { cellWidth: 13, halign: 'center' },
+      1: { cellWidth: 47 },
       2: { cellWidth: 14, halign: 'center' },
       3: { cellWidth: 22 },
       4: { cellWidth: 26 },

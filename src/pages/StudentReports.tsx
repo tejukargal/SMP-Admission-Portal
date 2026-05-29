@@ -91,22 +91,25 @@ function exportWhatsappPdf(students: Student[], filters: {
       s.fatherMobile || '—',
       s.studentMobile || '—',
     ]),
+    styles: { overflow: 'ellipsize' },
     headStyles: {
       fillColor: HEAD, textColor: WHITE, fontStyle: 'bold',
       fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
     },
     bodyStyles: {
       fontSize: 9.5, cellPadding: { top: 3, right: 3.5, bottom: 3, left: 3.5 },
-      lineColor: GRID, lineWidth: 0.18,
+      lineColor: GRID, lineWidth: 0.18, textColor: [20, 20, 20] as [number, number, number],
     },
     alternateRowStyles: { fillColor: [240, 253, 244] as [number, number, number] },
+    // Usable width = 210 - 12 - 12 = 186mm. Columns: 13+61+22+19+35+36 = 186mm.
+    // Sl=13mm gives 6mm text space for up to 3-digit serial numbers.
     columnStyles: {
-      0: { cellWidth: 8,  halign: 'center' },
-      1: { cellWidth: 72 },
-      2: { cellWidth: 24, halign: 'center' },
-      3: { cellWidth: 16, halign: 'center' },
-      4: { cellWidth: 33 },
-      5: { cellWidth: 33 },
+      0: { cellWidth: 13, halign: 'center' },
+      1: { cellWidth: 61 },
+      2: { cellWidth: 22, halign: 'center' },
+      3: { cellWidth: 19, halign: 'center' },
+      4: { cellWidth: 35 },
+      5: { cellWidth: 36 },
     },
   });
 
