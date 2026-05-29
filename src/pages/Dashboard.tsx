@@ -777,7 +777,7 @@ export function Dashboard() {
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
         <div
-          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-2"
+          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-1"
           style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
         >
           {/* Left arrow */}
@@ -850,7 +850,7 @@ export function Dashboard() {
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
-        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1.5">
+        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1">
           <input
             type="text"
             placeholder="Search"
@@ -927,7 +927,7 @@ export function Dashboard() {
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
-          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-300 flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-amber-50 transition-colors group"
+          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-300 flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-amber-50 transition-colors group"
           style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
           onClick={() => void navigate('/admissions')}
         >
