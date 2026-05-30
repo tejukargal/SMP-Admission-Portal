@@ -347,6 +347,29 @@ export async function applyAdmCatFeeAdjustment(
       : []
   );
 
+  // ── Pre-compute aggregate paid totals before any mutation ────────
+  // Used to build a refund note showing what the student paid prior to
+  // the category change and how much is now due back to them.
+  let priorTotalPaid = 0;
+  const refundByHead = new Map<string, number>(); // head label → total zeroed amount
+  for (const record of records) {
+    priorTotalPaid +=
+      (Object.values(record.smp) as number[]).reduce((a, b) => a + b, 0) +
+      record.svk +
+      record.additionalPaid.reduce((a, h) => a + h.amount, 0);
+    for (const key of headsToZero) {
+      if (record.smp[key] > 0) {
+        const label = SMP_FEE_HEADS.find((h) => h.key === key)?.label ?? key;
+        refundByHead.set(label, (refundByHead.get(label) ?? 0) + record.smp[key]);
+      }
+    }
+  }
+  const totalRefund = [...refundByHead.values()].reduce((a, b) => a + b, 0);
+  const refundNote = totalRefund > 0
+    ? `Prior paid ₹${priorTotalPaid}; Refund due ₹${totalRefund}` +
+      ` (${[...refundByHead.entries()].map(([l, a]) => `${l} ₹${a}`).join(', ')})`
+    : '';
+
   const now = new Date().toISOString();
   const batch = writeBatch(db);
 
@@ -369,9 +392,9 @@ export async function applyAdmCatFeeAdjustment(
         ? `${catNote}; ${adjustments.join(', ')} (auto-adjusted)`
         : catNote;
 
-    const updatedRemarks = record.remarks
-      ? `${record.remarks}; ${changeDetail}`
-      : changeDetail;
+    const updatedRemarks = [record.remarks, changeDetail, refundNote]
+      .filter(Boolean)
+      .join('; ');
 
     batch.update(doc(db, COL, record.id), {
       admCat: newAdmCat,

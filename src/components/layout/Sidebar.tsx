@@ -101,13 +101,6 @@ function IconChevronLeft() {
     </svg>
   );
 }
-function IconChevronRight() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6"/>
-    </svg>
-  );
-}
 
 // ── Nav items ──────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -140,6 +133,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = role === 'admin';
   const [showAbout, setShowAbout] = useState(false);
   const [showTech, setShowTech] = useState(false);
+  const [logoHovered, setLogoHovered] = useState(false);
 
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
@@ -173,37 +167,72 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       }}
     >
       {/* ── Brand ────────────────────────────────────────────────────── */}
-      <div className={`flex items-center pt-5 pb-3 ${collapsed ? 'flex-col gap-2 px-0' : 'px-4 justify-between'}`}>
-        {/* Logo mark + wordmark */}
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+      <button
+        onClick={onToggle}
+        onMouseEnter={() => setLogoHovered(true)}
+        onMouseLeave={() => setLogoHovered(false)}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className={`group flex items-center w-full cursor-pointer hover:bg-emerald-50/50 transition-colors pt-5 pb-3 ${
+          collapsed ? 'justify-center px-0' : 'px-4 justify-between gap-3'
+        }`}
+      >
+        {/* Flip-card logo — front: leaf, back: chevron */}
+        <div className="relative w-9 h-9 shrink-0" style={{ perspective: '280px' }}>
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-md"
-            style={{ background: 'linear-gradient(135deg, #34d399 0%, #059669 100%)' }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              transformStyle: 'preserve-3d',
+              transition: 'transform 380ms cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: collapsed && logoHovered ? 'rotateY(180deg)' : 'rotateY(0deg)',
+            }}
           >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
-              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
-            </svg>
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
-              <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
+            {/* Front face: leaf logo */}
+            <div
+              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md"
+              style={{
+                background: 'linear-gradient(135deg, #34d399 0%, #059669 100%)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+              }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+              </svg>
             </div>
-          )}
+            {/* Back face: expand arrow */}
+            <div
+              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md"
+              style={{
+                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'rotateY(180deg)',
+              }}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          </div>
         </div>
 
-        {/* Toggle button */}
-        <button
-          onClick={onToggle}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={`flex items-center justify-center rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors ${
-            collapsed ? 'w-8 h-8' : 'w-7 h-7 shrink-0'
-          }`}
-        >
-          {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
-        </button>
-      </div>
+        {/* Wordmark — expanded only */}
+        {!collapsed && (
+          <div className="min-w-0 flex-1 text-left">
+            <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
+            <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
+          </div>
+        )}
+
+        {/* Collapse arrow — expanded only */}
+        {!collapsed && (
+          <span className="flex items-center justify-center text-gray-400 group-hover:text-emerald-600 transition-colors shrink-0">
+            <IconChevronLeft />
+          </span>
+        )}
+      </button>
 
       {/* Divider */}
       <div className="mx-3 h-px bg-emerald-100 mb-2" />

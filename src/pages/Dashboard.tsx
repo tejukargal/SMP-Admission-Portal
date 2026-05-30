@@ -701,6 +701,14 @@ export function Dashboard() {
     ? 'All Years'
     : (academicYearFilter || 'All Years');
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h >= 5  && h < 12) return 'Good Morning';
+    if (h >= 12 && h < 17) return 'Good Afternoon';
+    if (h >= 17 && h < 21) return 'Good Evening';
+    return 'Good Night';
+  })();
+
   // ── Year chip palette (cycles if more than 5 academic years) ────────────
   const CHIP_PALETTE = [
     { idle: 'bg-emerald-50/80 border-emerald-200 text-emerald-700', count: 'text-emerald-800', sel: 'bg-emerald-100 border-emerald-400 text-emerald-800', glow: 'chip-glow-emerald' },
@@ -733,21 +741,21 @@ export function Dashboard() {
     <div className="h-full flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Dashboard</h2>
-            <span
-              className={`text-2xl font-black tracking-tight leading-tight transition-colors duration-200 ${
-                !isSearchMode && academicYearFilter ? 'text-emerald-600' : 'text-gray-300'
-              }`}
-            >
-              {displayYear}
-            </span>
-          </div>
-          <p className="text-xs text-gray-400 mt-0.5 font-medium">
-            {`${filteredStudents.length} student${filteredStudents.length !== 1 ? 's' : ''}`}
-          </p>
+      <div className="flex-shrink-0 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Dashboard</h2>
+          <span
+            style={{
+              fontFamily: "'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif",
+              fontSize: '1.25rem',
+              fontWeight: 900,
+              color: '#b8d4cc',
+              letterSpacing: '0.015em',
+              lineHeight: 1.25,
+            }}
+          >
+            {greeting}
+          </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!isSearchMode && academicYearFilter && (
@@ -1093,7 +1101,7 @@ export function Dashboard() {
 
         /* ── Metric cards ───────────────────────────────────────────── */
         <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin">
-          <div className="space-y-3 min-w-0 mt-2 px-2">
+          <div className="space-y-3 min-w-0 px-2 mt-1">
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

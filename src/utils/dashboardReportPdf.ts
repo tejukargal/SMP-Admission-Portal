@@ -124,23 +124,27 @@ export function exportSummaryReport(students: Student[], academicYear: string, s
   const grandIdx = body.length;
   body.push(['GRAND TOTAL', '', gRegular, gLtrl, gSnq, gRptr, gTotal]);
 
+  const S_HEAD_FONT = 9;
+  const S_DATA_FONT = 11;
+  const S_PAD       = { top: 2, right: 2.8, bottom: 2, left: 2.8 };
+
   // Portrait A4: usable = 210 − 2×14 = 182 mm
   autoTable(doc, {
     startY: 37,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Year', 'Course', 'Regular', 'LTRL', 'SNQ', 'RPTR', 'Total']],
     body,
-    headStyles: HEAD_STYLES,
-    bodyStyles: BODY_STYLES,
+    headStyles: { ...HEAD_STYLES, fontSize: S_HEAD_FONT, cellPadding: S_PAD },
+    bodyStyles: { ...BODY_STYLES, fontSize: S_DATA_FONT, cellPadding: S_PAD, overflow: 'hidden' },
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
-      0: { cellWidth: 26 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 30, halign: 'center' },
-      3: { cellWidth: 24, halign: 'center' },
-      4: { cellWidth: 24, halign: 'center' },
-      5: { cellWidth: 24, halign: 'center' },
-      6: { cellWidth: 26, halign: 'center' },
+      0: { cellWidth: 40 },
+      1: { cellWidth: 24 },
+      2: { cellWidth: 28, halign: 'center' },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 22, halign: 'center' },
+      5: { cellWidth: 22, halign: 'center' },
+      6: { cellWidth: 24, halign: 'center' },
     },
     didParseCell: (data) => {
       if (data.section !== 'body') return;
@@ -149,10 +153,12 @@ export function exportSummaryReport(students: Student[], academicYear: string, s
         data.cell.styles.fillColor = BLUE_GRAND;
         data.cell.styles.textColor = WHITE;
         data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fontSize  = S_HEAD_FONT;
       } else if (subtotalRows.includes(i)) {
         data.cell.styles.fillColor = BLUE_SUB;
         data.cell.styles.textColor = WHITE;
         data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fontSize  = S_HEAD_FONT;
       }
     },
   });

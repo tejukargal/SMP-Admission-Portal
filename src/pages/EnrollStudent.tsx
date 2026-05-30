@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent,
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
-import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber } from '../services/studentService';
+import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber, updateStudentAllottedCategory } from '../services/studentService';
 import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/feeRecordService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
@@ -100,12 +100,15 @@ interface YearWarningModalProps {
 }
 
 interface DuplicateWarningModalProps {
+  type: 'same-year' | 'too-many-years';
   match: Student;
+  allMatches: Student[];
   onContinue: () => void;
   onReset: () => void;
 }
 
-function DuplicateWarningModal({ match, onContinue, onReset }: DuplicateWarningModalProps) {
+function DuplicateWarningModal({ type, match, allMatches, onContinue, onReset }: DuplicateWarningModalProps) {
+  const distinctYears = [...new Set(allMatches.map((s) => s.academicYear))].sort();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
       <div className="bg-white rounded-2xl shadow-2xl border border-red-100 w-full max-w-md overflow-hidden">
@@ -115,17 +118,39 @@ function DuplicateWarningModal({ match, onContinue, onReset }: DuplicateWarningM
           </h3>
         </div>
         <div className="px-6 py-5 space-y-3">
-          <p className="text-sm text-gray-700">
-            A student with the same name, father name, and mother name already exists in the system:
-          </p>
-          <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-1">
-            <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
-            <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
-            <p className="text-xs text-gray-600">{match.course} · {match.year} · {match.academicYear}</p>
-            {match.meritNumber && (
-              <p className="text-xs text-gray-500 font-mono">Merit: {match.meritNumber} · Reg: {match.regNumber}</p>
-            )}
-          </div>
+          {type === 'same-year' ? (
+            <>
+              <p className="text-sm text-gray-700">
+                A student with the same name, father name, and mother name is already enrolled in{' '}
+                <span className="font-semibold">{match.academicYear}</span>:
+              </p>
+              <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-1">
+                <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
+                <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
+                <p className="text-xs text-gray-600">{match.course} · {match.year} · {match.academicYear}</p>
+                {match.meritNumber && (
+                  <p className="text-xs text-gray-500 font-mono">Merit: {match.meritNumber} · Reg: {match.regNumber}</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700">
+                This student already has enrollment records across{' '}
+                <span className="font-semibold">{distinctYears.length} academic year{distinctYears.length !== 1 ? 's' : ''}</span>.
+                Students can only be enrolled for a maximum of 3 academic years.
+              </p>
+              <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-2">
+                <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
+                <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {distinctYears.map((yr) => (
+                    <span key={yr} className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">{yr}</span>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
           <p className="text-sm text-gray-600">
             Do you want to continue with this entry, or reset the name fields to start over?
           </p>
@@ -423,7 +448,8 @@ export function EnrollStudent() {
   // Duplicate detection
   const allStudentsDupRef = useRef<Student[] | null>(null);
   const dupAcknowledgedRef = useRef<Set<string>>(new Set());
-  const [dupStudent, setDupStudent] = useState<Student | null>(null);
+  interface DupWarning { type: 'same-year' | 'too-many-years'; match: Student; allMatches: Student[]; }
+  const [dupWarning, setDupWarning] = useState<DupWarning | null>(null);
 
   // Caste autocomplete
   type CasteEntry = { caste: string; category: Category };
@@ -705,9 +731,10 @@ export function EnrollStudent() {
   // Debounced duplicate check: fires when name + father + mother all have ≥3 chars (add mode only)
   useEffect(() => {
     if (editId) return;
-    const name = form.studentNameSSLC.trim();
-    const father = form.fatherName.trim();
-    const mother = form.motherName.trim();
+    const name       = form.studentNameSSLC.trim();
+    const father     = form.fatherName.trim();
+    const mother     = form.motherName.trim();
+    const targetYear = form.academicYear;
     if (name.length < 3 || father.length < 3 || mother.length < 3) return;
     const key = `${name.toUpperCase()}__${father.toUpperCase()}__${mother.toUpperCase()}`;
     if (dupAcknowledgedRef.current.has(key)) return;
@@ -717,20 +744,35 @@ export function EnrollStudent() {
         if (allStudentsDupRef.current === null) {
           allStudentsDupRef.current = await getAllStudents();
         }
-        const match = allStudentsDupRef.current.find(
+        const allMatches = allStudentsDupRef.current.filter(
           (s) =>
             s.studentNameSSLC.trim().toUpperCase() === name.toUpperCase() &&
             s.fatherName.trim().toUpperCase() === father.toUpperCase() &&
             s.motherName.trim().toUpperCase() === mother.toUpperCase()
         );
-        if (match) setDupStudent(match);
+        if (allMatches.length === 0) return;
+
+        // Priority 1: already enrolled in the same academic year → true duplicate
+        const sameYearMatch = targetYear
+          ? (allMatches.find((s) => s.academicYear === targetYear) ?? null)
+          : null;
+        if (sameYearMatch) {
+          setDupWarning({ type: 'same-year', match: sameYearMatch, allMatches });
+          return;
+        }
+
+        // Priority 2: enrolled across 3+ distinct academic years → exceeds maximum
+        const distinctYears = new Set(allMatches.map((s) => s.academicYear));
+        if (distinctYears.size >= 3) {
+          setDupWarning({ type: 'too-many-years', match: allMatches[0], allMatches });
+        }
       } catch {
         // silently ignore
       }
     }, 700);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.studentNameSSLC, form.fatherName, form.motherName, editId]);
+  }, [form.studentNameSSLC, form.fatherName, form.motherName, form.academicYear, editId]);
 
   useEffect(() => {
     if (!editId) return;
@@ -883,7 +925,7 @@ export function EnrollStudent() {
       dateOfBirth: dob,
       applicationNumber: '',
       meritNumber: '',
-      admissionStatus: 'PENDING',
+      admissionStatus: 'CONFIRMED',
       enrollmentDate: new Date().toISOString().slice(0, 10),
       academicYear: settings?.currentAcademicYear ?? ('' as AcademicYear),
     });
@@ -949,13 +991,22 @@ export function EnrollStudent() {
         }
         navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
-        const { meritNumber, regNumber, applicationNumber } = await addStudent(form);
+        const { id: newStudentId, meritNumber, regNumber, applicationNumber } = await addStudent(form);
         allStudentsDupRef.current = null; // invalidate so next check sees the new entry
+        const wasReEnroll = !!prevSourceStudent;
+        const prevAllottedCategory = prevSourceStudent?.allottedCategory;
         setForm(emptyForm(settings?.currentAcademicYear));
         setPrevSourceStudent(null);
         setShowPreview(false);
-        setSuccessMsg(`Student enrolled successfully! App No: ${applicationNumber} · Merit No: ${meritNumber} · Reg No: ${regNumber}`);
-        topRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (wasReEnroll) {
+          if (prevAllottedCategory) {
+            await updateStudentAllottedCategory(newStudentId, prevAllottedCategory);
+          }
+          navigate('/students');
+        } else {
+          setSuccessMsg(`Student enrolled successfully! App No: ${applicationNumber} · Merit No: ${meritNumber} · Reg No: ${regNumber}`);
+          topRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to save student');
@@ -1768,16 +1819,18 @@ export function EnrollStudent() {
         />
       )}
 
-      {dupStudent && (
+      {dupWarning && (
         <DuplicateWarningModal
-          match={dupStudent}
+          type={dupWarning.type}
+          match={dupWarning.match}
+          allMatches={dupWarning.allMatches}
           onContinue={() => {
             const key = `${form.studentNameSSLC.trim().toUpperCase()}__${form.fatherName.trim().toUpperCase()}__${form.motherName.trim().toUpperCase()}`;
             dupAcknowledgedRef.current.add(key);
-            setDupStudent(null);
+            setDupWarning(null);
           }}
           onReset={() => {
-            setDupStudent(null);
+            setDupWarning(null);
             setForm((prev) => ({ ...prev, studentNameSSLC: '', fatherName: '', motherName: '' }));
           }}
         />
