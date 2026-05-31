@@ -619,6 +619,15 @@ export function Dashboard() {
     return sortedAcademicYears.map((ay) => ({ year: ay, count: map[ay] ?? 0 }));
   }, [activeSource, sortedAcademicYears]);
 
+  const [glowIdx, setGlowIdx] = useState(-1);
+  useEffect(() => {
+    const n = activeStats.length;
+    if (n === 0) { setGlowIdx(-1); return; }
+    setGlowIdx(0);
+    const id = setInterval(() => setGlowIdx((prev) => (prev + 1) % n), 1500);
+    return () => clearInterval(id);
+  }, [activeStats.length]);
+
   const confirmedActiveCount = useMemo(
     () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
     [activeSource]
@@ -811,21 +820,26 @@ export function Dashboard() {
               )}
             </div>
             <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-            {/* Per-year chips */}
+            {/* Per-year chips — sequential indigo glow: each chip fires once per round */}
             {activeStats.map(({ year, count }, idx) => {
               const isSelected = !isSearchMode && academicYearFilter === year;
               const isDimmed = count === 0;
               const p = CHIP_PALETTE[idx % CHIP_PALETTE.length];
-              const glowClass = isDimmed ? 'chip-glow-gray' : p.glow;
-              const delay = `${(idx * 0.4).toFixed(1)}s`;
+              const isActive = glowIdx === idx;
               return (
                 <button
                   key={year}
                   type="button"
                   disabled={isSearchMode}
                   onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                  style={{ animationDelay: delay }}
-                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 transition-colors duration-150 ${glowClass} ${
+                  style={{
+                    outlineWidth: '2px',
+                    outlineStyle: 'solid',
+                    outlineOffset: '2px',
+                    outlineColor: isActive ? 'rgba(52,211,153,0.75)' : 'rgba(52,211,153,0)',
+                    transition: 'outline-color 500ms ease-in-out, background-color 150ms, border-color 150ms',
+                  }}
+                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 ${
                     isSearchMode ? 'cursor-default' : 'cursor-pointer'
                   } ${
                     isDimmed
@@ -835,8 +849,8 @@ export function Dashboard() {
                       : p.idle
                   }`}
                 >
-                  <span className="font-medium text-[11px]">{year}</span>
-                  <span className={`font-bold tabular-nums ${isDimmed ? '' : isSelected ? p.count : ''}`}>
+                  <span className={`font-medium text-[11px] transition-colors duration-500 ease-in-out ${isActive ? '!text-gray-900' : ''}`}>{year}</span>
+                  <span className={`font-bold tabular-nums transition-colors duration-500 ease-in-out ${isDimmed ? '' : isSelected ? p.count : ''} ${isActive ? '!text-gray-900' : ''}`}>
                     <AnimNum value={count} />
                   </span>
                 </button>
