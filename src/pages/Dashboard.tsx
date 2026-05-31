@@ -63,9 +63,10 @@ interface StatCardProps {
   watermark?: string;
   onClick?: () => void;
   onLabelDoubleClick?: () => void;
+  animated?: boolean;
 }
 
-function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick, onLabelDoubleClick }: StatCardProps) {
+function StatCard({ label, value, total, bg, border, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick, onLabelDoubleClick, animated = true }: StatCardProps) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div
@@ -101,36 +102,36 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
       <p className={`text-3xl font-black leading-none ${textColor}`}>
         <AnimNum value={value} />
       </p>
-      {total > 0 ? (
-        <div className="mt-auto pt-2 space-y-1">
-          <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${barFill} transition-all duration-700 ease-out`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          {breakdown ? (
-            <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
-              {breakdown.map((b) => (
-                <span key={b.label} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
-                  {highlightBreakdown ? (
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${border} bg-white/70 ${textColor}`}>
-                      {b.label}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 font-medium">{b.label}</span>
-                  )}
-                  <span className="font-bold text-gray-600">{b.value}</span>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400">{subText ?? `${pct}% of total`}</p>
-          )}
+      <div className="mt-auto pt-2 space-y-1">
+        <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+          <div
+            className={`h-full w-full rounded-full ${barFill}`}
+            style={{
+              transformOrigin: 'left',
+              transform: animated ? `scaleX(${pct / 100})` : 'scaleX(0)',
+              transition: animated ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
+            }}
+          />
         </div>
-      ) : (
-        subText && <p className="text-xs text-gray-400 mt-auto">{subText}</p>
-      )}
+        {breakdown ? (
+          <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
+            {breakdown.map((b) => (
+              <span key={b.label} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
+                {highlightBreakdown ? (
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${border} bg-white/70 ${textColor}`}>
+                    {b.label}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 font-medium">{b.label}</span>
+                )}
+                <span className="font-bold text-gray-600">{b.value}</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">{subText ?? (total > 0 ? `${pct}% of total` : '—')}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -628,6 +629,14 @@ export function Dashboard() {
     return () => clearInterval(id);
   }, [activeStats.length]);
 
+  const [barsReady, setBarsReady] = useState(false);
+  useEffect(() => {
+    setBarsReady(false);
+    let r1: number, r2: number;
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setBarsReady(true)); });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+  }, [isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+
   const confirmedActiveCount = useMemo(
     () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
     [activeSource]
@@ -873,13 +882,27 @@ export function Dashboard() {
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1">
-          <input
-            type="text"
-            placeholder="Search"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="w-52 shrink-0 rounded-lg border border-emerald-300 px-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150"
-          />
+          <div className="relative shrink-0 w-52">
+            <input
+              type="text"
+              placeholder="Search"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className={`w-full rounded-lg border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 ${inputValue ? 'pl-3 pr-8' : 'px-3'}`}
+            />
+            {inputValue && (
+              <button
+                type="button"
+                onClick={() => setInputValue('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                aria-label="Clear search"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
           <select
             className={`${fs} w-[90px] shrink-0 ${isSearchMode ? 'opacity-40 cursor-not-allowed' : ''}`}
             value={academicYearFilter}
@@ -1004,7 +1027,7 @@ export function Dashboard() {
       ) : isSearchMode ? (
 
         /* ── Search results ─────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin">
+        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin" style={{ animation: 'page-enter 0.22s ease-out' }}>
           {studentGroups.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-gray-400">
               No students found.
@@ -1016,8 +1039,8 @@ export function Dashboard() {
                 Showing first 100 of {studentGroups.length} matches — refine your search to narrow results.
               </p>
             )}
-            {studentGroups.slice(0, 100).map((group) => (
-              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)' }}>
+            {studentGroups.slice(0, 100).map((group, idx) => (
+              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)', animation: 'result-enter 0.28s ease-out both', animationDelay: `${Math.min(idx * 45, 400)}ms` }}>
                 <div className="px-4 py-2.5 border-b border-emerald-50 flex items-baseline gap-3 flex-wrap" style={{ background: 'linear-gradient(90deg, #f0fdf8, #f8fafc)' }}>
                   <span className="font-bold text-gray-900 text-sm">{group.nameSSLC}</span>
                   {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
@@ -1119,10 +1142,10 @@ export function Dashboard() {
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {/* Total card — hero with subtle gradient */}
+              {/* Total card */}
               <div
                 onClick={() => setTotalModal(true)}
-                className="col-span-2 rounded-2xl border border-sky-400 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                className="rounded-2xl border border-sky-400 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                 style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.18)' }}
               >
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
@@ -1133,26 +1156,64 @@ export function Dashboard() {
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
                   title="Double-click to export PDF"
                 >Total Enrolled</p>
-                <p className="text-4xl font-black leading-none text-sky-700">
+                <p className="text-3xl font-black leading-none text-sky-700">
                   <AnimNum value={stats.total} />
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-auto">
                   <span className="text-xs text-sky-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</span>
-                  <span className="text-sky-300 text-xs select-none">·</span>
                   {YEARS.map((yr, i) => {
                     const y = yearConfig[yr];
-                    const pct = Math.round((stats.byYear[yr] / (COURSES.length * 60)) * 100);
                     return (
-                      <span key={yr} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${y.border} bg-white/70 ${y.textColor}`}>
-                          {i + 1}Y
-                        </span>
-                        <span className="font-bold text-gray-600">{pct}%</span>
+                      <span key={yr} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${y.border} bg-white/70 ${y.textColor}`}>
+                        {i + 1}Y {stats.byYear[yr]}
                       </span>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Course bar chart — watermark style */}
+              {(() => {
+                const maxVal = Math.max(...COURSES.map((c) => stats.byCourse[c]), 1);
+                const BAR_H = 60; // px — max bar height
+                return (
+                  <div
+                    className="rounded-2xl border border-sky-300 px-3 pt-2 pb-2 flex flex-col relative overflow-hidden transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.10)' }}
+                  >
+                    {/* Bars */}
+                    <div className="flex items-end gap-1 flex-1" style={{ height: BAR_H }}>
+                      {COURSES.map((course, i) => {
+                        const pct = stats.byCourse[course] / maxVal;
+                        const barH = Math.max(Math.round(pct * BAR_H), 3);
+                        return (
+                          <div key={course} className="flex-1 flex flex-col justify-end" style={{ height: BAR_H }}>
+                            <div
+                              style={{
+                                height: barH,
+                                background: 'rgba(56,189,248,0.28)',
+                                borderRadius: '3px 3px 0 0',
+                                transformOrigin: 'bottom',
+                                transform: barsReady ? 'scaleY(1)' : 'scaleY(0)',
+                                transition: barsReady ? `transform 700ms cubic-bezier(0.34,1.56,0.64,1)` : 'none',
+                                transitionDelay: barsReady ? `${i * 80}ms` : '0ms',
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Labels */}
+                    <div className="flex gap-1 pt-1.5 shrink-0">
+                      {COURSES.map((course) => (
+                        <span key={course} className="flex-1 text-center text-[8px] font-bold text-sky-500/60 leading-none">
+                          {course}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <StatCard
                 label="Boys"
                 value={stats.boys}
@@ -1164,6 +1225,7 @@ export function Dashboard() {
                 watermark="B"
                 onClick={() => setGenderModal('BOY')}
                 onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown')}
+                animated={barsReady}
               />
               <StatCard
                 label="Girls"
@@ -1176,6 +1238,7 @@ export function Dashboard() {
                 watermark="G"
                 onClick={() => setGenderModal('GIRL')}
                 onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown')}
+                animated={barsReady}
               />
             </div>
 
@@ -1200,6 +1263,7 @@ export function Dashboard() {
                       watermark={course}
                       onClick={() => setCourseModalCourse(course)}
                       onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`)}
+                      animated={barsReady}
                     />
                   );
                 })}
@@ -1229,6 +1293,7 @@ export function Dashboard() {
                       watermark={wm}
                       onClick={() => setYearModalYear(year)}
                       onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.year === year), displayYear, `${yrShort} — Admission Type-wise Count`)}
+                      animated={barsReady}
                     />
                   );
                 })}

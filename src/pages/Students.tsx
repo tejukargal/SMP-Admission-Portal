@@ -542,6 +542,7 @@ export function Students() {
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Course</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Year</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Category</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
@@ -565,6 +566,7 @@ export function Students() {
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.year}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.gender}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.category || '—'}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admType || '—'}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admCat || '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
