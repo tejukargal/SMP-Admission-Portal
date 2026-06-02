@@ -488,7 +488,7 @@ export function exportDatewiseAdmissionsReport(
 // ── 1st Year Pending Seats Report ─────────────────────────────────────────────
 
 export function exportFirstYearSeatsReport(
-  seats: Record<string, { regularConfirmed: number; snqConfirmed: number }>,
+  seats: Record<string, { nonSnqConfirmed: number; snqConfirmed: number }>,
   academicYear: string,
 ): void {
   const doc = buildDoc(academicYear, '1st Year — Pending Seats');
@@ -496,18 +496,26 @@ export function exportFirstYearSeatsReport(
   const TOTAL_SNQ = 3;
 
   const body: Row[] = COURSES.map((course) => {
-    const s = seats[course] ?? { regularConfirmed: 0, snqConfirmed: 0 };
+    const s = seats[course] ?? { nonSnqConfirmed: 0, snqConfirmed: 0 };
+    const snqAllotted   = s.snqConfirmed > 0;
+    const regFilled     = Math.min(s.nonSnqConfirmed, 60);
+    const overflowToSnq = Math.max(0, s.nonSnqConfirmed - 60);
+    const snqFilled     = snqAllotted ? s.snqConfirmed : overflowToSnq;
     return [
       course,
-      s.regularConfirmed,
-      Math.max(0, TOTAL_REGULAR - s.regularConfirmed),
-      s.snqConfirmed,
-      Math.max(0, TOTAL_SNQ - s.snqConfirmed),
+      regFilled,
+      Math.max(0, TOTAL_REGULAR - regFilled),
+      snqAllotted ? snqFilled : `${snqFilled}*`,
+      Math.max(0, TOTAL_SNQ - snqFilled),
     ];
   });
 
-  const totRegFilled  = COURSES.reduce((a, c) => a + (seats[c]?.regularConfirmed ?? 0), 0);
-  const totSnqFilled  = COURSES.reduce((a, c) => a + (seats[c]?.snqConfirmed   ?? 0), 0);
+  const totRegFilled  = COURSES.reduce((a, c) => a + Math.min(seats[c]?.nonSnqConfirmed ?? 0, 60), 0);
+  const totSnqFilled  = COURSES.reduce((a, c) => {
+    const s = seats[c];
+    if (!s) return a;
+    return a + (s.snqConfirmed > 0 ? s.snqConfirmed : Math.max(0, s.nonSnqConfirmed - 60));
+  }, 0);
   const grandIdx = body.length;
   body.push([
     'TOTAL',

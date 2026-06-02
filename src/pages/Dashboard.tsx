@@ -496,12 +496,12 @@ export function Dashboard() {
       EE: { '1ST YEAR': 0, '2ND YEAR': 0, '3RD YEAR': 0 },
     };
 
-    const firstYearSeats: Record<Course, { regularConfirmed: number; snqConfirmed: number }> = {
-      CE: { regularConfirmed: 0, snqConfirmed: 0 },
-      ME: { regularConfirmed: 0, snqConfirmed: 0 },
-      EC: { regularConfirmed: 0, snqConfirmed: 0 },
-      CS: { regularConfirmed: 0, snqConfirmed: 0 },
-      EE: { regularConfirmed: 0, snqConfirmed: 0 },
+    const firstYearSeats: Record<Course, { nonSnqConfirmed: number; snqConfirmed: number }> = {
+      CE: { nonSnqConfirmed: 0, snqConfirmed: 0 },
+      ME: { nonSnqConfirmed: 0, snqConfirmed: 0 },
+      EC: { nonSnqConfirmed: 0, snqConfirmed: 0 },
+      CS: { nonSnqConfirmed: 0, snqConfirmed: 0 },
+      EE: { nonSnqConfirmed: 0, snqConfirmed: 0 },
     };
     const byYearByCourse: Record<Year, Record<Course, number>> = {
       '1ST YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
@@ -568,10 +568,10 @@ export function Dashboard() {
       }
 
       if (s.year === '1ST YEAR' && s.course in firstYearSeats) {
-        if (s.admType === 'REGULAR' && s.admCat === 'GM') {
-          firstYearSeats[s.course as Course].regularConfirmed++;
-        } else if (s.admCat === 'SNQ') {
+        if (s.admCat === 'SNQ') {
           firstYearSeats[s.course as Course].snqConfirmed++;
+        } else {
+          firstYearSeats[s.course as Course].nonSnqConfirmed++;
         }
       }
 
@@ -1344,14 +1344,25 @@ export function Dashboard() {
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
-                  const { regularConfirmed, snqConfirmed } = stats.firstYearSeats[course];
-                  const regularPending = Math.max(0, 60 - regularConfirmed);
-                  const snqPending = Math.max(0, 3 - snqConfirmed);
-                  const regularFillPct = Math.min(100, Math.round((regularConfirmed / 60) * 100));
+                  const { nonSnqConfirmed, snqConfirmed } = stats.firstYearSeats[course];
+                  const snqAllotted = snqConfirmed > 0;
+
+                  // Regular seats: first 60 slots go to non-SNQ students
+                  const regularFilled    = Math.min(nonSnqConfirmed, 60);
+                  const regularPending   = Math.max(0, 60 - regularFilled);
+                  const overflowToSnq    = Math.max(0, nonSnqConfirmed - 60); // enrolled beyond 60
+                  const regularFillPct   = Math.min(100, Math.round((regularFilled / 60) * 100));
+
+                  // SNQ seats: if allotted use admCat count; otherwise use overflow as estimate
+                  const snqFilled  = snqAllotted ? snqConfirmed : overflowToSnq;
+                  const snqPending = Math.max(0, 3 - snqFilled);
+
                   return (
                     <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
                       <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
                       <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor}`}>{course}</span>
+
+                      {/* Regular seats */}
                       <div className="flex flex-col gap-1">
                         <div className="flex items-end justify-between">
                           <span className="text-[10px] text-gray-400 font-semibold">Regular</span>
@@ -1365,14 +1376,25 @@ export function Dashboard() {
                             style={{ width: `${regularFillPct}%` }}
                           />
                         </div>
-                        <p className="text-[10px] text-gray-400 tabular-nums">{regularConfirmed} / 60 filled</p>
+                        <p className="text-[10px] text-gray-400 tabular-nums">{regularFilled} / 60 filled</p>
                       </div>
-                      <div className="pt-1.5 border-t border-white/50 flex items-center justify-between">
-                        <div>
-                          <span className="text-[10px] text-gray-400 font-semibold">SNQ</span>
-                          <p className="text-[10px] text-gray-400 tabular-nums">{snqConfirmed} / 3 filled</p>
+
+                      {/* SNQ seats */}
+                      <div className="pt-1.5 border-t border-white/50 flex items-center justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-gray-400 font-semibold">SNQ</span>
+                            {!snqAllotted && (
+                              <span className="px-1 py-px rounded text-[8px] font-bold bg-amber-100 border border-amber-300 text-amber-600 leading-tight whitespace-nowrap">
+                                To be allotted
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-gray-400 tabular-nums">
+                            {snqFilled} / 3 {snqAllotted ? 'filled' : 'pre-filled'}
+                          </p>
                         </div>
-                        <span className={`text-lg font-black tabular-nums ${snqPending === 0 ? 'text-emerald-600' : 'text-gray-600'}`}>
+                        <span className={`text-lg font-black tabular-nums shrink-0 ${snqPending === 0 ? 'text-emerald-600' : snqAllotted ? 'text-gray-600' : 'text-amber-500'}`}>
                           <AnimNum value={snqPending} />
                         </span>
                       </div>
