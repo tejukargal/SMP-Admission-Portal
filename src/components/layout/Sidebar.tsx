@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -138,14 +139,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
 
-  // Shared NavLink class builder
+  // Sidebar text transition — fades + collapses width in sync with sidebar
+  const textStyle = (extraDelay = 0): React.CSSProperties => ({
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    maxWidth: collapsed ? 0 : '160px',
+    opacity: collapsed ? 0 : 1,
+    transition: collapsed
+      ? `opacity 100ms ease, max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms`
+      : `max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms, opacity 180ms ease ${extraDelay + 60}ms`,
+  });
+
+  // Nav item — icon always at px-3 from left; text fades in/out beside it
   function navClass(isActive: boolean) {
-    const base = `group flex items-center rounded-xl text-[13px] font-medium transition-all duration-150 overflow-hidden`;
-    const layout = collapsed ? 'justify-center px-0 py-2.5 w-10 mx-auto' : 'gap-2.5 px-3 py-2 w-full';
+    const base = `group flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] font-medium transition-colors duration-150`;
     const color = isActive
       ? 'bg-emerald-500 text-white shadow-sm'
       : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-800';
-    return `${base} ${layout} ${color}`;
+    return `${base} ${color}`;
   }
 
   function iconClass(isActive: boolean) {
@@ -172,9 +183,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         onMouseEnter={() => setLogoHovered(true)}
         onMouseLeave={() => setLogoHovered(false)}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className={`group flex items-center w-full cursor-pointer hover:bg-emerald-50/50 transition-colors pt-5 pb-3 ${
-          collapsed ? 'justify-center px-0' : 'px-4 justify-between gap-3'
-        }`}
+        className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors pt-5 pb-3 px-4"
       >
         {/* Flip-card logo — front: leaf, back: chevron */}
         <div className="relative w-9 h-9 shrink-0" style={{ perspective: '280px' }}>
@@ -218,20 +227,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         </div>
 
-        {/* Wordmark — expanded only */}
-        {!collapsed && (
-          <div className="min-w-0 flex-1 text-left">
-            <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
-            <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
-          </div>
-        )}
+        {/* Wordmark — fades with sidebar */}
+        <div className="min-w-0 flex-1 text-left" style={textStyle()}>
+          <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
+          <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
+        </div>
 
-        {/* Collapse arrow — expanded only */}
-        {!collapsed && (
-          <span className="flex items-center justify-center text-gray-400 group-hover:text-emerald-600 transition-colors shrink-0">
-            <IconChevronLeft />
-          </span>
-        )}
+        {/* Collapse arrow — fades with sidebar */}
+        <span
+          className="flex items-center justify-center text-gray-400 group-hover:text-emerald-600 transition-colors shrink-0"
+          style={textStyle()}
+        >
+          <IconChevronLeft />
+        </span>
       </button>
 
       {/* Divider */}
@@ -251,22 +259,28 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {({ isActive }) => (
               <>
                 <span className={iconClass(isActive)}><Icon /></span>
-                {!collapsed && <span className="truncate">{label}</span>}
+                <span style={textStyle()}>{label}</span>
               </>
             )}
           </NavLink>
         ))}
 
         {/* Section divider */}
-        {collapsed ? (
-          <div className="my-2 mx-1 h-px bg-emerald-100" />
-        ) : (
-          <div className="pt-3 pb-1 px-1">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300">
-              {isAdmin ? 'Administration' : 'Records'}
-            </p>
-          </div>
-        )}
+        <div className="pt-3 pb-1 px-1">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-gray-300" style={textStyle()}>
+            {isAdmin ? 'Administration' : 'Records'}
+          </p>
+          <div
+            className="h-px bg-emerald-100"
+            style={{
+              maxWidth: collapsed ? '100%' : 0,
+              opacity: collapsed ? 1 : 0,
+              transition: collapsed
+                ? 'max-width 220ms cubic-bezier(0.4,0,0.2,1), opacity 180ms ease 60ms'
+                : 'max-width 220ms cubic-bezier(0.4,0,0.2,1), opacity 100ms ease',
+            }}
+          />
+        </div>
 
         {/* Admin / staff items */}
         {adminItems.map(({ to, label, Icon }) => (
@@ -279,7 +293,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {({ isActive }) => (
               <>
                 <span className={iconClass(isActive)}><Icon /></span>
-                {!collapsed && <span className="truncate">{label}</span>}
+                <span style={textStyle()}>{label}</span>
               </>
             )}
           </NavLink>
@@ -287,18 +301,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}
-      <div className={`py-2.5 border-t border-emerald-50 ${collapsed ? 'flex justify-center px-0' : 'px-3'}`}>
+      <div className="py-2.5 border-t border-emerald-50 px-3">
         <button
           onClick={() => setShowAbout(true)}
           title="About"
-          className={`flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer ${collapsed ? 'justify-center' : ''}`}
+          className="flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          {!collapsed && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider">About</span>
-          )}
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={textStyle()}>About</span>
         </button>
       </div>
 
