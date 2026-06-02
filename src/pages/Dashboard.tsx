@@ -258,6 +258,7 @@ export function Dashboard() {
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
   const [totalModal, setTotalModal] = useState(false);
+  const [intakeModal, setIntakeModal] = useState(false);
 
   // ── Collect Fee from dashboard search (admin only) ───────────────────────
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
@@ -1172,25 +1173,58 @@ export function Dashboard() {
                 </div>
               </div>
 
-              {/* Course bar chart — watermark style */}
+              {/* Course bar chart — intake-based */}
               {(() => {
-                const maxVal = Math.max(...COURSES.map((c) => stats.byCourse[c]), 1);
-                const BAR_H = 60; // px — max bar height
+                const INTAKE = 63;
+                const YEAR_INTAKE = INTAKE * COURSES.length;           // 315 per year
+                const TOTAL_INTAKE = YEAR_INTAKE * YEARS.length;       // 945 overall
+                const overallPct = Math.round((stats.total / TOTAL_INTAKE) * 100);
+                const BAR_H = 44; // px — usable bar area
                 return (
                   <div
-                    className="rounded-2xl border border-sky-300 px-3 pt-2 pb-2 flex flex-col relative overflow-hidden transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    onClick={() => setIntakeModal(true)}
+                    className="rounded-2xl border border-sky-300 px-3 pt-2 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.10)' }}
                   >
-                    {/* Bars */}
-                    <div className="flex items-end gap-1 flex-1" style={{ height: BAR_H }}>
+                    {/* Overall % + year breakdown — single row */}
+                    <div className="flex items-baseline justify-between mb-1.5 shrink-0">
+                      <div className="flex items-baseline gap-2">
+                        {YEARS.map((yr, i) => {
+                          const yrPct = Math.round((stats.byYear[yr] / YEAR_INTAKE) * 100);
+                          return (
+                            <span key={yr} className="flex items-baseline gap-0.5">
+                              <span className="text-[9px] font-semibold text-sky-400/70 leading-none">{i + 1}Y</span>
+                              <span className="text-[11px] font-bold text-sky-500/80 tabular-nums leading-none">{yrPct}%</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span className="flex items-baseline gap-0.5">
+                        <span className="text-[9px] font-bold text-sky-500/70 uppercase tracking-wider leading-none">Total</span>
+                        <span className="text-[11px] font-black text-sky-600/90 tabular-nums leading-none">{overallPct}%</span>
+                      </span>
+                    </div>
+                    {/* Bars + count labels */}
+                    <div className="flex items-end gap-1 flex-1" style={{ height: 58 }}>
                       {COURSES.map((course, i) => {
-                        const pct = stats.byCourse[course] / maxVal;
+                        const count = stats.byCourse[course];
+                        const pct = Math.min(count / INTAKE, 1);
                         const barH = Math.max(Math.round(pct * BAR_H), 3);
                         return (
-                          <div key={course} className="flex-1 flex flex-col justify-end" style={{ height: BAR_H }}>
+                          <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
+                            <span
+                              className="text-[10px] font-bold text-sky-600/80 tabular-nums leading-none mb-0.5"
+                              style={{
+                                opacity: barsReady ? 1 : 0,
+                                transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
+                              }}
+                            >
+                              {count}
+                            </span>
                             <div
                               style={{
                                 height: barH,
+                                width: '100%',
                                 background: 'rgba(56,189,248,0.28)',
                                 borderRadius: '3px 3px 0 0',
                                 transformOrigin: 'bottom',
@@ -1203,13 +1237,17 @@ export function Dashboard() {
                         );
                       })}
                     </div>
-                    {/* Labels */}
+                    {/* Course label + intake % */}
                     <div className="flex gap-1 pt-1.5 shrink-0">
-                      {COURSES.map((course) => (
-                        <span key={course} className="flex-1 text-center text-[8px] font-bold text-sky-500/60 leading-none">
-                          {course}
-                        </span>
-                      ))}
+                      {COURSES.map((course) => {
+                        const intakePct = Math.round((stats.byCourse[course] / INTAKE) * 100);
+                        return (
+                          <div key={course} className="flex-1 flex flex-col items-center gap-0.5">
+                            <span className="text-[9px] font-bold text-sky-500/60 leading-none">{course}</span>
+                            <span className="text-[9px] font-semibold text-sky-400/90 tabular-nums leading-none">{intakePct}%</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -2044,6 +2082,102 @@ export function Dashboard() {
                       <td key={ci} className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm">{v}</td>
                     ))}
                     <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm border-l-2 border-sky-400">{grandTotal}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* Intake % modal — year × course breakdown */}
+    {intakeModal && (() => {
+      const INTAKE = 63;
+      const YEAR_INTAKE = INTAKE * COURSES.length;   // 315 per year
+      const OVERALL_INTAKE = YEAR_INTAKE * YEARS.length; // 945
+      const YEAR_LABELS: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
+      const rows = YEARS.map((yr) => {
+        const cells = COURSES.map((c) => stats.byYearByCourse[yr][c]);
+        const total = cells.reduce((a, v) => a + v, 0);
+        const rowPct = Math.round((total / YEAR_INTAKE) * 100);
+        return { yr, cells, total, rowPct };
+      });
+      const grandCols = COURSES.map((_, ci) => rows.reduce((a, r) => a + r.cells[ci], 0));
+      const grandTotal = rows.reduce((a, r) => a + r.total, 0);
+      const tc = 'px-3 py-2.5 text-right tabular-nums';
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIntakeModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-sky-400 bg-sky-50 shadow-2xl w-full max-w-xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            {/* Header */}
+            <div className="px-5 py-3.5 flex items-center justify-between border-b border-sky-400 relative overflow-hidden">
+              <span aria-hidden="true" className="absolute -bottom-4 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.07]">%</span>
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-0.5 rounded-md text-sm font-black uppercase tracking-widest border border-sky-400 bg-white/70 text-sky-700">Intake %</span>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Year &amp; Course-wise · 63 seats</p>
+              </div>
+              <button
+                onClick={() => setIntakeModal(false)}
+                className="relative z-10 rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer"
+                aria-label="Close"
+              >×</button>
+            </div>
+            {/* Table */}
+            <div className="p-4">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-sky-50">
+                    <th className="px-3 py-2 text-left font-semibold text-sky-700 border-b-2 border-sky-400">Year</th>
+                    {COURSES.map((c) => (
+                      <th key={c} className="px-3 py-2 text-right font-semibold text-gray-500 border-b-2 border-sky-400">{c}</th>
+                    ))}
+                    <th className="px-3 py-2 text-right font-semibold text-sky-700 border-b-2 border-l-2 border-sky-400">Total</th>
+                    <th className="px-3 py-2 text-right font-semibold text-sky-700 border-b-2 border-sky-400">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={row.yr} className={`${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} hover:bg-white/80 transition-colors`}>
+                      <td className="px-3 py-2.5 font-semibold text-gray-700 border-b border-sky-400/40">{YEAR_LABELS[row.yr]}</td>
+                      {row.cells.map((v, ci) => {
+                        const cellPct = Math.round((v / INTAKE) * 100);
+                        return (
+                          <td key={ci} className={`${tc} border-b border-sky-400/40`}>
+                            <div className="flex flex-col items-end gap-px">
+                              <span className="text-gray-700">{v > 0 ? v : <span className="text-gray-300">—</span>}</span>
+                              {v > 0 && <span className="text-[9px] text-sky-400/80 font-semibold">{cellPct}%</span>}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className={`${tc} font-bold text-sky-700 border-b border-l-2 border-sky-400/40`}>
+                        {row.total > 0 ? row.total : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className={`${tc} font-bold text-sky-600 border-b border-sky-400/40`}>
+                        {row.rowPct}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-sky-50 border-t-2 border-sky-400">
+                    <td className="px-3 py-2.5 font-bold text-sky-700 text-xs uppercase tracking-wide">Total</td>
+                    {grandCols.map((v, ci) => {
+                      const colPct = Math.round((v / (INTAKE * YEARS.length)) * 100);
+                      return (
+                        <td key={ci} className={`${tc}`}>
+                          <div className="flex flex-col items-end gap-px">
+                            <span className="font-bold text-sky-700 text-sm">{v}</span>
+                            <span className="text-[9px] text-sky-400/80 font-semibold">{colPct}%</span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm border-l-2 border-sky-400">{grandTotal}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-600 text-sm">
+                      {Math.round((grandTotal / OVERALL_INTAKE) * 100)}%
+                    </td>
                   </tr>
                 </tfoot>
               </table>

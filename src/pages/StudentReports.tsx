@@ -17,12 +17,13 @@ import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, Academic
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'allotted-category';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
-  { value: 'snq-allotment',    label: 'List for SNQ Allotment' },
-  { value: 'whatsapp-numbers', label: 'Whatsapp Numbers List'  },
-  { value: 'tc-issued',        label: 'TC Issued List'         },
+  { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
+  { value: 'whatsapp-numbers',   label: 'Whatsapp Numbers List'   },
+  { value: 'tc-issued',          label: 'TC Issued List'          },
+  { value: 'allotted-category',  label: 'Allotted Category List'  },
 ];
 
 const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
@@ -125,6 +126,114 @@ function exportWhatsappPdf(students: Student[], filters: {
   }
 
   const parts = ['whatsapp_numbers'];
+  if (filters.academicYear) parts.push(filters.academicYear.replace(/[^0-9-]/g, ''));
+  if (filters.courseFilter) parts.push(filters.courseFilter);
+  if (filters.yearFilter)   parts.push(filters.yearFilter.replace(/\s+/g, ''));
+  doc.save(parts.join('_') + '.pdf');
+}
+
+function exportAllottedCategoryPdf(students: Student[], filters: {
+  academicYear: string | null;
+  courseFilter: string;
+  yearFilter: string;
+  admTypeFilter: string;
+  admCatFilter: string;
+  searchTerm: string;
+}): void {
+  // Landscape A4: 297mm wide. Usable = 297 - 12 - 12 = 273mm.
+  // Columns: Sl(12) + Name(50) + FatherName(38) + Year(20) + Course(16) +
+  //          RegNo(24) + Cat(14) + AllottedCat(24) + AdmType(22) + StudMob(27) + FatherMob(26) = 273mm
+  const doc    = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W      = doc.internal.pageSize.getWidth();   // 297mm
+  const MARGIN = 12;
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  const title = filters.academicYear
+    ? `SMP Admissions — Allotted Category List  (${filters.academicYear})`
+    : 'SMP Admissions — Allotted Category List';
+  doc.text(title, W / 2, 12, { align: 'center' });
+
+  const chips: string[] = [];
+  if (filters.courseFilter)  chips.push(filters.courseFilter);
+  if (filters.yearFilter)    chips.push(filters.yearFilter);
+  if (filters.admTypeFilter) chips.push(filters.admTypeFilter);
+  if (filters.admCatFilter)  chips.push(filters.admCatFilter);
+  if (filters.searchTerm)    chips.push(`"${filters.searchTerm}"`);
+  chips.push(`${students.length} student${students.length !== 1 ? 's' : ''}`);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(chips.join('  ·  '), MARGIN, 18);
+  doc.text(`Generated ${dateStr}`, W - MARGIN, 18, { align: 'right' });
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.2);
+  doc.line(MARGIN, 21, W - MARGIN, 21);
+  doc.setTextColor(0);
+
+  const HEAD: [number, number, number]  = [30, 64, 175];   // indigo-800
+  const WHITE: [number, number, number] = [255, 255, 255];
+  const GRID: [number, number, number]  = [210, 215, 220];
+  const CELL_PAD = { top: 2, right: 2.5, bottom: 2, left: 2.5 };
+
+  autoTable(doc, {
+    startY: 24,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [['Sl', 'Student Name', 'Year', 'Course', 'Reg No', 'Cat', 'Adm Cat', 'Allotted Cat', 'Adm Type', 'Student Mob', 'Father Mob']],
+    body: students.map((s, i) => [
+      i + 1,
+      s.studentNameSSLC,
+      s.year,
+      s.course,
+      s.regNumber || '—',
+      s.category || '—',
+      s.admCat || '—',
+      s.allottedCategory || '—',
+      s.admType || '—',
+      s.studentMobile || '—',
+      s.fatherMobile || '—',
+    ]),
+    styles: { overflow: 'ellipsize' },
+    headStyles: {
+      fillColor: HEAD, textColor: WHITE, fontStyle: 'bold',
+      fontSize: 8, cellPadding: CELL_PAD,
+    },
+    bodyStyles: {
+      fontSize: 8, cellPadding: CELL_PAD,
+      lineColor: GRID, lineWidth: 0.18, textColor: [20, 20, 20] as [number, number, number],
+    },
+    alternateRowStyles: { fillColor: [239, 246, 255] as [number, number, number] },
+    // Landscape usable = 297-12-12 = 273mm: 10+65+18+13+27+12+17+35+17+29+30 = 273mm
+    columnStyles: {
+      0:  { cellWidth: 10,  halign: 'center' },
+      1:  { cellWidth: 65 },
+      2:  { cellWidth: 18,  halign: 'center' },
+      3:  { cellWidth: 13,  halign: 'center' },
+      4:  { cellWidth: 27 },
+      5:  { cellWidth: 12,  halign: 'center' },
+      6:  { cellWidth: 17,  halign: 'center' },
+      7:  { cellWidth: 35,  halign: 'center' },
+      8:  { cellWidth: 17,  halign: 'center' },
+      9:  { cellWidth: 29 },
+      10: { cellWidth: 30 },
+    },
+  });
+
+  const totalPages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(160, 160, 160);
+    doc.text(`Allotted Category List — ${filters.academicYear ?? ''}`, MARGIN, H - 5);
+    doc.text(`Page ${p} of ${totalPages}`, W - MARGIN, H - 5, { align: 'right' });
+  }
+
+  const parts = ['allotted_category'];
   if (filters.academicYear) parts.push(filters.academicYear.replace(/[^0-9-]/g, ''));
   if (filters.courseFilter) parts.push(filters.courseFilter);
   if (filters.yearFilter)   parts.push(filters.yearFilter.replace(/\s+/g, ''));
@@ -337,6 +446,15 @@ export function StudentReports() {
             admCatFilter,
             searchTerm: debouncedSearch,
           });
+        } else if (reportType === 'allotted-category') {
+          exportAllottedCategoryPdf(filteredStudents, {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+          });
         }
       } finally {
         setSavingPdf(false);
@@ -419,6 +537,30 @@ export function StudentReports() {
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Whatsapp Numbers');
           const parts = ['whatsapp_numbers'];
+          if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter)   parts.push(courseFilter);
+          if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'allotted-category') {
+          const headers = ['Sl No', 'Student Name', 'Year', 'Course', 'Reg No', 'Category', 'Adm Cat', 'Allotted Category', 'Adm Type', 'Student Mobile', 'Father Mobile'];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            s.studentNameSSLC,
+            s.year,
+            s.course,
+            s.regNumber || '',
+            s.category || '',
+            s.admCat || '',
+            s.allottedCategory || '',
+            s.admType || '',
+            s.studentMobile || '',
+            s.fatherMobile || '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [{ wch: 6 }, { wch: 32 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 8 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Allotted Category');
+          const parts = ['allotted_category'];
           if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
           if (courseFilter)   parts.push(courseFilter);
           if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
@@ -908,7 +1050,7 @@ export function StudentReports() {
             )}
           </div>
         </div>
-      ) : (
+      ) : reportType === 'whatsapp-numbers' ? (
         /* ── Whatsapp Numbers table ──────────────────────────────────────── */
         <div
           className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-green-100 overflow-auto flex flex-col"
@@ -942,6 +1084,68 @@ export function StudentReports() {
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-green-50 text-xs text-gray-500 mt-auto">
+            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
+              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ── Allotted Category table ─────────────────────────────────────── */
+        <div
+          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-indigo-100 overflow-auto flex flex-col"
+          style={{ boxShadow: '0 1px 4px 0 rgba(99,102,241,0.06)' }}
+        >
+          <table className="min-w-full divide-y divide-indigo-50 text-xs">
+            <thead className="sticky top-0 z-10">
+              <tr style={{ background: 'linear-gradient(90deg, #eef2ff, #e0e7ff)' }}>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-indigo-200">#</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-indigo-200">Student Name</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Year</th>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-indigo-200">Course</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-indigo-200">Reg No</th>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-indigo-200">Category</th>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-indigo-200">Adm Cat</th>
+                <th className="px-3 py-2 text-center font-bold text-indigo-700 whitespace-nowrap w-28 border-b border-indigo-300">Allotted Cat</th>
+                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-24 border-b border-indigo-200">Adm Type</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Student Mob</th>
+                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Father Mob</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-50/60">
+              {filteredStudents.map((s, idx) => (
+                <tr
+                  key={s.id}
+                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-indigo-50/40`}
+                >
+                  <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.regNumber || '—'}</td>
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-100 text-emerald-700">
+                      {s.category || '—'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-50 border border-sky-200 text-sky-700">
+                      {s.admCat || '—'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                      {s.allottedCategory || '—'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admType || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.studentMobile || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.fatherMobile || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-3 py-2 border-t border-indigo-50 text-xs text-gray-500 mt-auto">
             Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
