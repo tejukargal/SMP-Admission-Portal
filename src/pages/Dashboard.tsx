@@ -1205,38 +1205,42 @@ export function Dashboard() {
                       </span>
                     </div>
                     {/* Bars + count labels */}
-                    <div className="flex items-end gap-1 flex-1" style={{ height: 58 }}>
-                      {COURSES.map((course, i) => {
-                        const count = stats.byCourse[course];
-                        const pct = Math.min(count / INTAKE, 1);
-                        const barH = Math.max(Math.round(pct * BAR_H), 3);
-                        return (
-                          <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
-                            <span
-                              className="text-[10px] font-bold text-sky-600/80 tabular-nums leading-none mb-0.5"
-                              style={{
-                                opacity: barsReady ? 1 : 0,
-                                transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
-                              }}
-                            >
-                              {count}
-                            </span>
-                            <div
-                              style={{
-                                height: barH,
-                                width: '100%',
-                                background: 'rgba(56,189,248,0.28)',
-                                borderRadius: '3px 3px 0 0',
-                                transformOrigin: 'bottom',
-                                transform: barsReady ? 'scaleY(1)' : 'scaleY(0)',
-                                transition: barsReady ? `transform 700ms cubic-bezier(0.34,1.56,0.64,1)` : 'none',
-                                transitionDelay: barsReady ? `${i * 80}ms` : '0ms',
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {(() => {
+                      const maxCourseCount = Math.max(1, ...COURSES.map((c) => stats.byCourse[c]));
+                      return (
+                        <div className="flex items-end gap-1 flex-1" style={{ height: 58 }}>
+                          {COURSES.map((course, i) => {
+                            const count = stats.byCourse[course];
+                            const barH = count > 0 ? Math.max(3, Math.round((count / maxCourseCount) * BAR_H)) : 0;
+                            return (
+                              <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
+                                <span
+                                  className="text-[10px] font-bold text-sky-600/80 tabular-nums leading-none mb-0.5"
+                                  style={{
+                                    opacity: barsReady ? 1 : 0,
+                                    transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
+                                  }}
+                                >
+                                  {count}
+                                </span>
+                                <div
+                                  style={{
+                                    height: barH,
+                                    width: '100%',
+                                    background: 'rgba(56,189,248,0.28)',
+                                    borderRadius: '3px 3px 0 0',
+                                    transformOrigin: 'bottom',
+                                    transform: barsReady ? 'scaleY(1)' : 'scaleY(0)',
+                                    transition: barsReady ? `transform 700ms cubic-bezier(0.34,1.56,0.64,1)` : 'none',
+                                    transitionDelay: barsReady ? `${i * 80}ms` : '0ms',
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                     {/* Course label + intake % */}
                     <div className="flex gap-1 pt-1.5 shrink-0">
                       {COURSES.map((course) => {
@@ -1426,29 +1430,40 @@ export function Dashboard() {
                   </div>
                 </div>
 
-                {/* Bars — border-b is the baseline the bars grow up from */}
-                <div className="flex items-end gap-2 border-b border-gray-200" style={{ height: 120 }}>
-                  {COURSES.map((course) => (
-                    <div key={course} className="flex-1 flex items-end gap-px" style={{ height: '100%' }}>
-                      {YEARS.map((year) => {
-                        const y = yearConfig[year];
-                        const count = stats.byCourseByYear[course][year];
-                        const pct = Math.min(100, (count / 63) * 100);
-                        return (
-                          <div key={year} className="flex-1 flex flex-col items-center justify-end h-full">
-                            {count > 0 && (
-                              <span className="text-[7px] font-bold text-gray-400 tabular-nums leading-none mb-px">{count}</span>
-                            )}
-                            <div
-                              className={`w-full rounded-t-sm ${y.barFill} opacity-90 transition-all duration-700 ease-out`}
-                              style={{ height: `${Math.max(pct, count > 0 ? 3 : 0)}%` }}
-                            />
-                          </div>
-                        );
-                      })}
+                {/* Bars — explicit px heights so percentage-height CSS issues don't apply */}
+                {(() => {
+                  const CHART_H = 160;
+                  const maxBarCount = Math.max(
+                    1,
+                    ...COURSES.flatMap((c) => YEARS.map((yr) => stats.byCourseByYear[c][yr]))
+                  );
+                  return (
+                    <div className="flex items-end gap-2 border-b border-gray-200" style={{ height: CHART_H }}>
+                      {COURSES.map((course) => (
+                        <div key={course} className="flex-1 flex items-end gap-px">
+                          {YEARS.map((year) => {
+                            const y = yearConfig[year];
+                            const count = stats.byCourseByYear[course][year];
+                            const px = count > 0
+                              ? Math.max(4, Math.round((count / maxBarCount) * CHART_H))
+                              : 0;
+                            return (
+                              <div key={year} className="flex-1 flex flex-col items-center justify-end">
+                                {count > 0 && (
+                                  <span className="text-[7px] font-bold text-gray-400 tabular-nums leading-none mb-px">{count}</span>
+                                )}
+                                <div
+                                  className={`w-full rounded-t-sm ${y.barFill} opacity-90 transition-all duration-700 ease-out`}
+                                  style={{ height: px }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 {/* Course labels — sit below the baseline */}
                 <div className="flex gap-2 mt-1.5">
