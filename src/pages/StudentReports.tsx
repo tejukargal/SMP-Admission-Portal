@@ -9,7 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { exportStudentReportPdf } from '../utils/studentReportPdf';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
+import { exportPcIssuedPdf, type PcRow } from '../utils/pcIssuedPdf';
 import type { TCRecord } from '../services/tcService';
+import { clearTcHistory, academicYearFromDate } from '../services/tcService';
+import { CERT_CLEAR_PASSKEY } from '../config/constants';
+import type { PCRecord } from '../services/pcService';
+import { clearPcHistory } from '../services/pcService';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { ACADEMIC_YEARS } from '../types';
 import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear } from '../types';
@@ -17,12 +22,13 @@ import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, Academic
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'allotted-category';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
   { value: 'whatsapp-numbers',   label: 'Whatsapp Numbers List'   },
   { value: 'tc-issued',          label: 'TC Issued List'          },
+  { value: 'pc-issued',          label: 'PC Issued List'          },
   { value: 'allotted-category',  label: 'Allotted Category List'  },
 ];
 
@@ -276,10 +282,25 @@ export function StudentReports() {
   const [dateFrom,       setDateFrom]       = useState('');
   const [dateTo,         setDateTo]         = useState('');
   const [tcYearFilter,   setTcYearFilter]   = useState<string>('ALL');
+  const [pcYearFilter,   setPcYearFilter]   = useState<string>('ALL');
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [savingPdf,   setSavingPdf]   = useState(false);
   const [savingExcel, setSavingExcel] = useState(false);
+
+  // TC clear modal (double-click on a TC row)
+  const [tcClearModal,          setTcClearModal]          = useState<TcRow | null>(null);
+  const [tcClearModalClearing,  setTcClearModalClearing]  = useState(false);
+  const [tcClearModalMsg,       setTcClearModalMsg]       = useState('');
+  const [tcClearPasskey,        setTcClearPasskey]        = useState('');
+  const [tcClearPasskeyError,   setTcClearPasskeyError]   = useState('');
+
+  // PC clear modal (double-click on a PC row)
+  const [pcClearModal,          setPcClearModal]          = useState<PcRow | null>(null);
+  const [pcClearModalClearing,  setPcClearModalClearing]  = useState(false);
+  const [pcClearModalMsg,       setPcClearModalMsg]       = useState('');
+  const [pcClearPasskey,        setPcClearPasskey]        = useState('');
+  const [pcClearPasskeyError,   setPcClearPasskeyError]   = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -382,10 +403,71 @@ export function StudentReports() {
     return { totalTCs, byCourse };
   }, [reportType, allStudentsForTC]);
 
+  // ── PC Issued rows ────────────────────────────────────────────────────────────
+  const pcRows = useMemo((): PcRow[] => {
+    if (reportType !== 'pc-issued') return [];
+    type S = Student & { pcHistory?: PCRecord[] };
+    let filtered = (allStudentsForTC as S[]).filter((s) => s.pcHistory && s.pcHistory.length > 0);
+    if (courseFilter)   filtered = filtered.filter((s) => s.course === courseFilter);
+    if (yearFilter)     filtered = filtered.filter((s) => s.year === yearFilter);
+    if (genderFilter)   filtered = filtered.filter((s) => s.gender === genderFilter);
+    if (categoryFilter) filtered = filtered.filter((s) => s.category === categoryFilter);
+    if (admTypeFilter)  filtered = filtered.filter((s) => s.admType === admTypeFilter);
+    if (admCatFilter)   filtered = filtered.filter((s) => s.admCat === admCatFilter);
+
+    const rows: PcRow[] = [];
+    for (const s of filtered) {
+      for (const pc of (s.pcHistory ?? [])) {
+        const pcAcademicYear = academicYearFromDate(pc.issuedAt);
+        if (pcYearFilter !== 'ALL' && pcAcademicYear !== pcYearFilter) continue;
+        rows.push({
+          studentId: s.id,
+          studentName: s.studentNameSSLC,
+          course: s.course,
+          year: s.year,
+          category: s.category,
+          enrollmentYear: s.academicYear,
+          regNumber: s.regNumber ?? '',
+          pcId: pc.id,
+          examPeriod: pc.examPeriod,
+          resultClass: pc.resultClass,
+          dateOfIssue: pc.dateOfIssue,
+          isDuplicate: pc.isDuplicate,
+          issuedAt: pc.issuedAt,
+          pcAcademicYear,
+        });
+      }
+    }
+
+    const q = debouncedSearch.trim().toUpperCase();
+    const result = q
+      ? rows.filter((r) =>
+          r.studentName.toUpperCase().includes(q) ||
+          r.regNumber.toUpperCase().includes(q) ||
+          r.examPeriod.toUpperCase().includes(q)
+        )
+      : rows;
+    return result.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  }, [reportType, allStudentsForTC, pcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+
+  // ── PC stats (unfiltered counts for header chips) ─────────────────────────────
+  const pcStats = useMemo(() => {
+    if (reportType !== 'pc-issued') return null;
+    type S = Student & { pcHistory?: PCRecord[] };
+    const withPC = (allStudentsForTC as S[]).filter((s) => s.pcHistory && s.pcHistory.length > 0);
+    const totalPCs = withPC.reduce((sum, s) => sum + (s.pcHistory?.length ?? 0), 0);
+    const byCourse: Record<string, number> = {};
+    for (const s of withPC) {
+      byCourse[s.course] = (byCourse[s.course] ?? 0) + (s.pcHistory?.length ?? 0);
+    }
+    return { totalPCs, byCourse };
+  }, [reportType, allStudentsForTC]);
+
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
     !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo ||
-    (reportType === 'tc-issued' && tcYearFilter !== 'ALL');
+    (reportType === 'tc-issued' && tcYearFilter !== 'ALL') ||
+    (reportType === 'pc-issued' && pcYearFilter !== 'ALL');
 
   function clearFilters() {
     setSearchTerm(''); setDebouncedSearch('');
@@ -394,6 +476,7 @@ export function StudentReports() {
     setAdmTypeFilter(''); setAdmCatFilter('');
     setDateFrom(''); setDateTo('');
     setTcYearFilter('ALL');
+    setPcYearFilter('ALL');
   }
 
   // ── Stats (SNQ Allotment & WhatsApp Numbers) ──────────────────────────────────
@@ -438,6 +521,17 @@ export function StudentReports() {
         } else if (reportType === 'tc-issued') {
           exportTcIssuedPdf(tcRows, {
             tcYearFilter,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            categoryFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+          });
+        } else if (reportType === 'pc-issued') {
+          exportPcIssuedPdf(pcRows, {
+            pcYearFilter,
             courseFilter,
             yearFilter,
             genderFilter,
@@ -601,6 +695,37 @@ export function StudentReports() {
           if (courseFilter)           parts.push(courseFilter);
           if (yearFilter)             parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'pc-issued') {
+          const headers = [
+            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Enrollment Year',
+            'Reg No', 'Exam Period', 'Result Class', 'Date of Issue', 'Duplicate', 'Issued Date',
+          ];
+          const rows = pcRows.map((r, i) => [
+            i + 1,
+            r.studentName,
+            r.course,
+            r.year,
+            r.category,
+            r.enrollmentYear,
+            r.regNumber,
+            r.examPeriod,
+            r.resultClass,
+            r.dateOfIssue,
+            r.isDuplicate ? 'Yes' : 'No',
+            r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [
+            { wch: 6 }, { wch: 26 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 14 },
+            { wch: 14 }, { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 10 }, { wch: 16 },
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'PC Issued');
+          const parts = ['pc_issued'];
+          if (pcYearFilter !== 'ALL') parts.push(pcYearFilter.replace(/[^0-9-]/g, ''));
+          if (courseFilter)           parts.push(courseFilter);
+          if (yearFilter)             parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         }
       } finally {
         setSavingExcel(false);
@@ -608,10 +733,48 @@ export function StudentReports() {
     }, 0);
   }
 
-  const isLoading = settingsLoading || loading || feeLoading || (reportType === 'tc-issued' && tcLoading);
+  async function handleTcClearFromModal() {
+    if (!tcClearModal) return;
+    if (tcClearPasskey !== CERT_CLEAR_PASSKEY) {
+      setTcClearPasskeyError('Incorrect passkey. Please try again.');
+      return;
+    }
+    setTcClearPasskeyError('');
+    setTcClearModalClearing(true);
+    try {
+      await clearTcHistory(tcClearModal.studentId);
+      setTcClearModalMsg(`TC history cleared for ${tcClearModal.studentName}.`);
+      setTcClearModal(null);
+      setTcClearPasskey('');
+    } finally {
+      setTcClearModalClearing(false);
+    }
+  }
+
+  async function handlePcClearFromModal() {
+    if (!pcClearModal) return;
+    if (pcClearPasskey !== CERT_CLEAR_PASSKEY) {
+      setPcClearPasskeyError('Incorrect passkey. Please try again.');
+      return;
+    }
+    setPcClearPasskeyError('');
+    setPcClearModalClearing(true);
+    try {
+      await clearPcHistory(pcClearModal.studentId);
+      setPcClearModalMsg(`PC history cleared for ${pcClearModal.studentName}.`);
+      setPcClearModal(null);
+      setPcClearPasskey('');
+    } finally {
+      setPcClearModalClearing(false);
+    }
+  }
+
+  const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading);
   if (isLoading) return <PageSpinner />;
 
-  const activeCount = reportType === 'tc-issued' ? tcRows.length : filteredStudents.length;
+  const activeCount = reportType === 'tc-issued' ? tcRows.length
+    : reportType === 'pc-issued' ? pcRows.length
+    : filteredStudents.length;
 
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
@@ -620,16 +783,16 @@ export function StudentReports() {
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
         <div className="shrink-0">
           <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Reports</h2>
-          {academicYear && reportType !== 'tc-issued' && (
+          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && (
             <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
           )}
-          {reportType === 'tc-issued' && (
+          {(reportType === 'tc-issued' || reportType === 'pc-issued') && (
             <p className="text-[10px] text-gray-400 leading-tight">All Academic Years</p>
           )}
         </div>
 
         {/* Stats chips — SNQ Allotment & WhatsApp Numbers */}
-        {reportType !== 'tc-issued' && !isLoading && stats.total > 0 && (
+        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && !isLoading && stats.total > 0 && (
           <>
             <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
@@ -745,6 +908,53 @@ export function StudentReports() {
             </div>
           </>
         )}
+
+        {/* Stats chips — PC Issued List */}
+        {reportType === 'pc-issued' && !isLoading && pcStats && pcStats.totalPCs > 0 && (
+          <>
+            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
+
+              <div className="flex items-center gap-1 bg-white/80 border border-violet-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-violet-600 font-semibold">PCs Issued</span>
+                <span className="font-bold tabular-nums">{pcStats.totalPCs}</span>
+              </div>
+
+              <span className="text-violet-200 text-xs select-none shrink-0">·</span>
+
+              {COURSES.map((c) => {
+                const count  = pcStats.byCourse[c] ?? 0;
+                const active = courseFilter === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setCourseFilter(active ? '' : c)}
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      active
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : count === 0
+                        ? 'bg-white/50 border-gray-100 text-gray-300'
+                        : 'bg-white/80 border-violet-100 hover:border-violet-300 hover:bg-violet-50'
+                    }`}
+                  >
+                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
+                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
+                  </button>
+                );
+              })}
+
+              {hasActiveFilters && (
+                <>
+                  <span className="text-violet-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-violet-600 font-semibold">Filtered</span>
+                    <span className="font-bold tabular-nums">{pcRows.length}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Filters panel ──────────────────────────────────────────────────── */}
@@ -790,10 +1000,30 @@ export function StudentReports() {
             </>
           )}
 
+          {/* PC Year filter — only for PC Issued List */}
+          {reportType === 'pc-issued' && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">PC Year</span>
+                <select
+                  value={pcYearFilter}
+                  onChange={(e) => setPcYearFilter(e.target.value)}
+                  className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs font-semibold text-violet-800 focus:outline-none focus:ring-1 focus:ring-violet-400 focus:border-violet-400 cursor-pointer"
+                >
+                  <option value="ALL">All Academic Years</option>
+                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-gray-200 text-sm select-none">|</span>
+            </>
+          )}
+
           {/* Search */}
           <input
             type="text"
-            placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : 'Search name / reg / mobile…'}
+            placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : 'Search name / reg / mobile…'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-48 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
@@ -913,9 +1143,9 @@ export function StudentReports() {
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
-      {tcError && reportType === 'tc-issued' ? (
+      {tcError && (reportType === 'tc-issued' || reportType === 'pc-issued') ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{tcError}</div>
-      ) : error && reportType !== 'tc-issued' ? (
+      ) : error && reportType !== 'tc-issued' && reportType !== 'pc-issued' ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
       ) : reportType === 'tc-issued' ? (
         tcRows.length === 0 ? (
@@ -946,7 +1176,9 @@ export function StudentReports() {
                 {tcRows.map((r, idx) => (
                   <tr
                     key={`${r.studentId}-${r.tcId}`}
-                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-blue-50/40`}
+                    onDoubleClick={() => { setTcClearModal(r); setTcClearModalMsg(''); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
+                    title="Double-click to clear TC history"
+                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-blue-50/40 cursor-pointer`}
                   >
                     <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
@@ -974,11 +1206,96 @@ export function StudentReports() {
                 ))}
               </tbody>
             </table>
-            <div className="px-3 py-2 border-t border-blue-50 text-xs text-gray-500 mt-auto">
-              Showing {tcRows.length} TC record{tcRows.length !== 1 ? 's' : ''}
-              {hasActiveFilters && tcStats && tcStats.totalTCs > 0 && tcRows.length < tcStats.totalTCs && (
-                <span className="text-gray-400"> (filtered from {tcStats.totalTCs} total)</span>
-              )}
+            <div className="px-3 py-2 border-t border-blue-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
+              <span>
+                Showing {tcRows.length} TC record{tcRows.length !== 1 ? 's' : ''}
+                {hasActiveFilters && tcStats && tcStats.totalTCs > 0 && tcRows.length < tcStats.totalTCs && (
+                  <span className="text-gray-400"> (filtered from {tcStats.totalTCs} total)</span>
+                )}
+              </span>
+              <div className="flex items-center gap-3">
+                {tcClearModalMsg && (
+                  <span className="text-green-600 font-medium">{tcClearModalMsg}</span>
+                )}
+                {tcRows.length > 0 && (
+                  <span className="text-gray-300 select-none">Double-click a row to clear TC history</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      ) : reportType === 'pc-issued' ? (
+        pcRows.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            No PC records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
+          </div>
+        ) : (
+          /* ── PC Issued List table ──────────────────────────────────────── */
+          <div
+            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-violet-100 overflow-auto flex flex-col"
+            style={{ boxShadow: '0 1px 4px 0 rgba(109,40,217,0.06)' }}
+          >
+            <table className="min-w-full divide-y divide-violet-50 text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'linear-gradient(90deg, #f5f3ff, #ede9fe)' }}>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-violet-200">#</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-violet-200">Student Name</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-violet-200">Course</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-violet-200">Reg No</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-36 border-b border-violet-200">Exam Period</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-violet-200">Result Class</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-violet-200">Date of Issue</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-violet-200">PC Year</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-violet-50/60">
+                {pcRows.map((r, idx) => (
+                  <tr
+                    key={`${r.studentId}-${r.pcId}`}
+                    onDoubleClick={() => { setPcClearModal(r); setPcClearModalMsg(''); setPcClearPasskey(''); setPcClearPasskeyError(''); }}
+                    title="Double-click to clear PC history"
+                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-violet-50/40 cursor-pointer`}
+                  >
+                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                      {r.studentName}
+                      {r.isDuplicate && (
+                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
+                          DUP
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
+                    <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap">{r.examPeriod || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.resultClass || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.dateOfIssue || '—'}</td>
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                      {r.pcAcademicYear ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 border border-violet-100 text-violet-700">
+                          {r.pcAcademicYear}
+                        </span>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-3 py-2 border-t border-violet-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
+              <span>
+                Showing {pcRows.length} PC record{pcRows.length !== 1 ? 's' : ''}
+                {hasActiveFilters && pcStats && pcStats.totalPCs > 0 && pcRows.length < pcStats.totalPCs && (
+                  <span className="text-gray-400"> (filtered from {pcStats.totalPCs} total)</span>
+                )}
+              </span>
+              <div className="flex items-center gap-3">
+                {pcClearModalMsg && (
+                  <span className="text-green-600 font-medium">{pcClearModalMsg}</span>
+                )}
+                {pcRows.length > 0 && (
+                  <span className="text-gray-300 select-none">Double-click a row to clear PC history</span>
+                )}
+              </div>
             </div>
           </div>
         )
@@ -1150,6 +1467,134 @@ export function StudentReports() {
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── PC Clear Modal (double-click on PC row) ─────────────────────── */}
+      {pcClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !pcClearModalClearing && (setPcClearModal(null), setPcClearPasskey(''), setPcClearPasskeyError(''))}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            <div className="px-5 py-4 border-b border-red-100 bg-red-50/60">
+              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider">Clear PC History</h3>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+                <p className="text-sm font-semibold text-gray-800">{pcClearModal.studentName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {pcClearModal.regNumber || '—'} · {pcClearModal.course} · {pcClearModal.year} · {pcClearModal.enrollmentYear}
+                </p>
+              </div>
+
+              <p className="text-sm text-gray-600">
+                This will permanently erase{' '}
+                <span className="font-semibold text-red-600">all PC records</span> for this student.
+                The action cannot be undone.
+              </p>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Passkey</label>
+                <input
+                  type="password"
+                  value={pcClearPasskey}
+                  onChange={(e) => { setPcClearPasskey(e.target.value); setPcClearPasskeyError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { void handlePcClearFromModal(); } }}
+                  placeholder="Enter passkey"
+                  autoFocus
+                  className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${pcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {pcClearPasskeyError && (
+                  <p className="text-xs text-red-600 mt-1">{pcClearPasskeyError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => { setPcClearModal(null); setPcClearPasskey(''); setPcClearPasskeyError(''); }}
+                disabled={pcClearModalClearing}
+                className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { void handlePcClearFromModal(); }}
+                disabled={pcClearModalClearing}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 font-semibold cursor-pointer"
+              >
+                {pcClearModalClearing ? 'Clearing…' : 'Yes, Clear History'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TC Clear Modal (double-click on TC row) ─────────────────────── */}
+      {tcClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !tcClearModalClearing && (setTcClearModal(null), setTcClearPasskey(''), setTcClearPasskeyError(''))}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            <div className="px-5 py-4 border-b border-red-100 bg-red-50/60">
+              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider">Clear TC History</h3>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
+                <p className="text-sm font-semibold text-gray-800">{tcClearModal.studentName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {tcClearModal.regNumber || '—'} · {tcClearModal.course} · {tcClearModal.year} · {tcClearModal.enrollmentYear}
+                </p>
+              </div>
+
+              <p className="text-sm text-gray-600">
+                This will permanently erase{' '}
+                <span className="font-semibold text-red-600">all TC records</span> for this student.
+                The action cannot be undone.
+              </p>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Passkey</label>
+                <input
+                  type="password"
+                  value={tcClearPasskey}
+                  onChange={(e) => { setTcClearPasskey(e.target.value); setTcClearPasskeyError(''); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { void handleTcClearFromModal(); } }}
+                  placeholder="Enter passkey"
+                  autoFocus
+                  className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${tcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {tcClearPasskeyError && (
+                  <p className="text-xs text-red-600 mt-1">{tcClearPasskeyError}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => { setTcClearModal(null); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
+                disabled={tcClearModalClearing}
+                className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { void handleTcClearFromModal(); }}
+                disabled={tcClearModalClearing}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 font-semibold cursor-pointer"
+              >
+                {tcClearModalClearing ? 'Clearing…' : 'Yes, Clear History'}
+              </button>
+            </div>
           </div>
         </div>
       )}
