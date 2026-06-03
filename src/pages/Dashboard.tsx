@@ -1240,11 +1240,9 @@ export function Dashboard() {
                     {/* Course label + intake % */}
                     <div className="flex gap-1 pt-1.5 shrink-0">
                       {COURSES.map((course) => {
-                        const intakePct = Math.round((stats.byCourse[course] / INTAKE) * 100);
                         return (
-                          <div key={course} className="flex-1 flex flex-col items-center gap-0.5">
+                          <div key={course} className="flex-1 flex flex-col items-center">
                             <span className="text-[9px] font-bold text-sky-500/60 leading-none">{course}</span>
-                            <span className="text-[9px] font-semibold text-sky-400/90 tabular-nums leading-none">{intakePct}%</span>
                           </div>
                         );
                       })}
