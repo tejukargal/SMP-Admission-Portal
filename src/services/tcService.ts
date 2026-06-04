@@ -89,9 +89,40 @@ export async function saveTcRecord(
   });
 }
 
-/** Remove all TC history from a student document. */
-export async function clearTcHistory(studentId: string): Promise<void> {
+/** Remove all TC history from a student document and roll back the counter
+ *  if the student held the most-recently-issued sequence for a given academic year.
+ *  Pass the known history so we use in-memory data instead of a potentially-stale getDoc.
+ */
+export async function clearTcHistory(studentId: string, history: TCRecord[]): Promise<void> {
   await updateDoc(doc(db, 'students', studentId), { tcHistory: deleteField() });
+
+  if (history.length === 0) return;
+
+  // Find the min and max sequence numbers per academic year used by this student.
+  const rangeByYear = new Map<string, { min: number; max: number }>();
+  for (const record of history) {
+    const match = /^(\d+)\/(.+)$/.exec(record.tcNumber);
+    if (!match) continue;
+    const seq = parseInt(match[1], 10);
+    const yr  = match[2];
+    const existing = rangeByYear.get(yr);
+    if (!existing) {
+      rangeByYear.set(yr, { min: seq, max: seq });
+    } else {
+      rangeByYear.set(yr, { min: Math.min(existing.min, seq), max: Math.max(existing.max, seq) });
+    }
+  }
+
+  // For each year, if this student held the global high-water mark, roll the counter
+  // back to minSeq - 1 so the next issue reuses their first TC number.
+  for (const [yr, { min: minSeq, max: maxSeq }] of rangeByYear) {
+    const ref     = doc(db, COUNTERS, counterDocId(yr));
+    const cSnap   = await getDoc(ref);
+    const current = (cSnap.data() as { seq?: number } | undefined)?.seq ?? 0;
+    if (current === maxSeq) {
+      await setDoc(ref, { seq: Math.max(0, minSeq - 1), updatedAt: new Date().toISOString() });
+    }
+  }
 }
 
 /** Read TC history from the student document, sorted newest-first. */

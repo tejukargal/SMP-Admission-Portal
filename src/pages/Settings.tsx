@@ -512,7 +512,7 @@ export function Settings() {
     setTcClearMsg('');
     setTcClearError('');
     try {
-      await clearTcHistory(student.id);
+      await clearTcHistory(student.id, student.tcHistory ?? []);
       setTcStudents((prev) =>
         prev?.map((s) => s.id === student.id ? { ...s, tcHistory: [] } : s) ?? null
       );

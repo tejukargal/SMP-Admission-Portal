@@ -742,7 +742,9 @@ export function StudentReports() {
     setTcClearPasskeyError('');
     setTcClearModalClearing(true);
     try {
-      await clearTcHistory(tcClearModal.studentId);
+      type S = Student & { tcHistory?: TCRecord[] };
+      const fullStudent = (allStudentsForTC as S[]).find((s) => s.id === tcClearModal.studentId);
+      await clearTcHistory(tcClearModal.studentId, fullStudent?.tcHistory ?? []);
       setTcClearModalMsg(`TC history cleared for ${tcClearModal.studentName}.`);
       setTcClearModal(null);
       setTcClearPasskey('');
