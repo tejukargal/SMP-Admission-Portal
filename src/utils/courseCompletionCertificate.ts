@@ -14,6 +14,8 @@ export interface CCCFormData {
   refNumber: string;    // e.g. "SMP/EXAM/2026-27/0001"
   examPeriod: string;   // e.g. "MAY-2021"
   regNumber: string;
+  studyFrom: string;    // e.g. "2023-24"  — actual first-year enrollment year from DB
+  studyTo: string;      // e.g. "2025-26"  — 3rd-year enrollment year
 }
 
 function esc(s: string): string {
@@ -48,8 +50,8 @@ function buildCCC(student: Student, data: CCCFormData): string {
   const regNumber   = esc(data.regNumber);
   const dateOfIssue = esc(data.dateOfIssue);
   const refNumber   = esc(data.refNumber);
-  const startYear   = esc(computeFromYear(student.academicYear, student.admType));
-  const endYear     = esc(student.academicYear);
+  const startYear   = esc(data.studyFrom);
+  const endYear     = esc(data.studyTo);
 
   return `<!DOCTYPE html>
 <html lang="en">

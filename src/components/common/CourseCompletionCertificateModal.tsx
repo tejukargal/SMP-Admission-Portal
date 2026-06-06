@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Student } from '../../types';
 import {
   generateCourseCompletionCertificate,
@@ -7,6 +7,7 @@ import {
   type CCCFormData,
 } from '../../utils/courseCompletionCertificate';
 import { getNextCccNumber, certAcademicYear } from '../../services/cccService';
+import { useAllStudents } from '../../hooks/useAllStudents';
 
 interface Props {
   student: Student;
@@ -56,8 +57,33 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // ── Derive actual study period from all enrollment records ────────────────
+  // Same matching logic as the dashboard's studentGroups: prefer regNumber,
+  // fall back to name+DOB. Sort matched records by academicYear to find the
+  // earliest (first year) and use the current record's year as the end.
+  const { students: allStudents, loading: allLoading } = useAllStudents();
+
+  const { studyFrom, studyTo } = useMemo(() => {
+    const toYear = student.academicYear;
+    const rn = student.regNumber?.trim().toUpperCase();
+
+    const matched = rn
+      ? allStudents.filter((s) => s.regNumber?.trim().toUpperCase() === rn)
+      : allStudents.filter(
+          (s) => s.studentNameSSLC === student.studentNameSSLC && s.dateOfBirth === student.dateOfBirth
+        );
+
+    if (matched.length === 0) {
+      // Cache not ready yet — use arithmetic fallback until data loads
+      return { studyFrom: computeFromYear(toYear, student.admType), studyTo: toYear };
+    }
+
+    const earliest = [...matched].sort((a, b) => a.academicYear.localeCompare(b.academicYear))[0];
+    return { studyFrom: earliest.academicYear, studyTo: toYear };
+  }, [allStudents, student]);
+
   const numberSuffix = refNumber.slice(refNumber.lastIndexOf('/') + 1).trim();
-  const canGenerate  = dateIssueISO !== '' && examPeriod.trim() !== '' && regNumber.trim() !== '';
+  const canGenerate  = !allLoading && dateIssueISO !== '' && examPeriod.trim() !== '' && regNumber.trim() !== '';
 
   async function handleGenerate() {
     if (!canGenerate || generating) return;
@@ -77,6 +103,8 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
         refNumber:   finalRef,
         examPeriod:  examPeriod.trim(),
         regNumber:   regNumber.trim(),
+        studyFrom,
+        studyTo,
       };
       generateCourseCompletionCertificate(student, data);
       onClose();
@@ -84,8 +112,6 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
       setGenerating(false);
     }
   }
-
-  const fromYear = computeFromYear(student.academicYear, student.admType);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -116,7 +142,11 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
             </div>
             <div>
               <span className="font-medium text-gray-700">Study Period:</span>{' '}
-              {fromYear} to {student.academicYear}
+              {allLoading ? (
+                <span className="text-gray-400 italic">loading…</span>
+              ) : (
+                <>{studyFrom} to {studyTo}</>
+              )}
             </div>
             <div>
               <span className="font-medium text-gray-700">Gender:</span>{' '}
