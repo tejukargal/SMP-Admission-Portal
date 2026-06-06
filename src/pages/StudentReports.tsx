@@ -7,6 +7,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentReportPdf } from '../utils/studentReportPdf';
+import { exportStudentsPdf, type StudentsPdfFilters } from '../utils/studentsPdf';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
 import { exportPcIssuedPdf, type PcRow } from '../utils/pcIssuedPdf';
@@ -22,7 +23,7 @@ import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, Academic
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
@@ -30,6 +31,7 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'tc-issued',          label: 'TC Issued List'          },
   { value: 'pc-issued',          label: 'PC Issued List'          },
   { value: 'allotted-category',  label: 'Allotted Category List'  },
+  { value: 'student-list',       label: 'Student List'            },
 ];
 
 const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
@@ -540,6 +542,18 @@ export function StudentReports() {
             admCatFilter,
             searchTerm: debouncedSearch,
           });
+        } else if (reportType === 'student-list') {
+          const filters: StudentsPdfFilters = {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            admTypeFilter,
+            admCatFilter,
+            admStatusFilter: 'CONFIRMED',
+            searchTerm: debouncedSearch,
+          };
+          exportStudentsPdf(filteredStudents, filters);
         } else if (reportType === 'allotted-category') {
           exportAllottedCategoryPdf(filteredStudents, {
             academicYear,
@@ -658,6 +672,65 @@ export function StudentReports() {
           if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
           if (courseFilter)   parts.push(courseFilter);
           if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'student-list') {
+          const headers = [
+            '#', 'Name (SSLC)', 'Name (Aadhar)', 'Father Name', 'Mother Name',
+            'Date of Birth', 'Gender', 'Religion', 'Caste', 'Category',
+            'Course', 'Year', 'Adm Type', 'Adm Cat', 'Reg No',
+            'Student Mobile', 'Father Mobile',
+            'Address', 'Town', 'Taluk', 'District',
+            'SSLC Max', 'SSLC Obtained',
+            'Maths Max', 'Maths Obtained', 'Science Max', 'Science Obtained',
+            'M+S Max', 'M+S Obtained',
+            'PUC %', 'ITI %', 'Annual Income',
+            'Merit No', 'Enrollment Date', 'Admission Status', 'Academic Year',
+          ];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            s.studentNameSSLC,
+            s.studentNameAadhar,
+            s.fatherName,
+            s.motherName,
+            s.dateOfBirth,
+            s.gender,
+            s.religion,
+            s.caste,
+            s.category,
+            s.course,
+            s.year,
+            s.admType,
+            s.admCat,
+            s.regNumber || '',
+            s.studentMobile || '',
+            s.fatherMobile || '',
+            s.address,
+            s.town,
+            s.taluk,
+            s.district,
+            s.sslcMaxTotal,
+            s.sslcObtainedTotal,
+            s.mathsMax,
+            s.mathsObtained,
+            s.scienceMax,
+            s.scienceObtained,
+            s.mathsScienceMaxTotal,
+            s.mathsScienceObtainedTotal,
+            s.pucPercentage,
+            s.itiPercentage,
+            s.annualIncome,
+            s.meritNumber || '',
+            s.enrollmentDate,
+            s.admissionStatus,
+            s.academicYear,
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Students');
+          const parts = ['student_list'];
+          if (academicYear) parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter) parts.push(courseFilter);
+          if (yearFilter)   parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'tc-issued') {
           const headers = [
@@ -1358,6 +1431,80 @@ export function StudentReports() {
                     {s.annualIncome ? s.annualIncome.toLocaleString('en-IN') : '—'}
                   </td>
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap"></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
+            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
+              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            )}
+          </div>
+        </div>
+      ) : reportType === 'student-list' ? (
+        /* ── Student List table ──────────────────────────────────────────── */
+        <div
+          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col"
+          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+        >
+          <table className="min-w-full divide-y divide-emerald-50 text-xs">
+            <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Name (SSLC)</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Reg No</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Course</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Year</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Category</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-emerald-50/60">
+              {filteredStudents.map((s, idx) => (
+                <tr
+                  key={s.id}
+                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-emerald-50/50`}
+                >
+                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.course}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.year}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.gender}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.category || '—'}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {s.allottedCategory ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        s.allottedCategory !== s.category
+                          ? 'bg-amber-50 border-amber-200 text-amber-700'
+                          : 'bg-gray-50 border-gray-200 text-gray-600'
+                      }`}>
+                        {s.allottedCategory}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-[10px]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.studentMobile || '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                      s.admissionStatus === 'CONFIRMED'
+                        ? 'bg-green-100 text-green-700'
+                        : s.admissionStatus === 'CANCELLED'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {s.admissionStatus || '—'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
