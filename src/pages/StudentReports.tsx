@@ -1656,6 +1656,7 @@ export function StudentReports() {
                   onKeyDown={(e) => { if (e.key === 'Enter') { void handlePcClearFromModal(); } }}
                   placeholder="Enter passkey"
                   autoFocus
+                  autoComplete="new-password"
                   className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${pcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
                 />
                 {pcClearPasskeyError && (
@@ -1720,6 +1721,7 @@ export function StudentReports() {
                   onKeyDown={(e) => { if (e.key === 'Enter') { void handleTcClearFromModal(); } }}
                   placeholder="Enter passkey"
                   autoFocus
+                  autoComplete="new-password"
                   className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${tcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
                 />
                 {tcClearPasskeyError && (
