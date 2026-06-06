@@ -161,6 +161,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ── App Config (CCC counter, etc.) ────────────────────────────────────
+    // Active users need read+write so certificate number transactions work.
+    match /config/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if isActiveUser();
+    }
+
     // ── Merit List Snapshots ──────────────────────────────────────────────
     match /meritListSnapshots/{snapshotId} {
       allow read:  if request.auth != null;

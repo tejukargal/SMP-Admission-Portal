@@ -15,6 +15,7 @@ import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
+import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
 import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
@@ -101,6 +102,7 @@ export function Students() {
   const [studyCertStudent, setStudyCertStudent] = useState<Student | null>(null);
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
+  const [cccStudent, setCccStudent] = useState<Student | null>(null);
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
   const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
@@ -780,6 +782,17 @@ export function Students() {
                 Provisional Certificate
               </button>
             )}
+            {contextMenu.student.year === '3RD YEAR' && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                onClick={() => { setCccStudent(contextMenu.student); setContextMenu(null); }}
+              >
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-100 group-hover:text-violet-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                </span>
+                Course Completion Certificate
+              </button>
+            )}
           </div>
         </div>
       </>
@@ -839,6 +852,13 @@ export function Students() {
       <ProvisionalCertificateModal
         student={pcStudent}
         onClose={() => setPcStudent(null)}
+      />
+    )}
+
+    {cccStudent && (
+      <CourseCompletionCertificateModal
+        student={cccStudent}
+        onClose={() => setCccStudent(null)}
       />
     )}
 

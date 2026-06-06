@@ -669,8 +669,8 @@ export function Settings() {
                   {tcResults.length > 0 && (
                     <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
                       {tcResults.map((s) => {
-                        const tcCount      = s.tcHistory?.length ?? 0;
-                        const pcCount      = s.pcHistory?.length ?? 0;
+                        const tcCount        = s.tcHistory?.length ?? 0;
+                        const pcCount        = s.pcHistory?.length ?? 0;
                         const isTcConfirming = tcConfirmId === s.id;
                         const isPcConfirming = pcConfirmId === s.id;
                         const isTcClearing   = tcClearingId === s.id;

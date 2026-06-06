@@ -1058,6 +1058,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const [pcLoading, setPcLoading] = useState(false);
   const [pcLoaded,  setPcLoaded]  = useState(false);
 
+
   // Lazy-load fee history when fee tab first activated
   useEffect(() => {
     if (activeTab !== 'fee' || feeLoaded) return;
