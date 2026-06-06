@@ -3,7 +3,7 @@ import type { Student } from '../../types';
 import {
   generateCourseCompletionCertificate,
   CCC_COURSE_NAMES,
-  computeEndYear,
+  computeFromYear,
   type CCCFormData,
 } from '../../utils/courseCompletionCertificate';
 import { getNextCccNumber, certAcademicYear } from '../../services/cccService';
@@ -85,7 +85,7 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
     }
   }
 
-  const endYear = computeEndYear(student.academicYear);
+  const fromYear = computeFromYear(student.academicYear, student.admType);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -116,7 +116,7 @@ export function CourseCompletionCertificateModal({ student, onClose }: Props) {
             </div>
             <div>
               <span className="font-medium text-gray-700">Study Period:</span>{' '}
-              {student.academicYear} to {endYear}
+              {fromYear} to {student.academicYear}
             </div>
             <div>
               <span className="font-medium text-gray-700">Gender:</span>{' '}
