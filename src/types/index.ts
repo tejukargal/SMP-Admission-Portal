@@ -49,7 +49,11 @@ export interface Student {
   town: string;
   taluk: string;
   district: string;
+  pucMaxTotal: number;
+  pucObtainedTotal: number;
   pucPercentage: number;
+  itiMaxTotal: number;
+  itiObtainedTotal: number;
   itiPercentage: number;
   fatherMobile: string;
   studentMobile: string;

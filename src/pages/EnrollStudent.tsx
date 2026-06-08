@@ -279,10 +279,18 @@ function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: Enroll
               <PreviewRow label="10th Board" value={form.tenthBoard} />
               <PreviewRow label="Prior Qualification" value={form.priorQualification} />
               {form.priorQualification === 'PUC' && (
-                <PreviewRow label="PUC Percentage" value={form.pucPercentage ? `${form.pucPercentage}%` : ''} />
+                <>
+                  <PreviewRow label="PUC Max Total" value={form.pucMaxTotal} />
+                  <PreviewRow label="PUC Obtained Total" value={form.pucObtainedTotal} />
+                  <PreviewRow label="PUC Percentage" value={(form.pucMaxTotal ?? 0) > 0 ? `${(((form.pucObtainedTotal ?? 0) / form.pucMaxTotal) * 100).toFixed(2)}%` : ''} />
+                </>
               )}
               {form.priorQualification === 'ITI' && (
-                <PreviewRow label="ITI Percentage" value={form.itiPercentage ? `${form.itiPercentage}%` : ''} />
+                <>
+                  <PreviewRow label="ITI Max Total" value={form.itiMaxTotal} />
+                  <PreviewRow label="ITI Obtained Total" value={form.itiObtainedTotal} />
+                  <PreviewRow label="ITI Percentage" value={(form.itiMaxTotal ?? 0) > 0 ? `${(((form.itiObtainedTotal ?? 0) / form.itiMaxTotal) * 100).toFixed(2)}%` : ''} />
+                </>
               )}
               <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
               <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
@@ -361,7 +369,11 @@ const FIELD_LABELS: Record<string, string> = {
   town:                 'Town',
   taluk:                'Taluk',
   district:             'District',
+  pucMaxTotal:          'PUC Max Total',
+  pucObtainedTotal:     'PUC Obtained Total',
   pucPercentage:        'PUC %',
+  itiMaxTotal:          'ITI Max Total',
+  itiObtainedTotal:     'ITI Obtained Total',
   itiPercentage:        'ITI %',
   caste:                'Caste',
   category:             'Category',
@@ -398,7 +410,11 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     town: '',
     taluk: '',
     district: '',
+    pucMaxTotal: 0,
+    pucObtainedTotal: 0,
     pucPercentage: 0,
+    itiMaxTotal: 0,
+    itiObtainedTotal: 0,
     itiPercentage: 0,
     fatherMobile: '',
     studentMobile: '',
@@ -842,6 +858,18 @@ export function EnrollStudent() {
       if (['scienceObtained', 'mathsObtained'].includes(field as string)) {
         updated.mathsScienceObtainedTotal = newScienceObtained + newMathsObtained;
       }
+
+      const newPucMax = field === 'pucMaxTotal' ? Number(value) : Number(prev.pucMaxTotal ?? 0);
+      const newPucObtained = field === 'pucObtainedTotal' ? Number(value) : Number(prev.pucObtainedTotal ?? 0);
+      const newItiMax = field === 'itiMaxTotal' ? Number(value) : Number(prev.itiMaxTotal ?? 0);
+      const newItiObtained = field === 'itiObtainedTotal' ? Number(value) : Number(prev.itiObtainedTotal ?? 0);
+      if (['pucMaxTotal', 'pucObtainedTotal'].includes(field as string)) {
+        updated.pucPercentage = newPucMax > 0 ? parseFloat(((newPucObtained / newPucMax) * 100).toFixed(2)) : 0;
+      }
+      if (['itiMaxTotal', 'itiObtainedTotal'].includes(field as string)) {
+        updated.itiPercentage = newItiMax > 0 ? parseFloat(((newItiObtained / newItiMax) * 100).toFixed(2)) : 0;
+      }
+
       // regNumber auto-preview is handled by a dedicated useEffect
       return updated;
     });
@@ -1484,34 +1512,82 @@ export function EnrollStudent() {
                 />
               </div>
               {form.priorQualification === 'PUC' && (
-                <div className="lg:col-span-2">
-                  <Input
-                    label="PUC Percentage (%)"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    value={form.pucPercentage || ''}
-                    onChange={handleNumberChange('pucPercentage')}
-                    error={displayErrors['pucPercentage']}
-                    placeholder="e.g. 78.50"
-                  />
-                </div>
+                <>
+                  <div>
+                    <Input
+                      label="PUC Max Total"
+                      type="number"
+                      min={0}
+                      value={form.pucMaxTotal || ''}
+                      onChange={handleNumberChange('pucMaxTotal')}
+                      error={displayErrors['pucMaxTotal']}
+                      placeholder="e.g. 600"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      label="PUC Obtained Total"
+                      type="number"
+                      min={0}
+                      value={form.pucObtainedTotal || ''}
+                      onChange={handleNumberChange('pucObtainedTotal')}
+                      error={displayErrors['pucObtainedTotal']}
+                      placeholder="e.g. 450"
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">PUC Percentage</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        (form.pucMaxTotal ?? 0) > 0
+                          ? `${(((form.pucObtainedTotal ?? 0) / form.pucMaxTotal) * 100).toFixed(2)}%`
+                          : '—'
+                      }
+                      className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+                </>
               )}
               {form.priorQualification === 'ITI' && (
-                <div className="lg:col-span-2">
-                  <Input
-                    label="ITI Percentage (%)"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    value={form.itiPercentage || ''}
-                    onChange={handleNumberChange('itiPercentage')}
-                    error={displayErrors['itiPercentage']}
-                    placeholder="e.g. 82.00"
-                  />
-                </div>
+                <>
+                  <div>
+                    <Input
+                      label="ITI Max Total"
+                      type="number"
+                      min={0}
+                      value={form.itiMaxTotal || ''}
+                      onChange={handleNumberChange('itiMaxTotal')}
+                      error={displayErrors['itiMaxTotal']}
+                      placeholder="e.g. 1000"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      label="ITI Obtained Total"
+                      type="number"
+                      min={0}
+                      value={form.itiObtainedTotal || ''}
+                      onChange={handleNumberChange('itiObtainedTotal')}
+                      error={displayErrors['itiObtainedTotal']}
+                      placeholder="e.g. 820"
+                    />
+                  </div>
+                  <div className="lg:col-span-2">
+                    <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider block mb-1">ITI Percentage</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        (form.itiMaxTotal ?? 0) > 0
+                          ? `${(((form.itiObtainedTotal ?? 0) / form.itiMaxTotal) * 100).toFixed(2)}%`
+                          : '—'
+                      }
+                      className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+                </>
               )}
               <div className="lg:col-span-2">
                 <Input
