@@ -4,27 +4,35 @@ import type { AcademicYear, MeritListSnapshot } from '../types';
 
 interface Result {
   snapshots: MeritListSnapshot[];
+  lateralSnapshots: MeritListSnapshot[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
 export function useMeritListSnapshots(academicYear: AcademicYear | null): Result {
-  const [snapshots, setSnapshots] = useState<MeritListSnapshot[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-  const [tick, setTick]           = useState(0);
+  const [snapshots, setSnapshots]               = useState<MeritListSnapshot[]>([]);
+  const [lateralSnapshots, setLateralSnapshots] = useState<MeritListSnapshot[]>([]);
+  const [loading, setLoading]                   = useState(false);
+  const [error, setError]                       = useState<string | null>(null);
+  const [tick, setTick]                         = useState(0);
 
   useEffect(() => {
-    if (!academicYear) { setSnapshots([]); return; }
+    if (!academicYear) { setSnapshots([]); setLateralSnapshots([]); return; }
     let cancelled = false;
     setLoading(true);
     setError(null);
     getMeritListSnapshots(academicYear)
-      .then((data) => { if (!cancelled) { setSnapshots(data); setLoading(false); } })
+      .then((data) => {
+        if (!cancelled) {
+          setSnapshots(data.filter((s) => s.type !== 'lateral'));
+          setLateralSnapshots(data.filter((s) => s.type === 'lateral'));
+          setLoading(false);
+        }
+      })
       .catch((err: Error) => { if (!cancelled) { setError(err.message); setLoading(false); } });
     return () => { cancelled = true; };
   }, [academicYear, tick]);
 
-  return { snapshots, loading, error, refetch: () => setTick((t) => t + 1) };
+  return { snapshots, lateralSnapshots, loading, error, refetch: () => setTick((t) => t + 1) };
 }

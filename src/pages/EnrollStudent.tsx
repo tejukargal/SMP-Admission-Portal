@@ -375,6 +375,7 @@ const FIELD_LABELS: Record<string, string> = {
   itiMaxTotal:          'ITI Max Total',
   itiObtainedTotal:     'ITI Obtained Total',
   itiPercentage:        'ITI %',
+  itiPucCombination:    'PUC Combination / ITI Trade',
   caste:                'Caste',
   category:             'Category',
   address:              'Address',
@@ -416,6 +417,7 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     itiMaxTotal: 0,
     itiObtainedTotal: 0,
     itiPercentage: 0,
+    itiPucCombination: '',
     fatherMobile: '',
     studentMobile: '',
     course: '' as Course,
@@ -868,6 +870,16 @@ export function EnrollStudent() {
       }
       if (['itiMaxTotal', 'itiObtainedTotal'].includes(field as string)) {
         updated.itiPercentage = newItiMax > 0 ? parseFloat(((newItiObtained / newItiMax) * 100).toFixed(2)) : 0;
+      }
+
+      if (field === 'priorQualification') {
+        if (value === 'ITI' || value === 'PUC') {
+          updated.year = '2ND YEAR';
+          updated.admType = 'LATERAL';
+        } else if (value === 'NONE') {
+          updated.year = '' as Year;
+          updated.admType = 'REGULAR';
+        }
       }
 
       // regNumber auto-preview is handled by a dedicated useEffect
@@ -1588,6 +1600,17 @@ export function EnrollStudent() {
                     />
                   </div>
                 </>
+              )}
+              {(form.priorQualification === 'ITI' || form.priorQualification === 'PUC') && (
+                <div className="lg:col-span-4">
+                  <Input
+                    label={form.priorQualification === 'ITI' ? 'ITI Trade' : 'PUC Combination'}
+                    uppercase
+                    value={form.itiPucCombination || ''}
+                    onChange={(e) => handleFieldChange('itiPucCombination', e.target.value)}
+                    placeholder={form.priorQualification === 'ITI' ? 'e.g. ELECTRICIAN' : 'e.g. PCMB'}
+                  />
+                </div>
               )}
               <div className="lg:col-span-2">
                 <Input

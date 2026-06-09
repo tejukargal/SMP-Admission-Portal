@@ -55,6 +55,7 @@ export interface Student {
   itiMaxTotal: number;
   itiObtainedTotal: number;
   itiPercentage: number;
+  itiPucCombination: string;
   fatherMobile: string;
   studentMobile: string;
   course: Course;
@@ -274,6 +275,15 @@ export interface MeritListStudent {
   meritNumber: string;
   course: Course;
   year: Year;
+  // Lateral-entry fields (present only on lateral snapshots)
+  priorQualification?: string;
+  itiMaxTotal?: number;
+  itiObtainedTotal?: number;
+  itiPercentage?: number;
+  pucMaxTotal?: number;
+  pucObtainedTotal?: number;
+  pucPercentage?: number;
+  itiPucCombination?: string;
 }
 
 /** Immutable snapshot of the merit list saved at a point in time. */
@@ -283,6 +293,7 @@ export interface MeritListSnapshot {
   academicYear: AcademicYear;
   savedAt: string;        // ISO timestamp
   students: MeritListStudent[];
+  type?: 'lateral';       // absent = regular merit list
 }
 
 // ─── Exam Fee ─────────────────────────────────────────────────────────────────

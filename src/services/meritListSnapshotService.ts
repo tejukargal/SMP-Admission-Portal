@@ -25,6 +25,20 @@ function toMeritStudent(s: Student): MeritListStudent {
   };
 }
 
+function toLateralMeritStudent(s: Student): MeritListStudent {
+  return {
+    ...toMeritStudent(s),
+    priorQualification:  s.priorQualification,
+    itiMaxTotal:         s.itiMaxTotal,
+    itiObtainedTotal:    s.itiObtainedTotal,
+    itiPercentage:       s.itiPercentage,
+    pucMaxTotal:         s.pucMaxTotal,
+    pucObtainedTotal:    s.pucObtainedTotal,
+    pucPercentage:       s.pucPercentage,
+    itiPucCombination:   s.itiPucCombination || '',
+  };
+}
+
 export async function getMeritListSnapshots(academicYear: AcademicYear): Promise<MeritListSnapshot[]> {
   const q = query(
     collection(db, COLL),
@@ -46,6 +60,23 @@ export async function saveMeritListSnapshot(
     academicYear,
     savedAt: new Date().toISOString(),
     students: students.map(toMeritStudent),
+  };
+  const ref = await addDoc(collection(db, COLL), payload);
+  return { id: ref.id, ...payload };
+}
+
+export async function saveLateralMeritListSnapshot(
+  academicYear: AcademicYear,
+  students: Student[],
+  existingCount: number,
+): Promise<MeritListSnapshot> {
+  const phase = existingCount + 1;
+  const payload = {
+    phase,
+    academicYear,
+    type: 'lateral' as const,
+    savedAt: new Date().toISOString(),
+    students: students.map(toLateralMeritStudent),
   };
   const ref = await addDoc(collection(db, COLL), payload);
   return { id: ref.id, ...payload };

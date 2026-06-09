@@ -692,11 +692,22 @@ export function Dashboard() {
       s.academicYear === currentYear &&
       !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')
     );
-    const byCourse: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    const isLat = (s: Student) => s.priorQualification === 'ITI' || s.priorQualification === 'PUC';
+    const byCourseRegular: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    const byCourseLatear:  Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
     for (const s of pending) {
-      if (s.course in byCourse) byCourse[s.course]++;
+      if (!(s.course in byCourseRegular)) continue;
+      if (isLat(s)) byCourseLatear[s.course]++;
+      else          byCourseRegular[s.course]++;
     }
-    return { total: pending.length, byCourse, academicYear: currentYear };
+    return {
+      total:         pending.length,
+      totalRegular:  pending.filter((s) => !isLat(s)).length,
+      totalLateral:  pending.filter(isLat).length,
+      byCourseRegular,
+      byCourseLatear,
+      academicYear: currentYear,
+    };
   }, [allStudents, settings]);
 
   const hasActiveFilters =
@@ -989,11 +1000,21 @@ export function Dashboard() {
 
           <span className="text-amber-200 text-xs select-none shrink-0">|</span>
 
-          {/* Total pending */}
+          {/* Regular pending */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-amber-500 uppercase tracking-wide">Total</span>
+            <span className="text-[9px] font-semibold text-amber-400 uppercase tracking-wide">Reg</span>
             <span className="text-sm font-black tabular-nums text-amber-700">
-              <AnimNum value={admissionPendingStats.total} />
+              <AnimNum value={admissionPendingStats.totalRegular} />
+            </span>
+          </div>
+
+          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
+
+          {/* Lateral pending */}
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[9px] font-semibold text-orange-400 uppercase tracking-wide">Lat</span>
+            <span className="text-sm font-black tabular-nums text-orange-600">
+              <AnimNum value={admissionPendingStats.totalLateral} />
             </span>
           </div>
 
@@ -1003,15 +1024,21 @@ export function Dashboard() {
           <div className="flex items-center gap-1.5 flex-wrap">
             {COURSES.map((course) => {
               const c = courseConfig[course];
-              const count = admissionPendingStats.byCourse[course];
+              const reg = admissionPendingStats.byCourseRegular[course];
+              const lat = admissionPendingStats.byCourseLatear[course];
+              const isEmpty = reg === 0 && lat === 0;
               return (
                 <div
                   key={course}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded border ${c.border} bg-white/70 shrink-0 ${count === 0 ? 'opacity-30' : ''}`}
+                  className={`flex items-center gap-0 rounded border ${c.border} bg-white/70 shrink-0 overflow-hidden ${isEmpty ? 'opacity-30' : ''}`}
                 >
-                  <span className={`text-[9px] font-bold ${c.textColor}`}>{course}</span>
-                  <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
-                    <AnimNum value={count} />
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 ${c.textColor}`}>{course}</span>
+                  <span className={`text-xs font-black tabular-nums px-1.5 py-0.5 ${c.textColor}`}>
+                    <AnimNum value={reg} />
+                  </span>
+                  <span className="w-px self-stretch bg-orange-200" />
+                  <span className="text-xs font-black tabular-nums px-1.5 py-0.5 text-orange-500">
+                    <AnimNum value={lat} />
                   </span>
                 </div>
               );

@@ -239,6 +239,215 @@ export function exportMeritListPdf(
   }
 }
 
+// ── Lateral Merit List ────────────────────────────────────────────────────────
+
+interface LateralMeritRow extends MeritRow {
+  priorQualification?: string;
+  itiMaxTotal?: number;
+  itiObtainedTotal?: number;
+  itiPercentage?: number;
+  pucMaxTotal?: number;
+  pucObtainedTotal?: number;
+  pucPercentage?: number;
+  itiPucCombination?: string;
+}
+
+function lateralPct(s: LateralMeritRow): number {
+  if (s.priorQualification === 'ITI') {
+    if (s.itiPercentage) return s.itiPercentage;
+    return s.itiMaxTotal ? ((s.itiObtainedTotal ?? 0) / s.itiMaxTotal) * 100 : 0;
+  }
+  if (s.priorQualification === 'PUC') {
+    if (s.pucPercentage) return s.pucPercentage;
+    return s.pucMaxTotal ? ((s.pucObtainedTotal ?? 0) / s.pucMaxTotal) * 100 : 0;
+  }
+  return 0;
+}
+
+export function sortByLateralMerit<T extends LateralMeritRow>(students: T[]): T[] {
+  return [...students].sort((a, b) => {
+    const pctDiff = lateralPct(b) - lateralPct(a);
+    if (pctDiff !== 0) return pctDiff;
+    return sslcPct(b) - sslcPct(a);
+  });
+}
+
+export function exportLateralMeritListPdf(
+  students: LateralMeritRow[],
+  academicYear: string | null,
+  options: MeritExportOptions = {},
+): void {
+  const sorted = sortByLateralMerit(students);
+
+  const refDate = options.savedAt ? new Date(options.savedAt) : new Date();
+  const dd  = String(refDate.getDate()).padStart(2, '0');
+  const mm  = String(refDate.getMonth() + 1).padStart(2, '0');
+  const yy  = String(refDate.getFullYear()).slice(2);
+  const todayFmt = `${dd}-${mm}-${yy}`;
+
+  const esc = (s: string | number | undefined | null): string =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  const fmtIncome = (v: number | undefined | null): string => {
+    if (!v && v !== 0) return '—';
+    return v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const rows = sorted.map((s, idx) => {
+    const lMax = s.priorQualification === 'ITI' ? (s.itiMaxTotal ?? 0) : (s.pucMaxTotal ?? 0);
+    const lObt = s.priorQualification === 'ITI' ? (s.itiObtainedTotal ?? 0) : (s.pucObtainedTotal ?? 0);
+    const lPct = lateralPct(s);
+    return `
+    <tr class="${idx % 2 === 1 ? 'alt' : ''}">
+      <td class="c">${idx + 1}</td>
+      <td class="c merit-no">${idx + 1}</td>
+      <td class="l name">${esc(s.studentNameSSLC)}</td>
+      <td class="c">${fmtGender(s.gender)}</td>
+      <td class="l father">${esc(s.fatherName || '—')}</td>
+      <td class="c">${fmtDOB(s.dateOfBirth)}</td>
+      <td class="c">${esc(s.category)}</td>
+      <td class="r">${fmtIncome(s.annualIncome)}</td>
+      <td class="c">${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}</td>
+      <td class="r">${s.mathsScienceMaxTotal ? ((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2) : '—'}</td>
+      <td class="c">${s.sslcObtainedTotal}/${s.sslcMaxTotal}</td>
+      <td class="r">${sslcPct(s).toFixed(2)}</td>
+      <td class="c pq">${esc(s.priorQualification)}</td>
+      <td class="l">${esc(s.itiPucCombination || '—')}</td>
+      <td class="c">${lMax || '—'}</td>
+      <td class="c">${lObt || '—'}</td>
+      <td class="r">${lMax ? lPct.toFixed(2) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const ayDisplay = academicYear ?? '';
+
+  const html = `<!DOCTYPE html>
+<html lang="kn">
+<head>
+<meta charset="UTF-8">
+<title>Lateral Merit List – ${esc(ayDisplay)}</title>
+<style>
+  @page {
+    size: A4 landscape;
+    margin: 6mm 5mm 12mm;
+    @bottom-right {
+      content: "Page " counter(page) " / " counter(pages);
+      font-size: 8pt;
+      color: #555;
+      font-family: 'Noto Sans Kannada', Arial, sans-serif;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans Kannada', 'Arial Unicode MS', Arial, sans-serif; font-size: 9.5pt; color: #000; background: #fff; }
+
+  .inst-header { text-align: center; line-height: 1.5; border-bottom: 2pt solid #000; padding-bottom: 5pt; margin-bottom: 5pt; }
+  .ih-govt   { font-size: 10pt; }
+  .ih-dept   { font-size: 9pt; }
+  .ih-comm   { font-size: 9pt; }
+  .ih-college{ font-size: 13pt; font-weight: bold; }
+  .ih-addr   { font-size: 9pt; font-weight: bold; }
+
+  .title-block { border: 1pt solid #000; text-align: center; padding: 4pt 6pt; margin-bottom: 4pt; }
+  .tb-main { font-size: 11pt; font-weight: bold; line-height: 1.45; }
+  .tb-year { font-size: 12pt; font-weight: bold; margin-top: 3pt; }
+
+  .info-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5pt; font-size: 9.5pt; font-weight: bold; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  th, td { border: 0.5pt solid #444; padding: 4pt 3pt; vertical-align: middle; }
+  thead tr { background: #d8d8d8; }
+  thead th { font-weight: bold; text-align: center; font-size: 9pt; line-height: 1.35; }
+  .alt { background: #f5f5f5; }
+  .c { text-align: center; white-space: nowrap; }
+  .l { text-align: left; }
+  .r { text-align: right; white-space: nowrap; }
+  .merit-no { font-weight: bold; font-size: 10.5pt; }
+  .name   { max-width: 100pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .father { max-width: 85pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pq { font-weight: bold; font-size: 8.5pt; }
+
+  .footer { margin-top: 6pt; font-size: 8pt; color: #555; display: flex; justify-content: space-between; }
+
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+
+<div class="inst-header">
+  <div class="ih-govt">ಕರ್ನಾಟಕ ಸರ್ಕಾರ</div>
+  <div class="ih-dept">ಕರ್ನಾಟಕ ತಾಂತ್ರಿಕ ಶಿಕ್ಷಣ ಇಲಾಖೆ</div>
+  <div class="ih-comm">ಕಾಲೇಜು ಮತ್ತು ತಾಂತ್ರಿಕ ಶಿಕ್ಷಣ ಆಯುಕ್ತಾಲಯ</div>
+  <div class="ih-college">ಸಂಜಯ ಮೆಮೋರಿಯಲ್ ಪಾಲಿಟೆಕ್ನಿಕ್</div>
+  <div class="ih-addr">ಸಾಗರ– 577401</div>
+</div>
+
+<div class="title-block">
+  <div class="tb-main">ಮೆರಿಟ್ ಮತ್ತು ರೋಷ್ಟರ್ ಅನುಗುಣವಾಗಿ ಆಫ್ ಲೈನ್ ಮುಖಾಂತರ ದ್ವಿತೀಯ ವರ್ಷ ಲ್ಯಾಟರಲ್ ಇಂಜಿನಿಯರಿಂಗ್ ಡಿಪ್ಲೊಮಾ ಪ್ರವೇಶ ಪ್ರಕ್ರಿಯೆ</div>
+  <div class="tb-year">ಸಾಲು-${esc(ayDisplay)}</div>
+</div>
+
+<div class="info-row">
+  <span>${esc(options.phaseLabel ?? 'ಅರ್ಹ ಅಭ್ಯರ್ಥಿಗಳ ಲ್ಯಾಟರಲ್ ಮೆರಿಟ್ ಪಟ್ಟಿ')} &nbsp;(${sorted.length} ಅಭ್ಯರ್ಥಿಗಳು)</span>
+  <span>ಸೂಚನಾ ಫಲಕದಲ್ಲಿ ಪ್ರಕಟಿಸಿದ ದಿನಾಂಕ: ${todayFmt}</span>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:14pt">ಕ್ರ.ಸಂ</th>
+      <th style="width:18pt">ಮೆರಿಟ್<br>ನಂ.</th>
+      <th>ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+      <th style="width:14pt">ಲಿಂಗ</th>
+      <th>ತಂದೆಯ ಹೆಸರು</th>
+      <th style="width:34pt">ಹುಟ್ಟಿದ<br>ದಿನಾಂಕ</th>
+      <th style="width:24pt">ಅರ್ಹ<br>ಪ್ರವರ್ಗ</th>
+      <th style="width:46pt">ಆದಾಯ</th>
+      <th style="width:30pt">ಗ+ವಿ<br>ಅಂಕ</th>
+      <th style="width:24pt">ಗ+ವಿ<br>ಶೇಕಡಾ</th>
+      <th style="width:34pt">SSLC<br>ಅಂಕ</th>
+      <th style="width:24pt">ಶೇಕಡಾ</th>
+      <th style="width:20pt">ಅರ್ಹತೆ</th>
+      <th style="width:44pt">Trade/<br>Combination</th>
+      <th style="width:24pt">ITI/PUC<br>ಗರಿಷ್ಠ</th>
+      <th style="width:24pt">ITI/PUC<br>ಗಳಿಸಿದ</th>
+      <th style="width:26pt">ITI/PUC<br>ಶೇಕಡಾ</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div class="footer">
+  <span>ಸಂಜಯ ಮೆಮೋರಿಯಲ್ ಪಾಲಿಟೆಕ್ನಿಕ್, ಸಾಗರ – 577401</span>
+  <span>Sorted by ITI/PUC % (highest first) &nbsp;·&nbsp; Generated: ${todayFmt}</span>
+</div>
+
+<script>
+  window.onload = function () {
+    window.print();
+    window.addEventListener('afterprint', function () { window.close(); });
+  };
+</script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    win.addEventListener('afterprint', () => URL.revokeObjectURL(url));
+  } else {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+}
+
 // ── Excel (ExcelJS — styled) ──────────────────────────────────────────────────
 
 const TOTAL_COLS = 16;
@@ -469,6 +678,218 @@ export async function exportMeritListExcel(
   a.href    = url;
   const ay  = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
   a.download = `merit_list_${ay}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// ── Lateral Excel (ExcelJS) ───────────────────────────────────────────────────
+
+export async function exportLateralMeritListExcel(
+  students: LateralMeritRow[],
+  academicYear: string | null,
+): Promise<void> {
+  const sorted = sortByLateralMerit(students);
+
+  const now    = new Date();
+  const dd     = String(now.getDate()).padStart(2, '0');
+  const mm     = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy   = now.getFullYear();
+  const todayFmt = `${dd}/${mm}/${yyyy}`;
+  const ayDisplay = academicYear ?? '';
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'SMP Admissions';
+
+  const ws = wb.addWorksheet(
+    academicYear ? `Lateral Merit ${academicYear}` : 'Lateral Merit List',
+    {
+      pageSetup: {
+        orientation:        'landscape',
+        paperSize:          9,
+        horizontalCentered: true,
+      },
+    },
+  );
+
+  ws.pageSetup.margins = {
+    left: 0.40, right: 0.40,
+    top:  0.55, bottom: 0.55,
+    header: 0.25, footer: 0.25,
+  };
+
+  // A=Sl B=Merit C=App D=Name E=Gender F=Father G=DOB H=Cat I=Income
+  // J=StMob K=FatMob L=M+S Marks M=M+S% N=SSLC Marks(Obt/Max) O=SSLC%
+  // P=Prior Qual Q=Trade/Combo R=ITI/PUC Max S=ITI/PUC Obt T=ITI/PUC% → 20 cols
+  ws.columns = [
+    { width: 5  },   // A  Sl
+    { width: 9  },   // B  Merit No.
+    { width: 16 },   // C  Application No.
+    { width: 30 },   // D  Name (SSLC)
+    { width: 8  },   // E  Gender
+    { width: 26 },   // F  Father Name
+    { width: 13 },   // G  DOB
+    { width: 11 },   // H  Category
+    { width: 13 },   // I  Annual Income
+    { width: 13 },   // J  Student Mobile
+    { width: 13 },   // K  Father Mobile
+    { width: 12 },   // L  M+S Marks
+    { width: 9  },   // M  M+S %
+    { width: 16 },   // N  SSLC Marks (Obt/Max)
+    { width: 9  },   // O  SSLC %
+    { width: 10 },   // P  Prior Qual
+    { width: 22 },   // Q  Trade/Combination
+    { width: 12 },   // R  ITI/PUC Max
+    { width: 14 },   // S  ITI/PUC Obtained
+    { width: 10 },   // T  ITI/PUC %
+  ];
+
+  const LCOLS = 20;
+  const LCOL_LAST = 'T';
+
+  const addTitle = (
+    text: string,
+    fontSize: number,
+    bold: boolean,
+    height = 16,
+    bottomBorder = false,
+  ): ExcelJS.Row => {
+    const row = ws.addRow([text]);
+    ws.mergeCells(`A${row.number}:${LCOL_LAST}${row.number}`);
+    row.height = height;
+    const cell = row.getCell(1);
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.font = { name: 'Arial', size: fontSize, bold };
+    if (bottomBorder) cell.border = { bottom: { style: 'medium' } };
+    return row;
+  };
+
+  addTitle('GOVERNMENT OF KARNATAKA',                                    10, false, 18);
+  addTitle('DEPARTMENT OF TECHNICAL EDUCATION',                          10, false, 18);
+  addTitle('COMMISSIONER FOR COLLEGIATE AND TECHNICAL EDUCATION',        10, false, 18);
+  addTitle('SANJAY MEMORIAL POLYTECHNIC',                                16, true,  26);
+  addTitle('SAGAR – 577401',                                             11, true,  18, true);
+
+  ws.addRow([]);
+
+  const tb1 = addTitle(
+    'MERIT LIST FOR SECOND YEAR LATERAL ENGINEERING DIPLOMA ADMISSION THROUGH OFFLINE PROCESS AS PER MERIT AND ROSTER',
+    11, true, 36,
+  );
+  const tb2 = addTitle(`Academic Year: ${ayDisplay}`, 13, true, 28);
+
+  for (const row of [tb1, tb2]) {
+    row.getCell(1).border = {
+      top:    { style: 'medium' },
+      left:   { style: 'medium' },
+      bottom: { style: 'medium' },
+      right:  { style: 'medium' },
+    };
+  }
+
+  ws.addRow([]);
+
+  const infoRow = ws.addRow([
+    `Eligible Lateral Candidates Merit List   (${sorted.length} candidates)`,
+    ...Array(LCOLS - 2).fill(''),
+    `Date: ${todayFmt}`,
+  ]);
+  infoRow.height = 20;
+  infoRow.getCell(1).font            = { bold: true, size: 10 };
+  infoRow.getCell(1).alignment       = { horizontal: 'left', vertical: 'middle' };
+  infoRow.getCell(LCOLS).font        = { bold: true, size: 10 };
+  infoRow.getCell(LCOLS).alignment   = { horizontal: 'right', vertical: 'middle' };
+
+  ws.addRow([]);
+
+  const headerRow = ws.addRow([
+    'Sl', 'Merit\nNo.', 'App.\nNo.', 'Name (SSLC)', 'Gender',
+    'Father Name', 'Date of\nBirth', 'Category', 'Annual\nIncome',
+    'Student\nMobile', 'Father\nMobile',
+    'M+S\nMarks', 'M+S\n%',
+    'SSLC\nMarks\n(Obt/Max)', 'SSLC\n%',
+    'Prior\nQual', 'Trade /\nCombination',
+    'ITI/PUC\nMax', 'ITI/PUC\nObtained', 'ITI/PUC\n%',
+  ]);
+  headerRow.height = 42;
+  headerRow.eachCell({ includeEmpty: true }, cell => {
+    cell.fill      = headerFill;
+    cell.font      = { name: 'Arial', bold: true, size: 10 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border    = thinBorder;
+  });
+
+  ws.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
+
+  sorted.forEach((s, i) => {
+    const msPctVal = s.mathsScienceMaxTotal
+      ? parseFloat(((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2))
+      : 0;
+    const lMax = s.priorQualification === 'ITI' ? (s.itiMaxTotal ?? 0) : (s.pucMaxTotal ?? 0);
+    const lObt = s.priorQualification === 'ITI' ? (s.itiObtainedTotal ?? 0) : (s.pucObtainedTotal ?? 0);
+    const lPct = parseFloat(lateralPct(s).toFixed(2));
+
+    const dataRow = ws.addRow([
+      i + 1,
+      i + 1,
+      s.applicationNumber || '',
+      s.studentNameSSLC,
+      fmtGender(s.gender),
+      s.fatherName || '',
+      fmtDOB(s.dateOfBirth),
+      s.category,
+      s.annualIncome || 0,
+      s.studentMobile || '',
+      s.fatherMobile || '',
+      `${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}`,
+      msPctVal,
+      `${s.sslcObtainedTotal}/${s.sslcMaxTotal}`,
+      parseFloat(sslcPct(s).toFixed(2)),
+      s.priorQualification,
+      s.itiPucCombination || '',
+      lMax || '',
+      lObt || '',
+      lPct,
+    ]);
+
+    dataRow.height = 23;
+
+    if (i % 2 === 1) {
+      dataRow.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+      });
+    }
+
+    dataRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      cell.font   = { name: 'Arial', size: 10 };
+      cell.border = thinBorder;
+      if (colNum === 2) cell.font = { name: 'Arial', size: 10, bold: true };
+      if (colNum === 4 || colNum === 6 || colNum === 17) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      } else if (colNum === 9 || colNum === 13 || colNum === 15 || colNum === 20) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+    });
+  });
+
+  ws.addRow([]);
+  const footerRow = ws.addRow([
+    `Sorted by ITI/PUC % (highest first)  ·  Generated: ${todayFmt}  ·  ${sorted.length} candidates`,
+  ]);
+  ws.mergeCells(`A${footerRow.number}:${LCOL_LAST}${footerRow.number}`);
+  footerRow.getCell(1).font      = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF555555' } };
+  footerRow.getCell(1).alignment = { horizontal: 'center' };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href    = url;
+  const ay  = academicYear?.replace(/[^0-9-]/g, '') ?? 'merit';
+  a.download = `lateral_merit_list_${ay}.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
