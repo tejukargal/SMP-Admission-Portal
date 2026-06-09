@@ -143,6 +143,7 @@ function rowToFormData(row: ImportRow): StudentFormData {
     itiMaxTotal: 0,
     itiObtainedTotal: 0,
     itiPercentage: 0,
+    itiPucCombination: '',
     fatherMobile: phoneStr,
     studentMobile: '',
     course: row.course.trim().toUpperCase() as Course,
