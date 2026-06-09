@@ -196,7 +196,7 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
   }
   .tc-title {
     text-align: center;
-    font-size: 14pt;
+    font-size: 15pt;
     font-weight: bold;
     text-decoration: underline;
     letter-spacing: 2pt;
@@ -204,7 +204,7 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
     margin-bottom: 5pt;
   }
   .tc-no {
-    font-size: 10.5pt;
+    font-size: 11.5pt;
   }
 
   /* ── Table ── */
@@ -214,10 +214,10 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
   }
   .tc-table td {
     border: 0.75pt solid #000;
-    padding: 4.5pt 8pt;
+    padding: 7pt 8pt;
     vertical-align: middle;
-    font-size: 10.5pt;
-    line-height: 1.45;
+    font-size: 11.5pt;
+    line-height: 1.5;
   }
   /* Remove outer edges — .page border provides the outer rectangle */
   .tc-table tr:first-child td { border-top: none; }
@@ -233,7 +233,7 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
     flex: 1;
   }
   .footer-date {
-    font-size: 10.5pt;
+    font-size: 11.5pt;
     margin-bottom: 48pt;
   }
   .footer-sigs {
@@ -241,7 +241,7 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
     justify-content: space-between;
   }
   .footer-sigs span {
-    font-size: 10.5pt;
+    font-size: 11.5pt;
   }
 
   @media print {
