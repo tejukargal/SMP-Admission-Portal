@@ -201,22 +201,10 @@
   background: #34d399;
 }
 
-/* ── Thin vertical scrollbar (pushed to viewport-right edge) ─────────────── */
+/* ── Invisible scrollbar — zero layout impact, scrollable via wheel/touch ─── */
 .scroll-y-thin {
-  scrollbar-width: thin;
-  scrollbar-color: #a7f3d0 transparent;
-  margin-right: -3px;
+  scrollbar-width: none; /* Firefox */
 }
 .scroll-y-thin::-webkit-scrollbar {
-  width: 3px;
-}
-.scroll-y-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scroll-y-thin::-webkit-scrollbar-thumb {
-  background: #a7f3d0;
-  border-radius: 99px;
-}
-.scroll-y-thin::-webkit-scrollbar-thumb:hover {
-  background: #34d399;
+  display: none; /* Chrome / Safari / Edge */
 }

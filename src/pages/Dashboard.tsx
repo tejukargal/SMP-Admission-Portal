@@ -1249,8 +1249,8 @@ export function Dashboard() {
       ) : (
 
         /* ── Metric cards ───────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin">
-          <div className="space-y-3 min-w-0 px-2 mt-1">
+        <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin -mx-2 px-2">
+          <div className="space-y-3 min-w-0 mt-1">
 
             {/* Overview row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

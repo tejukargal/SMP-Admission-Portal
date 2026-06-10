@@ -46,7 +46,7 @@ export function Login() {
               <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">SMP Admissions</h1>
+          <h1 className="text-2xl font-black text-gray-900 uppercase" style={{ letterSpacing: '0.18em' }}>SMP Admissions</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
         </div>
 
