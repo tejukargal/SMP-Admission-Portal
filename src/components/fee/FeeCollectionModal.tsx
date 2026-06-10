@@ -256,6 +256,23 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
       };
       setLoadedOverride(saved);
       setEditingAllotted(false);
+
+      // Re-prefill Now Paying with remaining balance from the newly saved override
+      const fineExempt =
+        (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
+        (student.year === '2ND YEAR' && student.admType === 'LATERAL');
+      const remaining = emptySMP();
+      for (const { key } of SMP_FEE_HEADS) {
+        remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, overrideSmp[key] - cumulativeSmp[key]);
+      }
+      setSmpNow(remaining);
+      setSvkNow(Math.max(0, overrideSvk - cumulativeSvk));
+      setAdditionalNow(
+        overrideAdditional.map((h) => {
+          const prevPaid = cumulativeAdditional.get(h.label) ?? 0;
+          return { label: h.label, amount: Math.max(0, h.amount - prevPaid) };
+        })
+      );
     } catch (err: unknown) {
       setOverrideSaveError(err instanceof Error ? err.message : 'Failed to save allotted override');
     } finally {

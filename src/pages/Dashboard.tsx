@@ -5,6 +5,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
+import { getFeeOverridesByYear } from '../services/feeOverrideService';
 import { Button } from '../components/common/Button';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -425,9 +426,10 @@ export function Dashboard() {
     async function loadFeeStatus() {
       const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
 
-      const [allRecords, allStructures] = await Promise.all([
+      const [allRecords, allStructures, allOverrides] = await Promise.all([
         Promise.all(uniqueYears.map((y) => getFeeRecordsByAcademicYear(y))).then((arrs) => arrs.flat()),
         Promise.all(uniqueYears.map((y) => getFeeStructuresByAcademicYear(y))).then((arrs) => arrs.flat()),
+        Promise.all(uniqueYears.map((y) => getFeeOverridesByYear(y))).then((arrs) => arrs.flat()),
       ]);
 
       if (cancelled) return;
@@ -440,7 +442,7 @@ export function Dashboard() {
         paidByStudent.set(r.studentId, (paidByStudent.get(r.studentId) ?? 0) + smpSum + r.svk + addlSum);
       }
 
-      // Total allotted per `${academicYear}__${course}__${year}__${admType}__${admCat}`
+      // Total allotted per `${academicYear}__${course}__${year}__${admType}__${admCat}` (structure fallback)
       const allottedByKey = new Map<string, number>();
       for (const fs of allStructures) {
         const structKey = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
@@ -449,11 +451,24 @@ export function Dashboard() {
         allottedByKey.set(structKey, smpSum + fs.svk + addlSum);
       }
 
+      // Override allotted per studentId (takes precedence over structure)
+      const overrideByStudent = new Map<string, number>();
+      for (const o of allOverrides) {
+        const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
+        const addlSum = o.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        overrideByStudent.set(o.studentId, smpSum + o.svk + addlSum);
+      }
+
       const statusMap = new Map<string, FeeStatus>();
       for (const s of searchResults) {
         const paid = paidByStudent.get(s.id) ?? 0;
-        const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-        const allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+        let allotted: number | null;
+        if (overrideByStudent.has(s.id)) {
+          allotted = overrideByStudent.get(s.id)!;
+        } else {
+          const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+          allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+        }
         let status: FeeStatus;
         if (allotted !== null && paid >= allotted) {
           status = 'no-dues';
