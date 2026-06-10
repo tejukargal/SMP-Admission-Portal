@@ -240,7 +240,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <img
                 src={INSTITUTE_LOGO_B64}
                 alt="College Logo"
-                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px', animation: 'logo-spin 12s linear infinite' }}
               />
             </div>
           </div>
