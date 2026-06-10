@@ -1103,23 +1103,21 @@ export function Dashboard() {
           <span className="text-amber-200 text-xs select-none shrink-0">·</span>
 
           {/* Per-course counts */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {COURSES.map((course) => {
+          <div className="flex items-center gap-0 flex-wrap">
+            {COURSES.map((course, i) => {
               const c = courseConfig[course];
               const reg = admissionPendingStats.byCourseRegular[course];
               const lat = admissionPendingStats.byCourseLatear[course];
               const isEmpty = reg === 0 && lat === 0;
               return (
-                <div
-                  key={course}
-                  className={`flex items-center gap-0 rounded border ${c.border} bg-white/70 shrink-0 overflow-hidden ${isEmpty ? 'opacity-30' : ''}`}
-                >
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 ${c.textColor}`}>{course}</span>
-                  <span className={`text-xs font-black tabular-nums px-1.5 py-0.5 ${c.textColor}`}>
+                <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
+                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-amber-400 mx-3 shrink-0 rounded-full" />}
+                  <span className={`text-xs font-bold uppercase ${c.textColor} mr-1`}>{course}</span>
+                  <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
                     <AnimNum value={reg} />
                   </span>
-                  <span className="w-px self-stretch bg-orange-200" />
-                  <span className="text-xs font-black tabular-nums px-1.5 py-0.5 text-orange-500">
+                  <span className="w-px h-2.5 bg-amber-200 mx-1 shrink-0" />
+                  <span className="text-xs font-black tabular-nums text-orange-500">
                     <AnimNum value={lat} />
                   </span>
                 </div>
