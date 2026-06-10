@@ -1,10 +1,29 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import { Button } from '../common/Button';
 
+// App green interleaved between each course colour so it stays dominant
+const COURSE_COLORS = [
+  '#065f46', // app emerald (dark)
+  '#b45309', // CE — amber
+  '#065f46',
+  '#0369a1', // EC — sky
+  '#065f46',
+  '#0f766e', // CS — teal
+  '#065f46',
+  '#6d28d9', // EE — violet
+] as const;
+
 export function Header() {
   const { logout, user, role } = useAuth();
   const { settings } = useSettings();
+  const [colorIdx, setColorIdx] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setColorIdx((i) => (i + 1) % COURSE_COLORS.length), 3000);
+    return () => clearInterval(id);
+  }, []);
 
   // Derive initials from email
   const initials = user?.email
@@ -12,7 +31,20 @@ export function Header() {
     : '??';
 
   return (
-    <header className="h-13 bg-white flex items-center justify-between px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
+    <header className="h-13 bg-white flex items-center justify-between px-5 shrink-0 relative" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
+      {/* Watermark title — cycles through course colours */}
+      <span
+        className="absolute left-1/2 -translate-x-1/2 font-black uppercase select-none pointer-events-none whitespace-nowrap"
+        style={{
+          fontSize: '40px',
+          color: COURSE_COLORS[colorIdx],
+          letterSpacing: '0.18em',
+          transition: 'color 2s ease-in-out',
+          animation: 'header-title-breathe 6s ease-in-out infinite',
+        }}
+      >
+        SMP ADMISSIONS
+      </span>
 
       {/* Left — academic year badge */}
       <div className="flex items-center gap-2.5">

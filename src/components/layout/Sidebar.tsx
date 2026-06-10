@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
@@ -135,6 +135,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [showAbout, setShowAbout] = useState(false);
   const [showTech, setShowTech] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
+  const [titleIdx, setTitleIdx] = useState(0);
+
+  // 0 = SMP/Admissions, 1-4 = SANJAY / MEMORIAL / POLYTECHNIC / SAGAR
+  const TITLE_COUNT = 5;
+  useEffect(() => {
+    if (collapsed) { setTitleIdx(0); return; }
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => setTitleIdx((i) => (i + 1) % TITLE_COUNT), 3000);
+    }, 2500);
+    return () => { clearTimeout(delayId); if (intervalId) clearInterval(intervalId); };
+  }, [collapsed]);
 
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
@@ -183,7 +195,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         onMouseEnter={() => setLogoHovered(true)}
         onMouseLeave={() => setLogoHovered(false)}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors pt-5 pb-3 px-4"
+        className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors h-13 px-3 shrink-0"
       >
         {/* Flip-card logo — front: leaf, back: chevron */}
         <div className="relative w-9 h-9 shrink-0" style={{ perspective: '280px' }}>
@@ -227,10 +239,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         </div>
 
-        {/* Wordmark — fades with sidebar */}
-        <div className="min-w-0 flex-1 text-left" style={textStyle()}>
-          <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
-          <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
+        {/* Wordmark — fades with sidebar, flips through SMP then each college name word */}
+        <div className="min-w-0 flex-1 text-left overflow-hidden" style={textStyle()}>
+          <div
+            key={titleIdx}
+            style={{ animation: 'flip-num-in 0.75s cubic-bezier(0.25,0.46,0.45,0.94)', whiteSpace: 'normal' }}
+          >
+            {titleIdx === 0 ? (
+              <>
+                <p className="text-sm font-bold text-gray-900 leading-tight tracking-tight">SMP</p>
+                <p className="text-[10px] font-semibold text-emerald-600 leading-tight tracking-wider uppercase">Admissions</p>
+              </>
+            ) : (
+              <p className={`text-[15px] font-black leading-none tracking-wide uppercase ${titleIdx === 4 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                {['', 'SANJAY', 'MEMORIAL', 'POLYTECHNIC', 'SAGAR'][titleIdx]}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Collapse arrow — fades with sidebar */}

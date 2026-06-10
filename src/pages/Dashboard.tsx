@@ -25,6 +25,8 @@ import { SMP_FEE_HEADS } from '../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+// Labels for the course-card flip cycle (4 adm types; total is always shown separately)
+const COURSE_BREAK_LABELS = ['Regular', 'Lateral', 'SNQ', 'Repeater'] as const;
 
 const fs =
   'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
@@ -264,6 +266,11 @@ export function Dashboard() {
 
   // ── Collect Fee from dashboard search (admin only) ───────────────────────
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
+
+  // ── Course card breakup flip (0=total, 1=REG, 2=LAT, 3=SNQ, 4=RPT) ──────
+  const [courseBreakIdx, setCourseBreakIdx] = useState(0);
+  // ── Gender card breakup flip (cycles through COURSES: CE,ME,EC,CS,EE) ───
+  const [genderBreakIdx, setGenderBreakIdx] = useState(0);
 
   // ── Fee status for search result rows ────────────────────────────────────
   type FeeStatus = 'collect' | 'dues' | 'no-dues';
@@ -624,6 +631,34 @@ export function Dashboard() {
     [filteredStudents, admStatusFilter],
   );
 
+  // Course totals per gender (summed across all years) for the flip display
+  const genderCourseTotals = useMemo(() => {
+    const result: Record<'BOY' | 'GIRL', Record<Course, number>> = {
+      BOY:  { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+      GIRL: { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+    };
+    for (const g of ['BOY', 'GIRL'] as const) {
+      for (const course of COURSES) {
+        result[g][course] = YEARS.reduce((sum, yr) => sum + (stats.byGenderByCourseByYear[g][course][yr] ?? 0), 0);
+      }
+    }
+    return result;
+  }, [stats.byGenderByCourseByYear]);
+
+  // Adm-type totals per course (summed across all years) for the flip display
+  const courseAdmTotals = useMemo(() => {
+    const result = {} as Record<Course, { regular: number; ltrl: number; snq: number; rptr: number }>;
+    for (const course of COURSES) {
+      let regular = 0, ltrl = 0, snq = 0, rptr = 0;
+      for (const yr of YEARS) {
+        const cell = stats.summaryTable[yr]?.[course] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+        regular += cell.regular; ltrl += cell.ltrl; snq += cell.snq; rptr += cell.rptr;
+      }
+      result[course] = { regular, ltrl, snq, rptr };
+    }
+    return result;
+  }, [stats.summaryTable]);
+
   const activeSource = useMemo(
     () => (isSearchMode ? searchResults : filteredStudents),
     [isSearchMode, searchResults, filteredStudents]
@@ -654,6 +689,38 @@ export function Dashboard() {
     r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setBarsReady(true)); });
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
   }, [isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+
+  // Cycle course-card breakup display; reset to total whenever the view resets
+  useEffect(() => {
+    if (!barsReady || isSearchMode) {
+      setCourseBreakIdx(0);
+      return;
+    }
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => setCourseBreakIdx((i) => (i + 1) % COURSE_BREAK_LABELS.length), 6000);
+    }, 1200);
+    return () => {
+      clearTimeout(delayId);
+      if (intervalId !== null) clearInterval(intervalId);
+    };
+  }, [barsReady, isSearchMode]);
+
+  // Cycle gender-card breakup display through courses
+  useEffect(() => {
+    if (!barsReady || isSearchMode) {
+      setGenderBreakIdx(0);
+      return;
+    }
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => setGenderBreakIdx((i) => (i + 1) % COURSES.length), 6000);
+    }, 1200);
+    return () => {
+      clearTimeout(delayId);
+      if (intervalId !== null) clearInterval(intervalId);
+    };
+  }, [barsReady, isSearchMode]);
 
   const confirmedActiveCount = useMemo(
     () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
@@ -1298,32 +1365,100 @@ export function Dashboard() {
                   </div>
                 );
               })()}
-              <StatCard
-                label="Boys"
-                value={stats.boys}
-                total={stats.total}
-                bg="bg-sky-50"
-                border="border-sky-400"
-                textColor="text-sky-700"
-                barFill="bg-sky-400"
-                watermark="B"
-                onClick={() => setGenderModal('BOY')}
-                onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown')}
-                animated={barsReady}
-              />
-              <StatCard
-                label="Girls"
-                value={stats.girls}
-                total={stats.total}
-                bg="bg-rose-50"
-                border="border-rose-400"
-                textColor="text-rose-600"
-                barFill="bg-rose-400"
-                watermark="G"
-                onClick={() => setGenderModal('GIRL')}
-                onLabelDoubleClick={() => exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown')}
-                animated={barsReady}
-              />
+              {/* Boys card */}
+              {(() => {
+                const boysTotal = stats.boys;
+                const boysPct = stats.total > 0 ? Math.round((boysTotal / stats.total) * 100) : 0;
+                const boysBreakCourse = COURSES[genderBreakIdx];
+                const boysBreakVal = genderCourseTotals['BOY'][boysBreakCourse];
+                return (
+                  <div
+                    onClick={() => setGenderModal('BOY')}
+                    onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown'); }}
+                    className="rounded-2xl border border-sky-400 bg-sky-50 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+                  >
+                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-700 opacity-[0.07]">B</span>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">Boys</p>
+                    <div className="flex items-end justify-between">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-bold leading-none text-sky-700 opacity-50">Total</span>
+                        <p className="text-3xl font-black leading-none text-sky-700"><AnimNum value={boysTotal} /></p>
+                      </div>
+                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
+                        <div
+                          key={genderBreakIdx}
+                          className="flex flex-col gap-0.5 items-center"
+                          style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
+                        >
+                          <span className="text-xs font-bold leading-none text-sky-700">{boysBreakCourse}</span>
+                          <p className="text-3xl font-black leading-none tabular-nums text-sky-700">{boysBreakVal}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-2 space-y-1">
+                      <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+                        <div
+                          className="h-full w-full rounded-full bg-sky-400"
+                          style={{
+                            transformOrigin: "left",
+                            transform: barsReady ? `scaleX(${boysPct / 100})` : 'scaleX(0)',
+                            transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400">{stats.total > 0 ? `${boysPct}% of total` : '—'}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Girls card */}
+              {(() => {
+                const girlsTotal = stats.girls;
+                const girlsPct = stats.total > 0 ? Math.round((girlsTotal / stats.total) * 100) : 0;
+                const girlsBreakCourse = COURSES[genderBreakIdx];
+                const girlsBreakVal = genderCourseTotals['GIRL'][girlsBreakCourse];
+                return (
+                  <div
+                    onClick={() => setGenderModal('GIRL')}
+                    onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown'); }}
+                    className="rounded-2xl border border-rose-400 bg-rose-50 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+                  >
+                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-rose-600 opacity-[0.07]">G</span>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">Girls</p>
+                    <div className="flex items-end justify-between">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-bold leading-none text-rose-600 opacity-50">Total</span>
+                        <p className="text-3xl font-black leading-none text-rose-600"><AnimNum value={girlsTotal} /></p>
+                      </div>
+                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
+                        <div
+                          key={genderBreakIdx}
+                          className="flex flex-col gap-0.5 items-center"
+                          style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
+                        >
+                          <span className="text-xs font-bold leading-none text-rose-600">{girlsBreakCourse}</span>
+                          <p className="text-3xl font-black leading-none tabular-nums text-rose-600">{girlsBreakVal}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-2 space-y-1">
+                      <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+                        <div
+                          className="h-full w-full rounded-full bg-rose-400"
+                          style={{
+                            transformOrigin: "left",
+                            transform: barsReady ? `scaleX(${girlsPct / 100})` : 'scaleX(0)',
+                            transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400">{stats.total > 0 ? `${girlsPct}% of total` : '—'}</p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* By Course */}
@@ -1332,23 +1467,73 @@ export function Dashboard() {
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
+                  const courseTotal = stats.byCourse[course];
+                  const pct = stats.total > 0 ? Math.round((courseTotal / stats.total) * 100) : 0;
+                  const admTotals = courseAdmTotals[course];
+                  const displayValue =
+                    courseBreakIdx === 0 ? admTotals.regular
+                    : courseBreakIdx === 1 ? admTotals.ltrl
+                    : courseBreakIdx === 2 ? admTotals.snq
+                    : admTotals.rptr;
+                  const breakLabel = COURSE_BREAK_LABELS[courseBreakIdx];
                   return (
-                    <StatCard
+                    <div
                       key={course}
-                      label={course}
-                      value={stats.byCourse[course]}
-                      total={stats.total}
-                      bg={c.bg}
-                      border={c.border}
-                      textColor={c.textColor}
-                      barFill={c.barFill}
-                      breakdown={YEARS.map((yr, i) => ({ label: `${i + 1}Y`, value: stats.byCourseByYear[course][yr] }))}
-                      highlightLabel
-                      watermark={course}
                       onClick={() => setCourseModalCourse(course)}
-                      onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`)}
-                      animated={barsReady}
-                    />
+                      className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]`}
+                      style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+                    >
+                      {/* Watermark */}
+                      <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>
+                        {course}
+                      </span>
+                      {/* Label chip */}
+                      <span
+                        className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor} cursor-pointer select-none`}
+                        onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`); }}
+                        title="Double-click to export PDF"
+                      >
+                        {course}
+                      </span>
+                      {/* Total (left, permanent) + cycling breakup (right, animated) */}
+                      <div className="flex items-end justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-xs font-bold leading-none ${c.textColor} opacity-50`}>Total</span>
+                          <p className={`text-3xl font-black leading-none tabular-nums ${c.textColor}`}>{courseTotal}</p>
+                        </div>
+                        <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
+                          <div
+                            key={courseBreakIdx}
+                            className="flex flex-col gap-0.5 items-center"
+                            style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
+                          >
+                            <span className={`text-xs font-bold leading-none ${c.textColor}`}>{breakLabel}</span>
+                            <p className={`text-3xl font-black leading-none tabular-nums ${c.textColor}`}>{displayValue}</p>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Progress bar + year breakdown */}
+                      <div className="mt-auto pt-2 space-y-1">
+                        <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full w-full rounded-full ${c.barFill}`}
+                            style={{
+                              transformOrigin: 'left',
+                              transform: barsReady ? `scaleX(${pct / 100})` : 'scaleX(0)',
+                              transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
+                          {YEARS.map((yr, i) => (
+                            <span key={yr} className="flex items-center gap-1 text-xs tabular-nums whitespace-nowrap">
+                              <span className="text-gray-400 font-semibold">{i + 1}Y</span>
+                              <span className="font-bold text-gray-700">{stats.byCourseByYear[course][yr]}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
