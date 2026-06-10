@@ -3,6 +3,7 @@ import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 function IconDashboard() {
@@ -123,6 +124,7 @@ const STAFF_ONLY = [
   { to: '/fee-register',  label: 'Fee Register',  Icon: IconRegister     },
 ];
 
+
 // ── Props ──────────────────────────────────────────────────────────────────
 interface SidebarProps {
   collapsed: boolean;
@@ -134,8 +136,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = role === 'admin';
   const [showAbout, setShowAbout] = useState(false);
   const [showTech, setShowTech] = useState(false);
-  const [logoHovered, setLogoHovered] = useState(false);
+  const [logoFace, setLogoFace] = useState(0); // 0 = leaf, 1 = college logo
   const [titleIdx, setTitleIdx] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setLogoFace((f) => (f === 0 ? 1 : 0)), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   // 0 = SMP/Admissions, 1-4 = SANJAY / MEMORIAL / POLYTECHNIC / SAGAR
   const TITLE_COUNT = 5;
@@ -192,20 +199,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* ── Brand ────────────────────────────────────────────────────── */}
       <button
         onClick={onToggle}
-        onMouseEnter={() => setLogoHovered(true)}
-        onMouseLeave={() => setLogoHovered(false)}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors h-13 px-3 shrink-0"
       >
-        {/* Flip-card logo — front: leaf, back: chevron */}
-        <div className="relative w-9 h-9 shrink-0" style={{ perspective: '280px' }}>
+        {/* Flip-card logo — front: leaf, back: college logo, auto-cycles every 5s */}
+        <div className="relative w-9 h-9 shrink-0" style={{ perspective: '400px' }}>
           <div
             style={{
               position: 'absolute',
               inset: 0,
               transformStyle: 'preserve-3d',
-              transition: 'transform 380ms cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: collapsed && logoHovered ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              transition: 'transform 600ms cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: logoFace === 1 ? 'rotateY(180deg)' : 'rotateY(0deg)',
             }}
           >
             {/* Front face: leaf logo */}
@@ -222,19 +227,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
               </svg>
             </div>
-            {/* Back face: expand arrow */}
+            {/* Back face: college logo */}
             <div
-              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md"
+              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                background: 'white',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)',
               }}
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
+              <img
+                src={INSTITUTE_LOGO_B64}
+                alt="College Logo"
+                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+              />
             </div>
           </div>
         </div>
