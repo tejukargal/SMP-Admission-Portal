@@ -237,20 +237,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 transform: 'rotateY(180deg)',
               }}
             >
-              {/* Static logo */}
               <img
                 src={INSTITUTE_LOGO_B64}
                 alt="College Logo"
-                style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px', animation: 'logo-spin 12s linear infinite' }}
               />
-              {/* Rotating outer wheel overlay — spins independently over the static logo */}
-              <svg
-                viewBox="0 0 100 100"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', animation: 'logo-spin 10s linear infinite' }}
-              >
-                <circle cx="50" cy="50" r="46.5" fill="none" stroke="#1c3d2e" strokeWidth="5" strokeDasharray="5.2 2.6" strokeLinecap="round" />
-              </svg>
             </div>
           </div>
         </div>
