@@ -50,6 +50,49 @@ function AnimNum({ value }: { value: number }) {
   );
 }
 
+// ─── Slot ticker (label + value that cycles via slot-machine animation) ───────
+function SlotTicker({ label, value, textColor }: { label: string; value: string | number; textColor: string }) {
+  type Entry = { label: string; value: string | number };
+  const [state, setState] = useState<{ prev: Entry | null; cur: Entry }>({
+    prev: null,
+    cur: { label, value },
+  });
+
+  useEffect(() => {
+    setState((s) => {
+      if (s.cur.label === label && s.cur.value === value) return s;
+      return { prev: s.cur, cur: { label, value } };
+    });
+  }, [label, value]);
+
+  useEffect(() => {
+    if (!state.prev) return;
+    const t = setTimeout(() => setState((s) => ({ ...s, prev: null })), 820);
+    return () => clearTimeout(t);
+  }, [state.prev]);
+
+  return (
+    <div className="relative overflow-hidden w-full flex flex-col items-center gap-0.5">
+      {state.prev && (
+        <div
+          className="absolute top-0 left-0 right-0 flex flex-col items-center gap-0.5"
+          style={{ animation: 'slot-exit 0.38s ease-in forwards' }}
+        >
+          <span className={`text-xs font-bold leading-none ${textColor}`}>{state.prev.label}</span>
+          <p className={`text-3xl font-black leading-none tabular-nums ${textColor}`}>{state.prev.value}</p>
+        </div>
+      )}
+      <div
+        className="flex flex-col items-center gap-0.5 w-full"
+        style={{ animation: state.prev ? 'slot-enter 0.38s ease-out 0.38s both' : 'none' }}
+      >
+        <span className={`text-xs font-bold leading-none ${textColor}`}>{state.cur.label}</span>
+        <p className={`text-3xl font-black leading-none tabular-nums ${textColor}`}>{state.cur.value}</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Stat card ───────────────────────────────────────────────────────────────
 interface StatCardProps {
   label: string;
@@ -1383,15 +1426,8 @@ export function Dashboard() {
                         <span className="text-xs font-bold leading-none text-sky-700 opacity-50">Total</span>
                         <p className="text-3xl font-black leading-none text-sky-700"><AnimNum value={boysTotal} /></p>
                       </div>
-                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
-                        <div
-                          key={genderBreakIdx}
-                          className="flex flex-col gap-0.5 items-center"
-                          style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
-                        >
-                          <span className="text-xs font-bold leading-none text-sky-700">{boysBreakCourse}</span>
-                          <p className="text-3xl font-black leading-none tabular-nums text-sky-700">{boysBreakVal}</p>
-                        </div>
+                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
+                        <SlotTicker label={boysBreakCourse} value={boysBreakVal} textColor="text-sky-700" />
                       </div>
                     </div>
                     <div className="mt-auto pt-2 space-y-1">
@@ -1430,15 +1466,8 @@ export function Dashboard() {
                         <span className="text-xs font-bold leading-none text-rose-600 opacity-50">Total</span>
                         <p className="text-3xl font-black leading-none text-rose-600"><AnimNum value={girlsTotal} /></p>
                       </div>
-                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
-                        <div
-                          key={genderBreakIdx}
-                          className="flex flex-col gap-0.5 items-center"
-                          style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
-                        >
-                          <span className="text-xs font-bold leading-none text-rose-600">{girlsBreakCourse}</span>
-                          <p className="text-3xl font-black leading-none tabular-nums text-rose-600">{girlsBreakVal}</p>
-                        </div>
+                      <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
+                        <SlotTicker label={girlsBreakCourse} value={girlsBreakVal} textColor="text-rose-600" />
                       </div>
                     </div>
                     <div className="mt-auto pt-2 space-y-1">
@@ -1499,15 +1528,8 @@ export function Dashboard() {
                           <span className={`text-xs font-bold leading-none ${c.textColor} opacity-50`}>Total</span>
                           <p className={`text-3xl font-black leading-none tabular-nums ${c.textColor}`}>{courseTotal}</p>
                         </div>
-                        <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42] overflow-hidden">
-                          <div
-                            key={courseBreakIdx}
-                            className="flex flex-col gap-0.5 items-center"
-                            style={{ animation: 'flip-num-in 1.35s cubic-bezier(0.25,0.46,0.45,0.94)' }}
-                          >
-                            <span className={`text-xs font-bold leading-none ${c.textColor}`}>{breakLabel}</span>
-                            <p className={`text-3xl font-black leading-none tabular-nums ${c.textColor}`}>{displayValue}</p>
-                          </div>
+                        <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
+                          <SlotTicker label={breakLabel} value={displayValue} textColor={c.textColor} />
                         </div>
                       </div>
                       {/* Progress bar + year breakdown */}

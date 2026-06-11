@@ -28,6 +28,15 @@
   100% { transform: translateY(0); }
 }
 
+@keyframes slot-enter {
+  from { transform: translateY(105%); }
+  to   { transform: translateY(0); }
+}
+@keyframes slot-exit {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-105%); }
+}
+
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
