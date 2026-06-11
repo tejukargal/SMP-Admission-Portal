@@ -485,7 +485,7 @@ export function Dashboard() {
       const paidByStudent = new Map<string, number>();
       for (const r of allRecords) {
         const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (r.smp[key] ?? 0), 0);
-        const addlSum = r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+        const addlSum = (r.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
         paidByStudent.set(r.studentId, (paidByStudent.get(r.studentId) ?? 0) + smpSum + r.svk + addlSum);
       }
 
@@ -494,7 +494,7 @@ export function Dashboard() {
       for (const fs of allStructures) {
         const structKey = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
         const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (fs.smp[k] ?? 0), 0);
-        const addlSum = fs.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        const addlSum = (fs.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
         allottedByKey.set(structKey, smpSum + fs.svk + addlSum);
       }
 
@@ -502,7 +502,7 @@ export function Dashboard() {
       const overrideByStudent = new Map<string, number>();
       for (const o of allOverrides) {
         const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
-        const addlSum = o.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        const addlSum = (o.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
         overrideByStudent.set(o.studentId, smpSum + o.svk + addlSum);
       }
 
