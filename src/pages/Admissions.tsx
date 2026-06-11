@@ -435,7 +435,7 @@ export function Admissions() {
 
   return (
     <>
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="h-full flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* Page header */}
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
@@ -571,75 +571,77 @@ export function Admissions() {
         )}
       </div>
 
-      {/* Course-wise stats cards */}
-      {allStudents.length > 0 && (
-        <div className="flex-shrink-0 flex gap-1.5 overflow-x-auto pb-0.5">
-          {(() => {
-            const isLateral = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
-            return courseStats.map(({ course, pendingRegular, pendingLateral, cancelled }) => {
-              const pendingCount = isLateral ? pendingLateral : pendingRegular;
-              return (
-                <div
-                  key={course}
-                  className="flex-shrink-0 rounded-lg border border-gray-200 bg-white overflow-hidden"
-                  style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
-                >
-                  <div className="px-3 py-px bg-gray-50 border-b border-gray-200 text-center">
-                    <span className="text-[9px] font-bold tracking-widest text-gray-500 uppercase">{course}</span>
-                  </div>
-                  <div className="flex divide-x divide-gray-100">
-                    <div className="flex flex-col items-center justify-center w-[52px] py-1.5">
-                      <span className={`text-sm font-bold tabular-nums leading-none ${isLateral ? 'text-orange-500' : 'text-amber-500'}`}>{pendingCount}</span>
-                      <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5">Pending</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center w-[52px] py-1.5">
-                      <span className="text-sm font-bold text-red-400 tabular-nums leading-none">{cancelled}</span>
-                      <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide mt-0.5">Cancelled</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            });
-          })()}
-
-          {/* Divider */}
-          <div className="flex-shrink-0 self-stretch w-px bg-gray-200 mx-0.5" />
-
-          {/* Total card */}
-          {(() => {
-            const isLateral      = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
-            const totalPending   = isLateral
-              ? courseStats.reduce((s, c) => s + c.pendingLateral, 0)
-              : courseStats.reduce((s, c) => s + c.pendingRegular, 0);
-            const totalCancelled = courseStats.reduce((s, c) => s + c.cancelled, 0);
-            const totalEnrolled  = allStudents.filter(s => s.admissionStatus?.trim() === 'CONFIRMED').length;
-            return (
-              <div
-                className="flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 overflow-hidden"
-                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
-              >
-                <div className="px-3 py-px bg-blue-100 border-b border-blue-200 text-center">
-                  <span className="text-[9px] font-bold tracking-widest text-blue-600 uppercase">Total</span>
-                </div>
-                <div className="flex divide-x divide-blue-100">
-                  <div className="flex flex-col items-center justify-center w-[52px] py-1.5">
-                    <span className={`text-sm font-bold tabular-nums leading-none ${isLateral ? 'text-orange-500' : 'text-amber-500'}`}>{totalPending}</span>
-                    <span className="text-[8px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5">Pending</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center w-[52px] py-1.5">
-                    <span className="text-sm font-bold text-red-400 tabular-nums leading-none">{totalCancelled}</span>
-                    <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide mt-0.5">Cancelled</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center w-[52px] py-1.5">
-                    <span className="text-sm font-bold text-green-500 tabular-nums leading-none">{totalEnrolled}</span>
-                    <span className="text-[8px] font-semibold text-green-400 uppercase tracking-wide mt-0.5">Enrolled</span>
-                  </div>
-                </div>
+      {/* Course-wise stats strip */}
+      {allStudents.length > 0 && (() => {
+        const isLateral      = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
+        const totalPending   = isLateral
+          ? courseStats.reduce((s, c) => s + c.pendingLateral, 0)
+          : courseStats.reduce((s, c) => s + c.pendingRegular, 0);
+        const totalCancelled = courseStats.reduce((s, c) => s + c.cancelled, 0);
+        const courseColors: Record<Course, string> = {
+          CE: 'text-amber-600', ME: 'text-green-600', EC: 'text-sky-600', CS: 'text-teal-600', EE: 'text-violet-600',
+        };
+        const pendingColor = 'text-emerald-700';
+        const pendingLabelColor = 'text-emerald-400';
+        return (
+          <div
+            className="flex-shrink-0 bg-white/60 rounded-lg border border-gray-200 flex items-center px-3 py-1.5"
+            style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06)' }}
+          >
+            {/* Legend */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600">Pending</span>
               </div>
-            );
-          })()}
-        </div>
-      )}
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-red-500">Cancelled</span>
+              </div>
+            </div>
+
+            <span className="w-px h-5 bg-gray-200 shrink-0 mx-3" />
+
+            {/* Per-course blocks */}
+            <div className="flex items-center gap-0 flex-1 min-w-0 overflow-x-auto">
+              {courseStats.map(({ course, pendingRegular, pendingLateral, cancelled }, i) => {
+                const pending = isLateral ? pendingLateral : pendingRegular;
+                const isEmpty = pending === 0 && cancelled === 0;
+                return (
+                  <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
+                    {i > 0 && <span className="w-px h-4 bg-gray-200 mx-3 shrink-0" />}
+                    <span className={`text-[10px] font-bold uppercase ${courseColors[course]} mr-2 shrink-0`}>{course}</span>
+                    <div className="flex flex-col items-center">
+                      <span className={`text-sm font-black tabular-nums leading-none ${pendingColor}`}>{pending}</span>
+                      <span className={`text-[8px] font-semibold uppercase tracking-wide leading-none mt-px ${pendingLabelColor}`}>Pend</span>
+                    </div>
+                    <span className="w-px h-4 bg-gray-100 mx-1.5 shrink-0" />
+                    <div className="flex flex-col items-center">
+                      <span className="text-sm font-black tabular-nums text-red-500 leading-none">{cancelled}</span>
+                      <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide leading-none mt-px">Canc</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Totals */}
+            <span className="w-px h-5 bg-gray-200 shrink-0 mx-3" />
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Total</span>
+              <div className="flex flex-col items-center">
+                <span className={`text-sm font-black tabular-nums leading-none ${pendingColor}`}>{totalPending}</span>
+                <span className={`text-[8px] font-semibold uppercase tracking-wide leading-none mt-px ${pendingLabelColor}`}>Pend</span>
+              </div>
+              <span className="w-px h-4 bg-gray-100 shrink-0" />
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-black tabular-nums text-red-500 leading-none">{totalCancelled}</span>
+                <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide leading-none mt-px">Canc</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="flex-shrink-0 flex items-center border-b border-gray-200 bg-white rounded-t-lg overflow-x-auto">

@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
+
+interface TooltipState { label: string; y: number; x: number }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 function IconDashboard() {
@@ -136,6 +138,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = role === 'admin';
   const [showAbout, setShowAbout] = useState(false);
   const [showTech, setShowTech] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
+  const showTooltip = useCallback((label: string, e: React.MouseEvent) => {
+    if (!collapsed) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltip({ label, y: rect.top + rect.height / 2, x: rect.right + 10 });
+  }, [collapsed]);
+
+  const hideTooltip = useCallback(() => setTooltip(null), []);
   const [logoFace, setLogoFace] = useState(0); // 0 = leaf, 1 = college logo
   const [titleIdx, setTitleIdx] = useState(0);
 
@@ -285,8 +296,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <NavLink
             key={to}
             to={to}
-            title={collapsed ? label : undefined}
             className={({ isActive }) => navClass(isActive)}
+            onMouseEnter={(e) => showTooltip(label, e)}
+            onMouseLeave={hideTooltip}
           >
             {({ isActive }) => (
               <>
@@ -319,8 +331,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <NavLink
             key={to}
             to={to}
-            title={collapsed ? label : undefined}
             className={({ isActive }) => navClass(isActive)}
+            onMouseEnter={(e) => showTooltip(label, e)}
+            onMouseLeave={hideTooltip}
           >
             {({ isActive }) => (
               <>
@@ -336,8 +349,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="py-2.5 border-t border-emerald-50 px-3">
         <button
           onClick={() => setShowAbout(true)}
-          title="About"
           className="flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+          onMouseEnter={(e) => showTooltip('About', e)}
+          onMouseLeave={hideTooltip}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -352,6 +366,47 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <>
       {sidebar}
+
+      {/* ── Collapsed tooltip bubble ──────────────────────────────────── */}
+      {collapsed && tooltip && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translateY(-50%)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            animation: 'tooltip-pop 0.15s cubic-bezier(0.34,1.56,0.64,1)',
+          }}
+        >
+          {/* Left arrow pointing back to the icon */}
+          <div style={{
+            width: 0,
+            height: 0,
+            borderTop: '5px solid transparent',
+            borderBottom: '5px solid transparent',
+            borderRight: '5px solid #059669',
+          }} />
+          <div style={{
+            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 600,
+            letterSpacing: '0.01em',
+            padding: '5px 12px',
+            borderRadius: '20px',
+            boxShadow: '0 4px 14px rgba(5,150,105,0.35)',
+            whiteSpace: 'nowrap',
+          }}>
+            {tooltip.label}
+          </div>
+        </div>,
+        document.body
+      )}
+
       {showAbout && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
