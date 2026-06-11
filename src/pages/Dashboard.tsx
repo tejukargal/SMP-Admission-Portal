@@ -376,10 +376,7 @@ export function Dashboard() {
 
   const [inputValue, setInputValue] = useState(searchTerm);
   useEffect(() => {
-    const t = setTimeout(() => {
-      startTransition(() => setDashboardFilters({ searchTerm: inputValue }));
-    }, 300);
-    return () => clearTimeout(t);
+    startTransition(() => setDashboardFilters({ searchTerm: inputValue }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue]);
 
@@ -1026,7 +1023,7 @@ export function Dashboard() {
               type="text"
               placeholder="Search"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => setInputValue(e.target.value.toUpperCase())}
               className={`w-full rounded-lg border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 ${inputValue ? 'pl-3 pr-8' : 'px-3'}`}
             />
             {inputValue && (
@@ -1180,20 +1177,20 @@ export function Dashboard() {
       ) : isSearchMode ? (
 
         /* ── Search results ─────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin" style={{ animation: 'page-enter 0.22s ease-out' }}>
+        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin">
           {studentGroups.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-gray-400">
               No students found.
             </div>
           ) : (
             <>
-            {studentGroups.length > 100 && (
+            {studentGroups.length > 10 && (
               <p className="text-xs text-gray-400 px-1">
-                Showing first 100 of {studentGroups.length} matches — refine your search to narrow results.
+                Showing first 10 of {studentGroups.length} matches — refine your search to narrow results.
               </p>
             )}
-            {studentGroups.slice(0, 100).map((group, idx) => (
-              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)', animation: 'result-enter 0.28s ease-out both', animationDelay: `${Math.min(idx * 45, 400)}ms` }}>
+            {studentGroups.slice(0, 10).map((group, idx) => (
+              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)', animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` }}>
                 <div className="px-4 py-2.5 border-b border-emerald-50 flex items-baseline gap-3 flex-wrap" style={{ background: 'linear-gradient(90deg, #f0fdf8, #f8fafc)' }}>
                   <span className="font-bold text-gray-900 text-sm">{group.nameSSLC}</span>
                   {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
