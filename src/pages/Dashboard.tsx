@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
-import { getFeeRecordsByStudent } from '../services/feeRecordService';
+import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getFeeOverridesByYear } from '../services/feeOverrideService';
 import { Button } from '../components/common/Button';
@@ -318,7 +318,6 @@ export function Dashboard() {
   // ── Fee status for search result rows ────────────────────────────────────
   type FeeStatus = 'collect' | 'dues' | 'no-dues';
   const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
-  const [searchFeeDue, setSearchFeeDue] = useState<Map<string, number | null>>(new Map());
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
 
   // ── Certificate context menu (search results) ────────────────────────────
@@ -466,7 +465,6 @@ export function Dashboard() {
   useEffect(() => {
     if (!isSearchMode || searchResults.length === 0) {
       setSearchFeeStatus(new Map());
-      setSearchFeeDue(new Map());
       return;
     }
     let cancelled = false;
@@ -476,7 +474,7 @@ export function Dashboard() {
       const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
 
       const [allRecords, allStructures, allOverrides] = await Promise.all([
-        Promise.all(searchResults.map((s) => getFeeRecordsByStudent(s.id, s.academicYear))).then((arrs) => arrs.flat()),
+        Promise.all(uniqueYears.map((y) => getFeeRecordsByAcademicYear(y))).then((arrs) => arrs.flat()),
         Promise.all(uniqueYears.map((y) => getFeeStructuresByAcademicYear(y))).then((arrs) => arrs.flat()),
         Promise.all(uniqueYears.map((y) => getFeeOverridesByYear(y))).then((arrs) => arrs.flat()),
       ]);
@@ -500,22 +498,20 @@ export function Dashboard() {
         allottedByKey.set(structKey, smpSum + fs.svk + addlSum);
       }
 
-      // Override allotted per `${studentId}__${academicYear}` (takes precedence over structure)
+      // Override allotted per studentId (takes precedence over structure)
       const overrideByStudent = new Map<string, number>();
       for (const o of allOverrides) {
         const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
         const addlSum = o.additionalHeads.reduce((t, h) => t + h.amount, 0);
-        overrideByStudent.set(`${o.studentId}__${o.academicYear}`, smpSum + o.svk + addlSum);
+        overrideByStudent.set(o.studentId, smpSum + o.svk + addlSum);
       }
 
       const statusMap = new Map<string, FeeStatus>();
-      const dueMap = new Map<string, number | null>();
       for (const s of searchResults) {
         const paid = paidByStudent.get(s.id) ?? 0;
         let allotted: number | null;
-        const overrideKey = `${s.id}__${s.academicYear}`;
-        if (overrideByStudent.has(overrideKey)) {
-          allotted = overrideByStudent.get(overrideKey)!;
+        if (overrideByStudent.has(s.id)) {
+          allotted = overrideByStudent.get(s.id)!;
         } else {
           const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
           allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
@@ -529,12 +525,10 @@ export function Dashboard() {
           status = 'collect';
         }
         statusMap.set(s.id, status);
-        dueMap.set(s.id, allotted !== null ? Math.max(0, allotted - paid) : null);
       }
 
       if (!cancelled) {
         setSearchFeeStatus(statusMap);
-        setSearchFeeDue(dueMap);
         setSearchFeeLoading(false);
       }
     }
@@ -1114,39 +1108,39 @@ export function Dashboard() {
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
-          className="flex-shrink-0 bg-emerald-50/60 rounded-lg border border-emerald-200 flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-emerald-50 transition-colors group"
-          style={{ boxShadow: '0 2px 8px 0 rgba(16,185,129,0.08), 0 1px 3px -1px rgba(16,185,129,0.06)' }}
+          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-300 flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-amber-50 transition-colors group"
+          style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
           onClick={() => void navigate('/admissions')}
         >
-          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/80 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/80 shrink-0 whitespace-nowrap">
             Pending Admissions
           </span>
-          <span className="text-[10px] text-emerald-300 font-medium shrink-0">·</span>
-          <span className="text-[10px] font-semibold text-emerald-500/70 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] text-amber-300 font-medium shrink-0">·</span>
+          <span className="text-[10px] font-semibold text-amber-500/70 shrink-0 whitespace-nowrap">
             {admissionPendingStats.academicYear}
           </span>
 
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
+          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
 
           {/* Regular pending */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Reg</span>
-            <span className="text-sm font-black tabular-nums text-emerald-700">
+            <span className="text-[9px] font-semibold text-amber-400 uppercase tracking-wide">Reg</span>
+            <span className="text-sm font-black tabular-nums text-amber-700">
               <AnimNum value={admissionPendingStats.totalRegular} />
             </span>
           </div>
 
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
+          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
 
           {/* Lateral pending */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-teal-500 uppercase tracking-wide">Lat</span>
-            <span className="text-sm font-black tabular-nums text-teal-700">
+            <span className="text-[9px] font-semibold text-orange-400 uppercase tracking-wide">Lat</span>
+            <span className="text-sm font-black tabular-nums text-orange-600">
               <AnimNum value={admissionPendingStats.totalLateral} />
             </span>
           </div>
 
-          <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+          <span className="text-amber-200 text-xs select-none shrink-0">·</span>
 
           {/* Per-course counts */}
           <div className="flex items-center gap-0 flex-wrap">
@@ -1157,13 +1151,13 @@ export function Dashboard() {
               const isEmpty = reg === 0 && lat === 0;
               return (
                 <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
-                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-emerald-300 mx-3 shrink-0 rounded-full" />}
+                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-amber-400 mx-3 shrink-0 rounded-full" />}
                   <span className={`text-xs font-bold uppercase ${c.textColor} mr-1`}>{course}</span>
                   <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
                     <AnimNum value={reg} />
                   </span>
-                  <span className="w-px h-2.5 bg-emerald-100 mx-1 shrink-0" />
-                  <span className="text-xs font-black tabular-nums text-teal-600">
+                  <span className="w-px h-2.5 bg-amber-200 mx-1 shrink-0" />
+                  <span className="text-xs font-black tabular-nums text-orange-500">
                     <AnimNum value={lat} />
                   </span>
                 </div>
@@ -1171,7 +1165,7 @@ export function Dashboard() {
             })}
           </div>
 
-          <span className="ml-auto text-[10px] text-emerald-400 group-hover:text-emerald-600 font-semibold shrink-0 transition-colors whitespace-nowrap">
+          <span className="ml-auto text-[10px] text-amber-400 group-hover:text-amber-600 font-semibold shrink-0 transition-colors whitespace-nowrap">
             View →
           </span>
         </div>
@@ -1212,7 +1206,7 @@ export function Dashboard() {
                   <table className="min-w-full text-xs divide-y divide-emerald-50">
                     <thead className="bg-white/50">
                       <tr>
-                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Adm Type', 'Adm Cat', 'Status', 'Due', ''].map((h) => (
+                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', ''].map((h) => (
                           <th key={h} className="px-3 py-1.5 text-left font-semibold text-gray-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -1235,17 +1229,7 @@ export function Dashboard() {
                               {s.admissionStatus || '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-1.5 whitespace-nowrap tabular-nums text-right">
-                            {searchFeeLoading
-                              ? <span className="text-gray-300 text-xs">…</span>
-                              : (() => {
-                                  const due = searchFeeDue.get(s.id);
-                                  if (due === undefined || due === null) return <span className="text-gray-300 text-xs">—</span>;
-                                  if (due === 0) return <span className="text-emerald-600 text-sm font-semibold">No Dues</span>;
-                                  return <span className="text-red-600 text-sm font-bold">₹{due.toLocaleString('en-IN')}</span>;
-                                })()
-                            }
-                          </td>
+                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.studentMobile}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">
                             <div className="flex gap-1.5">
                               <Button
