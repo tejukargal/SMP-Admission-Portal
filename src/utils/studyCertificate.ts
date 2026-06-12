@@ -194,7 +194,6 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
   /* ── Body ── */
   .body {
     padding: 36pt 28pt 0;
-    flex: 1;
   }
   .cert-title {
     text-align: center;
@@ -222,7 +221,7 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
     height: 80pt;
     border: 1.5pt dashed #999;
     border-radius: 50%;
-    margin: 16pt 0 0;
+    margin: 0 0 8pt;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -231,10 +230,10 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
     letter-spacing: 1pt;
   }
 
-  /* ── Footer ── */
-  .footer {
-    padding: 0 28pt 22pt;
-    margin-top: -80pt;
+  /* ── Signature section: always 2 inches below last paragraph ── */
+  .sig-section {
+    margin-top: 36pt;
+    padding-bottom: 22pt;
   }
   .footer-row {
     display: flex;
@@ -336,26 +335,24 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
     ${casteClause}`}
     ${opts.customExtra ? opts.customExtra.split(/\n\n+/).filter(p => p.trim()).map(p => `<p class="cert-para">${esc(p.trim())}</p>`).join('\n    ') : ''}
 
-    <!-- Seal -->
-    <div class="seal-circle">SEAL</div>
-  </div>
+    <!-- Signature: 2 inches below last paragraph -->
+    <div class="sig-section">
+      <div class="footer-row">
 
-  <!-- ── Footer ── -->
-  <div class="footer">
-    <div class="footer-row">
+        <!-- Left: Seal + Place -->
+        <div class="footer-left">
+          <div class="seal-circle">SEAL</div>
+          <div><strong>Place:</strong>&nbsp; Sagar</div>
+        </div>
 
-      <!-- Left: Place -->
-      <div class="footer-left">
-        <div><strong>Place:</strong>&nbsp; Sagar</div>
+        <!-- Right: Principal signature -->
+        <div class="sig-block">
+          <div class="sig-space"></div>
+          <div class="sig-line"></div>
+          <div class="sig-title">Principal</div>
+        </div>
+
       </div>
-
-      <!-- Right: Principal signature -->
-      <div class="sig-block">
-        <div class="sig-space"></div>
-        <div class="sig-line"></div>
-        <div class="sig-title">Principal</div>
-      </div>
-
     </div>
   </div>
 
