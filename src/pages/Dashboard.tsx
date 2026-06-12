@@ -2175,6 +2175,54 @@ export function Dashboard() {
           </div>
           {/* Items */}
           <div className="py-1">
+            {/* ── Navigation actions ── */}
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setFeeHistoryStudent(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </span>
+              View Details
+            </button>
+            {isAdmin && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-blue-50 hover:text-blue-900 flex items-center gap-2 transition-colors duration-100"
+                onClick={() => { void navigate(`/enroll?edit=${ctxMenu.student.id}&from=dashboard`); setCtxMenu(null); }}
+              >
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </span>
+                Edit
+              </button>
+            )}
+            {isAdmin && (() => {
+              const feeStatus = searchFeeLoading ? null : (searchFeeStatus.get(ctxMenu.student.id) ?? 'collect');
+              if (feeStatus === 'no-dues') {
+                return (
+                  <div className="flex items-center gap-2 px-3 py-[5px] text-[12px] text-gray-400 cursor-default">
+                    <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-400 flex items-center justify-center flex-shrink-0">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
+                    No Dues
+                  </div>
+                );
+              }
+              return (
+                <button
+                  className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-amber-50 hover:text-amber-900 flex items-center gap-2 transition-colors duration-100"
+                  onClick={() => { setCollectFeeStudent(ctxMenu.student); setCtxMenu(null); }}
+                >
+                  <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </span>
+                  {feeStatus === 'dues' ? 'Collect Dues' : 'Collect Fee'}
+                </button>
+              );
+            })()}
+            {/* ── Divider ── */}
+            <div className="my-1 border-t border-gray-100" />
+            {/* ── Certificate actions ── */}
             <button
               className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setStudyCertStudent(ctxMenu.student); setCtxMenu(null); }}
