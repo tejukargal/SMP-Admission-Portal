@@ -1108,39 +1108,48 @@ export function Dashboard() {
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
-          className="flex-shrink-0 bg-amber-50/60 rounded-lg border border-amber-300 flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-amber-50 transition-colors group"
-          style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+          className="flex-shrink-0 rounded-lg border flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors group"
+          style={{
+            background: 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)',
+            borderColor: '#6ee7b7',
+            boxShadow: '0 2px 8px 0 rgba(16,185,129,0.10), 0 1px 3px -1px rgba(16,185,129,0.08)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #ecfdf5 0%, #d1fae5 60%, #ecfdf5 100%)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)'; }}
           onClick={() => void navigate('/admissions')}
         >
-          <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/80 shrink-0 whitespace-nowrap">
+          {/* Leaf accent dot */}
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" style={{ boxShadow: '0 0 0 2px #a7f3d0' }} />
+
+          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/80 shrink-0 whitespace-nowrap">
             Pending Admissions
           </span>
-          <span className="text-[10px] text-amber-300 font-medium shrink-0">·</span>
-          <span className="text-[10px] font-semibold text-amber-500/70 shrink-0 whitespace-nowrap">
+          <span className="text-[10px] text-emerald-300 font-medium shrink-0">·</span>
+          <span className="text-[10px] font-semibold text-emerald-500/70 shrink-0 whitespace-nowrap">
             {admissionPendingStats.academicYear}
           </span>
 
-          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
+          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
 
           {/* Regular pending */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-amber-400 uppercase tracking-wide">Reg</span>
-            <span className="text-sm font-black tabular-nums text-amber-700">
+            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Reg</span>
+            <span className="text-sm font-black tabular-nums text-emerald-800">
               <AnimNum value={admissionPendingStats.totalRegular} />
             </span>
           </div>
 
-          <span className="text-amber-200 text-xs select-none shrink-0">|</span>
+          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
 
           {/* Lateral pending */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-orange-400 uppercase tracking-wide">Lat</span>
-            <span className="text-sm font-black tabular-nums text-orange-600">
+            <span className="text-[9px] font-semibold text-teal-500 uppercase tracking-wide">Lat</span>
+            <span className="text-sm font-black tabular-nums text-teal-700">
               <AnimNum value={admissionPendingStats.totalLateral} />
             </span>
           </div>
 
-          <span className="text-amber-200 text-xs select-none shrink-0">·</span>
+          <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
           {/* Per-course counts */}
           <div className="flex items-center gap-0 flex-wrap">
@@ -1151,13 +1160,13 @@ export function Dashboard() {
               const isEmpty = reg === 0 && lat === 0;
               return (
                 <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
-                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-amber-400 mx-3 shrink-0 rounded-full" />}
+                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-emerald-300 mx-3 shrink-0 rounded-full" />}
                   <span className={`text-xs font-bold uppercase ${c.textColor} mr-1`}>{course}</span>
                   <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
                     <AnimNum value={reg} />
                   </span>
-                  <span className="w-px h-2.5 bg-amber-200 mx-1 shrink-0" />
-                  <span className="text-xs font-black tabular-nums text-orange-500">
+                  <span className="w-px h-2.5 bg-emerald-200 mx-1 shrink-0" />
+                  <span className="text-xs font-black tabular-nums text-teal-600">
                     <AnimNum value={lat} />
                   </span>
                 </div>
@@ -1165,7 +1174,7 @@ export function Dashboard() {
             })}
           </div>
 
-          <span className="ml-auto text-[10px] text-amber-400 group-hover:text-amber-600 font-semibold shrink-0 transition-colors whitespace-nowrap">
+          <span className="ml-auto text-[10px] text-emerald-400 group-hover:text-emerald-700 font-semibold shrink-0 transition-colors whitespace-nowrap">
             View →
           </span>
         </div>
