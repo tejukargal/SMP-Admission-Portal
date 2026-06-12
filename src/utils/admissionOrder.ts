@@ -52,6 +52,7 @@ function buildOrderBlock(student: Student, counsellingDate: string): string {
   const category    = student.allottedCategory ? esc(student.allottedCategory) : '';
   const counselDate = formatDate(counsellingDate);
   const ayFormatted = formatAcademicYear(student.academicYear);
+  const isLateral   = student.admType === 'LATERAL';
 
   const relation    = student.gender === 'GIRL' ? 'D/o' : 'S/o';
 
@@ -68,7 +69,7 @@ function buildOrderBlock(student: Student, counsellingDate: string): string {
 
     <div class="header-rule"></div>
 
-    <div class="order-title">PROVISIONAL ADMISSION ORDER FOR ${yearTitle} DIPLOMA ${ayFormatted}</div>
+    <div class="order-title">PROVISIONAL ADMISSION ORDER FOR ${yearTitle} DIPLOMA ${ayFormatted}${isLateral ? ' &#8211; LATERAL ENTRY' : ''}</div>
 
     <div class="app-no-row">
       <span class="app-no-label">Application No.&nbsp;:</span>
@@ -78,7 +79,7 @@ function buildOrderBlock(student: Student, counsellingDate: string): string {
     <div class="body-para">
       Kum.&nbsp;<span class="hl">${name}</span>,&nbsp;${relation}&nbsp;Sri.&nbsp;<span class="hl">${fatherName}</span>,
       is hereby allotted a Diploma seat for&nbsp;<span class="hl">${yearLabel}</span>&nbsp;<span class="hl">${courseName}</span>
-      Engineering Programme in the Institute of <strong>Sanjay Memorial Polytechnic, Sagar, Shivamogga</strong>,
+      Engineering Programme${isLateral ? '&nbsp;under&nbsp;<span class="hl">Lateral Entry</span>' : ''} in the Institute of <strong>Sanjay Memorial Polytechnic, Sagar, Shivamogga</strong>,
       under&nbsp;<span class="hl">${category}</span>&nbsp;Category
       through Offline Counselling held on&nbsp;<span class="hl">${counselDate}</span>.
     </div>
