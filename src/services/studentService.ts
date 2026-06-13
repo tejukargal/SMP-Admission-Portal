@@ -354,6 +354,46 @@ export async function getStudentsByRegNumber(regNumber: string): Promise<Student
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
 }
 
+/**
+ * Returns the earliest (admitted) and latest (studied till) academic years
+ * across all year-records for the same physical student.
+ * Looks up by aadharNumber (most reliable cross-year identifier).
+ * Falls back to the single record's own data when aadhar is unavailable.
+ */
+export async function getStudentEnrollmentHistory(
+  student: Student,
+): Promise<{ admittedYear: AcademicYear; studiedTillYear: AcademicYear }> {
+  let records: Student[] = [];
+
+  if (student.regNumber && student.regNumber.trim()) {
+    const q = query(
+      collection(db, STUDENTS_COLLECTION),
+      where('regNumber', '==', student.regNumber.trim()),
+      where('course', '==', student.course),
+    );
+    const snap = await getDocs(q);
+    records = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+  }
+
+  if (records.length === 0) records = [student];
+
+  const { ACADEMIC_YEARS } = await import('../types');
+
+  const byIndex = (ay: AcademicYear) => ACADEMIC_YEARS.indexOf(ay);
+
+  const entryYearValue: import('../types').Year =
+    student.admType === 'LATERAL' ? '2ND YEAR' : '1ST YEAR';
+  const entryRecord = records.find((r) => r.year === entryYearValue);
+  const admittedYear = entryRecord?.academicYear ?? student.academicYear;
+
+  const studiedTillYear = records.reduce<AcademicYear>(
+    (max, r) => (byIndex(r.academicYear) > byIndex(max) ? r.academicYear : max),
+    records[0].academicYear,
+  );
+
+  return { admittedYear, studiedTillYear };
+}
+
 export async function deleteStudentsByAcademicYear(
   academicYear: AcademicYear
 ): Promise<number> {
