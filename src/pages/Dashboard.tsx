@@ -931,20 +931,13 @@ export function Dashboard() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Dashboard</h2>
-          <span
-            style={{
-              fontFamily: "'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif",
-              fontSize: '1.25rem',
-              fontWeight: 900,
-              color: '#b8d4cc',
-              letterSpacing: '0.015em',
-              lineHeight: 1.25,
-            }}
-          >
-            {greeting}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* Emerald accent bar */}
+          <div className="w-[3px] h-9 rounded-full bg-emerald-400 shrink-0" />
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{greeting}</p>
+            <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight mt-0.5">Dashboard</h2>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!isSearchMode && academicYearFilter && (
