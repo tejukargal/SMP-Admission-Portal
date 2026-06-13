@@ -33,24 +33,22 @@ export function Header() {
   return (
     <header className="h-13 bg-white flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
 
-      {/* Left — app name + divider + academic year badge */}
-      <div className="flex items-center gap-4">
-        <span
-          className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
-          style={{
-            fontSize: '28px',
-            color: COURSE_COLORS[colorIdx],
-            letterSpacing: '0.16em',
-            transition: 'color 2s ease-in-out',
-            animation: 'header-title-breathe 6s ease-in-out infinite',
-          }}
-        >
-          SMP ADMISSIONS
-        </span>
+      {/* Left — app name */}
+      <span
+        className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
+        style={{
+          fontSize: '34px',
+          color: COURSE_COLORS[colorIdx],
+          letterSpacing: '0.16em',
+          transition: 'color 2s ease-in-out',
+          animation: 'header-title-breathe 6s ease-in-out infinite',
+        }}
+      >
+        SMP ADMISSIONS
+      </span>
 
-        {/* Divider */}
-        <div className="h-5 w-px bg-emerald-200 shrink-0" />
-
+      {/* Right — year badge + divider + user info + logout */}
+      <div className="flex items-center gap-3 ml-auto">
         {settings?.currentAcademicYear ? (
           <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold tracking-wide" style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: '1px solid #a7f3d0' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -61,10 +59,10 @@ export function Header() {
         ) : (
           <span className="text-xs text-gray-400">No academic year set</span>
         )}
-      </div>
 
-      {/* Right — user info + logout */}
-      <div className="flex items-center gap-3 ml-auto">
+        {/* Divider */}
+        <div className="h-5 w-px bg-emerald-200 shrink-0" />
+
         {role === 'staff' && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>
             Staff
