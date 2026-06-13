@@ -489,3 +489,56 @@ export async function resetAcademicYearCounters(academicYear: AcademicYear): Pro
   ];
   await Promise.all(deletes);
 }
+
+/**
+ * Backfills missing dateOfBirth and fatherName across all enrollment records for
+ * the same physical student, identified by regNumber.
+ * For each regNumber group, the first non-empty value found across any year's record
+ * is written to all other records in the group that are still missing it.
+ */
+export async function backfillStudentDOB(): Promise<{ checked: number; updated: number }> {
+  const all = await getAllStudents();
+
+  // Group by regNumber — only students with a non-empty reg number can be cross-linked
+  const byReg = new Map<string, Student[]>();
+  for (const s of all) {
+    const reg = s.regNumber?.trim().toUpperCase();
+    if (!reg) continue;
+    if (!byReg.has(reg)) byReg.set(reg, []);
+    byReg.get(reg)!.push(s);
+  }
+
+  // Collect { id, fields } patches for records that need updating
+  const updates: { id: string; patch: Record<string, string> }[] = [];
+
+  for (const records of byReg.values()) {
+    if (records.length < 2) continue; // nothing to sync for single-year students
+
+    const bestDOB        = records.find((r) => r.dateOfBirth?.trim())?.dateOfBirth?.trim() ?? '';
+    const bestFatherName = records.find((r) => r.fatherName?.trim())?.fatherName?.trim()   ?? '';
+
+    if (!bestDOB && !bestFatherName) continue;
+
+    for (const r of records) {
+      const patch: Record<string, string> = {};
+      if (bestDOB        && !r.dateOfBirth?.trim()) patch.dateOfBirth = bestDOB;
+      if (bestFatherName && !r.fatherName?.trim())  patch.fatherName  = bestFatherName;
+      if (Object.keys(patch).length > 0) updates.push({ id: r.id, patch });
+    }
+  }
+
+  const CHUNK = 400;
+  const now = new Date().toISOString();
+  for (let i = 0; i < updates.length; i += CHUNK) {
+    const batch = writeBatch(db);
+    updates.slice(i, i + CHUNK).forEach(({ id, patch }) => {
+      batch.update(doc(db, STUDENTS_COLLECTION, id), { ...patch, updatedAt: now });
+    });
+    await batch.commit();
+  }
+
+  return {
+    checked: [...byReg.values()].filter((g) => g.length >= 2).reduce((n, g) => n + g.length, 0),
+    updated: updates.length,
+  };
+}

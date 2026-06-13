@@ -443,6 +443,7 @@ export function Dashboard() {
     key: string;
     nameSSLC: string;
     nameAadhar: string;
+    fatherName: string;
     dob: string;
     gender: Gender;
     records: Student[];
@@ -453,12 +454,20 @@ export function Dashboard() {
     for (const s of searchResults) {
       const key = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
       if (!map.has(key)) {
-        map.set(key, { key, nameSSLC: s.studentNameSSLC, nameAadhar: s.studentNameAadhar, dob: s.dateOfBirth, gender: s.gender, records: [] });
+        map.set(key, { key, nameSSLC: s.studentNameSSLC, nameAadhar: s.studentNameAadhar, fatherName: s.fatherName, dob: s.dateOfBirth, gender: s.gender, records: [] });
       }
       map.get(key)!.records.push(s);
     }
     for (const group of map.values()) {
       group.records.sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+      if (!group.dob) {
+        const withDob = group.records.find((r) => r.dateOfBirth);
+        if (withDob) group.dob = withDob.dateOfBirth;
+      }
+      if (!group.fatherName) {
+        const withFather = group.records.find((r) => r.fatherName);
+        if (withFather) group.fatherName = withFather.fatherName;
+      }
     }
     return Array.from(map.values()).sort((a, b) => a.nameSSLC.localeCompare(b.nameSSLC));
   }, [searchResults]);
@@ -1200,48 +1209,53 @@ export function Dashboard() {
               </p>
             )}
             {studentGroups.slice(0, 10).map((group, idx) => (
-              <div key={group.key} className="bg-white/80 rounded-2xl border border-emerald-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04)', animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` }}>
-                <div className="px-4 py-2.5 border-b border-emerald-50 flex items-baseline gap-3 flex-wrap" style={{ background: 'linear-gradient(90deg, #f0fdf8, #f8fafc)' }}>
-                  <span className="font-bold text-gray-900 text-sm">{group.nameSSLC}</span>
+              <div key={group.key} className="bg-white/90 rounded-2xl border border-emerald-200 overflow-hidden" style={{ boxShadow: '0 2px 6px 0 rgba(0,0,0,0.07)', animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` }}>
+                <div className="px-4 py-3 border-b border-emerald-100 flex items-baseline gap-3 flex-wrap" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f8fafc)' }}>
+                  <span className="font-bold text-gray-900 text-base">
+                    {group.nameSSLC}
+                    {group.fatherName && (
+                      <span className="font-normal text-gray-500 text-sm"> {group.gender === 'BOY' ? 'S/o' : 'D/o'} {group.fatherName}</span>
+                    )}
+                  </span>
                   {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
-                    <span className="text-xs text-gray-500">({group.nameAadhar})</span>
+                    <span className="text-sm text-gray-500">({group.nameAadhar})</span>
                   )}
-                  <span className="text-xs text-gray-500">DOB: {group.dob || '—'}</span>
-                  <span className="text-xs text-gray-500">{group.gender}</span>
-                  <span className="text-xs text-emerald-600 font-semibold ml-auto">
+                  <span className="text-sm text-gray-500">DOB: {group.dob || '—'}</span>
+                  <span className="text-sm text-emerald-600 font-semibold ml-auto">
                     {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-xs divide-y divide-emerald-50">
-                    <thead className="bg-white/50">
+                  <table className="min-w-full text-sm divide-y divide-emerald-100">
+                    <thead className="bg-emerald-50/70">
                       <tr>
-                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', ''].map((h) => (
-                          <th key={h} className="px-3 py-1.5 text-left font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Cat', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', 'Actions'].map((h) => (
+                          <th key={h} className={`px-3 py-2.5 text-xs font-bold text-gray-600 uppercase tracking-wide whitespace-nowrap ${h === 'Actions' ? 'text-right' : 'text-left'}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-emerald-50/50">
+                    <tbody className="divide-y divide-emerald-100">
                       {group.records.map((s) => (
                         <tr
                           key={s.id}
-                          className="hover:bg-emerald-50/40 transition-colors cursor-context-menu"
+                          className="hover:bg-emerald-50/50 transition-colors cursor-context-menu"
                           onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
                         >
-                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
-                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.year}</td>
-                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.course}</td>
-                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
-                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
-                          <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
+                          <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
+                          <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.year}</td>
+                          <td className="px-3 py-2.5 font-semibold text-gray-800 whitespace-nowrap">{s.course}</td>
+                          <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
+                          <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.category || '—'}</td>
+                          <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
+                          <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass(s.admissionStatus)}`}>
                               {s.admissionStatus || '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{s.studentMobile}</td>
-                          <td className="px-3 py-1.5 whitespace-nowrap">
-                            <div className="flex gap-1.5">
+                          <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{s.studentMobile || s.fatherMobile || '—'}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                            <div className="flex gap-1.5 justify-end">
                               <Button
                                 variant="secondary"
                                 size="sm"

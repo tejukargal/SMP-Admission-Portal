@@ -57,7 +57,7 @@ export function buildTCApplicationHTML(
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Times New Roman', Times, serif;
-    font-size: 12pt;
+    font-size: 14pt;
     color: #000;
     background: #fff;
   }
@@ -83,12 +83,12 @@ export function buildTCApplicationHTML(
   .to-block {
     text-align: left;
     line-height: 1.45;
-    font-size: 12pt;
+    font-size: 14pt;
   }
 
   .date-cell {
     text-align: right;
-    font-size: 12pt;
+    font-size: 14pt;
     white-space: nowrap;
   }
 
@@ -96,7 +96,7 @@ export function buildTCApplicationHTML(
     text-align: left;
     line-height: 1.8;
     margin-bottom: 20pt;
-    font-size: 12pt;
+    font-size: 14pt;
   }
   .from-label {
     font-weight: bold;
@@ -106,9 +106,9 @@ export function buildTCApplicationHTML(
 
   /* ── Subject line ── */
   .subject-row {
-    font-size: 12pt;
+    font-size: 14pt;
     margin-bottom: 20pt;
-    margin-left: 36pt;
+    margin-left: 72pt;
     line-height: 1.6;
   }
   .subject-label {
@@ -120,17 +120,17 @@ export function buildTCApplicationHTML(
 
   /* ── Salutation ── */
   .salutation {
-    font-size: 12pt;
+    font-size: 14pt;
     margin-bottom: 14pt;
   }
 
   /* ── Body paragraphs ── */
   .para {
-    font-size: 12pt;
+    font-size: 14pt;
     line-height: 2;
     text-align: justify;
     text-indent: 36pt;
-    margin-bottom: 18pt;
+    margin-bottom: 8pt;
   }
 
   /* ── Closing / signature ── */
@@ -139,7 +139,7 @@ export function buildTCApplicationHTML(
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    font-size: 12pt;
+    font-size: 14pt;
     line-height: 1.8;
   }
   .closing-left {
@@ -181,7 +181,7 @@ export function buildTCApplicationHTML(
     <div class="from-label">From,</div>
     <div>${name}</div>
     <div>Reg. No.: ${regNo}</div>
-    <div>S/o ${fatherName}</div>
+    <div>${student.gender === 'GIRL' ? 'D/o' : 'S/o'} ${fatherName}</div>
     <div>${yearLabel} &ndash; ${courseLabel}</div>
     <div>Sagar.</div>
   </div>
