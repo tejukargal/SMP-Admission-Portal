@@ -31,20 +31,7 @@ export function Header() {
     : '??';
 
   return (
-    <header className="h-13 bg-white flex items-center justify-between px-5 shrink-0 relative" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
-      {/* Watermark title — cycles through course colours */}
-      <span
-        className="absolute left-1/2 -translate-x-1/2 font-black uppercase select-none pointer-events-none whitespace-nowrap"
-        style={{
-          fontSize: '40px',
-          color: COURSE_COLORS[colorIdx],
-          letterSpacing: '0.18em',
-          transition: 'color 2s ease-in-out',
-          animation: 'header-title-breathe 6s ease-in-out infinite',
-        }}
-      >
-        SMP ADMISSIONS
-      </span>
+    <header className="h-13 bg-white grid grid-cols-[1fr_auto_1fr] items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
 
       {/* Left — academic year badge */}
       <div className="flex items-center gap-2.5">
@@ -60,8 +47,22 @@ export function Header() {
         )}
       </div>
 
+      {/* Centre — App title, guaranteed centre of content area by 1fr auto 1fr grid */}
+      <span
+        className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
+        style={{
+          fontSize: '40px',
+          color: COURSE_COLORS[colorIdx],
+          letterSpacing: '0.18em',
+          transition: 'color 2s ease-in-out',
+          animation: 'header-title-breathe 6s ease-in-out infinite',
+        }}
+      >
+        SMP ADMISSIONS
+      </span>
+
       {/* Right — user info + logout */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 justify-self-end">
         {role === 'staff' && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>
             Staff
