@@ -320,6 +320,8 @@ export function Dashboard() {
   type FeeStatus = 'collect' | 'dues' | 'no-dues';
   const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
+  // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
+  const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null>>(new Map());
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -475,6 +477,7 @@ export function Dashboard() {
   useEffect(() => {
     if (!isSearchMode || searchResults.length === 0) {
       setSearchFeeStatus(new Map());
+      setSearchGroupDue(new Map());
       return;
     }
     let cancelled = false;
@@ -537,8 +540,30 @@ export function Dashboard() {
         statusMap.set(s.id, status);
       }
 
+      // Compute total due per student group (same key logic as studentGroups useMemo)
+      const groupDueMap = new Map<string, number | null>();
+      for (const s of searchResults) {
+        const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
+        const paid = paidByStudent.get(s.id) ?? 0;
+        let allotted: number | null;
+        if (overrideByStudent.has(s.id)) {
+          allotted = overrideByStudent.get(s.id)!;
+        } else {
+          const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+          allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+        }
+        const prev = groupDueMap.get(groupKey);
+        if (allotted !== null) {
+          groupDueMap.set(groupKey, (prev ?? 0) + (allotted - paid));
+        } else if (prev === undefined) {
+          groupDueMap.set(groupKey, null); // no structure configured for this enrollment
+        }
+        // if prev is already a number and this enrollment has no structure, keep the running total
+      }
+
       if (!cancelled) {
         setSearchFeeStatus(statusMap);
+        setSearchGroupDue(groupDueMap);
         setSearchFeeLoading(false);
       }
     }
@@ -1221,9 +1246,29 @@ export function Dashboard() {
                     <span className="text-sm text-gray-500">({group.nameAadhar})</span>
                   )}
                   <span className="text-sm text-gray-500">DOB: {group.dob || '—'}</span>
-                  <span className="text-sm text-emerald-600 font-semibold ml-auto">
-                    {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
-                  </span>
+                  <div className="ml-auto flex items-center gap-3 shrink-0">
+                    {!searchFeeLoading && (() => {
+                      const due = searchGroupDue.get(group.key);
+                      if (due === undefined) return null;
+                      if (due === null) return (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+                          Fee structure not set
+                        </span>
+                      );
+                      return due > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-bold text-red-600 tabular-nums">
+                          Due ₹{due.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
+                          ✓ No Dues
+                        </span>
+                      );
+                    })()}
+                    <span className="text-sm text-emerald-600 font-semibold">
+                      {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm divide-y divide-emerald-100">
