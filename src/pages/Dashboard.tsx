@@ -15,6 +15,7 @@ import { StudyCertificateModal } from '../components/common/StudyCertificateModa
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
+import { generateTCApplication } from '../utils/tcApplicationPdf';
 import {
   exportSummaryReport, exportCategoryReport,
   exportGenderCourseYearReport, exportGenderCategoryReport,
@@ -2240,6 +2241,15 @@ export function Dashboard() {
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </span>
               Transfer Certificate
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-orange-50 hover:text-orange-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { generateTCApplication(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
+              </span>
+              TC Application
             </button>
             {ctxMenu.student.year === '3RD YEAR' && (
               <button
