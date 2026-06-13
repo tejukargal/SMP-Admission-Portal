@@ -119,8 +119,8 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
-      style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+      className={`rounded-2xl border ${border} ${bg} backdrop-blur-sm p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
+      style={{ background: 'rgba(255,255,255,0.62)', boxShadow: '0 4px 24px 0 rgba(0,0,0,0.07), 0 1px 0 0 rgba(255,255,255,0.85) inset' }}
     >
       {watermark && (
         <span
@@ -194,7 +194,7 @@ interface BreakdownItem {
 
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
-    <div className="bg-white/80 rounded-2xl border border-emerald-400 p-5" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
+    <div className="rounded-2xl border border-emerald-300 backdrop-blur-sm p-5" style={{ background: 'rgba(255,255,255,0.62)', boxShadow: '0 4px 24px 0 rgba(0,0,0,0.07), 0 1px 0 0 rgba(255,255,255,0.85) inset' }}>
       <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-4">{title}</h4>
       <div className="space-y-3.5">
         {items.map((item) => {
