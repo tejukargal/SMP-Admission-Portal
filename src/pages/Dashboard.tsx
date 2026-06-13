@@ -119,9 +119,11 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border ${border} ${bg} backdrop-blur-sm p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
-      style={{ background: 'rgba(255,255,255,0.62)', boxShadow: '0 4px 24px 0 rgba(0,0,0,0.07), 0 1px 0 0 rgba(255,255,255,0.85) inset' }}
+      className={`rounded-2xl border ${border} ${bg} pt-5 px-4 pb-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
+      style={{ background: '#ffffff', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}
     >
+      {/* Coloured top accent strip */}
+      <div className={`absolute top-0 left-0 right-0 h-[3px] ${barFill} rounded-t-2xl`} />
       {watermark && (
         <span
           aria-hidden="true"
@@ -194,7 +196,7 @@ interface BreakdownItem {
 
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
-    <div className="rounded-2xl border border-emerald-300 backdrop-blur-sm p-5" style={{ background: 'rgba(255,255,255,0.62)', boxShadow: '0 4px 24px 0 rgba(0,0,0,0.07), 0 1px 0 0 rgba(255,255,255,0.85) inset' }}>
+    <div className="bg-white rounded-2xl border border-emerald-200 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}>
       <h4 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400/70 mb-4">{title}</h4>
       <div className="space-y-3.5">
         {items.map((item) => {
@@ -1046,7 +1048,7 @@ export function Dashboard() {
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1">
-          <div className="relative shrink-0 w-56">
+          <div className="relative flex-1 min-w-[180px]">
             {/* Search icon */}
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
