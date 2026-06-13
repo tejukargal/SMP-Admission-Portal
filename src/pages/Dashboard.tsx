@@ -195,7 +195,7 @@ interface BreakdownItem {
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
     <div className="rounded-2xl border border-emerald-300 backdrop-blur-sm p-5" style={{ background: 'rgba(255,255,255,0.62)', boxShadow: '0 4px 24px 0 rgba(0,0,0,0.07), 0 1px 0 0 rgba(255,255,255,0.85) inset' }}>
-      <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-4">{title}</h4>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400/70 mb-4">{title}</h4>
       <div className="space-y-3.5">
         {items.map((item) => {
           const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
@@ -230,7 +230,7 @@ function SectionLabel({ children, accent, onDoubleClick }: { children: React.Rea
       <div className="flex items-center gap-2.5 mb-1.5">
         <span className={`w-1 h-4 rounded-full shrink-0 ${accent.bar}`} />
         <p
-          className={`text-xs font-extrabold uppercase tracking-widest ${accent.text} ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
+          className={`text-xs font-semibold uppercase tracking-wider ${accent.text} ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
           onDoubleClick={onDoubleClick}
           title={onDoubleClick ? 'Double-click to export PDF' : undefined}
         >
@@ -241,7 +241,7 @@ function SectionLabel({ children, accent, onDoubleClick }: { children: React.Rea
   }
   return (
     <p
-      className={`text-[11px] font-bold uppercase tracking-widest text-gray-400/80 mb-1.5 ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
+      className={`text-[11px] font-semibold uppercase tracking-wider text-gray-400/70 mb-1.5 ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
       onDoubleClick={onDoubleClick}
       title={onDoubleClick ? 'Double-click to export PDF' : undefined}
     >
