@@ -1048,7 +1048,7 @@ export function Dashboard() {
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1">
-          <div className="relative shrink-0 w-52">
+          <div className="relative shrink-0 w-80">
             {/* Search icon */}
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
