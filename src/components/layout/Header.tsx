@@ -31,13 +31,29 @@ export function Header() {
     : '??';
 
   return (
-    <header className="h-13 bg-white grid grid-cols-[1fr_auto_1fr] items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
+    <header className="h-13 bg-white flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
 
-      {/* Left — academic year badge */}
-      <div className="flex items-center gap-2.5">
+      {/* Left — app name + divider + academic year badge */}
+      <div className="flex items-center gap-4">
+        <span
+          className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
+          style={{
+            fontSize: '28px',
+            color: COURSE_COLORS[colorIdx],
+            letterSpacing: '0.16em',
+            transition: 'color 2s ease-in-out',
+            animation: 'header-title-breathe 6s ease-in-out infinite',
+          }}
+        >
+          SMP ADMISSIONS
+        </span>
+
+        {/* Divider */}
+        <div className="h-5 w-px bg-emerald-200 shrink-0" />
+
         {settings?.currentAcademicYear ? (
-          <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide" style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: '1px solid #a7f3d0' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold tracking-wide" style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: '1px solid #a7f3d0' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
             <span>{settings.currentAcademicYear}</span>
@@ -47,22 +63,8 @@ export function Header() {
         )}
       </div>
 
-      {/* Centre — App title, guaranteed centre of content area by 1fr auto 1fr grid */}
-      <span
-        className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
-        style={{
-          fontSize: '40px',
-          color: COURSE_COLORS[colorIdx],
-          letterSpacing: '0.18em',
-          transition: 'color 2s ease-in-out',
-          animation: 'header-title-breathe 6s ease-in-out infinite',
-        }}
-      >
-        SMP ADMISSIONS
-      </span>
-
       {/* Right — user info + logout */}
-      <div className="flex items-center gap-3 justify-self-end">
+      <div className="flex items-center gap-3 ml-auto">
         {role === 'staff' && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>
             Staff
@@ -70,7 +72,6 @@ export function Header() {
         )}
         {user?.email && (
           <div className="flex items-center gap-2">
-            {/* Avatar circle */}
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
               {initials}
             </div>
