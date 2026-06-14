@@ -1351,11 +1351,14 @@ const [barsReady, setBarsReady] = useState(false);
                 <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
                   ALL
                 </span>
-                <p
-                  className="text-[11px] font-bold uppercase tracking-widest text-sky-600/70 cursor-pointer select-none"
+                <div
+                  className="flex items-center gap-2 cursor-pointer select-none"
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
                   title="Double-click to export PDF"
-                >Total Enrolled</p>
+                >
+                  <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
+                  <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700">Total Enrolled</p>
+                </div>
                 <p className="text-3xl font-black leading-none text-sky-700">
                   <AnimNum value={stats.total} />
                 </p>
@@ -1386,11 +1389,16 @@ const [barsReady, setBarsReady] = useState(false);
                 return (
                   <div
                     onClick={() => setIntakeModal(true)}
-                    className="rounded-2xl border border-sky-300 px-3 pt-2 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    className="rounded-2xl border border-sky-300 px-3 pt-4 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.10)' }}
                   >
-                    {/* Overall % + year breakdown — single row */}
-                    <div className="flex items-baseline justify-between mb-1.5 shrink-0">
+                    {/* Label (left) + year breakdown (right) */}
+                    <div className="flex items-center justify-between mb-1.5 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
+                        <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700 leading-none">Total</p>
+                        <span className="text-[13px] font-black text-sky-700/60 tabular-nums leading-none">{overallPct}%</span>
+                      </div>
                       <div className="flex items-baseline gap-2">
                         {YEARS.map((yr, i) => {
                           const yrPct = Math.round((stats.byYear[yr] / YEAR_INTAKE) * 100);
@@ -1402,10 +1410,6 @@ const [barsReady, setBarsReady] = useState(false);
                           );
                         })}
                       </div>
-                      <span className="flex items-baseline gap-0.5">
-                        <span className="text-[9px] font-bold text-sky-500/70 uppercase tracking-wider leading-none">Total</span>
-                        <span className="text-[11px] font-black text-sky-600/90 tabular-nums leading-none">{overallPct}%</span>
-                      </span>
                     </div>
                     {/* Bars + count labels */}
                     {(() => {
@@ -1471,7 +1475,10 @@ const [barsReady, setBarsReady] = useState(false);
                     style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
                   >
                     <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-700 opacity-[0.07]">B</span>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">Boys</p>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
+                      <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700">Boys</p>
+                    </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs font-bold leading-none text-sky-700 opacity-50">Total</span>
@@ -1511,7 +1518,10 @@ const [barsReady, setBarsReady] = useState(false);
                     style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
                   >
                     <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-rose-600 opacity-[0.07]">G</span>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight">Girls</p>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
+                      <p className="text-[15px] font-semibold uppercase tracking-wider text-rose-600">Girls</p>
+                    </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs font-bold leading-none text-rose-600 opacity-50">Total</span>
