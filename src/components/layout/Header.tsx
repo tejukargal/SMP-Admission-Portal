@@ -49,16 +49,12 @@ export function Header() {
 
       {/* Right — year badge + divider + user info + logout */}
       <div className="flex items-center gap-3 ml-auto">
-        {settings?.currentAcademicYear ? (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold tracking-wide" style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: '1px solid #a7f3d0' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            <span>{settings.currentAcademicYear}</span>
-          </div>
-        ) : (
-          <span className="text-xs text-gray-400">No academic year set</span>
-        )}
+        <div className="text-right shrink-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">Academic Year</p>
+          <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">
+            {settings?.currentAcademicYear ?? '—'}
+          </p>
+        </div>
 
         {/* Divider */}
         <div className="h-5 w-px bg-emerald-200 shrink-0" />

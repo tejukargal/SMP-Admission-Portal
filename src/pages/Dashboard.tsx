@@ -119,11 +119,9 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border ${border} ${bg} pt-5 px-4 pb-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
-      style={{ background: '#ffffff', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}
+      className={`rounded-2xl border ${border} ${bg} p-4 flex flex-col gap-1.5 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]' : ''}`}
+      style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
     >
-      {/* Coloured top accent strip */}
-      <div className={`absolute top-0 left-0 right-0 h-[3px] ${barFill} rounded-t-2xl`} />
       {watermark && (
         <span
           aria-hidden="true"
@@ -133,13 +131,14 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
         </span>
       )}
       {highlightLabel ? (
-        <span
-          className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${border} bg-white/70 ${textColor} ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
+        <div
+          className={`flex items-center gap-2 ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
           onDoubleClick={onLabelDoubleClick ? (e) => { e.stopPropagation(); onLabelDoubleClick(); } : undefined}
           title={onLabelDoubleClick ? 'Double-click to export PDF' : undefined}
         >
-          {label}
-        </span>
+          <span className={`w-1 h-3.5 rounded-full shrink-0 ${barFill}`} />
+          <p className={`text-[15px] font-semibold uppercase tracking-wider ${textColor}`}>{label}</p>
+        </div>
       ) : (
         <p
           className={`text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
@@ -164,17 +163,16 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
           />
         </div>
         {breakdown ? (
-          <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
-            {breakdown.map((b) => (
-              <span key={b.label} className="flex items-center gap-1 text-[10px] tabular-nums whitespace-nowrap">
+          <div className="flex flex-wrap gap-y-1 pt-0.5 items-center">
+            {breakdown.map((b, i) => (
+              <span key={b.label} className="flex items-center text-[10px] tabular-nums whitespace-nowrap">
+                {i > 0 && <span className="w-px h-3 bg-current opacity-20 mx-1.5 shrink-0" />}
                 {highlightBreakdown ? (
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${border} bg-white/70 ${textColor}`}>
-                    {b.label}
-                  </span>
+                  <span className={`font-semibold ${textColor}`}>{b.label}</span>
                 ) : (
                   <span className="text-gray-400 font-medium">{b.label}</span>
                 )}
-                <span className="font-bold text-gray-600">{b.value}</span>
+                <span className="font-bold text-gray-600 ml-1">{b.value}</span>
               </span>
             ))}
           </div>
@@ -196,8 +194,11 @@ interface BreakdownItem {
 
 function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
   return (
-    <div className="bg-white rounded-2xl border border-emerald-200 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}>
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400/70 mb-4">{title}</h4>
+    <div className="bg-emerald-50 rounded-2xl border border-emerald-400 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">{title}</p>
+      </div>
       <div className="space-y-3.5">
         {items.map((item) => {
           const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
@@ -243,7 +244,7 @@ function SectionLabel({ children, accent, onDoubleClick }: { children: React.Rea
   }
   return (
     <p
-      className={`text-[11px] font-semibold uppercase tracking-wider text-gray-400/70 mb-1.5 ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
+      className={`text-xs font-semibold uppercase tracking-wider text-gray-400/70 mb-1.5 ${onDoubleClick ? 'cursor-pointer select-none' : ''}`}
       onDoubleClick={onDoubleClick}
       title={onDoubleClick ? 'Double-click to export PDF' : undefined}
     >
@@ -750,16 +751,7 @@ export function Dashboard() {
     return sortedAcademicYears.map((ay) => ({ year: ay, count: map[ay] ?? 0 }));
   }, [activeSource, sortedAcademicYears]);
 
-  const [glowIdx, setGlowIdx] = useState(-1);
-  useEffect(() => {
-    const n = activeStats.length;
-    if (n === 0) { setGlowIdx(-1); return; }
-    setGlowIdx(0);
-    const id = setInterval(() => setGlowIdx((prev) => (prev + 1) % n), 1500);
-    return () => clearInterval(id);
-  }, [activeStats.length]);
-
-  const [barsReady, setBarsReady] = useState(false);
+const [barsReady, setBarsReady] = useState(false);
   useEffect(() => {
     setBarsReady(false);
     let r1: number, r2: number;
@@ -900,13 +892,22 @@ export function Dashboard() {
     return 'Good Night';
   })();
 
+  // ── Live clock ───────────────────────────────────────────────────────────
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const clockDate = now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  const clockTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true });
+
   // ── Year chip palette (cycles if more than 5 academic years) ────────────
   const CHIP_PALETTE = [
-    { idle: 'bg-emerald-50/80 border-emerald-200 text-emerald-700', count: 'text-emerald-800', sel: 'bg-emerald-100 border-emerald-400 text-emerald-800', glow: 'chip-glow-emerald' },
-    { idle: 'bg-sky-50/80 border-sky-200 text-sky-700',             count: 'text-sky-800',     sel: 'bg-sky-100 border-sky-400 text-sky-800',             glow: 'chip-glow-sky'     },
-    { idle: 'bg-violet-50/80 border-violet-200 text-violet-700',    count: 'text-violet-800',  sel: 'bg-violet-100 border-violet-400 text-violet-800',    glow: 'chip-glow-violet'  },
-    { idle: 'bg-amber-50/80 border-amber-200 text-amber-700',       count: 'text-amber-800',   sel: 'bg-amber-100 border-amber-400 text-amber-800',       glow: 'chip-glow-amber'   },
-    { idle: 'bg-rose-50/80 border-rose-200 text-rose-700',          count: 'text-rose-800',    sel: 'bg-rose-100 border-rose-400 text-rose-800',          glow: 'chip-glow-rose'    },
+    { dot: 'bg-emerald-400', selDot: 'bg-emerald-600', text: 'text-emerald-600', selText: 'text-emerald-800' },
+    { dot: 'bg-sky-400',     selDot: 'bg-sky-600',     text: 'text-sky-600',     selText: 'text-sky-800'     },
+    { dot: 'bg-violet-400',  selDot: 'bg-violet-600',  text: 'text-violet-600',  selText: 'text-violet-800'  },
+    { dot: 'bg-amber-400',   selDot: 'bg-amber-600',   text: 'text-amber-600',   selText: 'text-amber-800'   },
+    { dot: 'bg-rose-400',    selDot: 'bg-rose-600',    text: 'text-rose-600',    selText: 'text-rose-800'    },
   ] as const;
 
   // ── Nature palette colour map ────────────────────────────────────────────
@@ -933,36 +934,30 @@ export function Dashboard() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* Emerald accent bar */}
-          <div className="w-[3px] h-9 rounded-full bg-emerald-400 shrink-0" />
+          <div className="w-[3px] h-7 rounded-full bg-emerald-400 shrink-0" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{greeting}</p>
-            <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight mt-0.5">Dashboard</h2>
+            <h2 className="text-xl font-black text-gray-800 leading-none tracking-tight mt-px">Dashboard</h2>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          {!isSearchMode && academicYearFilter && (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
-              >
-                Summary PDF
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => exportCategoryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
-              >
-                Category PDF
-              </Button>
-            </>
-          )}
-          <Button size="sm" onClick={() => void navigate('/enroll')}>
-            + Enroll Student
-          </Button>
+        <div className="flex items-center gap-4 flex-wrap justify-end">
+          {/* Date & Time */}
+          <div className="text-right shrink-0">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{clockDate}</p>
+            <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">{clockTime}</p>
+          </div>
+          <button
+            onClick={() => void navigate('/enroll')}
+            className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+            style={{ boxShadow: '0 2px 8px 0 rgba(16,185,129,0.35)' }}
+            title="Enroll Student"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -976,56 +971,44 @@ export function Dashboard() {
           <button
             type="button"
             onClick={() => scrollChips('left')}
-            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-base leading-none select-none"
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-xl leading-none select-none"
             aria-label="Scroll left"
           >
             ‹
           </button>
 
-          {/* Chips — scrollable, no scrollbar */}
-          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-1.5 flex-1 py-1">
-            {/* Total chip */}
-            <div className="flex items-center gap-1.5 bg-emerald-500 border border-emerald-400 rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 chip-glow-emerald">
-              <span className="text-emerald-100 font-medium text-[11px]">Total</span>
-              <span className="font-bold tabular-nums text-white text-[11px]">
+          {/* Labels — scrollable, no scrollbar */}
+          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1 py-1.5">
+            {/* Total label */}
+            <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+              <span className="text-[13px] font-semibold uppercase tracking-wider text-emerald-700">Total</span>
+              <span className="text-[13px] font-bold tabular-nums text-emerald-800">
                 <AnimNum value={confirmedActiveCount} />
               </span>
               {confirmedActiveCount < confirmedTotalCount && (
-                <span className="text-emerald-200 font-medium text-[11px]">/{confirmedTotalCount}</span>
+                <span className="text-[13px] text-emerald-500/60 font-medium">/{confirmedTotalCount}</span>
               )}
             </div>
-            <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-            {/* Per-year chips — sequential indigo glow: each chip fires once per round */}
+            <span className="w-px h-3.5 rounded-full bg-emerald-200 shrink-0" />
+            {/* Per-year labels */}
             {activeStats.map(({ year, count }, idx) => {
               const isSelected = !isSearchMode && academicYearFilter === year;
               const isDimmed = count === 0;
               const p = CHIP_PALETTE[idx % CHIP_PALETTE.length];
-              const isActive = glowIdx === idx;
               return (
                 <button
                   key={year}
                   type="button"
                   disabled={isSearchMode}
                   onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                  style={{
-                    outlineWidth: '2px',
-                    outlineStyle: 'solid',
-                    outlineOffset: '2px',
-                    outlineColor: isActive ? 'rgba(52,211,153,0.75)' : 'rgba(52,211,153,0)',
-                    transition: 'outline-color 500ms ease-in-out, background-color 150ms, border-color 150ms',
-                  }}
-                  className={`flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs whitespace-nowrap shrink-0 ${
+                  className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-opacity ${
                     isSearchMode ? 'cursor-default' : 'cursor-pointer'
-                  } ${
-                    isDimmed
-                      ? 'bg-transparent border-gray-100 text-gray-300'
-                      : isSelected
-                      ? p.sel
-                      : p.idle
-                  }`}
+                  } ${isDimmed ? 'opacity-30' : ''}`}
                 >
-                  <span className={`font-medium text-[11px] transition-colors duration-500 ease-in-out ${isActive ? '!text-gray-900' : ''}`}>{year}</span>
-                  <span className={`font-bold tabular-nums transition-colors duration-500 ease-in-out ${isDimmed ? '' : isSelected ? p.count : ''} ${isActive ? '!text-gray-900' : ''}`}>
+                  <span className={`w-1 h-3.5 rounded-full shrink-0 transition-colors ${isDimmed ? 'bg-gray-300' : isSelected ? p.selDot : p.dot}`} />
+                  <span className={`text-[13px] font-semibold uppercase tracking-wider transition-colors ${isDimmed ? 'text-gray-400' : isSelected ? p.selText : p.text}`}>{year}</span>
+                  <span className={`text-[13px] font-bold tabular-nums transition-colors ${isDimmed ? 'text-gray-300' : isSelected ? p.selText : 'text-gray-500'}`}>
                     <AnimNum value={count} />
                   </span>
                 </button>
@@ -1037,7 +1020,7 @@ export function Dashboard() {
           <button
             type="button"
             onClick={() => scrollChips('right')}
-            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-base leading-none select-none"
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-xl leading-none select-none"
             aria-label="Scroll right"
           >
             ›
@@ -1073,17 +1056,6 @@ export function Dashboard() {
               </button>
             )}
           </div>
-          <select
-            className={`${fs} w-[90px] shrink-0 ${isSearchMode ? 'opacity-40 cursor-not-allowed' : ''}`}
-            value={academicYearFilter}
-            onChange={(e) => setAcademicYearFilter(e.target.value as AcademicYear | '')}
-            disabled={isSearchMode}
-          >
-            <option value="">Acad Yr</option>
-            {sortedAcademicYears.map((ay) => (
-              <option key={ay} value={ay}>{ay}</option>
-            ))}
-          </select>
           <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
             <option value="">Course</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -1134,6 +1106,16 @@ export function Dashboard() {
               className="shrink-0 rounded-lg border border-amber-300 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
             >
               Clear
+            </button>
+          )}
+          {!isSearchMode && academicYearFilter && (
+            <button
+              onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
+              className="flex items-center gap-1.5 group cursor-pointer shrink-0 ml-auto"
+              title="Export Summary PDF"
+            >
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
             </button>
           )}
         </div>
@@ -1377,16 +1359,20 @@ export function Dashboard() {
                 <p className="text-3xl font-black leading-none text-sky-700">
                   <AnimNum value={stats.total} />
                 </p>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-auto">
-                  <span className="text-xs text-sky-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</span>
-                  {YEARS.map((yr, i) => {
-                    const y = yearConfig[yr];
-                    return (
-                      <span key={yr} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${y.border} bg-white/70 ${y.textColor}`}>
-                        {i + 1}Y {stats.byYear[yr]}
-                      </span>
-                    );
-                  })}
+                <div className="mt-auto space-y-0.5">
+                  <p className="text-xs text-sky-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
+                  <div className="flex items-center">
+                    {YEARS.map((yr, i) => {
+                      const y = yearConfig[yr];
+                      return (
+                        <span key={yr} className="flex items-center text-xs tabular-nums whitespace-nowrap">
+                          {i > 0 && <span className={`w-px h-3 ${y.barFill} opacity-30 mx-1.5 shrink-0`} />}
+                          <span className={`font-semibold ${y.textColor}`}>{i + 1}Y</span>
+                          <span className="font-bold text-gray-700 ml-1">{stats.byYear[yr]}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1579,14 +1565,15 @@ export function Dashboard() {
                       <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>
                         {course}
                       </span>
-                      {/* Label chip */}
-                      <span
-                        className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor} cursor-pointer select-none`}
+                      {/* Label */}
+                      <div
+                        className="flex items-center gap-2 cursor-pointer select-none"
                         onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`); }}
                         title="Double-click to export PDF"
                       >
-                        {course}
-                      </span>
+                        <span className={`w-1 h-3.5 rounded-full shrink-0 ${c.barFill}`} />
+                        <p className={`text-[15px] font-semibold uppercase tracking-wider ${c.textColor}`}>{course}</p>
+                      </div>
                       {/* Total (left, permanent) + cycling breakup (right, animated) */}
                       <div className="flex items-end justify-between">
                         <div className="flex flex-col gap-0.5">
@@ -1609,11 +1596,12 @@ export function Dashboard() {
                             }}
                           />
                         </div>
-                        <div className="flex flex-wrap gap-x-2 gap-y-1 pt-0.5">
+                        <div className="flex flex-wrap gap-y-1 pt-0.5 items-center">
                           {YEARS.map((yr, i) => (
-                            <span key={yr} className="flex items-center gap-1 text-xs tabular-nums whitespace-nowrap">
+                            <span key={yr} className="flex items-center text-xs tabular-nums whitespace-nowrap">
+                              {i > 0 && <span className={`w-px h-3 ${c.barFill} opacity-30 mx-1.5 shrink-0`} />}
                               <span className="text-gray-400 font-semibold">{i + 1}Y</span>
-                              <span className="font-bold text-gray-700">{stats.byCourseByYear[course][yr]}</span>
+                              <span className="font-bold text-gray-700 ml-1">{stats.byCourseByYear[course][yr]}</span>
                             </span>
                           ))}
                         </div>
@@ -1643,6 +1631,7 @@ export function Dashboard() {
                       textColor={y.textColor}
                       barFill={y.barFill}
                       breakdown={COURSES.map((course) => ({ label: course, value: stats.byYearByCourse[year][course] }))}
+                      highlightLabel
                       highlightBreakdown
                       watermark={wm}
                       onClick={() => setYearModalYear(year)}
@@ -1676,7 +1665,10 @@ export function Dashboard() {
                   return (
                     <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
                       <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
-                      <span className={`self-start px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${c.border} bg-white/70 ${c.textColor}`}>{course}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1 h-3.5 rounded-full shrink-0 ${c.barFill}`} />
+                        <p className={`text-[15px] font-semibold uppercase tracking-wider ${c.textColor}`}>{course}</p>
+                      </div>
 
                       {/* Regular seats */}
                       <div className="flex flex-col gap-1">
@@ -1724,13 +1716,16 @@ export function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — all 3 years */}
-              <div className="bg-white/80 rounded-2xl border border-emerald-400 p-4" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+              <div className="bg-emerald-50 rounded-2xl border border-emerald-400 p-4" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                 {/* Header + legend */}
                 <div className="flex items-start justify-between mb-3">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80 leading-tight">
-                    Course-wise<br />
-                    <span className="text-gray-300 font-medium normal-case tracking-normal">confirmed · 63 seats ref</span>
-                  </h4>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Course-wise</p>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium mt-0.5 ml-3">confirmed · 63 seats ref</p>
+                  </div>
                   <div className="flex flex-row gap-2.5 items-center">
                     {YEARS.map((yr) => {
                       const y = yearConfig[yr];
@@ -1842,13 +1837,14 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-emerald-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                  <div className="bg-emerald-50 rounded-2xl border border-emerald-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div
-                      className="px-4 py-2.5 border-b border-emerald-50 cursor-pointer select-none"
+                      className="px-4 py-1.5 border-b border-emerald-100 flex items-center gap-2 cursor-pointer select-none"
                       onDoubleClick={() => exportCategoryReport(confirmedStudents, displayYear)}
                       title="Double-click to export PDF"
                     >
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category-wise Count</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Category-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px] border-collapse">
@@ -1905,13 +1901,14 @@ export function Dashboard() {
                 const tc = 'px-2 py-1 text-right tabular-nums';
                 const tl = 'px-2 py-1 text-left';
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-sky-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                  <div className="bg-sky-50 rounded-2xl border border-sky-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div
-                      className="px-4 py-2.5 border-b border-sky-50 cursor-pointer select-none"
+                      className="px-4 py-1.5 border-b border-sky-100 flex items-center gap-2 cursor-pointer select-none"
                       onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}
                       title="Double-click to export PDF"
                     >
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Admission Type-wise Count</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">Admission Type-wise Count</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-[10px] border-collapse">
@@ -1985,13 +1982,14 @@ export function Dashboard() {
                 }
 
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-rose-400 overflow-hidden flex flex-col h-full" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                  <div className="bg-rose-50 rounded-2xl border border-rose-400 overflow-hidden flex flex-col h-full" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div
-                      className="px-4 py-2.5 border-b border-rose-50 shrink-0 cursor-pointer select-none"
+                      className="px-4 py-1.5 border-b border-rose-100 shrink-0 flex items-center gap-2 cursor-pointer select-none"
                       onDoubleClick={() => exportGenderCategoryReport(confirmedStudents, displayYear)}
                       title="Double-click to export PDF"
                     >
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Category & Gender-wise Count</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Category &amp; Gender-wise Count</p>
                     </div>
                     <div className="overflow-x-auto flex-1">
                       <table className="w-full h-full text-[10px] border-collapse">
@@ -2073,13 +2071,14 @@ export function Dashboard() {
                   { boys: 0, girls: 0, total: 0 }
                 );
                 return (
-                  <div className="bg-white/80 rounded-2xl border border-teal-400 overflow-hidden h-full flex flex-col" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                  <div className="bg-teal-50 rounded-2xl border border-teal-400 overflow-hidden h-full flex flex-col" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                     <div
-                      className="px-4 py-2.5 border-b border-teal-50 shrink-0 cursor-pointer select-none"
+                      className="px-4 py-1.5 border-b border-teal-100 shrink-0 flex items-center gap-2 cursor-pointer select-none"
                       onDoubleClick={() => exportGenderCourseYearReport(confirmedStudents, displayYear)}
                       title="Double-click to export PDF"
                     >
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Year & Course-wise Gender</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-teal-400" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Year &amp; Course-wise Gender</p>
                     </div>
                     <div className="overflow-x-auto flex-1">
                       <table className="w-full h-full text-[10px] border-collapse">
@@ -2136,13 +2135,14 @@ export function Dashboard() {
                 return `${d} ${months[parseInt(m) - 1]} ${y}`;
               }
               return (
-                <div className="bg-white/80 rounded-2xl border border-violet-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+                <div className="bg-violet-50 rounded-2xl border border-violet-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
                   <div
-                    className="px-4 py-2.5 border-b border-violet-50 flex items-baseline gap-2 flex-wrap cursor-pointer select-none"
+                    className="px-4 py-1.5 border-b border-violet-100 flex items-center gap-2 flex-wrap cursor-pointer select-none"
                     onDoubleClick={() => feeAcademicYear && exportDatewiseAdmissionsReport(dateTable, feeAcademicYear)}
                     title="Double-click to export PDF"
                   >
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400/80">Date-wise Admissions — Course Count</p>
+                    <span className="w-1 h-3.5 rounded-full shrink-0 bg-violet-400" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">Date-wise Admissions — Course Count</p>
                     {feeAcademicYear && (
                       <span className="text-[10px] font-semibold text-violet-500/70 whitespace-nowrap">
                         {feeAcademicYear}{!academicYearFilter ? ' (current year)' : ''}
