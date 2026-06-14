@@ -23,7 +23,7 @@ import {
 } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import { AISummaryCard } from '../components/dashboard/AISummaryCard';
+import { AISummaryCard, CompactAIInsight } from '../components/dashboard/AISummaryCard';
 import type { AISummaryPayload } from '../services/aiSummaryService';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -1500,6 +1500,9 @@ const [barsReady, setBarsReady] = useState(false);
                         );
                       })}
                     </div>
+
+                    {/* AI insight — full-card overlay, cycles with the bar chart */}
+                    <CompactAIInsight payload={aiPayload} />
                   </div>
                 );
               })()}
@@ -1850,7 +1853,14 @@ const [barsReady, setBarsReady] = useState(false);
                   })}
                 </div>
 
-                <AISummaryCard payload={aiPayload} compact />
+              </div>
+
+              {/* Dedicated AI Insights card — relative wrapper contributes 0 intrinsic height
+                  so only the chart card sets the grid row height; absolute div fills the result */}
+              <div className="relative">
+                <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                  <AISummaryCard payload={aiPayload} />
+                </div>
               </div>
             </div>
 
