@@ -189,12 +189,17 @@ interface AnthropicResponse {
   content: AnthropicMessage[];
 }
 
-function callClaude(apiKey: string, p: SummaryPayload): Promise<string> {
+function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const prompt = [
       'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
-      'Write a concise 2–3 sentence insight summary of the current admission data below.',
-      'Use the exact numbers given. No preamble or labels. Plain English, professional tone.',
+      'Generate exactly 3 distinct one-sentence insights from the admission data below.',
+      'Each insight must focus on a DIFFERENT angle:',
+      '  1. Overall enrollment strength and gender ratio',
+      '  2. Course distribution — highlight the leading course and any lagging one',
+      '  3. Pending admissions outlook — how many are unconfirmed and what it means',
+      'Rules: use exact numbers given, plain English, professional tone, no preamble.',
+      'Return ONLY a valid JSON array of exactly 3 strings. Example: ["insight1","insight2","insight3"]',
       '',
       `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
       `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
@@ -206,7 +211,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<string> {
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 220,
+      max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -228,9 +233,12 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<string> {
         res.on('end', () => {
           try {
             const parsed = JSON.parse(raw) as AnthropicResponse;
-            const text = parsed.content?.[0]?.text?.trim() ?? '';
-            if (text) resolve(text);
-            else reject(new Error('Empty AI response'));
+            const rawText = parsed.content?.[0]?.text?.trim() ?? '';
+            const match = rawText.match(/\[[\s\S]*\]/);
+            if (!match) { reject(new Error('Invalid AI response format')); return; }
+            const insights = JSON.parse(match[0]) as string[];
+            if (!Array.isArray(insights) || insights.length === 0) { reject(new Error('Empty AI response')); return; }
+            resolve(insights);
           } catch (err) {
             reject(err);
           }
@@ -269,8 +277,8 @@ export const generateAdmissionSummary = onCall(
     }
 
     try {
-      const text = await callClaude(anthropicApiKey.trim(), payload);
-      return { text, generatedAt: new Date().toISOString() };
+      const insights = await callClaude(anthropicApiKey.trim(), payload);
+      return { insights, generatedAt: new Date().toISOString() };
     } catch {
       throw new HttpsError('internal', 'AI generation failed. Check the API key and try again.');
     }

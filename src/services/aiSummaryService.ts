@@ -15,7 +15,7 @@ export interface AISummaryPayload {
 }
 
 export interface AISummaryResult {
-  text: string;
+  insights: string[];
   generatedAt: string;
 }
 

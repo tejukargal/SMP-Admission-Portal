@@ -4,7 +4,7 @@ import type { AISummaryPayload } from '../services/aiSummaryService';
 
 interface CacheEntry {
   key: string;
-  text: string;
+  insights: string[];
   generatedAt: string;
   ts: number;
 }
@@ -15,7 +15,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const summaryCache = new Map<string, CacheEntry>();
 
 export interface UseAISummaryReturn {
-  text: string | null;
+  insights: string[] | null;
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
@@ -23,7 +23,7 @@ export interface UseAISummaryReturn {
 }
 
 export function useAISummary(): UseAISummaryReturn {
-  const [text, setText] = useState<string | null>(null);
+  const [insights, setInsights] = useState<string[] | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function useAISummary(): UseAISummaryReturn {
     const cached = summaryCache.get(key);
 
     if (!force && cached && Date.now() - cached.ts < CACHE_TTL) {
-      setText(cached.text);
+      setInsights(cached.insights);
       setGeneratedAt(cached.generatedAt);
       setError(null);
       return;
@@ -49,11 +49,10 @@ export function useAISummary(): UseAISummaryReturn {
     try {
       const result = await callGenerateAdmissionSummary(payload);
       summaryCache.set(key, { key, ...result, ts: Date.now() });
-      setText(result.text);
+      setInsights(result.insights);
       setGeneratedAt(result.generatedAt);
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : 'Failed to generate summary';
-      // Strip Firebase error prefix e.g. "functions/failed-precondition: ..."
       setError(raw.replace(/^FirebaseError:\s*/, '').replace(/^functions\/[\w-]+:\s*/, ''));
     } finally {
       setLoading(false);
@@ -61,5 +60,5 @@ export function useAISummary(): UseAISummaryReturn {
     }
   }, []);
 
-  return { text, generatedAt, loading, error, generate };
+  return { insights, generatedAt, loading, error, generate };
 }

@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendBulkSMS = void 0;
+exports.generateAdmissionSummary = exports.sendBulkSMS = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const https = __importStar(require("https"));
@@ -140,5 +140,82 @@ exports.sendBulkSMS = (0, https_1.onCall)({ region: 'asia-south1', timeoutSecond
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     return { successCount, failCount, total: successCount + failCount };
+});
+function callClaude(apiKey, p) {
+    return new Promise((resolve, reject) => {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+        const prompt = [
+            'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
+            'Write a concise 2–3 sentence insight summary of the current admission data below.',
+            'Use the exact numbers given. No preamble or labels. Plain English, professional tone.',
+            '',
+            `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
+            `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
+            `By course — CE: ${(_a = p.byCourse['CE']) !== null && _a !== void 0 ? _a : 0}, ME: ${(_b = p.byCourse['ME']) !== null && _b !== void 0 ? _b : 0}, EC: ${(_c = p.byCourse['EC']) !== null && _c !== void 0 ? _c : 0}, CS: ${(_d = p.byCourse['CS']) !== null && _d !== void 0 ? _d : 0}, EE: ${(_e = p.byCourse['EE']) !== null && _e !== void 0 ? _e : 0}`,
+            `By study year — 1st: ${(_f = p.byYear['1ST YEAR']) !== null && _f !== void 0 ? _f : 0}, 2nd: ${(_g = p.byYear['2ND YEAR']) !== null && _g !== void 0 ? _g : 0}, 3rd: ${(_h = p.byYear['3RD YEAR']) !== null && _h !== void 0 ? _h : 0}`,
+            `Admission type — Regular: ${(_j = p.byAdmType['REGULAR']) !== null && _j !== void 0 ? _j : 0}, Lateral: ${(_k = p.byAdmType['LATERAL']) !== null && _k !== void 0 ? _k : 0}, Repeater: ${(_l = p.byAdmType['REPEATER']) !== null && _l !== void 0 ? _l : 0}, SNQ: ${(_m = p.byAdmType['SNQ']) !== null && _m !== void 0 ? _m : 0}, External: ${(_o = p.byAdmType['EXTERNAL']) !== null && _o !== void 0 ? _o : 0}`,
+            `Pending (unconfirmed, current year): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+        ].join('\n');
+        const body = JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 220,
+            messages: [{ role: 'user', content: prompt }],
+        });
+        const req = https.request({
+            hostname: 'api.anthropic.com',
+            path: '/v1/messages',
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(body),
+            },
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                var _a, _b, _c, _d;
+                try {
+                    const parsed = JSON.parse(raw);
+                    const text = (_d = (_c = (_b = (_a = parsed.content) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : '';
+                    if (text)
+                        resolve(text);
+                    else
+                        reject(new Error('Empty AI response'));
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 30 }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Sign in required.');
+    }
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add anthropicApiKey to adminConfig/aiSettings in Firestore.');
+    }
+    const { anthropicApiKey } = configSnap.data();
+    if (!(anthropicApiKey === null || anthropicApiKey === void 0 ? void 0 : anthropicApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    }
+    const payload = request.data;
+    if (typeof payload.total !== 'number') {
+        throw new https_1.HttpsError('invalid-argument', 'Invalid stats payload.');
+    }
+    try {
+        const text = await callClaude(anthropicApiKey.trim(), payload);
+        return { text, generatedAt: new Date().toISOString() };
+    }
+    catch (_a) {
+        throw new https_1.HttpsError('internal', 'AI generation failed. Check the API key and try again.');
+    }
 });
 //# sourceMappingURL=index.js.map
