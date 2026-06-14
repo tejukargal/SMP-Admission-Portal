@@ -971,7 +971,7 @@ const [barsReady, setBarsReady] = useState(false);
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
         <div
-          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-1"
+          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-1.5"
           style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
         >
           {/* Left arrow */}
@@ -985,7 +985,7 @@ const [barsReady, setBarsReady] = useState(false);
           </button>
 
           {/* Labels — scrollable, no scrollbar */}
-          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1 py-1.5">
+          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1">
             {/* Total label */}
             <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
               <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />

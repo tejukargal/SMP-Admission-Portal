@@ -16,7 +16,7 @@ const COURSE_COLORS = [
 ] as const;
 
 export function Header() {
-  const { logout, user, role } = useAuth();
+  const { logout } = useAuth();
   const { settings } = useSettings();
   const [colorIdx, setColorIdx] = useState(0);
 
@@ -24,11 +24,6 @@ export function Header() {
     const id = setInterval(() => setColorIdx((i) => (i + 1) % COURSE_COLORS.length), 3000);
     return () => clearInterval(id);
   }, []);
-
-  // Derive initials from email
-  const initials = user?.email
-    ? user.email.split('@')[0].slice(0, 2).toUpperCase()
-    : '??';
 
   return (
     <header className="h-13 bg-white flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
@@ -59,19 +54,6 @@ export function Header() {
         {/* Divider */}
         <div className="h-5 w-px bg-emerald-200 shrink-0" />
 
-        {role === 'staff' && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>
-            Staff
-          </span>
-        )}
-        {user?.email && (
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
-              {initials}
-            </div>
-            <span className="text-xs text-gray-500 hidden sm:block max-w-[160px] truncate">{user.email}</span>
-          </div>
-        )}
         <Button variant="secondary" size="sm" onClick={() => { void logout(); }}>
           Logout
         </Button>

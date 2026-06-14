@@ -134,7 +134,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
   const [showAbout, setShowAbout] = useState(false);
   const [showTech, setShowTech] = useState(false);
@@ -182,12 +182,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   // Nav item — icon always at px-3 from left; text fades in/out beside it
   function navClass(isActive: boolean) {
-    const base = `group flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] font-medium transition-colors duration-150`;
     const color = isActive
       ? 'bg-emerald-500 text-white shadow-sm'
       : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-800';
-    return `${base} ${color}`;
+    return `group flex items-center gap-2.5 px-3 py-2 w-full text-[13px] font-medium transition-colors duration-150 ${color}`;
   }
+
+  const navItemStyle: React.CSSProperties = {
+    borderRadius: collapsed ? '9999px' : '0.75rem',
+    transition: 'border-radius 220ms cubic-bezier(0.4,0,0.2,1)',
+  };
 
   function iconClass(isActive: boolean) {
     return `shrink-0 transition-colors ${
@@ -226,7 +230,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           >
             {/* Front face: leaf logo */}
             <div
-              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md"
+              className="absolute inset-0 rounded-full flex items-center justify-center shadow-md"
               style={{
                 background: 'linear-gradient(135deg, #34d399 0%, #059669 100%)',
                 backfaceVisibility: 'hidden',
@@ -240,9 +244,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             </div>
             {/* Back face: college logo */}
             <div
-              className="absolute inset-0 rounded-xl flex items-center justify-center shadow-md overflow-hidden"
+              className="absolute inset-0 rounded-full flex items-center justify-center overflow-hidden"
               style={{
-                background: 'white',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)',
@@ -251,7 +254,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <img
                 src={INSTITUTE_LOGO_B64}
                 alt="College Logo"
-                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px', animation: 'logo-spin 12s linear infinite' }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '1px', animation: 'logo-spin 12s linear infinite' }}
               />
             </div>
           </div>
@@ -297,6 +300,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             key={to}
             to={to}
             className={({ isActive }) => navClass(isActive)}
+            style={navItemStyle}
             onMouseEnter={(e) => showTooltip(label, e)}
             onMouseLeave={hideTooltip}
           >
@@ -332,6 +336,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             key={to}
             to={to}
             className={({ isActive }) => navClass(isActive)}
+            style={navItemStyle}
             onMouseEnter={(e) => showTooltip(label, e)}
             onMouseLeave={hideTooltip}
           >
@@ -346,10 +351,34 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* ── Footer ───────────────────────────────────────────────────── */}
-      <div className="py-2.5 border-t border-emerald-50 px-3">
+      <div className="border-t border-emerald-50 px-2 pt-2.5 pb-2 space-y-0.5">
+
+        {/* User info */}
+        <div
+          className="flex items-center gap-2.5 w-full rounded-xl px-3 py-1.5"
+          onMouseEnter={(e) => showTooltip(user?.email ?? 'Account', e)}
+          onMouseLeave={hideTooltip}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-gray-400">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <div className="min-w-0 flex-1 overflow-hidden flex items-center gap-1.5" style={textStyle()}>
+            <p className="text-[11px] font-semibold text-gray-500 truncate leading-tight min-w-0 flex-1">
+              {user?.email}
+            </p>
+            {role === 'staff' && (
+              <span className="shrink-0 inline-flex items-center px-1.5 py-px rounded-full text-[9px] font-bold uppercase tracking-wider" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>
+                Staff
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* About */}
         <button
           onClick={() => setShowAbout(true)}
-          className="flex items-center gap-2 w-full rounded-lg px-2 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+          className="flex items-center gap-2 w-full rounded-lg px-3 py-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
           onMouseEnter={(e) => showTooltip('About', e)}
           onMouseLeave={hideTooltip}
         >
