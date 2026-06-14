@@ -148,6 +148,7 @@ export function AISummaryCard({ payload, compact = false }: Props) {
     return () => { clearInterval(timer); clearTimeout(tid); };
   }, [insights, compact]);
 
+  const currentInsight = insights?.[currentIndex] ?? null;
   const timeLabel = generatedAt
     ? new Date(generatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })
     : null;
