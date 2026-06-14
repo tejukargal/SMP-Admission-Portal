@@ -146,8 +146,13 @@ function callClaude(apiKey, p) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
         const prompt = [
             'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
-            'Write a concise 2–3 sentence insight summary of the current admission data below.',
-            'Use the exact numbers given. No preamble or labels. Plain English, professional tone.',
+            'Generate exactly 3 distinct one-sentence insights from the admission data below.',
+            'Each insight must focus on a DIFFERENT angle:',
+            '  1. Overall enrollment strength and gender ratio',
+            '  2. Course distribution — highlight the leading course and any lagging one',
+            '  3. Pending admissions outlook — how many are unconfirmed and what it means',
+            'Rules: use exact numbers given, plain English, professional tone, no preamble.',
+            'Return ONLY a valid JSON array of exactly 3 strings. Example: ["insight1","insight2","insight3"]',
             '',
             `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
             `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
@@ -158,7 +163,7 @@ function callClaude(apiKey, p) {
         ].join('\n');
         const body = JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
-            max_tokens: 220,
+            max_tokens: 400,
             messages: [{ role: 'user', content: prompt }],
         });
         const req = https.request({
@@ -178,11 +183,18 @@ function callClaude(apiKey, p) {
                 var _a, _b, _c, _d;
                 try {
                     const parsed = JSON.parse(raw);
-                    const text = (_d = (_c = (_b = (_a = parsed.content) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : '';
-                    if (text)
-                        resolve(text);
-                    else
+                    const rawText = (_d = (_c = (_b = (_a = parsed.content) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : '';
+                    const match = rawText.match(/\[[\s\S]*\]/);
+                    if (!match) {
+                        reject(new Error('Invalid AI response format'));
+                        return;
+                    }
+                    const insights = JSON.parse(match[0]);
+                    if (!Array.isArray(insights) || insights.length === 0) {
                         reject(new Error('Empty AI response'));
+                        return;
+                    }
+                    resolve(insights);
                 }
                 catch (err) {
                     reject(err);
@@ -211,8 +223,8 @@ exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', 
         throw new https_1.HttpsError('invalid-argument', 'Invalid stats payload.');
     }
     try {
-        const text = await callClaude(anthropicApiKey.trim(), payload);
-        return { text, generatedAt: new Date().toISOString() };
+        const insights = await callClaude(anthropicApiKey.trim(), payload);
+        return { insights, generatedAt: new Date().toISOString() };
     }
     catch (_a) {
         throw new https_1.HttpsError('internal', 'AI generation failed. Check the API key and try again.');

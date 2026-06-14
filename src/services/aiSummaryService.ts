@@ -12,6 +12,11 @@ export interface AISummaryPayload {
   pendingTotal: number;
   pendingRegular: number;
   pendingLateral: number;
+  prevAcademicYear?: string;
+  prevTotal?: number;
+  prevBoys?: number;
+  prevGirls?: number;
+  prevByCourse?: Record<string, number>;
 }
 
 export interface AISummaryResult {

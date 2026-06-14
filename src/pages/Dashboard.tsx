@@ -828,8 +828,27 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [allStudents, settings]);
 
+  const prevYearStats = useMemo(() => {
+    if (isSearchMode || !academicYearFilter) return null;
+    const idx = sortedAcademicYears.indexOf(academicYearFilter);
+    if (idx === -1 || idx >= sortedAcademicYears.length - 1) return null;
+    const prevYear = sortedAcademicYears[idx + 1];
+    const prev = allStudents.filter(
+      (s) => s.academicYear === prevYear && s.admissionStatus === 'CONFIRMED'
+    );
+    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const s of prev) { if (s.course in byCourse) byCourse[s.course]++; }
+    return {
+      academicYear: prevYear,
+      total: prev.length,
+      boys: prev.filter((s) => s.gender === 'BOY').length,
+      girls: prev.filter((s) => s.gender === 'GIRL').length,
+      byCourse,
+    };
+  }, [isSearchMode, academicYearFilter, sortedAcademicYears, allStudents]);
+
   const aiPayload = useMemo<AISummaryPayload>(() => ({
-    academicYear: isSearchMode ? '' : (academicYearFilter || ''),
+    academicYear: isSearchMode ? '' : (academicYearFilter || settings?.currentAcademicYear || ''),
     total: stats.total,
     boys: stats.boys,
     girls: stats.girls,
@@ -839,7 +858,14 @@ const [barsReady, setBarsReady] = useState(false);
     pendingTotal: admissionPendingStats?.total ?? 0,
     pendingRegular: admissionPendingStats?.totalRegular ?? 0,
     pendingLateral: admissionPendingStats?.totalLateral ?? 0,
-  }), [stats, admissionPendingStats, academicYearFilter, isSearchMode]);
+    ...(prevYearStats && {
+      prevAcademicYear: prevYearStats.academicYear,
+      prevTotal: prevYearStats.total,
+      prevBoys: prevYearStats.boys,
+      prevGirls: prevYearStats.girls,
+      prevByCourse: prevYearStats.byCourse,
+    }),
+  }), [stats, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats]);
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||

@@ -178,6 +178,11 @@ interface SummaryPayload {
   pendingTotal: number;
   pendingRegular: number;
   pendingLateral: number;
+  prevAcademicYear?: string;
+  prevTotal?: number;
+  prevBoys?: number;
+  prevGirls?: number;
+  prevByCourse?: Record<string, number>;
 }
 
 interface AnthropicMessage {
@@ -191,22 +196,38 @@ interface AnthropicResponse {
 
 function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
   return new Promise((resolve, reject) => {
+    const hasPrev = !!p.prevAcademicYear && p.prevTotal !== undefined;
+    const growthLine = hasPrev
+      ? (() => {
+          const diff = p.total - (p.prevTotal ?? 0);
+          const sign = diff >= 0 ? '+' : '';
+          const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
+          return `Year-over-year: ${sign}${diff} students (${sign}${pct}%) vs ${p.prevAcademicYear} (${p.prevTotal} confirmed)`;
+        })()
+      : '';
+
     const prompt = [
-      'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
-      'Generate exactly 3 distinct one-sentence insights from the admission data below.',
-      'Each insight must focus on a DIFFERENT angle:',
-      '  1. Overall enrollment strength and gender ratio',
-      '  2. Course distribution — highlight the leading course and any lagging one',
-      '  3. Pending admissions outlook — how many are unconfirmed and what it means',
-      'Rules: use exact numbers given, plain English, professional tone, no preamble.',
-      'Return ONLY a valid JSON array of exactly 3 strings. Example: ["insight1","insight2","insight3"]',
+      'You are an admissions intelligence analyst for Sanjay Memorial Polytechnic, Sagar.',
+      'Generate exactly 3 sharp, engaging one-sentence insights from the data below.',
+      'Each insight must cover a DIFFERENT angle with a specific focus:',
+      '  1. Enrollment momentum — total strength, gender ratio, and year-over-year growth/decline if prior data is available (use "+X students" or "-X students" language, be direct)',
+      '  2. Course performance — name the top-performing course and the one that needs attention, with their numbers',
+      '  3. Pending conversions — frame as a concrete opportunity or urgency (e.g. "X students are awaiting confirmation")',
+      'Style rules: cite exact numbers, be specific and direct, use active voice, avoid generic filler phrases, no preamble.',
+      'Return ONLY a valid JSON array of exactly 3 strings. No markdown, no labels.',
       '',
-      `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
+      `Current Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
       `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
       `By course — CE: ${p.byCourse['CE'] ?? 0}, ME: ${p.byCourse['ME'] ?? 0}, EC: ${p.byCourse['EC'] ?? 0}, CS: ${p.byCourse['CS'] ?? 0}, EE: ${p.byCourse['EE'] ?? 0}`,
       `By study year — 1st: ${p.byYear['1ST YEAR'] ?? 0}, 2nd: ${p.byYear['2ND YEAR'] ?? 0}, 3rd: ${p.byYear['3RD YEAR'] ?? 0}`,
       `Admission type — Regular: ${p.byAdmType['REGULAR'] ?? 0}, Lateral: ${p.byAdmType['LATERAL'] ?? 0}, Repeater: ${p.byAdmType['REPEATER'] ?? 0}, SNQ: ${p.byAdmType['SNQ'] ?? 0}, External: ${p.byAdmType['EXTERNAL'] ?? 0}`,
-      `Pending (unconfirmed, current year): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+      `Pending (unconfirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+      ...(hasPrev ? [
+        '',
+        `Previous Year (${p.prevAcademicYear}): ${p.prevTotal} students (${p.prevBoys} boys, ${p.prevGirls} girls)`,
+        `Prev by course — CE: ${p.prevByCourse?.['CE'] ?? 0}, ME: ${p.prevByCourse?.['ME'] ?? 0}, EC: ${p.prevByCourse?.['EC'] ?? 0}, CS: ${p.prevByCourse?.['CS'] ?? 0}, EE: ${p.prevByCourse?.['EE'] ?? 0}`,
+        growthLine,
+      ] : []),
     ].join('\n');
 
     const body = JSON.stringify({
