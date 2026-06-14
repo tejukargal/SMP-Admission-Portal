@@ -37,6 +37,12 @@
   to   { transform: translateY(-105%); }
 }
 
+@keyframes glow-emerald {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  50%       { box-shadow: 0 0 8px 2px rgba(52, 211, 153, 0.5); }
+}
+.glow-emerald { animation: glow-emerald 2.4s ease-in-out infinite; }
+
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }

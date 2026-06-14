@@ -180,41 +180,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       : `max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms, opacity 180ms ease ${extraDelay + 60}ms`,
   });
 
-  // Nav item — bg highlight is a separate absolutely-positioned span that morphs
-  // between full-width rounded-rect (expanded) and a 32×32 circle (collapsed),
-  // so the icon never shifts position during the transition.
   function navClass(isActive: boolean) {
-    return `group relative flex items-center gap-2.5 px-3 py-2 w-full text-[13px] font-medium ${
-      isActive ? 'text-white' : 'text-gray-500'
-    }`;
+    const color = isActive
+      ? 'bg-emerald-500 text-white shadow-sm'
+      : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-800';
+    return `group flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] font-medium transition-colors duration-150 ${color}`;
   }
 
-  // Absolutely-positioned highlight span rendered inside each NavLink
-  function NavHighlight({ isActive }: { isActive: boolean }) {
-    return (
-      <span
-        aria-hidden
-        className={`absolute pointer-events-none transition-colors duration-150 ${
-          isActive ? 'bg-emerald-500 shadow-sm' : 'group-hover:bg-emerald-50'
-        }`}
-        style={{
-          top: '50%',
-          transform: 'translateY(-50%)',
-          left: collapsed ? '4px' : '0',
-          width: collapsed ? '32px' : '100%',
-          height: '32px',
-          borderRadius: collapsed ? '9999px' : '0.75rem',
-          transition:
-            'left 220ms cubic-bezier(0.4,0,0.2,1),' +
-            'width 220ms cubic-bezier(0.4,0,0.2,1),' +
-            'border-radius 220ms cubic-bezier(0.4,0,0.2,1)',
-        }}
-      />
-    );
-  }
+  // paddingLeft slides the icon toward center as the sidebar narrows
+  const navItemStyle: React.CSSProperties = {
+    paddingLeft: collapsed ? 14 : 12,
+    transition: 'padding-left 220ms cubic-bezier(0.4,0,0.2,1)',
+  };
 
   function iconClass(isActive: boolean) {
-    return `relative z-10 shrink-0 transition-colors ${
+    return `shrink-0 transition-colors ${
       isActive ? 'text-white' : 'text-gray-400 group-hover:text-emerald-600'
     }`;
   }
@@ -320,14 +300,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             key={to}
             to={to}
             className={({ isActive }) => navClass(isActive)}
+            style={navItemStyle}
             onMouseEnter={(e) => showTooltip(label, e)}
             onMouseLeave={hideTooltip}
           >
             {({ isActive }) => (
               <>
-                <NavHighlight isActive={isActive} />
                 <span className={iconClass(isActive)}><Icon /></span>
-                <span className="relative z-10" style={textStyle()}>{label}</span>
+                <span style={textStyle()}>{label}</span>
+                {isActive && (
+                  <span
+                    className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto"
+                    style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -356,14 +342,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             key={to}
             to={to}
             className={({ isActive }) => navClass(isActive)}
+            style={navItemStyle}
             onMouseEnter={(e) => showTooltip(label, e)}
             onMouseLeave={hideTooltip}
           >
             {({ isActive }) => (
               <>
-                <NavHighlight isActive={isActive} />
                 <span className={iconClass(isActive)}><Icon /></span>
-                <span className="relative z-10" style={textStyle()}>{label}</span>
+                <span style={textStyle()}>{label}</span>
+                {isActive && (
+                  <span
+                    className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto"
+                    style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}
+                  />
+                )}
               </>
             )}
           </NavLink>
