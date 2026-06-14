@@ -164,3 +164,115 @@ export const sendBulkSMS = onCall(
     return { successCount, failCount, total: successCount + failCount };
   },
 );
+
+// ── AI Admission Summary ───────────────────────────────────────────────────
+
+interface SummaryPayload {
+  academicYear: string;
+  total: number;
+  boys: number;
+  girls: number;
+  byCourse: Record<string, number>;
+  byYear: Record<string, number>;
+  byAdmType: Record<string, number>;
+  pendingTotal: number;
+  pendingRegular: number;
+  pendingLateral: number;
+}
+
+interface AnthropicMessage {
+  type: string;
+  text: string;
+}
+
+interface AnthropicResponse {
+  content: AnthropicMessage[];
+}
+
+function callClaude(apiKey: string, p: SummaryPayload): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const prompt = [
+      'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
+      'Write a concise 2–3 sentence insight summary of the current admission data below.',
+      'Use the exact numbers given. No preamble or labels. Plain English, professional tone.',
+      '',
+      `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
+      `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
+      `By course — CE: ${p.byCourse['CE'] ?? 0}, ME: ${p.byCourse['ME'] ?? 0}, EC: ${p.byCourse['EC'] ?? 0}, CS: ${p.byCourse['CS'] ?? 0}, EE: ${p.byCourse['EE'] ?? 0}`,
+      `By study year — 1st: ${p.byYear['1ST YEAR'] ?? 0}, 2nd: ${p.byYear['2ND YEAR'] ?? 0}, 3rd: ${p.byYear['3RD YEAR'] ?? 0}`,
+      `Admission type — Regular: ${p.byAdmType['REGULAR'] ?? 0}, Lateral: ${p.byAdmType['LATERAL'] ?? 0}, Repeater: ${p.byAdmType['REPEATER'] ?? 0}, SNQ: ${p.byAdmType['SNQ'] ?? 0}, External: ${p.byAdmType['EXTERNAL'] ?? 0}`,
+      `Pending (unconfirmed, current year): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+    ].join('\n');
+
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 220,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const req = https.request(
+      {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(raw) as AnthropicResponse;
+            const text = parsed.content?.[0]?.text?.trim() ?? '';
+            if (text) resolve(text);
+            else reject(new Error('Empty AI response'));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+export const generateAdmissionSummary = onCall(
+  { region: 'asia-south1', timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'AI not configured. Add anthropicApiKey to adminConfig/aiSettings in Firestore.',
+      );
+    }
+
+    const { anthropicApiKey } = configSnap.data() as { anthropicApiKey: string };
+    if (!anthropicApiKey?.trim()) {
+      throw new HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    }
+
+    const payload = request.data as SummaryPayload;
+    if (typeof payload.total !== 'number') {
+      throw new HttpsError('invalid-argument', 'Invalid stats payload.');
+    }
+
+    try {
+      const text = await callClaude(anthropicApiKey.trim(), payload);
+      return { text, generatedAt: new Date().toISOString() };
+    } catch {
+      throw new HttpsError('internal', 'AI generation failed. Check the API key and try again.');
+    }
+  },
+);

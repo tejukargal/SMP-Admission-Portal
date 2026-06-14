@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
-import { Button } from '../common/Button';
 
 // App green interleaved between each course colour so it stays dominant
 const COURSE_COLORS = [
@@ -28,7 +27,15 @@ export function Header() {
   return (
     <header className="h-13 bg-white flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid #d1fae5', boxShadow: '0 1px 6px 0 rgba(16,185,129,0.06)' }}>
 
-      {/* Left — app name */}
+      {/* Left — Academic Year */}
+      <div className="flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">Academic Year</p>
+        <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">
+          {settings?.currentAcademicYear ?? '—'}
+        </p>
+      </div>
+
+      {/* Centre — app name */}
       <span
         className="font-black uppercase select-none pointer-events-none whitespace-nowrap"
         style={{
@@ -42,21 +49,16 @@ export function Header() {
         SMP ADMISSIONS
       </span>
 
-      {/* Right — year badge + divider + user info + logout */}
-      <div className="flex items-center gap-3 ml-auto">
-        <div className="text-right shrink-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">Academic Year</p>
-          <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">
-            {settings?.currentAcademicYear ?? '—'}
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div className="h-5 w-px bg-emerald-200 shrink-0" />
-
-        <Button variant="secondary" size="sm" onClick={() => { void logout(); }}>
-          Logout
-        </Button>
+      {/* Right — logout */}
+      <div className="flex-1 flex justify-end">
+        <button
+          onClick={() => { void logout(); }}
+          className="flex items-center gap-1.5 group cursor-pointer"
+          title="Logout"
+        >
+          <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400 group-hover:bg-rose-600 transition-colors" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-rose-500 group-hover:text-rose-700 transition-colors">Logout</span>
+        </button>
       </div>
     </header>
   );

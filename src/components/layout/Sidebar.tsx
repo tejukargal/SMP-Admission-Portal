@@ -169,14 +169,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
 
-  // Sidebar text transition — fades + collapses width in sync with sidebar
+  // Sidebar text transition — fade out first, then snap max-width to 0 (no animated
+  // layout change competing with the sidebar width animation = no jitter at collapse end).
+  // On expand, max-width grows in sync with the sidebar so the label slides in.
   const textStyle = (extraDelay = 0): React.CSSProperties => ({
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     maxWidth: collapsed ? 0 : '160px',
     opacity: collapsed ? 0 : 1,
     transition: collapsed
-      ? `opacity 100ms ease, max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms`
+      ? `opacity 90ms ease ${extraDelay}ms, max-width 0ms linear ${90 + extraDelay}ms`
       : `max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms, opacity 180ms ease ${extraDelay + 60}ms`,
   });
 
@@ -205,6 +207,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       style={{
         width: collapsed ? 60 : 208,
         transition: 'width 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+        willChange: 'width',
         background: 'rgba(255,255,255,0.92)',
         backdropFilter: 'blur(20px)',
         borderRight: '1px solid #d1fae5',

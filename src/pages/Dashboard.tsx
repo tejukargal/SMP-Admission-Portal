@@ -23,6 +23,8 @@ import {
 } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { SMP_FEE_HEADS } from '../types';
+import { AISummaryCard } from '../components/dashboard/AISummaryCard';
+import type { AISummaryPayload } from '../services/aiSummaryService';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -179,48 +181,6 @@ function StatCard({ label, value, total, bg, border, textColor, barFill, subText
         ) : (
           <p className="text-xs text-gray-400">{subText ?? (total > 0 ? `${pct}% of total` : '—')}</p>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Breakdown panel ─────────────────────────────────────────────────────────
-interface BreakdownItem {
-  label: string;
-  value: number;
-  dotClass: string;
-  barClass: string;
-}
-
-function BreakdownPanel({ title, items, total }: { title: string; items: BreakdownItem[]; total: number }) {
-  return (
-    <div className="bg-emerald-50 rounded-2xl border border-emerald-400 p-5" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06), 0 4px 16px 0 rgba(0,0,0,0.07)' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
-        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">{title}</p>
-      </div>
-      <div className="space-y-3.5">
-        {items.map((item) => {
-          const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-          return (
-            <div key={item.label} className="flex items-center gap-2.5">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.dotClass}`} />
-              <span className="text-xs text-gray-600 w-24 truncate shrink-0">{item.label}</span>
-              <span className="text-sm font-bold text-gray-800 w-7 tabular-nums text-right shrink-0">
-                <AnimNum value={item.value} />
-              </span>
-              <div className="flex-1 h-1.5 bg-emerald-50 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${item.barClass} rounded-full transition-all duration-700 ease-out`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-xs text-gray-400 w-8 tabular-nums text-right shrink-0">
-                {pct}%
-              </span>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -868,6 +828,19 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [allStudents, settings]);
 
+  const aiPayload = useMemo<AISummaryPayload>(() => ({
+    academicYear: isSearchMode ? '' : (academicYearFilter || ''),
+    total: stats.total,
+    boys: stats.boys,
+    girls: stats.girls,
+    byCourse: stats.byCourse as Record<string, number>,
+    byYear: stats.byYear as Record<string, number>,
+    byAdmType: stats.byAdmType,
+    pendingTotal: admissionPendingStats?.total ?? 0,
+    pendingRegular: admissionPendingStats?.totalRegular ?? 0,
+    pendingLateral: admissionPendingStats?.totalLateral ?? 0,
+  }), [stats, admissionPendingStats, academicYearFilter, isSearchMode]);
+
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
     !!genderFilter || !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
@@ -941,20 +914,17 @@ const [barsReady, setBarsReady] = useState(false);
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
+        {/* Left: accent bar + greeting/title */}
         <div className="flex items-center gap-2.5">
-          {/* Emerald accent bar */}
           <div className="w-[3px] h-7 rounded-full bg-emerald-400 shrink-0" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{greeting}</p>
             <h2 className="text-xl font-black text-gray-800 leading-none tracking-tight mt-px">Dashboard</h2>
           </div>
         </div>
-        <div className="flex items-center gap-4 flex-wrap justify-end">
-          {/* Date & Time */}
-          <div className="text-right shrink-0">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{clockDate}</p>
-            <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">{clockTime}</p>
-          </div>
+
+        {/* Right: enroll button + separator + date/time */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => void navigate('/enroll')}
             className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
@@ -965,6 +935,11 @@ const [barsReady, setBarsReady] = useState(false);
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
           </button>
+          <div className="h-7 w-px bg-emerald-200 shrink-0" />
+          <div className="shrink-0">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-500/70 leading-none">{clockDate}</p>
+            <p className="text-xl font-black text-gray-800 leading-none mt-px tabular-nums">{clockTime}</p>
+          </div>
         </div>
       </div>
 
@@ -1821,17 +1796,7 @@ const [barsReady, setBarsReady] = useState(false);
                 </div>
               </div>
 
-              <BreakdownPanel
-                title="Admission Type"
-                total={stats.total}
-                items={[
-                  { label: 'Regular',  value: stats.byAdmType['REGULAR'],  dotClass: 'bg-teal-400',    barClass: 'bg-teal-400'    },
-                  { label: 'Repeater', value: stats.byAdmType['REPEATER'], dotClass: 'bg-amber-400',   barClass: 'bg-amber-400'   },
-                  { label: 'Lateral',  value: stats.byAdmType['LATERAL'],  dotClass: 'bg-sky-400',     barClass: 'bg-sky-400'     },
-                  { label: 'External', value: stats.byAdmType['EXTERNAL'], dotClass: 'bg-violet-400',  barClass: 'bg-violet-400'  },
-                  { label: 'SNQ',      value: stats.byAdmType['SNQ'],      dotClass: 'bg-gray-400',    barClass: 'bg-gray-400'    },
-                ]}
-              />
+              <AISummaryCard payload={aiPayload} />
             </div>
 
             {/* Report tables */}
