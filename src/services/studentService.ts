@@ -391,7 +391,15 @@ export async function getStudentEnrollmentHistory(
     records[0].academicYear,
   );
 
-  return { admittedYear, studiedTillYear };
+  const YEAR_ORDER: Record<import('../types').Year, number> = {
+    '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3,
+  };
+  const lastStudiedYear = records.reduce<import('../types').Year>(
+    (max, r) => (YEAR_ORDER[r.year] > YEAR_ORDER[max] ? r.year : max),
+    records[0].year,
+  );
+
+  return { admittedYear, studiedTillYear, lastStudiedYear };
 }
 
 export async function deleteStudentsByAcademicYear(

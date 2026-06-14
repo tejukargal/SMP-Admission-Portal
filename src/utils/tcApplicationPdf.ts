@@ -18,6 +18,17 @@ function formatToday(): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+function academicYearRange(from: AcademicYear, to: AcademicYear): string {
+  const start = parseInt(from.split('-')[0], 10);
+  const end   = parseInt(to.split('-')[0], 10);
+  const years: string[] = [];
+  for (let y = start; y <= end; y++) {
+    const shortEnd = String((y + 1) % 100).padStart(2, '0');
+    years.push(`${y}-${shortEnd}`);
+  }
+  return years.join(', ');
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -30,6 +41,7 @@ export function buildTCApplicationHTML(
   student: Student,
   admittedYear: AcademicYear,
   studiedTillYear: AcademicYear,
+  lastStudiedYear: import('../types').Year,
 ): string {
   const name        = esc(student.studentNameSSLC.trim());
   const fatherName  = esc(student.fatherName.trim());
@@ -42,8 +54,8 @@ export function buildTCApplicationHTML(
   const entryYear    = student.admType === 'LATERAL' ? '2nd' : '1st';
 
   const salutation  = student.gender === 'GIRL' ? 'Madam' : 'Sir';
-  const yearLabel   = student.year === '1ST YEAR' ? '1st Year'
-                    : student.year === '2ND YEAR' ? '2nd Year'
+  const yearLabel   = lastStudiedYear === '1ST YEAR' ? '1st Year'
+                    : lastStudiedYear === '2ND YEAR' ? '2nd Year'
                     : '3rd Year';
   const courseLabel = student.course;
 
@@ -94,7 +106,7 @@ export function buildTCApplicationHTML(
 
   .from-block {
     text-align: left;
-    line-height: 1.8;
+    line-height: 1.4;
     margin-bottom: 20pt;
     font-size: 14pt;
   }
@@ -182,19 +194,20 @@ export function buildTCApplicationHTML(
     <div>${name}</div>
     <div>Reg. No.: ${regNo}</div>
     <div>${student.gender === 'GIRL' ? 'D/o' : 'S/o'} ${fatherName}</div>
-    <div>${yearLabel} &ndash; ${courseLabel}</div>
+    <div>${yearLabel} &ndash; ${courseLabel} (${esc(academicYearRange(admittedYear, studiedTillYear))})</div>
     <div>Sagar.</div>
+    ${(student.studentMobile || student.fatherMobile) ? `<div>Mob: ${esc(student.studentMobile || student.fatherMobile)}</div>` : ''}
+  </div>
+
+  <!-- Salutation -->
+  <div class="salutation">
+    Respected ${salutation},
   </div>
 
   <!-- Subject -->
   <div class="subject-row">
     <span class="subject-label">Sub: </span>
     <span class="subject-text">Request for Transfer Certificate.</span>
-  </div>
-
-  <!-- Salutation -->
-  <div class="salutation">
-    Respected ${salutation},
   </div>
 
   <!-- Body -->
@@ -228,8 +241,8 @@ export function buildTCApplicationHTML(
 
 export async function generateTCApplication(student: Student): Promise<void> {
   const { getStudentEnrollmentHistory } = await import('../services/studentService');
-  const { admittedYear, studiedTillYear } = await getStudentEnrollmentHistory(student);
-  const base = buildTCApplicationHTML(student, admittedYear, studiedTillYear);
+  const { admittedYear, studiedTillYear, lastStudiedYear } = await getStudentEnrollmentHistory(student);
+  const base = buildTCApplicationHTML(student, admittedYear, studiedTillYear, lastStudiedYear);
   const html = base.replace('</body>', `<script>
   window.onload = function () {
     window.print();
