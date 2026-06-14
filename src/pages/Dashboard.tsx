@@ -847,25 +847,54 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [isSearchMode, academicYearFilter, sortedAcademicYears, allStudents]);
 
-  const aiPayload = useMemo<AISummaryPayload>(() => ({
-    academicYear: isSearchMode ? '' : (academicYearFilter || settings?.currentAcademicYear || ''),
-    total: stats.total,
-    boys: stats.boys,
-    girls: stats.girls,
-    byCourse: stats.byCourse as Record<string, number>,
-    byYear: stats.byYear as Record<string, number>,
-    byAdmType: stats.byAdmType,
-    pendingTotal: admissionPendingStats?.total ?? 0,
-    pendingRegular: admissionPendingStats?.totalRegular ?? 0,
-    pendingLateral: admissionPendingStats?.totalLateral ?? 0,
-    ...(prevYearStats && {
-      prevAcademicYear: prevYearStats.academicYear,
-      prevTotal: prevYearStats.total,
-      prevBoys: prevYearStats.boys,
-      prevGirls: prevYearStats.girls,
-      prevByCourse: prevYearStats.byCourse,
-    }),
-  }), [stats, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats]);
+  const aiPayload = useMemo<AISummaryPayload>(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const yr = isSearchMode ? '' : (academicYearFilter || settings?.currentAcademicYear || '');
+    const recentEnrollmentsCount = allStudents.filter(
+      (s) => (!yr || s.academicYear === yr) &&
+        s.admissionStatus === 'CONFIRMED' &&
+        new Date(s.createdAt).getTime() > cutoff,
+    ).length;
+
+    const byAdmCat: Record<string, number> = { GM: 0, SNQ: 0, OTHERS: 0 };
+    for (const s of confirmedStudents) {
+      const k = s.admCat in byAdmCat ? s.admCat : 'OTHERS';
+      byAdmCat[k]++;
+    }
+
+    return {
+      academicYear: yr,
+      total: stats.total,
+      boys: stats.boys,
+      girls: stats.girls,
+      byCourse: stats.byCourse as Record<string, number>,
+      byYear: stats.byYear as Record<string, number>,
+      byAdmType: stats.byAdmType,
+      pendingTotal: admissionPendingStats?.total ?? 0,
+      pendingRegular: admissionPendingStats?.totalRegular ?? 0,
+      pendingLateral: admissionPendingStats?.totalLateral ?? 0,
+      byCourseByYear: stats.byCourseByYear as Record<string, Record<string, number>>,
+      byCategory: Object.fromEntries(
+        ['SC', 'ST', 'C1', '2A', '2B', '3A', '3B', 'GM'].map((cat) => [
+          cat,
+          (stats.byGenderByCategory['BOY'][cat] ?? 0) + (stats.byGenderByCategory['GIRL'][cat] ?? 0),
+        ]),
+      ),
+      byGenderByCourse: {
+        BOY:  Object.fromEntries(COURSES.map((c) => [c, YEARS.reduce((a, yr2) => a + (stats.byGenderByCourseByYear['BOY'][c][yr2] ?? 0), 0)])),
+        GIRL: Object.fromEntries(COURSES.map((c) => [c, YEARS.reduce((a, yr2) => a + (stats.byGenderByCourseByYear['GIRL'][c][yr2] ?? 0), 0)])),
+      },
+      recentEnrollmentsCount,
+      byAdmCat,
+      ...(prevYearStats && {
+        prevAcademicYear: prevYearStats.academicYear,
+        prevTotal: prevYearStats.total,
+        prevBoys: prevYearStats.boys,
+        prevGirls: prevYearStats.girls,
+        prevByCourse: prevYearStats.byCourse,
+      }),
+    };
+  }, [stats, confirmedStudents, allStudents, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats]);
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||

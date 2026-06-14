@@ -143,27 +143,93 @@ exports.sendBulkSMS = (0, https_1.onCall)({ region: 'asia-south1', timeoutSecond
 });
 function callClaude(apiKey, p) {
     return new Promise((resolve, reject) => {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9;
+        const hasPrev = !!p.prevAcademicYear && p.prevTotal !== undefined;
+        const growthLine = hasPrev
+            ? (() => {
+                var _a;
+                const diff = p.total - ((_a = p.prevTotal) !== null && _a !== void 0 ? _a : 0);
+                const sign = diff >= 0 ? '+' : '';
+                const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
+                return `Year-over-year: ${sign}${diff} students (${sign}${pct}%) vs ${p.prevAcademicYear} (${p.prevTotal} confirmed)`;
+            })()
+            : '';
+        const courseYearLines = p.byCourseByYear
+            ? ['Course × Year matrix:',
+                ...['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => {
+                    var _a, _b, _c, _d;
+                    const row = (_a = p.byCourseByYear[c]) !== null && _a !== void 0 ? _a : {};
+                    return `  ${c}: 1st=${(_b = row['1ST YEAR']) !== null && _b !== void 0 ? _b : 0}, 2nd=${(_c = row['2ND YEAR']) !== null && _c !== void 0 ? _c : 0}, 3rd=${(_d = row['3RD YEAR']) !== null && _d !== void 0 ? _d : 0}`;
+                }),
+            ]
+            : [];
+        const categoryLine = p.byCategory
+            ? `Category breakdown — GM: ${(_a = p.byCategory['GM']) !== null && _a !== void 0 ? _a : 0}, C1: ${(_b = p.byCategory['C1']) !== null && _b !== void 0 ? _b : 0}, 2A: ${(_c = p.byCategory['2A']) !== null && _c !== void 0 ? _c : 0}, 2B: ${(_d = p.byCategory['2B']) !== null && _d !== void 0 ? _d : 0}, 3A: ${(_e = p.byCategory['3A']) !== null && _e !== void 0 ? _e : 0}, 3B: ${(_f = p.byCategory['3B']) !== null && _f !== void 0 ? _f : 0}, SC: ${(_g = p.byCategory['SC']) !== null && _g !== void 0 ? _g : 0}, ST: ${(_h = p.byCategory['ST']) !== null && _h !== void 0 ? _h : 0}`
+            : '';
+        const genderCourseLines = p.byGenderByCourse
+            ? ['Gender per course (Boys / Girls):',
+                ...['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => {
+                    var _a, _b, _c, _d;
+                    const boys = (_b = (_a = p.byGenderByCourse['BOY']) === null || _a === void 0 ? void 0 : _a[c]) !== null && _b !== void 0 ? _b : 0;
+                    const girls = (_d = (_c = p.byGenderByCourse['GIRL']) === null || _c === void 0 ? void 0 : _c[c]) !== null && _d !== void 0 ? _d : 0;
+                    return `  ${c}: ${boys}B / ${girls}G`;
+                }),
+            ]
+            : [];
+        const recentLine = p.recentEnrollmentsCount !== undefined
+            ? `Recent enrollments (last 7 days): ${p.recentEnrollmentsCount} new confirmed students`
+            : '';
+        const admCatLine = p.byAdmCat
+            ? `Admission category — GM seats: ${(_j = p.byAdmCat['GM']) !== null && _j !== void 0 ? _j : 0}, SNQ seats: ${(_k = p.byAdmCat['SNQ']) !== null && _k !== void 0 ? _k : 0}, Others: ${(_l = p.byAdmCat['OTHERS']) !== null && _l !== void 0 ? _l : 0}`
+            : '';
+        const YEAR_INTAKE = 63;
+        const y1 = (_m = p.byYear['1ST YEAR']) !== null && _m !== void 0 ? _m : 0;
+        const y2 = (_o = p.byYear['2ND YEAR']) !== null && _o !== void 0 ? _o : 0;
+        const y3 = (_p = p.byYear['3RD YEAR']) !== null && _p !== void 0 ? _p : 0;
+        const fillLine = `Year-wise fill (intake ${YEAR_INTAKE}/year) — 1st: ${y1} (${Math.round(y1 / YEAR_INTAKE * 100)}%), 2nd: ${y2} (${Math.round(y2 / YEAR_INTAKE * 100)}%), 3rd: ${y3} (${Math.round(y3 / YEAR_INTAKE * 100)}%)`;
         const prompt = [
-            'You are an admissions data analyst for Sanjay Memorial Polytechnic, Sagar.',
-            'Generate exactly 3 distinct one-sentence insights from the admission data below.',
-            'Each insight must focus on a DIFFERENT angle:',
-            '  1. Overall enrollment strength and gender ratio',
-            '  2. Course distribution — highlight the leading course and any lagging one',
-            '  3. Pending admissions outlook — how many are unconfirmed and what it means',
-            'Rules: use exact numbers given, plain English, professional tone, no preamble.',
-            'Return ONLY a valid JSON array of exactly 3 strings. Example: ["insight1","insight2","insight3"]',
+            'You are an admissions intelligence analyst for Sanjay Memorial Polytechnic, Sagar.',
+            'Generate between 10 and 15 sharp, engaging one-sentence insights from the data below.',
+            'Cover as many DIFFERENT angles as the data supports — pick from this pool:',
+            '  • Overall enrollment strength and gender ratio',
+            '  • Year-over-year growth or decline (only if prior year data is present)',
+            '  • Course rankings — top performer and one needing attention',
+            '  • Course × Year matrix — which cell is highest or lowest',
+            '  • Year-wise fill rate vs 63-seat-per-year intake',
+            '  • Pending conversions — regular vs lateral urgency',
+            '  • Recent activity — last 7 days enrollment momentum',
+            '  • Category diversity — SC/ST/OBC share vs GM',
+            '  • Gender representation per course — most and least female-friendly',
+            '  • Admission type mix — regular / lateral / SNQ / repeater ratios',
+            '  • GM vs SNQ seat allocation',
+            '  • A standout or surprising specific number from the data',
+            '  • Actionable opportunity (e.g. converting pending students or boosting a weak course)',
+            '  • One positive or celebratory highlight',
+            'Style rules: cite exact numbers, one sentence each, active voice, no filler phrases, no preamble.',
+            'Return ONLY a valid JSON array of 10–15 strings. No markdown, no labels, no explanation.',
             '',
-            `Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
+            `Current Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
             `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
-            `By course — CE: ${(_a = p.byCourse['CE']) !== null && _a !== void 0 ? _a : 0}, ME: ${(_b = p.byCourse['ME']) !== null && _b !== void 0 ? _b : 0}, EC: ${(_c = p.byCourse['EC']) !== null && _c !== void 0 ? _c : 0}, CS: ${(_d = p.byCourse['CS']) !== null && _d !== void 0 ? _d : 0}, EE: ${(_e = p.byCourse['EE']) !== null && _e !== void 0 ? _e : 0}`,
-            `By study year — 1st: ${(_f = p.byYear['1ST YEAR']) !== null && _f !== void 0 ? _f : 0}, 2nd: ${(_g = p.byYear['2ND YEAR']) !== null && _g !== void 0 ? _g : 0}, 3rd: ${(_h = p.byYear['3RD YEAR']) !== null && _h !== void 0 ? _h : 0}`,
-            `Admission type — Regular: ${(_j = p.byAdmType['REGULAR']) !== null && _j !== void 0 ? _j : 0}, Lateral: ${(_k = p.byAdmType['LATERAL']) !== null && _k !== void 0 ? _k : 0}, Repeater: ${(_l = p.byAdmType['REPEATER']) !== null && _l !== void 0 ? _l : 0}, SNQ: ${(_m = p.byAdmType['SNQ']) !== null && _m !== void 0 ? _m : 0}, External: ${(_o = p.byAdmType['EXTERNAL']) !== null && _o !== void 0 ? _o : 0}`,
-            `Pending (unconfirmed, current year): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+            `By course — CE: ${(_q = p.byCourse['CE']) !== null && _q !== void 0 ? _q : 0}, ME: ${(_r = p.byCourse['ME']) !== null && _r !== void 0 ? _r : 0}, EC: ${(_s = p.byCourse['EC']) !== null && _s !== void 0 ? _s : 0}, CS: ${(_t = p.byCourse['CS']) !== null && _t !== void 0 ? _t : 0}, EE: ${(_u = p.byCourse['EE']) !== null && _u !== void 0 ? _u : 0}`,
+            `By study year — 1st: ${y1}, 2nd: ${y2}, 3rd: ${y3}`,
+            fillLine,
+            `Admission type — Regular: ${(_v = p.byAdmType['REGULAR']) !== null && _v !== void 0 ? _v : 0}, Lateral: ${(_w = p.byAdmType['LATERAL']) !== null && _w !== void 0 ? _w : 0}, Repeater: ${(_x = p.byAdmType['REPEATER']) !== null && _x !== void 0 ? _x : 0}, SNQ: ${(_y = p.byAdmType['SNQ']) !== null && _y !== void 0 ? _y : 0}, External: ${(_z = p.byAdmType['EXTERNAL']) !== null && _z !== void 0 ? _z : 0}`,
+            `Pending (unconfirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+            ...(recentLine ? [recentLine] : []),
+            ...(categoryLine ? [categoryLine] : []),
+            ...(admCatLine ? [admCatLine] : []),
+            ...courseYearLines,
+            ...genderCourseLines,
+            ...(hasPrev ? [
+                '',
+                `Previous Year (${p.prevAcademicYear}): ${p.prevTotal} students (${p.prevBoys} boys, ${p.prevGirls} girls)`,
+                `Prev by course — CE: ${(_1 = (_0 = p.prevByCourse) === null || _0 === void 0 ? void 0 : _0['CE']) !== null && _1 !== void 0 ? _1 : 0}, ME: ${(_3 = (_2 = p.prevByCourse) === null || _2 === void 0 ? void 0 : _2['ME']) !== null && _3 !== void 0 ? _3 : 0}, EC: ${(_5 = (_4 = p.prevByCourse) === null || _4 === void 0 ? void 0 : _4['EC']) !== null && _5 !== void 0 ? _5 : 0}, CS: ${(_7 = (_6 = p.prevByCourse) === null || _6 === void 0 ? void 0 : _6['CS']) !== null && _7 !== void 0 ? _7 : 0}, EE: ${(_9 = (_8 = p.prevByCourse) === null || _8 === void 0 ? void 0 : _8['EE']) !== null && _9 !== void 0 ? _9 : 0}`,
+                growthLine,
+            ] : []),
         ].join('\n');
         const body = JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
-            max_tokens: 400,
+            max_tokens: 1100,
             messages: [{ role: 'user', content: prompt }],
         });
         const req = https.request({

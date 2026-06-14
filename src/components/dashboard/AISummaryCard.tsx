@@ -53,6 +53,11 @@ export function AISummaryCard({ payload }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-2.5">
+          {insights && insights.length > 1 && !loading && (
+            <span className="text-[9px] text-emerald-400/60 font-medium tabular-nums">
+              {currentIndex + 1} of {insights.length}
+            </span>
+          )}
           {timeLabel && !loading && (
             <span className="text-[9px] text-emerald-400/60 font-medium tabular-nums">{timeLabel}</span>
           )}

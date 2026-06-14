@@ -183,6 +183,11 @@ interface SummaryPayload {
   prevBoys?: number;
   prevGirls?: number;
   prevByCourse?: Record<string, number>;
+  byCourseByYear?: Record<string, Record<string, number>>;
+  byCategory?: Record<string, number>;
+  byGenderByCourse?: Record<string, Record<string, number>>;
+  recentEnrollmentsCount?: number;
+  byAdmCat?: Record<string, number>;
 }
 
 interface AnthropicMessage {
@@ -206,22 +211,76 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
         })()
       : '';
 
+    const courseYearLines = p.byCourseByYear
+      ? ['Course × Year matrix:',
+          ...['CE','ME','EC','CS','EE'].map((c) => {
+            const row = p.byCourseByYear![c] ?? {};
+            return `  ${c}: 1st=${row['1ST YEAR'] ?? 0}, 2nd=${row['2ND YEAR'] ?? 0}, 3rd=${row['3RD YEAR'] ?? 0}`;
+          }),
+        ]
+      : [];
+
+    const categoryLine = p.byCategory
+      ? `Category breakdown — GM: ${p.byCategory['GM'] ?? 0}, C1: ${p.byCategory['C1'] ?? 0}, 2A: ${p.byCategory['2A'] ?? 0}, 2B: ${p.byCategory['2B'] ?? 0}, 3A: ${p.byCategory['3A'] ?? 0}, 3B: ${p.byCategory['3B'] ?? 0}, SC: ${p.byCategory['SC'] ?? 0}, ST: ${p.byCategory['ST'] ?? 0}`
+      : '';
+
+    const genderCourseLines = p.byGenderByCourse
+      ? ['Gender per course (Boys / Girls):',
+          ...['CE','ME','EC','CS','EE'].map((c) => {
+            const boys = p.byGenderByCourse!['BOY']?.[c] ?? 0;
+            const girls = p.byGenderByCourse!['GIRL']?.[c] ?? 0;
+            return `  ${c}: ${boys}B / ${girls}G`;
+          }),
+        ]
+      : [];
+
+    const recentLine = p.recentEnrollmentsCount !== undefined
+      ? `Recent enrollments (last 7 days): ${p.recentEnrollmentsCount} new confirmed students`
+      : '';
+
+    const admCatLine = p.byAdmCat
+      ? `Admission category — GM seats: ${p.byAdmCat['GM'] ?? 0}, SNQ seats: ${p.byAdmCat['SNQ'] ?? 0}, Others: ${p.byAdmCat['OTHERS'] ?? 0}`
+      : '';
+
+    const YEAR_INTAKE = 63;
+    const y1 = p.byYear['1ST YEAR'] ?? 0;
+    const y2 = p.byYear['2ND YEAR'] ?? 0;
+    const y3 = p.byYear['3RD YEAR'] ?? 0;
+    const fillLine = `Year-wise fill (intake ${YEAR_INTAKE}/year) — 1st: ${y1} (${Math.round(y1/YEAR_INTAKE*100)}%), 2nd: ${y2} (${Math.round(y2/YEAR_INTAKE*100)}%), 3rd: ${y3} (${Math.round(y3/YEAR_INTAKE*100)}%)`;
+
     const prompt = [
       'You are an admissions intelligence analyst for Sanjay Memorial Polytechnic, Sagar.',
-      'Generate exactly 3 sharp, engaging one-sentence insights from the data below.',
-      'Each insight must cover a DIFFERENT angle with a specific focus:',
-      '  1. Enrollment momentum — total strength, gender ratio, and year-over-year growth/decline if prior data is available (use "+X students" or "-X students" language, be direct)',
-      '  2. Course performance — name the top-performing course and the one that needs attention, with their numbers',
-      '  3. Pending conversions — frame as a concrete opportunity or urgency (e.g. "X students are awaiting confirmation")',
-      'Style rules: cite exact numbers, be specific and direct, use active voice, avoid generic filler phrases, no preamble.',
-      'Return ONLY a valid JSON array of exactly 3 strings. No markdown, no labels.',
+      'Generate between 10 and 15 sharp, engaging one-sentence insights from the data below.',
+      'Cover as many DIFFERENT angles as the data supports — pick from this pool:',
+      '  • Overall enrollment strength and gender ratio',
+      '  • Year-over-year growth or decline (only if prior year data is present)',
+      '  • Course rankings — top performer and one needing attention',
+      '  • Course × Year matrix — which cell is highest or lowest',
+      '  • Year-wise fill rate vs 63-seat-per-year intake',
+      '  • Pending conversions — regular vs lateral urgency',
+      '  • Recent activity — last 7 days enrollment momentum',
+      '  • Category diversity — SC/ST/OBC share vs GM',
+      '  • Gender representation per course — most and least female-friendly',
+      '  • Admission type mix — regular / lateral / SNQ / repeater ratios',
+      '  • GM vs SNQ seat allocation',
+      '  • A standout or surprising specific number from the data',
+      '  • Actionable opportunity (e.g. converting pending students or boosting a weak course)',
+      '  • One positive or celebratory highlight',
+      'Style rules: cite exact numbers, one sentence each, active voice, no filler phrases, no preamble.',
+      'Return ONLY a valid JSON array of 10–15 strings. No markdown, no labels, no explanation.',
       '',
       `Current Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
       `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
       `By course — CE: ${p.byCourse['CE'] ?? 0}, ME: ${p.byCourse['ME'] ?? 0}, EC: ${p.byCourse['EC'] ?? 0}, CS: ${p.byCourse['CS'] ?? 0}, EE: ${p.byCourse['EE'] ?? 0}`,
-      `By study year — 1st: ${p.byYear['1ST YEAR'] ?? 0}, 2nd: ${p.byYear['2ND YEAR'] ?? 0}, 3rd: ${p.byYear['3RD YEAR'] ?? 0}`,
+      `By study year — 1st: ${y1}, 2nd: ${y2}, 3rd: ${y3}`,
+      fillLine,
       `Admission type — Regular: ${p.byAdmType['REGULAR'] ?? 0}, Lateral: ${p.byAdmType['LATERAL'] ?? 0}, Repeater: ${p.byAdmType['REPEATER'] ?? 0}, SNQ: ${p.byAdmType['SNQ'] ?? 0}, External: ${p.byAdmType['EXTERNAL'] ?? 0}`,
       `Pending (unconfirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+      ...(recentLine ? [recentLine] : []),
+      ...(categoryLine ? [categoryLine] : []),
+      ...(admCatLine ? [admCatLine] : []),
+      ...courseYearLines,
+      ...genderCourseLines,
       ...(hasPrev ? [
         '',
         `Previous Year (${p.prevAcademicYear}): ${p.prevTotal} students (${p.prevBoys} boys, ${p.prevGirls} girls)`,
@@ -232,7 +291,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
+      max_tokens: 1100,
       messages: [{ role: 'user', content: prompt }],
     });
 

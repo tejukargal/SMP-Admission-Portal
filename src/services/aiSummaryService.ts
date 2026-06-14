@@ -17,6 +17,11 @@ export interface AISummaryPayload {
   prevBoys?: number;
   prevGirls?: number;
   prevByCourse?: Record<string, number>;
+  byCourseByYear?: Record<string, Record<string, number>>;
+  byCategory?: Record<string, number>;
+  byGenderByCourse?: Record<string, Record<string, number>>;
+  recentEnrollmentsCount?: number;
+  byAdmCat?: Record<string, number>;
 }
 
 export interface AISummaryResult {
