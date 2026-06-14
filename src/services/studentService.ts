@@ -362,7 +362,7 @@ export async function getStudentsByRegNumber(regNumber: string): Promise<Student
  */
 export async function getStudentEnrollmentHistory(
   student: Student,
-): Promise<{ admittedYear: AcademicYear; studiedTillYear: AcademicYear; lastStudiedYear: import('../types').Year }> {
+): Promise<{ admittedYear: AcademicYear; studiedTillYear: AcademicYear; lastStudiedYear: import('../types').Year; records: Student[] }> {
   let records: Student[] = [];
 
   if (student.regNumber && student.regNumber.trim()) {
@@ -399,7 +399,7 @@ export async function getStudentEnrollmentHistory(
     records[0].year,
   );
 
-  return { admittedYear, studiedTillYear, lastStudiedYear };
+  return { admittedYear, studiedTillYear, lastStudiedYear, records };
 }
 
 export async function deleteStudentsByAcademicYear(

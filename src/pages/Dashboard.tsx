@@ -324,7 +324,7 @@ export function Dashboard() {
   const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
-  const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null>>(new Map());
+  const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -543,9 +543,15 @@ export function Dashboard() {
         statusMap.set(s.id, status);
       }
 
-      // Compute total due per student group (same key logic as studentGroups useMemo)
-      const groupDueMap = new Map<string, number | null>();
+      // Compute total due per student group (only 2021-22 and later — prior data unavailable)
+      const groupDueMap = new Map<string, number | null | 'unavailable'>();
+      // Pre-seed every group as unavailable; upgraded below for 2021-22+ enrollments
       for (const s of searchResults) {
+        const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
+        if (!groupDueMap.has(groupKey)) groupDueMap.set(groupKey, 'unavailable');
+      }
+      for (const s of searchResults) {
+        if (s.academicYear < '2021-22') continue;
         const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
         const paid = paidByStudent.get(s.id) ?? 0;
         let allotted: number | null;
@@ -557,9 +563,10 @@ export function Dashboard() {
         }
         const prev = groupDueMap.get(groupKey);
         if (allotted !== null) {
-          groupDueMap.set(groupKey, (prev ?? 0) + (allotted - paid));
-        } else if (prev === undefined) {
-          groupDueMap.set(groupKey, null); // no structure configured for this enrollment
+          const prevNum = typeof prev === 'number' ? prev : 0;
+          groupDueMap.set(groupKey, prevNum + (allotted - paid));
+        } else if (prev === 'unavailable') {
+          groupDueMap.set(groupKey, null); // has 2021-22+ enrollment but no structure configured
         }
         // if prev is already a number and this enrollment has no structure, keep the running total
       }
@@ -1231,6 +1238,11 @@ const [barsReady, setBarsReady] = useState(false);
                     {!searchFeeLoading && (() => {
                       const due = searchGroupDue.get(group.key);
                       if (due === undefined) return null;
+                      if (due === 'unavailable') return (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+                          Fee records unavailable
+                        </span>
+                      );
                       if (due === null) return (
                         <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-400">
                           Fee structure not set

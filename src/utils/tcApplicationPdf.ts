@@ -37,11 +37,112 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function inr(n: number): string {
+  return '₹ ' + n.toLocaleString('en-IN');
+}
+
+// ── Per-year fee due row ──────────────────────────────────────────────────────
+interface YearDueRow {
+  studyYear: string;
+  academicYear: string;
+  allotted: number | null;
+  paid: number;
+  unavailable: boolean;
+}
+
+async function loadFeeDues(records: Student[]): Promise<YearDueRow[]> {
+  const { SMP_FEE_HEADS } = await import('../types');
+  const { getFeeStructuresByAcademicYear } = await import('../services/feeStructureService');
+  const { getFeeRecordsByStudent } = await import('../services/feeRecordService');
+  const { getFeeOverride } = await import('../services/feeOverrideService');
+
+  const sorted = [...records].sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+
+  // Pre-fetch structures for all unique post-2021-22 years in parallel
+  const eligibleYears = [...new Set(
+    sorted.filter((r) => r.academicYear >= '2021-22').map((r) => r.academicYear)
+  )];
+  const structsByYear = new Map<string, import('../types').FeeStructure[]>();
+  await Promise.all(
+    eligibleYears.map(async (ay) => {
+      const s = await getFeeStructuresByAcademicYear(ay as AcademicYear);
+      structsByYear.set(ay, s);
+    })
+  );
+
+  const rows: YearDueRow[] = [];
+
+  for (const r of sorted) {
+    const studyYear =
+      r.year === '1ST YEAR' ? '1st Year'
+      : r.year === '2ND YEAR' ? '2nd Year'
+      : '3rd Year';
+
+    if (r.academicYear < '2021-22') {
+      rows.push({ studyYear, academicYear: r.academicYear, allotted: null, paid: 0, unavailable: true });
+      continue;
+    }
+
+    const [feeRecs, override] = await Promise.all([
+      getFeeRecordsByStudent(r.id, r.academicYear),
+      getFeeOverride(r.id, r.academicYear),
+    ]);
+
+    const paid = feeRecs.reduce((sum, rec) => {
+      const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (rec.smp[key] ?? 0), 0);
+      const addlSum = (rec.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
+      return sum + smpSum + rec.svk + addlSum;
+    }, 0);
+
+    let allotted: number | null = null;
+    if (override) {
+      const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (override.smp[key] ?? 0), 0);
+      const addlSum = (override.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
+      allotted = smpSum + override.svk + addlSum;
+    } else {
+      const struct = (structsByYear.get(r.academicYear) ?? []).find(
+        (s) => s.course === r.course && s.year === r.year && s.admType === r.admType && s.admCat === r.admCat
+      );
+      if (struct) {
+        const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (struct.smp[key] ?? 0), 0);
+        const addlSum = (struct.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
+        allotted = smpSum + struct.svk + addlSum;
+      }
+    }
+
+    rows.push({ studyYear, academicYear: r.academicYear, allotted, paid, unavailable: false });
+  }
+
+  return rows;
+}
+
+function buildFeeSection(rows: YearDueRow[]): string {
+  const dueRows = rows.filter((r) => !r.unavailable && r.allotted !== null && (r.allotted - r.paid) > 0);
+  const totalDue = dueRows.reduce((s, r) => s + (r.allotted! - r.paid), 0);
+
+  let content: string;
+  if (dueRows.length === 0) {
+    content = `<span class="fd-nil">No Fee Dues</span>`;
+  } else {
+    const items = dueRows
+      .map((r) => `<span class="fd-item">${r.academicYear} &mdash; ${inr(r.allotted! - r.paid)}</span>`)
+      .join('<span class="fd-sep"> &middot; </span>');
+    content = `${items}<span class="fd-sep"> &middot; </span><span class="fd-total">Total &mdash; ${inr(totalDue)}</span>`;
+  }
+
+  return `
+  <div class="fd-wrap">
+    <span class="fd-label">Fee Dues</span>
+    ${content}
+  </div>`;
+}
+
 export function buildTCApplicationHTML(
   student: Student,
   admittedYear: AcademicYear,
   studiedTillYear: AcademicYear,
   lastStudiedYear: import('../types').Year,
+  feeDues?: YearDueRow[],
 ): string {
   const name        = esc(student.studentNameSSLC.trim());
   const fatherName  = esc(student.fatherName.trim());
@@ -58,6 +159,8 @@ export function buildTCApplicationHTML(
                     : lastStudiedYear === '2ND YEAR' ? '2nd Year'
                     : '3rd Year';
   const courseLabel = student.course;
+
+  const feeSectionHTML = feeDues && feeDues.length > 0 ? buildFeeSection(feeDues) : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -167,6 +270,29 @@ export function buildTCApplicationHTML(
     font-weight: bold;
   }
 
+  /* ── Fee dues section ── */
+  .fd-wrap {
+    margin-top: 14pt;
+    border-top: 0.75pt solid #000;
+    padding-top: 5pt;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6pt;
+    font-size: 9.5pt;
+  }
+  .fd-label {
+    font-size: 9pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.4pt;
+    white-space: nowrap;
+  }
+  .fd-item { white-space: nowrap; font-weight: bold; color: #900; }
+  .fd-sep  { color: #aaa; }
+  .fd-total { white-space: nowrap; font-weight: bold; color: #900; }
+  .fd-nil  { color: #060; font-style: italic; }
+
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
@@ -234,6 +360,9 @@ export function buildTCApplicationHTML(
     </div>
   </div>
 
+  <!-- Fee dues -->
+  ${feeSectionHTML}
+
 </div>
 </body>
 </html>`;
@@ -241,8 +370,9 @@ export function buildTCApplicationHTML(
 
 export async function generateTCApplication(student: Student): Promise<void> {
   const { getStudentEnrollmentHistory } = await import('../services/studentService');
-  const { admittedYear, studiedTillYear, lastStudiedYear } = await getStudentEnrollmentHistory(student);
-  const base = buildTCApplicationHTML(student, admittedYear, studiedTillYear, lastStudiedYear);
+  const { admittedYear, studiedTillYear, lastStudiedYear, records } = await getStudentEnrollmentHistory(student);
+  const feeDues = await loadFeeDues(records);
+  const base = buildTCApplicationHTML(student, admittedYear, studiedTillYear, lastStudiedYear, feeDues);
   const html = base.replace('</body>', `<script>
   window.onload = function () {
     window.print();
