@@ -1849,9 +1849,9 @@ const [barsReady, setBarsReady] = useState(false);
                     );
                   })}
                 </div>
-              </div>
 
-              <AISummaryCard payload={aiPayload} />
+                <AISummaryCard payload={aiPayload} compact />
+              </div>
             </div>
 
             {/* Report tables */}
