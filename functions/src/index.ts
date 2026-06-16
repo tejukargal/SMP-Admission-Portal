@@ -357,7 +357,7 @@ Keep these terms in English even inside Kannada sentences (exact form, no transl
 All other Kannada must be natural Karnataka Kannada — not a literal word-for-word translation of the English sentence. A fluent Kannada speaker should find it natural.
 
 ## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON array of exactly 15 objects. No markdown fences, no explanation, no trailing text.
+Return ONLY a raw JSON array of exactly 12 objects. No markdown fences, no explanation, no trailing text.
 Each object must have exactly these 4 string keys:
   "title"   — short English title, 2–4 words
   "titleKn" — same title in Kannada, 2–4 words
@@ -399,8 +399,8 @@ Special thanks to the college Principal and staff for their support.`;
     const USER_MSG = [
       `== THIS RUN'S EMPHASIS ==`,
       emphasisAngle,
-      `Generate 15 insights now. Apply the emphasis above across your statistics choices while still covering all required topics listed below.`,
-      `Interleave the 4–5 app tips naturally — do NOT group them all at the start or end.`,
+      `Generate 12 insights now. Apply the emphasis above across your statistics choices while still covering all required topics listed below.`,
+      `Interleave 3–4 app tips naturally — do NOT group them all at the start or end.`,
       '',
       `== REQUIRED STATISTICS TOPICS — all from ${cyLabel} ==`,
       `1. Total confirmed students with boys/girls count and overall girl percentage`,
@@ -490,7 +490,7 @@ Special thanks to the college Principal and staff for their support.`;
 }
 
 export const generateAdmissionSummary = onCall(
-  { region: 'asia-south1', timeoutSeconds: 90 },
+  { region: 'asia-south1', timeoutSeconds: 300 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign in required.');
