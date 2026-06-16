@@ -23,8 +23,8 @@ import {
 } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import { AISummaryCard, CompactAIInsight } from '../components/dashboard/AISummaryCard';
-import type { AISummaryPayload } from '../services/aiSummaryService';
+import { FeeStatsCard } from '../components/dashboard/FeeStatsCard';
+import type { FeeStatsData } from '../components/dashboard/FeeStatsCard';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -852,127 +852,85 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [allStudents, settings]);
 
-  const prevYearStats = useMemo(() => {
-    if (isSearchMode || !academicYearFilter) return null;
-    const idx = sortedAcademicYears.indexOf(academicYearFilter);
-    if (idx === -1 || idx >= sortedAcademicYears.length - 1) return null;
-    const prevYear = sortedAcademicYears[idx + 1];
-    const prev = allStudents.filter(
-      (s) => s.academicYear === prevYear && s.admissionStatus === 'CONFIRMED'
-    );
-    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
-    for (const s of prev) { if (s.course in byCourse) byCourse[s.course]++; }
-    return {
-      academicYear: prevYear,
-      total: prev.length,
-      boys: prev.filter((s) => s.gender === 'BOY').length,
-      girls: prev.filter((s) => s.gender === 'GIRL').length,
-      byCourse,
-    };
-  }, [isSearchMode, academicYearFilter, sortedAcademicYears, allStudents]);
 
-  // ── All-years aggregate stats (for AI overall context) ───────────────────
-  const overallAIStats = useMemo(() => {
-    const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
-    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
-    const byCategory: Record<string, number> = { GM: 0, SC: 0, ST: 0, C1: 0, '2A': 0, '2B': 0, '3A': 0, '3B': 0 };
-    const byGenderByCourse: Record<string, Record<string, number>> = {
-      BOY:  { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
-      GIRL: { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
-    };
-    for (const s of confirmed) {
-      if (s.course in byCourse) byCourse[s.course]++;
-      if (s.category in byCategory) byCategory[s.category]++;
-      if (s.gender in byGenderByCourse && s.course in byGenderByCourse[s.gender]) {
-        byGenderByCourse[s.gender][s.course]++;
+  // ── Fee statistics for the fee stats card ────────────────────────────────
+  const [feeStatsData, setFeeStatsData] = useState<FeeStatsData | null>(null);
+  const [feeStatsLoading, setFeeStatsLoading] = useState(false);
+
+  useEffect(() => {
+    const yr = (academicYearFilter || settings?.currentAcademicYear) as AcademicYear | undefined;
+    if (!yr) return;
+    const scopedStudents = allStudents.filter(
+      (s) => s.academicYear === yr && s.admissionStatus === 'CONFIRMED',
+    );
+    if (scopedStudents.length === 0) { setFeeStatsData(null); return; }
+
+    let cancelled = false;
+    setFeeStatsLoading(true);
+
+    async function load() {
+      const [records, structures, overrides] = await Promise.all([
+        getFeeRecordsByAcademicYear(yr!),
+        getFeeStructuresByAcademicYear(yr!),
+        getFeeOverridesByYear(yr!),
+      ]);
+      if (cancelled) return;
+
+      const paidById = new Map<string, number>();
+      for (const r of records) {
+        const smp = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (r.smp[k] ?? 0), 0);
+        const addl = (r.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
+        paidById.set(r.studentId, (paidById.get(r.studentId) ?? 0) + smp + r.svk + addl);
+      }
+
+      const allottedByKey = new Map<string, number>();
+      for (const fs of structures) {
+        const k = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
+        const smp = SMP_FEE_HEADS.reduce((t, { key: fk }) => t + (fs.smp[fk] ?? 0), 0);
+        const addl = (fs.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
+        allottedByKey.set(k, smp + fs.svk + addl);
+      }
+
+      const overrideById = new Map<string, number>();
+      for (const o of overrides) {
+        const smp = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
+        const addl = (o.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
+        overrideById.set(o.studentId, smp + o.svk + addl);
+      }
+
+      const mkBucket = () => ({ allotted: 0, collected: 0, dues: 0, pending: 0, total: 0 });
+      const byCourse: FeeStatsData['byCourse'] = { CE: mkBucket(), ME: mkBucket(), EC: mkBucket(), CS: mkBucket(), EE: mkBucket() };
+      const byYear: FeeStatsData['byYear'] = { '1ST YEAR': mkBucket(), '2ND YEAR': mkBucket(), '3RD YEAR': mkBucket() };
+      let totalAllotted = 0, totalCollected = 0, totalDues = 0, totalPending = 0;
+
+      for (const s of scopedStudents) {
+        const collected = paidById.get(s.id) ?? 0;
+        const allotted = overrideById.has(s.id)
+          ? overrideById.get(s.id)!
+          : (allottedByKey.get(`${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? 0);
+        const dues = Math.max(0, allotted - collected);
+        const hasDues = dues > 0;
+
+        totalAllotted   += allotted;
+        totalCollected  += collected;
+        totalDues       += dues;
+        if (hasDues) totalPending++;
+
+        const cb = byCourse[s.course as Course];
+        const yb = byYear[s.year as Year];
+        if (cb) { cb.allotted += allotted; cb.collected += collected; cb.dues += dues; cb.total++; if (hasDues) cb.pending++; }
+        if (yb) { yb.allotted += allotted; yb.collected += collected; yb.dues += dues; yb.total++; if (hasDues) yb.pending++; }
+      }
+
+      if (!cancelled) {
+        setFeeStatsData({ totalAllotted, totalCollected, totalDues, totalPending, totalStudents: scopedStudents.length, byCourse, byYear, academicYear: yr! });
+        setFeeStatsLoading(false);
       }
     }
-    return {
-      total: confirmed.length,
-      boys: confirmed.filter((s) => s.gender === 'BOY').length,
-      girls: confirmed.filter((s) => s.gender === 'GIRL').length,
-      byCourse,
-      byCategory,
-      byGenderByCourse,
-    };
-  }, [allStudents]);
 
-  // ── Current active academic year stats ────────────────────────────────────
-  const currentYearAIStats = useMemo(() => {
-    const cy = settings?.currentAcademicYear;
-    if (!cy) return null;
-    const confirmed = allStudents.filter((s) => s.academicYear === cy && s.admissionStatus === 'CONFIRMED');
-    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
-    for (const s of confirmed) { if (s.course in byCourse) byCourse[s.course]++; }
-    return {
-      total: confirmed.length,
-      boys: confirmed.filter((s) => s.gender === 'BOY').length,
-      girls: confirmed.filter((s) => s.gender === 'GIRL').length,
-      byCourse,
-    };
-  }, [allStudents, settings]);
-
-  const aiPayload = useMemo<AISummaryPayload>(() => {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const yr = isSearchMode ? '' : (academicYearFilter || settings?.currentAcademicYear || '');
-    const recentEnrollmentsCount = allStudents.filter(
-      (s) => (!yr || s.academicYear === yr) &&
-        s.admissionStatus === 'CONFIRMED' &&
-        new Date(s.createdAt).getTime() > cutoff,
-    ).length;
-
-    const byAdmCat: Record<string, number> = { GM: 0, SNQ: 0, OTHERS: 0 };
-    for (const s of confirmedStudents) {
-      const k = s.admCat in byAdmCat ? s.admCat : 'OTHERS';
-      byAdmCat[k]++;
-    }
-
-    return {
-      academicYear: yr,
-      total: stats.total,
-      boys: stats.boys,
-      girls: stats.girls,
-      byCourse: stats.byCourse as Record<string, number>,
-      byYear: stats.byYear as Record<string, number>,
-      byAdmType: stats.byAdmType,
-      pendingTotal: admissionPendingStats?.total ?? 0,
-      pendingRegular: admissionPendingStats?.totalRegular ?? 0,
-      pendingLateral: admissionPendingStats?.totalLateral ?? 0,
-      byCourseByYear: stats.byCourseByYear as Record<string, Record<string, number>>,
-      byCategory: Object.fromEntries(
-        ['SC', 'ST', 'C1', '2A', '2B', '3A', '3B', 'GM'].map((cat) => [
-          cat,
-          (stats.byGenderByCategory['BOY'][cat] ?? 0) + (stats.byGenderByCategory['GIRL'][cat] ?? 0),
-        ]),
-      ),
-      byGenderByCourse: {
-        BOY:  Object.fromEntries(COURSES.map((c) => [c, YEARS.reduce((a, yr2) => a + (stats.byGenderByCourseByYear['BOY'][c][yr2] ?? 0), 0)])),
-        GIRL: Object.fromEntries(COURSES.map((c) => [c, YEARS.reduce((a, yr2) => a + (stats.byGenderByCourseByYear['GIRL'][c][yr2] ?? 0), 0)])),
-      },
-      recentEnrollmentsCount,
-      byAdmCat,
-      ...(prevYearStats && {
-        prevAcademicYear: prevYearStats.academicYear,
-        prevTotal: prevYearStats.total,
-        prevBoys: prevYearStats.boys,
-        prevGirls: prevYearStats.girls,
-        prevByCourse: prevYearStats.byCourse,
-      }),
-      currentAcademicYear: settings?.currentAcademicYear ?? '',
-      overallTotal: overallAIStats.total,
-      overallBoys: overallAIStats.boys,
-      overallGirls: overallAIStats.girls,
-      overallByCourse: overallAIStats.byCourse,
-      overallByCategory: overallAIStats.byCategory,
-      overallByGenderByCourse: overallAIStats.byGenderByCourse,
-      ...(currentYearAIStats && {
-        currentYearTotal: currentYearAIStats.total,
-        currentYearBoys: currentYearAIStats.boys,
-        currentYearGirls: currentYearAIStats.girls,
-        currentYearByCourse: currentYearAIStats.byCourse,
-      }),
-    };
-  }, [stats, confirmedStudents, allStudents, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats, overallAIStats, currentYearAIStats]);
+    load().catch(() => { if (!cancelled) setFeeStatsLoading(false); });
+    return () => { cancelled = true; };
+  }, [academicYearFilter, settings?.currentAcademicYear, allStudents]);
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
@@ -1579,8 +1537,7 @@ const [barsReady, setBarsReady] = useState(false);
                       })}
                     </div>
 
-                    {/* AI insight — full-card overlay, cycles with the bar chart */}
-                    <CompactAIInsight payload={aiPayload} />
+
                   </div>
                 );
               })()}
@@ -1962,8 +1919,8 @@ const [barsReady, setBarsReady] = useState(false);
                     </div>
                   </div>
 
-                  {/* Pill bars */}
-                  <div className="flex gap-3 flex-1">
+                  {/* Bars */}
+                  <div className="flex gap-2 flex-1">
                     {COURSES.map((course, ci) => {
                       const courseTotal = [0, 1, 2].reduce((s, i) => s + mode.getValue(course, i), 0);
                       return (
@@ -1979,19 +1936,27 @@ const [barsReady, setBarsReady] = useState(false);
                           >
                             {courseTotal}
                           </span>
-                          {/* 3 pill bars */}
+                          {/* 3 track bars */}
                           <div className="flex gap-1 w-full" style={{ height: CHART_H }}>
                             {([0, 1, 2] as const).map((bi) => {
                               const bar = mode.bars[bi];
                               const count = mode.getValue(course, bi);
-                              const fillPct = count > 0 ? Math.max(6, Math.round((count / maxBarCount) * 100)) : 0;
+                              const fillPct = count > 0 ? Math.max(4, Math.round((count / maxBarCount) * 100)) : 0;
                               return (
-                                <div key={bi} className="flex-1 relative rounded-full overflow-hidden">
+                                <div
+                                  key={bi}
+                                  className="flex-1 relative overflow-hidden"
+                                  style={{
+                                    borderRadius: 8,
+                                    background: 'rgba(0,0,0,0.03)',
+                                  }}
+                                >
                                   <div
-                                    className={`absolute bottom-0 left-0 right-0 rounded-full ${bar.fill}`}
+                                    className={`absolute bottom-0 left-0 right-0 ${bar.fill}`}
                                     style={{
+                                      borderRadius: 8,
                                       height: chartBarsReady ? `${fillPct}%` : '0%',
-                                      opacity: 0.88,
+                                      opacity: 0.9,
                                       transition: chartBarsReady
                                         ? `height 680ms cubic-bezier(0.34,1.08,0.64,1) ${(ci * 3 + bi) * 55}ms`
                                         : 'none',
@@ -2032,11 +1997,10 @@ const [barsReady, setBarsReady] = useState(false);
                 );
               })()}
 
-              {/* Dedicated AI Insights card — relative wrapper contributes 0 intrinsic height
-                  so only the chart card sets the grid row height; absolute div fills the result */}
+              {/* Fee stats card — absolute fill so bar chart card sets the row height */}
               <div className="relative">
                 <div className="absolute inset-0 overflow-hidden rounded-2xl">
-                  <AISummaryCard payload={aiPayload} />
+                  <FeeStatsCard data={feeStatsData} loading={feeStatsLoading} />
                 </div>
               </div>
             </div>

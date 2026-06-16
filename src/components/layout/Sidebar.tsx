@@ -169,16 +169,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const mainItems = NAV_ITEMS;
   const adminItems = isAdmin ? ADMIN_ITEMS : STAFF_ONLY;
 
-  // Sidebar text transition — fade out first, then snap max-width to 0 (no animated
-  // layout change competing with the sidebar width animation = no jitter at collapse end).
-  // On expand, max-width grows in sync with the sidebar so the label slides in.
   const textStyle = (extraDelay = 0): React.CSSProperties => ({
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     maxWidth: collapsed ? 0 : '160px',
     opacity: collapsed ? 0 : 1,
     transition: collapsed
-      ? `opacity 90ms ease ${extraDelay}ms, max-width 0ms linear ${90 + extraDelay}ms`
+      ? `opacity 120ms ease ${extraDelay}ms, max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms`
       : `max-width 220ms cubic-bezier(0.4,0,0.2,1) ${extraDelay}ms, opacity 180ms ease ${extraDelay + 60}ms`,
   });
 
@@ -186,13 +183,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const color = isActive
       ? 'bg-emerald-500 text-white shadow-sm'
       : 'text-gray-500 hover:bg-emerald-50 hover:text-emerald-800';
-    return `group flex items-center gap-2.5 px-3 py-2 w-full rounded-xl text-[13px] font-medium transition-colors duration-150 ${color}`;
+    return `group flex items-center gap-2.5 w-full rounded-full text-[13px] font-medium transition-colors duration-150 ${color}`;
   }
 
-  // paddingLeft slides the icon toward center as the sidebar narrows
+  // Fixed padding — icon never shifts. Only paddingRight collapses so the pill narrows
+  // into an oval; rounded-full makes it look circular at 44×32px with no height change.
   const navItemStyle: React.CSSProperties = {
-    paddingLeft: collapsed ? 14 : 12,
-    transition: 'padding-left 220ms cubic-bezier(0.4,0,0.2,1)',
+    paddingTop:    8,
+    paddingBottom: 8,
+    paddingLeft:   14,
+    paddingRight:  collapsed ? 0 : 12,
+    transition: 'padding-right 220ms cubic-bezier(0.4,0,0.2,1)',
   };
 
   function iconClass(isActive: boolean) {
@@ -218,7 +219,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <button
         onClick={onToggle}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors h-13 px-3 shrink-0"
+        className="group flex items-center gap-3 w-full cursor-pointer hover:bg-emerald-50/50 transition-colors h-13 shrink-0"
+        style={{ paddingLeft: 14, paddingRight: 12 }}
       >
         {/* Flip-card logo — front: leaf, back: college logo, auto-cycles every 5s */}
         <div className="relative w-9 h-9 shrink-0" style={{ perspective: '400px' }}>
@@ -311,11 +313,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <>
                 <span className={iconClass(isActive)}><Icon /></span>
                 <span style={textStyle()}>{label}</span>
-                {isActive && (
-                  <span
-                    className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto"
-                    style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}
-                  />
+                {isActive && !collapsed && (
+                  <span className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto" />
                 )}
               </>
             )}
@@ -353,11 +352,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <>
                 <span className={iconClass(isActive)}><Icon /></span>
                 <span style={textStyle()}>{label}</span>
-                {isActive && (
-                  <span
-                    className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto"
-                    style={{ opacity: collapsed ? 0 : 1, transition: 'opacity 150ms ease' }}
-                  />
+                {isActive && !collapsed && (
+                  <span className="w-1 h-4 rounded-full bg-emerald-300 glow-emerald shrink-0 ml-auto" />
                 )}
               </>
             )}

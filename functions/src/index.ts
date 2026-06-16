@@ -165,8 +165,6 @@ export const sendBulkSMS = onCall(
   },
 );
 
-// ── AI Admission Summary ───────────────────────────────────────────────────
-
 interface SummaryPayload {
   academicYear: string;
   total: number;

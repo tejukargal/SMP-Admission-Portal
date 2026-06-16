@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateAdmissionSummary = exports.sendBulkSMS = void 0;
+exports.sendBulkSMS = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const https = __importStar(require("https"));
@@ -141,6 +141,8 @@ exports.sendBulkSMS = (0, https_1.onCall)({ region: 'asia-south1', timeoutSecond
     });
     return { successCount, failCount, total: successCount + failCount };
 });
+// AI insights removed
+/*
 function callClaude(apiKey, p) {
     return new Promise((resolve, reject) => {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2;
@@ -423,4 +425,5 @@ exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', 
         throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
     }
 });
+*/
 //# sourceMappingURL=index.js.map
