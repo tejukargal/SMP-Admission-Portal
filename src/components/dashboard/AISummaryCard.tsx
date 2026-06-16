@@ -259,20 +259,20 @@ export function AISummaryCard({ payload, compact = false }: Props) {
           </div>
         ) : currentInsight ? (
           <div
-            className="grid grid-cols-2 gap-0"
+            className="grid grid-cols-2 gap-0 mt-3"
             style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.45s ease' }}
           >
             {/* English column */}
-            <div className="pr-4 flex flex-col gap-2">
+            <div className="pr-4 flex flex-col gap-2.5">
               <p
-                className="text-[10px] font-bold uppercase tracking-widest leading-none"
+                className="text-[11px] font-bold uppercase tracking-widest leading-none"
                 style={{ color: p.accent }}
               >
                 {currentInsight.title}
               </p>
               <div className="h-px rounded-full" style={{ backgroundColor: p.divider }} />
               <p
-                className="text-[13px] leading-relaxed font-normal"
+                className="text-[14px] leading-relaxed font-normal text-justify"
                 style={{ color: p.body }}
               >
                 {currentInsight.en}
@@ -281,18 +281,18 @@ export function AISummaryCard({ payload, compact = false }: Props) {
 
             {/* Kannada column */}
             <div
-              className="pl-4 border-l flex flex-col gap-2"
+              className="pl-4 border-l flex flex-col gap-2.5"
               style={{ borderColor: p.divider }}
             >
               <p
-                className="text-[10px] font-bold leading-none"
+                className="text-[11px] font-bold leading-none"
                 style={{ color: p.accent + 'cc', fontFamily: "'Noto Sans Kannada', 'Arial Unicode MS', sans-serif" }}
               >
                 {currentInsight.titleKn}
               </p>
               <div className="h-px rounded-full" style={{ backgroundColor: p.divider }} />
               <p
-                className="text-[13px] leading-relaxed font-normal"
+                className="text-[14px] leading-relaxed font-normal text-justify"
                 style={{ color: p.body + 'bb', fontFamily: "'Noto Sans Kannada', 'Arial Unicode MS', sans-serif" }}
               >
                 {currentInsight.kn}
