@@ -324,7 +324,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2400,
+      max_tokens: 3500,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -345,12 +345,36 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
         res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
         res.on('end', () => {
           try {
+            // Surface HTTP-level errors from Anthropic (4xx / 5xx)
+            if (res.statusCode !== 200) {
+              let apiMsg = `HTTP ${res.statusCode}`;
+              try {
+                const errBody = JSON.parse(raw) as { error?: { message?: string } };
+                if (errBody.error?.message) apiMsg += `: ${errBody.error.message}`;
+              } catch { /* raw may not be JSON */ }
+              reject(new Error(apiMsg));
+              return;
+            }
+
             const parsed = JSON.parse(raw) as AnthropicResponse;
             const rawText = parsed.content?.[0]?.text?.trim() ?? '';
-            const match = rawText.match(/\[[\s\S]*\]/);
-            if (!match) { reject(new Error('Invalid AI response format')); return; }
+
+            // Strip optional markdown fences Claude sometimes adds
+            const stripped = rawText
+              .replace(/^```(?:json)?\s*/i, '')
+              .replace(/\s*```\s*$/i, '')
+              .trim();
+
+            const match = stripped.match(/\[[\s\S]*\]/);
+            if (!match) {
+              reject(new Error(`No JSON array in response. Got: ${stripped.slice(0, 200)}`));
+              return;
+            }
             const insights = JSON.parse(match[0]) as Insight[];
-            if (!Array.isArray(insights) || insights.length === 0) { reject(new Error('Empty AI response')); return; }
+            if (!Array.isArray(insights) || insights.length === 0) {
+              reject(new Error('Empty insights array'));
+              return;
+            }
             resolve(insights);
           } catch (err) {
             reject(err);
@@ -392,8 +416,9 @@ export const generateAdmissionSummary = onCall(
     try {
       const insights = await callClaude(anthropicApiKey.trim(), payload);
       return { insights, generatedAt: new Date().toISOString() };
-    } catch {
-      throw new HttpsError('internal', 'AI generation failed. Check the API key and try again.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI generation failed: ${msg}`);
     }
   },
 );

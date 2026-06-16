@@ -244,9 +244,11 @@ export function AISummaryCard({ payload, compact = false }: Props) {
         ) : error ? (
           <div className="flex flex-col justify-center h-full gap-2">
             <p className="text-[12px] font-medium leading-relaxed" style={{ color: p.accent }}>{error}</p>
-            <p className="text-[11px] leading-relaxed text-gray-400">
-              Go to Firestore → <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">adminConfig/aiSettings</code> and add the <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">anthropicApiKey</code> field.
-            </p>
+            {(error.includes('not configured') || error.includes('API key')) && (
+              <p className="text-[11px] leading-relaxed text-gray-400">
+                Go to Firestore → <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">adminConfig/aiSettings</code> and add the <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">anthropicApiKey</code> field.
+              </p>
+            )}
           </div>
         ) : currentInsight ? (
           <div
