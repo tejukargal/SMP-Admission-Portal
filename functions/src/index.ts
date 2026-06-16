@@ -220,167 +220,212 @@ interface AnthropicResponse {
 function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
   return new Promise((resolve, reject) => {
     const hasPrev = !!p.prevAcademicYear && p.prevTotal !== undefined;
+    const COURSES = ['CE', 'ME', 'EC', 'CS', 'EE'] as const;
+    const MAX_SEATS = 63;
 
-    // ── helper: course row for Boys/Girls ────────────────────────────────
-    const genderCourseRow = (gender: string, src?: Record<string, Record<string, number>>) =>
-      ['CE','ME','EC','CS','EE'].map((c) => `${c}:${src?.[gender]?.[c] ?? 0}`).join(', ');
-
-    const YEAR_INTAKE = 63;
-
-    // ── Determine which data represents the current academic year ─────────
-    // If user has current year selected, activeBlock IS the current year.
-    // Otherwise current year comes from the currentYear* fields.
+    // ── Resolve current-year data ────────────────────────────────────────
+    // When the active Dashboard filter IS the current year, the main stats
+    // already represent it. Otherwise pull from the dedicated currentYear* fields.
     const activeIsCurrent = !!p.currentAcademicYear && p.academicYear === p.currentAcademicYear;
-    const cyTotal  = activeIsCurrent ? p.total            : (p.currentYearTotal  ?? 0);
-    const cyBoys   = activeIsCurrent ? p.boys             : (p.currentYearBoys   ?? 0);
-    const cyGirls  = activeIsCurrent ? p.girls            : (p.currentYearGirls  ?? 0);
-    const cyCourse = activeIsCurrent ? p.byCourse         : (p.currentYearByCourse ?? {});
+    const cyTotal  = activeIsCurrent ? p.total  : (p.currentYearTotal  ?? 0);
+    const cyBoys   = activeIsCurrent ? p.boys   : (p.currentYearBoys   ?? 0);
+    const cyGirls  = activeIsCurrent ? p.girls  : (p.currentYearGirls  ?? 0);
+    const cyCourse = activeIsCurrent ? p.byCourse : (p.currentYearByCourse ?? {});
     const cyLabel  = p.currentAcademicYear || p.academicYear || 'Current Year';
 
-    const cyBoysPerCourse  = activeIsCurrent ? genderCourseRow('BOY',  p.byGenderByCourse)  : ['CE','ME','EC','CS','EE'].map((c) => `${c}:${(p.byGenderByCourse?.['BOY']?.[c]  ?? 0)}`).join(', ');
-    const cyGirlsPerCourse = activeIsCurrent ? genderCourseRow('GIRL', p.byGenderByCourse) : ['CE','ME','EC','CS','EE'].map((c) => `${c}:${(p.byGenderByCourse?.['GIRL']?.[c] ?? 0)}`).join(', ');
+    const cyBoysMap  = activeIsCurrent ? (p.byGenderByCourse?.['BOY']  ?? {}) : {};
+    const cyGirlsMap = activeIsCurrent ? (p.byGenderByCourse?.['GIRL'] ?? {}) : {};
 
-    // ── SECTION 1 — Current academic year (PRIMARY FOCUS) ────────────────
+    // ── Pre-compute richer analytics ─────────────────────────────────────
+    const courseTotal  = (c: string) => cyCourse[c] ?? 0;
+    const courseBoys   = (c: string) => cyBoysMap[c]  ?? 0;
+    const courseGirls  = (c: string) => cyGirlsMap[c] ?? 0;
+    const fillPct      = (c: string) => Math.round(courseTotal(c) / MAX_SEATS * 100);
+    const girlPct      = (c: string) => {
+      const t = courseTotal(c);
+      return t > 0 ? Math.round(courseGirls(c) / t * 100) : 0;
+    };
+
+    const coursesByTotal = [...COURSES].sort((a, b) => courseTotal(b) - courseTotal(a));
+    const coursesByGirlPct = [...COURSES].filter(c => courseTotal(c) > 0)
+                                         .sort((a, b) => girlPct(b) - girlPct(a));
+
+    const topCourse    = coursesByTotal[0];
+    const bottomCourse = coursesByTotal[coursesByTotal.length - 1];
+    const mostGirlsCourse  = coursesByGirlPct[0];
+    const leastGirlsCourse = coursesByGirlPct[coursesByGirlPct.length - 1];
+
+    // Category analytics
+    const catMap     = activeIsCurrent ? (p.byCategory ?? {}) : {};
+    const catTotal   = Object.values(catMap).reduce((s, v) => s + v, 0);
+    const gmCount    = catMap['GM'] ?? 0;
+    const scCount    = catMap['SC'] ?? 0;
+    const stCount    = catMap['ST'] ?? 0;
+    const obcCount   = (catMap['2A']??0) + (catMap['2B']??0) + (catMap['3A']??0) + (catMap['3B']??0);
+    const reservedCount  = catTotal - gmCount;
+    const reservedPct    = catTotal > 0 ? Math.round(reservedCount / catTotal * 100) : 0;
+    const gmPct          = catTotal > 0 ? Math.round(gmCount / catTotal * 100) : 0;
+
+    // Study-year data
     const y1 = activeIsCurrent ? (p.byYear['1ST YEAR'] ?? 0) : 0;
     const y2 = activeIsCurrent ? (p.byYear['2ND YEAR'] ?? 0) : 0;
     const y3 = activeIsCurrent ? (p.byYear['3RD YEAR'] ?? 0) : 0;
+    const y1FillPct = Math.round(y1 / MAX_SEATS * 100);
 
-    const currentYearBlock = [
-      `*** CURRENT ACADEMIC YEAR — ${cyLabel} (PRIMARY — generate most insights from this) ***`,
-      `  Total confirmed: ${cyTotal} students — ${cyBoys} boys, ${cyGirls} girls`,
-      `  By course — CE:${cyCourse['CE']??0}, ME:${cyCourse['ME']??0}, EC:${cyCourse['EC']??0}, CS:${cyCourse['CS']??0}, EE:${cyCourse['EE']??0}`,
-      `  Boys per course  — ${cyBoysPerCourse}`,
-      `  Girls per course — ${cyGirlsPerCourse}`,
-      ...(activeIsCurrent && p.byCategory ? [
-        `  Category — GM:${p.byCategory['GM']??0}, SC:${p.byCategory['SC']??0}, ST:${p.byCategory['ST']??0}, C1:${p.byCategory['C1']??0}, 2A:${p.byCategory['2A']??0}, 2B:${p.byCategory['2B']??0}, 3A:${p.byCategory['3A']??0}, 3B:${p.byCategory['3B']??0}`,
-      ] : []),
-      ...(activeIsCurrent ? [
-        `  Admission type — Regular:${p.byAdmType['REGULAR']??0}, Lateral:${p.byAdmType['LATERAL']??0}, Repeater:${p.byAdmType['REPEATER']??0}, SNQ:${p.byAdmType['SNQ']??0}`,
-        `  Adm seats — GM:${p.byAdmCat?.['GM']??0}, SNQ:${p.byAdmCat?.['SNQ']??0}`,
-        `  Study year — 1ST YEAR:${y1} (${Math.round(y1/YEAR_INTAKE*100)}% of ${YEAR_INTAKE} seats), 2ND YEAR:${y2}, 3RD YEAR:${y3}`,
-        `  Pending (not yet confirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
-        ...(p.recentEnrollmentsCount !== undefined ? [`  New in last 7 days: ${p.recentEnrollmentsCount} students`] : []),
-      ] : []),
-    ].join('\n');
-
-    // ── SECTION 2 — Course × Year matrix (current year if available) ──────
-    const matrixBlock = (activeIsCurrent && p.byCourseByYear)
-      ? ['  Course × Year breakdown (current year):',
-          ...['CE','ME','EC','CS','EE'].map((c) => {
-            const row = p.byCourseByYear![c] ?? {};
-            return `    ${c}: 1ST YEAR=${row['1ST YEAR']??0}, 2ND YEAR=${row['2ND YEAR']??0}, 3RD YEAR=${row['3RD YEAR']??0}`;
-          }),
-        ].join('\n')
+    // Year-over-year analytics
+    const cyYoYBase = activeIsCurrent ? p.total : cyTotal;
+    const yoyDiff   = hasPrev ? cyYoYBase - (p.prevTotal ?? 0) : 0;
+    const yoySign   = yoyDiff >= 0 ? '+' : '';
+    const yoyPct    = hasPrev && p.prevTotal ? Math.round(yoyDiff / p.prevTotal * 100) : 0;
+    const courseYoY = hasPrev
+      ? COURSES.map(c => {
+          const d = courseTotal(c) - (p.prevByCourse?.[c] ?? 0);
+          return `${c}: ${d >= 0 ? '+' : ''}${d}`;
+        }).join(', ')
       : '';
 
-    // ── SECTION 3 — All-years cumulative (SECONDARY CONTEXT) ─────────────
-    const overallBlock = (p.overallTotal !== undefined && p.overallTotal !== cyTotal) ? [
-      `*** ALL YEARS COMBINED (secondary context only) ***`,
-      `  Total ever enrolled: ${p.overallTotal} students — ${p.overallBoys??0} boys, ${p.overallGirls??0} girls`,
-      `  By course — CE:${p.overallByCourse?.['CE']??0}, ME:${p.overallByCourse?.['ME']??0}, EC:${p.overallByCourse?.['EC']??0}, CS:${p.overallByCourse?.['CS']??0}, EE:${p.overallByCourse?.['EE']??0}`,
-      `  Boys  — ${genderCourseRow('BOY',  p.overallByGenderByCourse)}`,
-      `  Girls — ${genderCourseRow('GIRL', p.overallByGenderByCourse)}`,
-      ...(p.overallByCategory ? [
-        `  Category — GM:${p.overallByCategory['GM']??0}, SC:${p.overallByCategory['SC']??0}, ST:${p.overallByCategory['ST']??0}, C1:${p.overallByCategory['C1']??0}, 2A:${p.overallByCategory['2A']??0}, 2B:${p.overallByCategory['2B']??0}, 3A:${p.overallByCategory['3A']??0}, 3B:${p.overallByCategory['3B']??0}`,
+    // Overall all-years analytics
+    const hasOverall = p.overallTotal !== undefined && p.overallTotal !== cyTotal;
+    const ovGirlPct  = hasOverall && p.overallTotal
+      ? Math.round((p.overallGirls ?? 0) / p.overallTotal * 100) : 0;
+
+    // ── Variety — rotate emphasis angle each invocation ──────────────────
+    const EMPHASIS_POOL = [
+      `Lean into GENDER DIVERSITY this run: dig into which courses have high/low girl ratios, frame findings with the exact percentages, and make the patterns vivid.`,
+      `Lean into COURSE FILL RATES this run: highlight which courses are near capacity vs. have open seats, use the ${MAX_SEATS}-seat maximum, and make comparisons between courses compelling.`,
+      `Lean into RESERVATION & CATEGORY MIX this run: show what the SC/ST/OBC/GM split reveals about who is being served, use percentages, and highlight any notable category patterns.`,
+      `Lean into YEAR-WISE DISTRIBUTION this run: explore how students are spread across 1ST, 2ND, and 3RD YEAR, what the 1ST YEAR intake says about this batch's potential, and how each course's year mix looks.`,
+      `Lean into ADMISSION PIPELINE HEALTH this run: focus on pending vs. confirmed ratios, what recent enrollments signal, and whether the pipeline looks healthy or needs attention.`,
+      `Lean into COURSE COMPARISON this run: rank the five courses, call out the largest and smallest, look for surprising gaps or close races, and frame it as a story of which disciplines students prefer.`,
+    ];
+    const emphasisAngle = EMPHASIS_POOL[Math.floor(Math.random() * EMPHASIS_POOL.length)];
+
+    // ── Analytics summary block (pre-digested for Claude) ────────────────
+    const analyticsBlock = [
+      `PRE-COMPUTED ANALYTICS — ${cyLabel} (use these exact numbers in your insights):`,
+      `  Overall: ${cyTotal} confirmed (${cyBoys} boys ${cyGirls} girls; ${cyTotal > 0 ? Math.round(cyGirls/cyTotal*100) : 0}% girls overall)`,
+      `  Course totals ranked: ${coursesByTotal.map(c => `${c}:${courseTotal(c)} (${fillPct(c)}% full)`).join(', ')}`,
+      `  Boys per course: ${COURSES.map(c => `${c}:${courseBoys(c)}`).join(', ')}`,
+      `  Girls per course: ${COURSES.map(c => `${c}:${courseGirls(c)} (${girlPct(c)}%)`).join(', ')}`,
+      `  Most girls (% of course): ${mostGirlsCourse} at ${girlPct(mostGirlsCourse)}%`,
+      `  Least girls (% of course): ${leastGirlsCourse} at ${girlPct(leastGirlsCourse)}%`,
+      `  Top enrollment course: ${topCourse} (${courseTotal(topCourse)} students, ${fillPct(topCourse)}% of ${MAX_SEATS} seats)`,
+      `  Lowest enrollment course: ${bottomCourse} (${courseTotal(bottomCourse)} students, ${fillPct(bottomCourse)}% of ${MAX_SEATS} seats)`,
+      ...(activeIsCurrent && catTotal > 0 ? [
+        `  Category: GM ${gmCount} (${gmPct}%), Reserved ${reservedCount} (${reservedPct}%) — SC ${scCount}, ST ${stCount}, OBC (2A+2B+3A+3B) ${obcCount}`,
       ] : []),
-    ].join('\n') : '';
-
-    // ── SECTION 4 — Year-over-year comparison ────────────────────────────
-    const prevBlock = hasPrev ? (() => {
-      const base  = activeIsCurrent ? p.total : cyTotal;
-      const diff  = base - (p.prevTotal ?? 0);
-      const sign  = diff >= 0 ? '+' : '';
-      const pct   = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
-      return [
-        `*** YEAR-OVER-YEAR COMPARISON ***`,
-        `  Previous year (${p.prevAcademicYear}): ${p.prevTotal} students — ${p.prevBoys??0} boys, ${p.prevGirls??0} girls`,
-        `  Prev courses — CE:${p.prevByCourse?.['CE']??0}, ME:${p.prevByCourse?.['ME']??0}, EC:${p.prevByCourse?.['EC']??0}, CS:${p.prevByCourse?.['CS']??0}, EE:${p.prevByCourse?.['EE']??0}`,
-        `  Change vs ${cyLabel}: ${sign}${diff} students (${sign}${pct}%)`,
-      ].join('\n');
-    })() : '';
-
-    const APP_FEATURES = [
-      'APP FEATURES (use these to generate 3–4 tip insights mixed with the statistics):',
-      '  Dashboard Search: Type any student name, mobile number, or registration number in the search bar on the Dashboard to find students instantly. Right-click (or long-press) on any search result to issue a Transfer Certificate (TC), Study Certificate, Provisional Certificate, or Course Completion Certificate.',
-      '  Dashboard Filters: Use the Course, Study Year, Gender, Category, Admission Type, and Status filters on the Dashboard to slice the data any way you need.',
-      '  Year Chips: Click a year chip (e.g. 2024-25) on the Dashboard to see stats for just that batch.',
-      '  Enroll Student: Go to the Enroll page to add a new student or edit an existing one. Edit mode is triggered by searching and selecting a student from the Dashboard.',
-      '  Students Page: Browse the full student list with search and filters; double-click a student row to open their full profile; export filtered lists as PDF reports.',
-      '  Fee Collection (Admin): Admins can collect fees directly from the Dashboard search results — click the "Collect Fee" button next to any student.',
-      '  Fee Register: View all fee records and payment history across all students and years.',
-      '  Settings (Admin): Manage the current academic year, configure fee structures per course and year, create and manage staff accounts, set up SMS messaging, and backup or restore data.',
-      '  About Section: Click the "About" button at the bottom of the sidebar to learn about this application and its developer.',
-      '',
-      'ABOUT THIS APP:',
-      '  Name: SMP Admissions',
-      '  College: Sanjay Memorial Polytechnic, Sagar, Karnataka',
-      '  Description: A purpose-built web app for the complete administrative workflow — student enrollment, fee collection with itemised receipts, document management, and certificate issuance (TC, Study Cert, Provisional Cert, Course Completion Cert) — all from one interface.',
-      '  Developer: Thejaraj R, FDA (First Division Assistant) at Sanjay Memorial Polytechnic, Sagar.',
-      '  Tech: React 19, TypeScript, Tailwind CSS 4, Google Firebase (Firestore + Auth). Role-based access: admins have full access; staff are restricted to permitted operations. Data is cloud-hosted with offline caching.',
-      '  Special thanks to the college Principal and staff for their support in developing this software.',
+      ...(activeIsCurrent ? [
+        `  Admission type: Regular ${p.byAdmType['REGULAR']??0}, Lateral ${p.byAdmType['LATERAL']??0}, Repeater ${p.byAdmType['REPEATER']??0}, SNQ ${p.byAdmType['SNQ']??0}`,
+        `  Study year: 1ST YEAR ${y1} (${y1FillPct}% of ${MAX_SEATS} seats), 2ND YEAR ${y2}, 3RD YEAR ${y3}`,
+        `  Pending: ${p.pendingTotal} not yet confirmed (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+        ...(p.recentEnrollmentsCount !== undefined ? [`  Last 7 days: ${p.recentEnrollmentsCount} new confirmations`] : []),
+      ] : []),
+      ...(hasPrev ? [
+        `  YoY vs ${p.prevAcademicYear}: ${yoySign}${yoyDiff} students (${yoySign}${yoyPct}%) — by course: ${courseYoY}`,
+      ] : []),
+      ...(hasOverall ? [
+        `  All-years cumulative: ${p.overallTotal} students ever (${p.overallBoys??0} boys, ${p.overallGirls??0} girls, ${ovGirlPct}% girls)`,
+        `  All-years by course: ${COURSES.map(c => `${c}:${p.overallByCourse?.[c]??0}`).join(', ')}`,
+      ] : []),
+      ...(activeIsCurrent && p.byCourseByYear ? [
+        `  Course × Year matrix: ${COURSES.map(c => {
+          const row = p.byCourseByYear![c] ?? {};
+          return `${c}[1Y:${row['1ST YEAR']??0} 2Y:${row['2ND YEAR']??0} 3Y:${row['3RD YEAR']??0}]`;
+        }).join(' ')}`,
+      ] : []),
     ].join('\n');
 
-    const prompt = [
-      'You are a friendly assistant for SMP Admissions — the student management app of Sanjay Memorial Polytechnic, Sagar, Karnataka.',
-      `Generate exactly 15 insights: 10–11 about admission statistics and 4–5 tips about app features, interleaved (do NOT group all tips at the end).`,
+    // ── STATIC SYSTEM PROMPT (cached for 1 h) ────────────────────────────
+    const SYSTEM = `You are the AI insights engine for "SMP Admissions" — the official student management system of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka.
+
+You generate fresh, bilingual (English + Kannada) insights shown on the principal's dashboard. Each refresh must produce a genuinely different set — explore different angles, emphasise different patterns, use different comparisons.
+
+## WRITING STYLE
+- Lead with the most striking or specific number first. Example: "CE tops the charts with 45 students — filling 71% of its 63 available seats."
+- Use ratios and comparisons to make numbers vivid: "3 in 4 EE students are boys." or "CS has gained 8 more students than last year — the biggest jump among all courses."
+- For app tips: be concrete and action-oriented. Mention the exact feature name and what it achieves.
+- Avoid vague words ("good", "strong", "impressive"). State the fact and let the number speak.
+- English sentence length: 12–28 words. Kannada: natural equivalent.
+- Vary sentence structures across the 15 insights — don't start every one with the same pattern.
+
+## LANGUAGE RULES — MANDATORY
+Keep these terms in English even inside Kannada sentences (exact form, no translation):
+  Course codes: CE, ME, EC, CS, EE
+  Study years: 1ST YEAR, 2ND YEAR, 3RD YEAR
+  App feature names: Dashboard, Search, Filter, Enroll, Settings, Fee Register, TC, Study Certificate, Provisional Certificate, Fee Collection, Students Page
+  Academic year strings (e.g. 2024-25)
+All other Kannada must be natural Karnataka Kannada — not a literal word-for-word translation of the English sentence. A fluent Kannada speaker should find it natural.
+
+## OUTPUT FORMAT — STRICT
+Return ONLY a raw JSON array of exactly 15 objects. No markdown fences, no explanation, no trailing text.
+Each object must have exactly these 4 string keys:
+  "title"   — short English title, 2–4 words
+  "titleKn" — same title in Kannada, 2–4 words
+  "en"      — one vivid English sentence using exact numbers from the data
+  "kn"      — same idea in natural Kannada (keep English terms listed above)
+
+Valid example object:
+{"title":"CE Leads Enrollment","titleKn":"CE ಅಗ್ರ ದಾಖಲಾತಿ","en":"CE tops all five courses with 45 confirmed students, filling 71% of its 63 available seats.","kn":"ಐದು ಕೋರ್ಸ್‌ಗಳಲ್ಲಿ CE ಮುಂದಿದ್ದು, 63 ಸೀಟಿನಲ್ಲಿ 45 ವಿದ್ಯಾರ್ಥಿಗಳು ಅಂದರೆ 71% ತುಂಬಿದೆ."}
+
+## APP FEATURES REFERENCE (use 4–5 of these for tip insights, interleaved with statistics)
+
+Dashboard Search — Type any student name, registration number, or mobile number in the search bar to find students instantly. Right-click (or long-press on mobile) any result to get quick actions: issue a TC, Study Certificate, Provisional Certificate, or Course Completion Certificate directly.
+
+Dashboard Filters — Use the Course, Study Year, Gender, Category, Admission Type, and Status filter chips to slice and view exactly the student segment you need.
+
+Year Chips — Click any academic year badge on the Dashboard (e.g. 2024-25) to see enrollment stats for just that batch. Click again to return to the all-years view.
+
+Enroll Student — Go to the Enroll page to add a new student or edit an existing one. To edit, search the student on the Dashboard and select them — the app opens their record in edit mode automatically.
+
+Students Page — Browse the full student directory with search and multi-filter support. Double-click any row to open the student's complete profile. Use the PDF export button to generate filtered reports.
+
+Fee Collection (Admin only) — Collect fees directly from the Dashboard: search a student, then click the Collect Fee button on their result card. The app generates an itemised fee receipt.
+
+Fee Register — View the complete payment history across all students and all years. Filter by course, year, or date range to audit collections.
+
+Settings (Admin only) — Configure the current academic year, set fee structures per course and year, manage staff accounts, set up SMS notification templates, and use the Backup & Restore tool.
+
+About Section — Click the "About" link at the bottom of the sidebar for information about this application and its developer.
+
+## ABOUT THIS APP
+Name: SMP Admissions
+College: Sanjay Memorial Polytechnic, Sagar, Karnataka
+Purpose: A purpose-built web application for the complete administrative workflow — student enrollment, fee collection with itemised receipts, document management, and certificate issuance (TC, Study Cert, Provisional Cert, Course Completion Cert) — all in one interface.
+Developer: Thejaraj R, FDA (First Division Assistant) at Sanjay Memorial Polytechnic, Sagar.
+Technology: React 19, TypeScript, Tailwind CSS 4, Google Firebase (Firestore + Authentication). Role-based access — admins have full access, staff are restricted to permitted operations. Data is cloud-hosted with offline caching for reliability.
+Special thanks to the college Principal and staff for their support.`;
+
+    // ── DYNAMIC USER MESSAGE (changes per call — NOT cached) ─────────────
+    const USER_MSG = [
+      `== THIS RUN'S EMPHASIS ==`,
+      emphasisAngle,
+      `Generate 15 insights now. Apply the emphasis above across your statistics choices while still covering all required topics listed below.`,
+      `Interleave the 4–5 app tips naturally — do NOT group them all at the start or end.`,
       '',
-      'PRIORITY RULE: The section marked "CURRENT ACADEMIC YEAR" is your PRIMARY data source.',
-      'AT LEAST 7 of your statistics insights MUST be about the current academic year specifically.',
-      'Use the overall/all-years data only for 1–2 additional context insights (e.g. cumulative totals).',
+      `== REQUIRED STATISTICS TOPICS — all from ${cyLabel} ==`,
+      `1. Total confirmed students with boys/girls count and overall girl percentage`,
+      `2. Top enrollment course — name it, give count and fill-rate percentage`,
+      `3. Lowest enrollment course — name it, highlight the gap vs the top`,
+      `4. Girls distribution — which course has the highest girl percentage and which the lowest`,
+      `5. Boys-per-course comparison — where do most boys enroll`,
+      ...(activeIsCurrent && catTotal > 0 ? [
+        `6. Category/reservation breakdown — GM vs reserved (SC/ST/OBC) percentages`,
+        `7. Admission type mix — regular vs lateral vs SNQ numbers`,
+        `8. Study-year fill rate — how much of the 1ST YEAR intake (of ${MAX_SEATS} seats) is filled`,
+        `9. Pending admissions — how many students are still not confirmed`,
+        ...(p.recentEnrollmentsCount !== undefined ? [`10. Recent activity — new confirmations in the last 7 days`] : []),
+      ] : [`6. All-years cumulative context — total ever enrolled across all batches`]),
+      ...(hasPrev ? [`Extra: Year-over-year change — highlight the course that changed most vs ${p.prevAcademicYear}`] : []),
       '',
-      'LANGUAGE RULES:',
-      '  • Each insight must have a short title in English AND Kannada.',
-      '  • Each insight must have one simple sentence in English AND one natural sentence in Kannada.',
-      '  • Use plain, everyday language. Avoid jargon.',
-      '  • In the Kannada sentence, keep ALL of the following in English exactly as shown:',
-      '      – Course codes: CE, ME, EC, CS, EE',
-      '      – Study years: 1ST YEAR, 2ND YEAR, 3RD YEAR',
-      '      – App feature names: Dashboard, Search, Filter, Enroll, Settings, Fee Register, TC, Study Certificate, Provisional Certificate',
-      '      – Any registration numbers or academic year strings (e.g. 2024-25)',
-      '  • Kannada text must otherwise be natural Karnataka Kannada — not a word-for-word translation.',
-      '',
-      `REQUIRED STATISTICS TOPICS for ${cyLabel} (cover ALL of these using the CURRENT YEAR data):`,
-      `  1. Total confirmed students in ${cyLabel} with boys/girls split`,
-      `  2. Boys per course in ${cyLabel} — which course has the most boys`,
-      `  3. Girls per course in ${cyLabel} — which course has the most/least girls`,
-      `  4. Which course has the highest total enrollment in ${cyLabel}`,
-      `  5. Which course has the lowest enrollment in ${cyLabel}`,
-      ...(activeIsCurrent && p.byCategory ? [
-        `  6. Category breakdown in ${cyLabel} — highlight SC/ST or GM counts`,
-        `  7. Admission type mix in ${cyLabel} — regular vs lateral vs SNQ`,
-        `  8. Study year breakdown — 1ST YEAR vs 2ND YEAR vs 3RD YEAR fill rate`,
-        `  9. Pending admissions in ${cyLabel} — students not yet confirmed`,
-        ...(p.recentEnrollmentsCount !== undefined ? [`  10. New students confirmed in the last 7 days`] : []),
-      ] : [`  6. Total combined enrollment across all years for broader context`]),
-      ...(hasPrev ? [`  (Additional) Year-over-year change: ${cyLabel} vs ${p.prevAcademicYear}`] : []),
-      '',
-      'APP TIP TOPICS (exactly 4–5 of these, interleaved with statistics):',
-      '  • How to search a student and issue a TC or certificate from the Dashboard',
-      '  • How to use the year chips or filters to view specific batches or course data',
-      '  • How to enroll a new student or edit an existing student record',
-      '  • How to collect a fee or view payment history in the Fee Register',
-      '  • What is in the About section and who built this app',
-      '',
-      'OUTPUT FORMAT — return ONLY a valid JSON array of exactly 15 objects. No markdown, no explanation, no trailing text.',
-      'Each object must have exactly these 4 keys:',
-      '  title    — short English title (2–4 words)',
-      '  titleKn  — same title in Kannada (2–4 words)',
-      '  en       — one clear English sentence with exact numbers from the data',
-      '  kn       — same sentence in natural Kannada (keep course codes, year labels, and feature names in English)',
-      '',
-      APP_FEATURES,
-      '',
-      '=== ADMISSION DATA ===',
-      currentYearBlock,
-      ...(matrixBlock ? ['', matrixBlock] : []),
-      ...(overallBlock ? ['', overallBlock] : []),
-      ...(prevBlock ? ['', prevBlock] : []),
+      `== ADMISSION DATA ==`,
+      analyticsBlock,
     ].join('\n');
 
     const body = JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 5000,
-      messages: [{ role: 'user', content: prompt }],
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+      messages: [{ role: 'user', content: USER_MSG }],
     });
 
     const req = https.request(
@@ -391,6 +436,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(body),
         },
