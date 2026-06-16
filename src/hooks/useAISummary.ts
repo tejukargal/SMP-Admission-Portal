@@ -36,10 +36,15 @@ export function useAISummary(): UseAISummaryReturn {
     const cached = summaryCache.get(key);
 
     if (!force && cached && Date.now() - cached.ts < CACHE_TTL) {
-      setInsights(cached.insights);
-      setGeneratedAt(cached.generatedAt);
-      setError(null);
-      return;
+      // Guard against stale cache entries from the old string[] format
+      const first = cached.insights[0];
+      if (first && typeof first === 'object' && 'en' in first) {
+        setInsights(cached.insights);
+        setGeneratedAt(cached.generatedAt);
+        setError(null);
+        return;
+      }
+      summaryCache.delete(key);
     }
 
     inFlight.current = true;
