@@ -424,7 +424,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
 }
 
 export const generateAdmissionSummary = onCall(
-  { region: 'asia-south1', timeoutSeconds: 30 },
+  { region: 'asia-south1', timeoutSeconds: 90 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign in required.');

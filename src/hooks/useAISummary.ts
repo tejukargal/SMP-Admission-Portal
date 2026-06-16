@@ -57,8 +57,20 @@ export function useAISummary(): UseAISummaryReturn {
       setInsights(result.insights);
       setGeneratedAt(result.generatedAt);
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : 'Failed to generate summary';
-      setError(raw.replace(/^FirebaseError:\s*/, '').replace(/^functions\/[\w-]+:\s*/, ''));
+      let msg = 'Failed to generate insights. Please try again.';
+      if (err instanceof Error) {
+        const raw = err.message
+          .replace(/^FirebaseError:\s*/i, '')
+          .replace(/^functions\/[\w-]+:\s*/i, '')
+          .trim();
+        // Raw Firebase error codes (no message attached) — replace with friendly text
+        if (raw && raw !== 'internal' && raw !== 'INTERNAL' && raw !== 'deadline-exceeded') {
+          msg = raw;
+        } else if (raw === 'deadline-exceeded') {
+          msg = 'Request timed out — the AI took too long. Please try again.';
+        }
+      }
+      setError(msg);
     } finally {
       setLoading(false);
       inFlight.current = false;
