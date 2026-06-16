@@ -211,7 +211,7 @@ export function AISummaryCard({ payload, compact = false }: Props) {
       >"</span>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 shrink-0">
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="font-black text-sm leading-none tracking-tighter select-none" style={{ color: p.accent }}>//</span>
           <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: p.title }}>AI Insights</p>
@@ -231,19 +231,26 @@ export function AISummaryCard({ payload, compact = false }: Props) {
         </button>
       </div>
 
-      {/* Body */}
+      {/* Body — starts immediately below the header */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {payload.total === 0 ? (
           <p className="text-sm italic" style={{ color: p.body + '80' }}>No admission data to summarize.</p>
         ) : loading ? (
-          <div className="flex flex-col gap-2.5 h-full justify-center">
-            {[88, 100, 68, 92, 55, 78].map((w, i) => (
-              <div key={i} className="h-2.5 rounded-full animate-pulse" style={{ width: `${w}%`, backgroundColor: p.dotDim }} />
-            ))}
+          <div className="grid grid-cols-2 gap-0">
+            <div className="pr-4 space-y-2">
+              {[55, 100, 82, 74, 90, 60].map((w, i) => (
+                <div key={i} className="h-2 rounded-full animate-pulse" style={{ width: `${w}%`, backgroundColor: p.dotDim }} />
+              ))}
+            </div>
+            <div className="pl-4 border-l space-y-2" style={{ borderColor: p.divider }}>
+              {[60, 95, 78, 85, 68, 55].map((w, i) => (
+                <div key={i} className="h-2 rounded-full animate-pulse" style={{ width: `${w}%`, backgroundColor: p.dotDim }} />
+              ))}
+            </div>
           </div>
         ) : error ? (
-          <div className="flex flex-col justify-center h-full gap-2">
-            <p className="text-[12px] font-medium leading-relaxed" style={{ color: p.accent }}>{error}</p>
+          <div className="flex flex-col gap-2">
+            <p className="text-[12px] leading-relaxed" style={{ color: p.accent }}>{error}</p>
             {(error.includes('not configured') || error.includes('API key')) && (
               <p className="text-[11px] leading-relaxed text-gray-400">
                 Go to Firestore → <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">adminConfig/aiSettings</code> and add the <code className="font-mono bg-gray-100 px-1 py-px rounded text-gray-500">anthropicApiKey</code> field.
@@ -252,44 +259,45 @@ export function AISummaryCard({ payload, compact = false }: Props) {
           </div>
         ) : currentInsight ? (
           <div
-            className="h-full flex flex-col justify-center gap-3"
+            className="grid grid-cols-2 gap-0"
             style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.45s ease' }}
           >
-            {/* Title row: English · Kannada */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className="text-[11px] font-black uppercase tracking-widest leading-none"
+            {/* English column */}
+            <div className="pr-4 flex flex-col gap-2">
+              <p
+                className="text-[10px] font-bold uppercase tracking-widest leading-none"
                 style={{ color: p.accent }}
               >
                 {currentInsight.title}
-              </span>
-              <span className="w-px h-3 rounded-full shrink-0" style={{ backgroundColor: p.accent + '40' }} />
-              <span
-                className="text-[11px] font-semibold leading-none"
-                style={{ color: p.accent + 'bb' }}
+              </p>
+              <div className="h-px rounded-full" style={{ backgroundColor: p.divider }} />
+              <p
+                className="text-[13px] leading-relaxed font-normal"
+                style={{ color: p.body }}
               >
-                {currentInsight.titleKn}
-              </span>
+                {currentInsight.en}
+              </p>
             </div>
 
-            {/* English text */}
-            <p
-              className="text-[15px] leading-relaxed font-semibold"
-              style={{ color: p.body }}
+            {/* Kannada column */}
+            <div
+              className="pl-4 border-l flex flex-col gap-2"
+              style={{ borderColor: p.divider }}
             >
-              {currentInsight.en}
-            </p>
-
-            {/* Divider */}
-            <div className="h-px w-full rounded-full" style={{ backgroundColor: p.divider }} />
-
-            {/* Kannada text */}
-            <p
-              className="text-[13px] leading-relaxed"
-              style={{ color: p.body + 'cc', fontFamily: "'Noto Sans Kannada', 'Arial Unicode MS', sans-serif" }}
-            >
-              {currentInsight.kn}
-            </p>
+              <p
+                className="text-[10px] font-bold leading-none"
+                style={{ color: p.accent + 'cc', fontFamily: "'Noto Sans Kannada', 'Arial Unicode MS', sans-serif" }}
+              >
+                {currentInsight.titleKn}
+              </p>
+              <div className="h-px rounded-full" style={{ backgroundColor: p.divider }} />
+              <p
+                className="text-[13px] leading-relaxed font-normal"
+                style={{ color: p.body + 'bb', fontFamily: "'Noto Sans Kannada', 'Arial Unicode MS', sans-serif" }}
+              >
+                {currentInsight.kn}
+              </p>
+            </div>
           </div>
         ) : null}
       </div>
