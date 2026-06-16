@@ -225,66 +225,77 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
     const genderCourseRow = (gender: string, src?: Record<string, Record<string, number>>) =>
       ['CE','ME','EC','CS','EE'].map((c) => `${c}:${src?.[gender]?.[c] ?? 0}`).join(', ');
 
-    // ── Active-view data block ────────────────────────────────────────────
     const YEAR_INTAKE = 63;
-    const y1 = p.byYear['1ST YEAR'] ?? 0;
-    const y2 = p.byYear['2ND YEAR'] ?? 0;
-    const y3 = p.byYear['3RD YEAR'] ?? 0;
 
-    const activeBlock = [
-      `Active view (${p.academicYear || 'All years'}): ${p.total} confirmed students — ${p.boys} boys, ${p.girls} girls`,
-      `  Courses — CE:${p.byCourse['CE']??0}, ME:${p.byCourse['ME']??0}, EC:${p.byCourse['EC']??0}, CS:${p.byCourse['CS']??0}, EE:${p.byCourse['EE']??0}`,
-      `  Study year — 1st:${y1} (${Math.round(y1/YEAR_INTAKE*100)}% of ${YEAR_INTAKE} seats), 2nd:${y2}, 3rd:${y3}`,
-      `  Boys per course  — ${genderCourseRow('BOY',  p.byGenderByCourse)}`,
-      `  Girls per course — ${genderCourseRow('GIRL', p.byGenderByCourse)}`,
-      p.byCategory
-        ? `  Category — GM:${p.byCategory['GM']??0}, SC:${p.byCategory['SC']??0}, ST:${p.byCategory['ST']??0}, C1:${p.byCategory['C1']??0}, 2A:${p.byCategory['2A']??0}, 2B:${p.byCategory['2B']??0}, 3A:${p.byCategory['3A']??0}, 3B:${p.byCategory['3B']??0}`
-        : null,
-      `  Admission type — Regular:${p.byAdmType['REGULAR']??0}, Lateral:${p.byAdmType['LATERAL']??0}, Repeater:${p.byAdmType['REPEATER']??0}, SNQ:${p.byAdmType['SNQ']??0}`,
-      p.byAdmCat
-        ? `  Adm category — GM seats:${p.byAdmCat['GM']??0}, SNQ seats:${p.byAdmCat['SNQ']??0}`
-        : null,
-      `  Pending (not yet confirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
-      p.recentEnrollmentsCount !== undefined
-        ? `  New in last 7 days: ${p.recentEnrollmentsCount} students`
-        : null,
-    ].filter(Boolean).join('\n');
+    // ── Determine which data represents the current academic year ─────────
+    // If user has current year selected, activeBlock IS the current year.
+    // Otherwise current year comes from the currentYear* fields.
+    const activeIsCurrent = !!p.currentAcademicYear && p.academicYear === p.currentAcademicYear;
+    const cyTotal  = activeIsCurrent ? p.total            : (p.currentYearTotal  ?? 0);
+    const cyBoys   = activeIsCurrent ? p.boys             : (p.currentYearBoys   ?? 0);
+    const cyGirls  = activeIsCurrent ? p.girls            : (p.currentYearGirls  ?? 0);
+    const cyCourse = activeIsCurrent ? p.byCourse         : (p.currentYearByCourse ?? {});
+    const cyLabel  = p.currentAcademicYear || p.academicYear || 'Current Year';
 
-    // ── Course × Year matrix ──────────────────────────────────────────────
-    const matrixBlock = p.byCourseByYear
-      ? ['Course-year breakdown:', ...['CE','ME','EC','CS','EE'].map((c) => {
-          const row = p.byCourseByYear![c] ?? {};
-          return `  ${c}: 1st=${row['1ST YEAR']??0}, 2nd=${row['2ND YEAR']??0}, 3rd=${row['3RD YEAR']??0}`;
-        })].join('\n')
+    const cyBoysPerCourse  = activeIsCurrent ? genderCourseRow('BOY',  p.byGenderByCourse)  : ['CE','ME','EC','CS','EE'].map((c) => `${c}:${(p.byGenderByCourse?.['BOY']?.[c]  ?? 0)}`).join(', ');
+    const cyGirlsPerCourse = activeIsCurrent ? genderCourseRow('GIRL', p.byGenderByCourse) : ['CE','ME','EC','CS','EE'].map((c) => `${c}:${(p.byGenderByCourse?.['GIRL']?.[c] ?? 0)}`).join(', ');
+
+    // ── SECTION 1 — Current academic year (PRIMARY FOCUS) ────────────────
+    const y1 = activeIsCurrent ? (p.byYear['1ST YEAR'] ?? 0) : 0;
+    const y2 = activeIsCurrent ? (p.byYear['2ND YEAR'] ?? 0) : 0;
+    const y3 = activeIsCurrent ? (p.byYear['3RD YEAR'] ?? 0) : 0;
+
+    const currentYearBlock = [
+      `*** CURRENT ACADEMIC YEAR — ${cyLabel} (PRIMARY — generate most insights from this) ***`,
+      `  Total confirmed: ${cyTotal} students — ${cyBoys} boys, ${cyGirls} girls`,
+      `  By course — CE:${cyCourse['CE']??0}, ME:${cyCourse['ME']??0}, EC:${cyCourse['EC']??0}, CS:${cyCourse['CS']??0}, EE:${cyCourse['EE']??0}`,
+      `  Boys per course  — ${cyBoysPerCourse}`,
+      `  Girls per course — ${cyGirlsPerCourse}`,
+      ...(activeIsCurrent && p.byCategory ? [
+        `  Category — GM:${p.byCategory['GM']??0}, SC:${p.byCategory['SC']??0}, ST:${p.byCategory['ST']??0}, C1:${p.byCategory['C1']??0}, 2A:${p.byCategory['2A']??0}, 2B:${p.byCategory['2B']??0}, 3A:${p.byCategory['3A']??0}, 3B:${p.byCategory['3B']??0}`,
+      ] : []),
+      ...(activeIsCurrent ? [
+        `  Admission type — Regular:${p.byAdmType['REGULAR']??0}, Lateral:${p.byAdmType['LATERAL']??0}, Repeater:${p.byAdmType['REPEATER']??0}, SNQ:${p.byAdmType['SNQ']??0}`,
+        `  Adm seats — GM:${p.byAdmCat?.['GM']??0}, SNQ:${p.byAdmCat?.['SNQ']??0}`,
+        `  Study year — 1ST YEAR:${y1} (${Math.round(y1/YEAR_INTAKE*100)}% of ${YEAR_INTAKE} seats), 2ND YEAR:${y2}, 3RD YEAR:${y3}`,
+        `  Pending (not yet confirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+        ...(p.recentEnrollmentsCount !== undefined ? [`  New in last 7 days: ${p.recentEnrollmentsCount} students`] : []),
+      ] : []),
+    ].join('\n');
+
+    // ── SECTION 2 — Course × Year matrix (current year if available) ──────
+    const matrixBlock = (activeIsCurrent && p.byCourseByYear)
+      ? ['  Course × Year breakdown (current year):',
+          ...['CE','ME','EC','CS','EE'].map((c) => {
+            const row = p.byCourseByYear![c] ?? {};
+            return `    ${c}: 1ST YEAR=${row['1ST YEAR']??0}, 2ND YEAR=${row['2ND YEAR']??0}, 3RD YEAR=${row['3RD YEAR']??0}`;
+          }),
+        ].join('\n')
       : '';
 
-    // ── Overall all-years block ───────────────────────────────────────────
-    const overallBlock = p.overallTotal !== undefined ? [
-      `All-years totals (every batch combined): ${p.overallTotal} confirmed — ${p.overallBoys??0} boys, ${p.overallGirls??0} girls`,
-      `  Courses — CE:${p.overallByCourse?.['CE']??0}, ME:${p.overallByCourse?.['ME']??0}, EC:${p.overallByCourse?.['EC']??0}, CS:${p.overallByCourse?.['CS']??0}, EE:${p.overallByCourse?.['EE']??0}`,
+    // ── SECTION 3 — All-years cumulative (SECONDARY CONTEXT) ─────────────
+    const overallBlock = (p.overallTotal !== undefined && p.overallTotal !== cyTotal) ? [
+      `*** ALL YEARS COMBINED (secondary context only) ***`,
+      `  Total ever enrolled: ${p.overallTotal} students — ${p.overallBoys??0} boys, ${p.overallGirls??0} girls`,
+      `  By course — CE:${p.overallByCourse?.['CE']??0}, ME:${p.overallByCourse?.['ME']??0}, EC:${p.overallByCourse?.['EC']??0}, CS:${p.overallByCourse?.['CS']??0}, EE:${p.overallByCourse?.['EE']??0}`,
       `  Boys  — ${genderCourseRow('BOY',  p.overallByGenderByCourse)}`,
       `  Girls — ${genderCourseRow('GIRL', p.overallByGenderByCourse)}`,
-      p.overallByCategory
-        ? `  Category — GM:${p.overallByCategory['GM']??0}, SC:${p.overallByCategory['SC']??0}, ST:${p.overallByCategory['ST']??0}, C1:${p.overallByCategory['C1']??0}, 2A:${p.overallByCategory['2A']??0}, 2B:${p.overallByCategory['2B']??0}, 3A:${p.overallByCategory['3A']??0}, 3B:${p.overallByCategory['3B']??0}`
-        : null,
-    ].filter(Boolean).join('\n') : '';
-
-    // ── Current academic year block (if different from active view) ───────
-    const showCurrentYr = p.currentYearTotal !== undefined && p.currentAcademicYear && p.currentAcademicYear !== p.academicYear;
-    const currentYrBlock = showCurrentYr ? [
-      `Current academic year (${p.currentAcademicYear}): ${p.currentYearTotal} confirmed — ${p.currentYearBoys??0} boys, ${p.currentYearGirls??0} girls`,
-      `  Courses — CE:${p.currentYearByCourse?.['CE']??0}, ME:${p.currentYearByCourse?.['ME']??0}, EC:${p.currentYearByCourse?.['EC']??0}, CS:${p.currentYearByCourse?.['CS']??0}, EE:${p.currentYearByCourse?.['EE']??0}`,
+      ...(p.overallByCategory ? [
+        `  Category — GM:${p.overallByCategory['GM']??0}, SC:${p.overallByCategory['SC']??0}, ST:${p.overallByCategory['ST']??0}, C1:${p.overallByCategory['C1']??0}, 2A:${p.overallByCategory['2A']??0}, 2B:${p.overallByCategory['2B']??0}, 3A:${p.overallByCategory['3A']??0}, 3B:${p.overallByCategory['3B']??0}`,
+      ] : []),
     ].join('\n') : '';
 
-    // ── Year-over-year block ──────────────────────────────────────────────
+    // ── SECTION 4 — Year-over-year comparison ────────────────────────────
     const prevBlock = hasPrev ? (() => {
-      const diff = p.total - (p.prevTotal ?? 0);
-      const sign = diff >= 0 ? '+' : '';
-      const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
+      const base  = activeIsCurrent ? p.total : cyTotal;
+      const diff  = base - (p.prevTotal ?? 0);
+      const sign  = diff >= 0 ? '+' : '';
+      const pct   = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
       return [
-        `Previous year (${p.prevAcademicYear}): ${p.prevTotal} students — ${p.prevBoys??0} boys, ${p.prevGirls??0} girls`,
+        `*** YEAR-OVER-YEAR COMPARISON ***`,
+        `  Previous year (${p.prevAcademicYear}): ${p.prevTotal} students — ${p.prevBoys??0} boys, ${p.prevGirls??0} girls`,
         `  Prev courses — CE:${p.prevByCourse?.['CE']??0}, ME:${p.prevByCourse?.['ME']??0}, EC:${p.prevByCourse?.['EC']??0}, CS:${p.prevByCourse?.['CS']??0}, EE:${p.prevByCourse?.['EE']??0}`,
-        `  Change vs this year: ${sign}${diff} students (${sign}${pct}%)`,
+        `  Change vs ${cyLabel}: ${sign}${diff} students (${sign}${pct}%)`,
       ].join('\n');
     })() : '';
 
@@ -311,7 +322,11 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
 
     const prompt = [
       'You are a friendly assistant for SMP Admissions — the student management app of Sanjay Memorial Polytechnic, Sagar, Karnataka.',
-      'Generate exactly 10 insights: roughly 6–7 about the admission statistics and 3–4 tips about app features (mixed together, not grouped).',
+      `Generate exactly 15 insights: 10–11 about admission statistics and 4–5 tips about app features, interleaved (do NOT group all tips at the end).`,
+      '',
+      'PRIORITY RULE: The section marked "CURRENT ACADEMIC YEAR" is your PRIMARY data source.',
+      'AT LEAST 7 of your statistics insights MUST be about the current academic year specifically.',
+      'Use the overall/all-years data only for 1–2 additional context insights (e.g. cumulative totals).',
       '',
       'LANGUAGE RULES:',
       '  • Each insight must have a short title in English AND Kannada.',
@@ -324,42 +339,47 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
       '      – Any registration numbers or academic year strings (e.g. 2024-25)',
       '  • Kannada text must otherwise be natural Karnataka Kannada — not a word-for-word translation.',
       '',
-      'STATISTICS TOPICS (pick the most interesting 6–7 from the data):',
-      '  • Total confirmed students this year and overall all-years total',
-      '  • Boy vs girl count overall and per course (which course has most / least girls)',
-      '  • Course comparison — top course and the one needing attention',
-      '  • Category breakdown — SC, ST, OBC (2A/2B/3A/3B), GM counts',
-      '  • Year-over-year change — only if previous year data is present',
-      '  • Pending students — how many still need to confirm admission',
-      '  • Recent activity — new confirmed students in the last 7 days',
+      `REQUIRED STATISTICS TOPICS for ${cyLabel} (cover ALL of these using the CURRENT YEAR data):`,
+      `  1. Total confirmed students in ${cyLabel} with boys/girls split`,
+      `  2. Boys per course in ${cyLabel} — which course has the most boys`,
+      `  3. Girls per course in ${cyLabel} — which course has the most/least girls`,
+      `  4. Which course has the highest total enrollment in ${cyLabel}`,
+      `  5. Which course has the lowest enrollment in ${cyLabel}`,
+      ...(activeIsCurrent && p.byCategory ? [
+        `  6. Category breakdown in ${cyLabel} — highlight SC/ST or GM counts`,
+        `  7. Admission type mix in ${cyLabel} — regular vs lateral vs SNQ`,
+        `  8. Study year breakdown — 1ST YEAR vs 2ND YEAR vs 3RD YEAR fill rate`,
+        `  9. Pending admissions in ${cyLabel} — students not yet confirmed`,
+        ...(p.recentEnrollmentsCount !== undefined ? [`  10. New students confirmed in the last 7 days`] : []),
+      ] : [`  6. Total combined enrollment across all years for broader context`]),
+      ...(hasPrev ? [`  (Additional) Year-over-year change: ${cyLabel} vs ${p.prevAcademicYear}`] : []),
       '',
-      'APP TIP TOPICS (pick 3–4 of these):',
+      'APP TIP TOPICS (exactly 4–5 of these, interleaved with statistics):',
       '  • How to search a student and issue a TC or certificate from the Dashboard',
-      '  • How to use the year chips or filters to view specific data',
-      '  • How to enroll a new student or edit an existing one',
-      '  • How to collect a fee or view payment history',
+      '  • How to use the year chips or filters to view specific batches or course data',
+      '  • How to enroll a new student or edit an existing student record',
+      '  • How to collect a fee or view payment history in the Fee Register',
       '  • What is in the About section and who built this app',
       '',
-      'OUTPUT FORMAT — return ONLY a valid JSON array of exactly 10 objects. No markdown, no explanation.',
+      'OUTPUT FORMAT — return ONLY a valid JSON array of exactly 15 objects. No markdown, no explanation, no trailing text.',
       'Each object must have exactly these 4 keys:',
       '  title    — short English title (2–4 words)',
       '  titleKn  — same title in Kannada (2–4 words)',
-      '  en       — one clear English sentence (use exact numbers for statistics; describe the feature clearly for tips)',
+      '  en       — one clear English sentence with exact numbers from the data',
       '  kn       — same sentence in natural Kannada (keep course codes, year labels, and feature names in English)',
       '',
       APP_FEATURES,
       '',
       '=== ADMISSION DATA ===',
-      activeBlock,
+      currentYearBlock,
       ...(matrixBlock ? ['', matrixBlock] : []),
       ...(overallBlock ? ['', overallBlock] : []),
-      ...(currentYrBlock ? ['', currentYrBlock] : []),
       ...(prevBlock ? ['', prevBlock] : []),
     ].join('\n');
 
     const body = JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3500,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 5000,
       messages: [{ role: 'user', content: prompt }],
     });
 

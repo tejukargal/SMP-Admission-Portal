@@ -143,93 +143,157 @@ exports.sendBulkSMS = (0, https_1.onCall)({ region: 'asia-south1', timeoutSecond
 });
 function callClaude(apiKey, p) {
     return new Promise((resolve, reject) => {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23;
         const hasPrev = !!p.prevAcademicYear && p.prevTotal !== undefined;
-        const growthLine = hasPrev
-            ? (() => {
-                var _a;
-                const diff = p.total - ((_a = p.prevTotal) !== null && _a !== void 0 ? _a : 0);
-                const sign = diff >= 0 ? '+' : '';
-                const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
-                return `Year-over-year: ${sign}${diff} students (${sign}${pct}%) vs ${p.prevAcademicYear} (${p.prevTotal} confirmed)`;
-            })()
-            : '';
-        const courseYearLines = p.byCourseByYear
-            ? ['Course × Year matrix:',
+        // ── helper: course row for Boys/Girls ────────────────────────────────
+        const genderCourseRow = (gender, src) => ['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => { var _a, _b; return `${c}:${(_b = (_a = src === null || src === void 0 ? void 0 : src[gender]) === null || _a === void 0 ? void 0 : _a[c]) !== null && _b !== void 0 ? _b : 0}`; }).join(', ');
+        const YEAR_INTAKE = 63;
+        // ── Determine which data represents the current academic year ─────────
+        // If user has current year selected, activeBlock IS the current year.
+        // Otherwise current year comes from the currentYear* fields.
+        const activeIsCurrent = !!p.currentAcademicYear && p.academicYear === p.currentAcademicYear;
+        const cyTotal = activeIsCurrent ? p.total : ((_a = p.currentYearTotal) !== null && _a !== void 0 ? _a : 0);
+        const cyBoys = activeIsCurrent ? p.boys : ((_b = p.currentYearBoys) !== null && _b !== void 0 ? _b : 0);
+        const cyGirls = activeIsCurrent ? p.girls : ((_c = p.currentYearGirls) !== null && _c !== void 0 ? _c : 0);
+        const cyCourse = activeIsCurrent ? p.byCourse : ((_d = p.currentYearByCourse) !== null && _d !== void 0 ? _d : {});
+        const cyLabel = p.currentAcademicYear || p.academicYear || 'Current Year';
+        const cyBoysPerCourse = activeIsCurrent ? genderCourseRow('BOY', p.byGenderByCourse) : ['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => { var _a, _b, _c; return `${c}:${((_c = (_b = (_a = p.byGenderByCourse) === null || _a === void 0 ? void 0 : _a['BOY']) === null || _b === void 0 ? void 0 : _b[c]) !== null && _c !== void 0 ? _c : 0)}`; }).join(', ');
+        const cyGirlsPerCourse = activeIsCurrent ? genderCourseRow('GIRL', p.byGenderByCourse) : ['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => { var _a, _b, _c; return `${c}:${((_c = (_b = (_a = p.byGenderByCourse) === null || _a === void 0 ? void 0 : _a['GIRL']) === null || _b === void 0 ? void 0 : _b[c]) !== null && _c !== void 0 ? _c : 0)}`; }).join(', ');
+        // ── SECTION 1 — Current academic year (PRIMARY FOCUS) ────────────────
+        const y1 = activeIsCurrent ? ((_e = p.byYear['1ST YEAR']) !== null && _e !== void 0 ? _e : 0) : 0;
+        const y2 = activeIsCurrent ? ((_f = p.byYear['2ND YEAR']) !== null && _f !== void 0 ? _f : 0) : 0;
+        const y3 = activeIsCurrent ? ((_g = p.byYear['3RD YEAR']) !== null && _g !== void 0 ? _g : 0) : 0;
+        const currentYearBlock = [
+            `*** CURRENT ACADEMIC YEAR — ${cyLabel} (PRIMARY — generate most insights from this) ***`,
+            `  Total confirmed: ${cyTotal} students — ${cyBoys} boys, ${cyGirls} girls`,
+            `  By course — CE:${(_h = cyCourse['CE']) !== null && _h !== void 0 ? _h : 0}, ME:${(_j = cyCourse['ME']) !== null && _j !== void 0 ? _j : 0}, EC:${(_k = cyCourse['EC']) !== null && _k !== void 0 ? _k : 0}, CS:${(_l = cyCourse['CS']) !== null && _l !== void 0 ? _l : 0}, EE:${(_m = cyCourse['EE']) !== null && _m !== void 0 ? _m : 0}`,
+            `  Boys per course  — ${cyBoysPerCourse}`,
+            `  Girls per course — ${cyGirlsPerCourse}`,
+            ...(activeIsCurrent && p.byCategory ? [
+                `  Category — GM:${(_o = p.byCategory['GM']) !== null && _o !== void 0 ? _o : 0}, SC:${(_p = p.byCategory['SC']) !== null && _p !== void 0 ? _p : 0}, ST:${(_q = p.byCategory['ST']) !== null && _q !== void 0 ? _q : 0}, C1:${(_r = p.byCategory['C1']) !== null && _r !== void 0 ? _r : 0}, 2A:${(_s = p.byCategory['2A']) !== null && _s !== void 0 ? _s : 0}, 2B:${(_t = p.byCategory['2B']) !== null && _t !== void 0 ? _t : 0}, 3A:${(_u = p.byCategory['3A']) !== null && _u !== void 0 ? _u : 0}, 3B:${(_v = p.byCategory['3B']) !== null && _v !== void 0 ? _v : 0}`,
+            ] : []),
+            ...(activeIsCurrent ? [
+                `  Admission type — Regular:${(_w = p.byAdmType['REGULAR']) !== null && _w !== void 0 ? _w : 0}, Lateral:${(_x = p.byAdmType['LATERAL']) !== null && _x !== void 0 ? _x : 0}, Repeater:${(_y = p.byAdmType['REPEATER']) !== null && _y !== void 0 ? _y : 0}, SNQ:${(_z = p.byAdmType['SNQ']) !== null && _z !== void 0 ? _z : 0}`,
+                `  Adm seats — GM:${(_1 = (_0 = p.byAdmCat) === null || _0 === void 0 ? void 0 : _0['GM']) !== null && _1 !== void 0 ? _1 : 0}, SNQ:${(_3 = (_2 = p.byAdmCat) === null || _2 === void 0 ? void 0 : _2['SNQ']) !== null && _3 !== void 0 ? _3 : 0}`,
+                `  Study year — 1ST YEAR:${y1} (${Math.round(y1 / YEAR_INTAKE * 100)}% of ${YEAR_INTAKE} seats), 2ND YEAR:${y2}, 3RD YEAR:${y3}`,
+                `  Pending (not yet confirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+                ...(p.recentEnrollmentsCount !== undefined ? [`  New in last 7 days: ${p.recentEnrollmentsCount} students`] : []),
+            ] : []),
+        ].join('\n');
+        // ── SECTION 2 — Course × Year matrix (current year if available) ──────
+        const matrixBlock = (activeIsCurrent && p.byCourseByYear)
+            ? ['  Course × Year breakdown (current year):',
                 ...['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => {
                     var _a, _b, _c, _d;
                     const row = (_a = p.byCourseByYear[c]) !== null && _a !== void 0 ? _a : {};
-                    return `  ${c}: 1st=${(_b = row['1ST YEAR']) !== null && _b !== void 0 ? _b : 0}, 2nd=${(_c = row['2ND YEAR']) !== null && _c !== void 0 ? _c : 0}, 3rd=${(_d = row['3RD YEAR']) !== null && _d !== void 0 ? _d : 0}`;
+                    return `    ${c}: 1ST YEAR=${(_b = row['1ST YEAR']) !== null && _b !== void 0 ? _b : 0}, 2ND YEAR=${(_c = row['2ND YEAR']) !== null && _c !== void 0 ? _c : 0}, 3RD YEAR=${(_d = row['3RD YEAR']) !== null && _d !== void 0 ? _d : 0}`;
                 }),
-            ]
-            : [];
-        const categoryLine = p.byCategory
-            ? `Category breakdown — GM: ${(_a = p.byCategory['GM']) !== null && _a !== void 0 ? _a : 0}, C1: ${(_b = p.byCategory['C1']) !== null && _b !== void 0 ? _b : 0}, 2A: ${(_c = p.byCategory['2A']) !== null && _c !== void 0 ? _c : 0}, 2B: ${(_d = p.byCategory['2B']) !== null && _d !== void 0 ? _d : 0}, 3A: ${(_e = p.byCategory['3A']) !== null && _e !== void 0 ? _e : 0}, 3B: ${(_f = p.byCategory['3B']) !== null && _f !== void 0 ? _f : 0}, SC: ${(_g = p.byCategory['SC']) !== null && _g !== void 0 ? _g : 0}, ST: ${(_h = p.byCategory['ST']) !== null && _h !== void 0 ? _h : 0}`
+            ].join('\n')
             : '';
-        const genderCourseLines = p.byGenderByCourse
-            ? ['Gender per course (Boys / Girls):',
-                ...['CE', 'ME', 'EC', 'CS', 'EE'].map((c) => {
-                    var _a, _b, _c, _d;
-                    const boys = (_b = (_a = p.byGenderByCourse['BOY']) === null || _a === void 0 ? void 0 : _a[c]) !== null && _b !== void 0 ? _b : 0;
-                    const girls = (_d = (_c = p.byGenderByCourse['GIRL']) === null || _c === void 0 ? void 0 : _c[c]) !== null && _d !== void 0 ? _d : 0;
-                    return `  ${c}: ${boys}B / ${girls}G`;
-                }),
-            ]
-            : [];
-        const recentLine = p.recentEnrollmentsCount !== undefined
-            ? `Recent enrollments (last 7 days): ${p.recentEnrollmentsCount} new confirmed students`
-            : '';
-        const admCatLine = p.byAdmCat
-            ? `Admission category — GM seats: ${(_j = p.byAdmCat['GM']) !== null && _j !== void 0 ? _j : 0}, SNQ seats: ${(_k = p.byAdmCat['SNQ']) !== null && _k !== void 0 ? _k : 0}, Others: ${(_l = p.byAdmCat['OTHERS']) !== null && _l !== void 0 ? _l : 0}`
-            : '';
-        const YEAR_INTAKE = 63;
-        const y1 = (_m = p.byYear['1ST YEAR']) !== null && _m !== void 0 ? _m : 0;
-        const y2 = (_o = p.byYear['2ND YEAR']) !== null && _o !== void 0 ? _o : 0;
-        const y3 = (_p = p.byYear['3RD YEAR']) !== null && _p !== void 0 ? _p : 0;
-        const fillLine = `Year-wise fill (intake ${YEAR_INTAKE}/year) — 1st: ${y1} (${Math.round(y1 / YEAR_INTAKE * 100)}%), 2nd: ${y2} (${Math.round(y2 / YEAR_INTAKE * 100)}%), 3rd: ${y3} (${Math.round(y3 / YEAR_INTAKE * 100)}%)`;
-        const prompt = [
-            'You are an admissions intelligence analyst for Sanjay Memorial Polytechnic, Sagar.',
-            'Generate between 10 and 15 sharp, engaging one-sentence insights from the data below.',
-            'Cover as many DIFFERENT angles as the data supports — pick from this pool:',
-            '  • Overall enrollment strength and gender ratio',
-            '  • Year-over-year growth or decline (only if prior year data is present)',
-            '  • Course rankings — top performer and one needing attention',
-            '  • Course × Year matrix — which cell is highest or lowest',
-            '  • Year-wise fill rate vs 63-seat-per-year intake',
-            '  • Pending conversions — regular vs lateral urgency',
-            '  • Recent activity — last 7 days enrollment momentum',
-            '  • Category diversity — SC/ST/OBC share vs GM',
-            '  • Gender representation per course — most and least female-friendly',
-            '  • Admission type mix — regular / lateral / SNQ / repeater ratios',
-            '  • GM vs SNQ seat allocation',
-            '  • A standout or surprising specific number from the data',
-            '  • Actionable opportunity (e.g. converting pending students or boosting a weak course)',
-            '  • One positive or celebratory highlight',
-            'Style rules: cite exact numbers, one sentence each, active voice, no filler phrases, no preamble.',
-            'Return ONLY a valid JSON array of 10–15 strings. No markdown, no labels, no explanation.',
-            '',
-            `Current Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
-            `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
-            `By course — CE: ${(_q = p.byCourse['CE']) !== null && _q !== void 0 ? _q : 0}, ME: ${(_r = p.byCourse['ME']) !== null && _r !== void 0 ? _r : 0}, EC: ${(_s = p.byCourse['EC']) !== null && _s !== void 0 ? _s : 0}, CS: ${(_t = p.byCourse['CS']) !== null && _t !== void 0 ? _t : 0}, EE: ${(_u = p.byCourse['EE']) !== null && _u !== void 0 ? _u : 0}`,
-            `By study year — 1st: ${y1}, 2nd: ${y2}, 3rd: ${y3}`,
-            fillLine,
-            `Admission type — Regular: ${(_v = p.byAdmType['REGULAR']) !== null && _v !== void 0 ? _v : 0}, Lateral: ${(_w = p.byAdmType['LATERAL']) !== null && _w !== void 0 ? _w : 0}, Repeater: ${(_x = p.byAdmType['REPEATER']) !== null && _x !== void 0 ? _x : 0}, SNQ: ${(_y = p.byAdmType['SNQ']) !== null && _y !== void 0 ? _y : 0}, External: ${(_z = p.byAdmType['EXTERNAL']) !== null && _z !== void 0 ? _z : 0}`,
-            `Pending (unconfirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
-            ...(recentLine ? [recentLine] : []),
-            ...(categoryLine ? [categoryLine] : []),
-            ...(admCatLine ? [admCatLine] : []),
-            ...courseYearLines,
-            ...genderCourseLines,
-            ...(hasPrev ? [
-                '',
-                `Previous Year (${p.prevAcademicYear}): ${p.prevTotal} students (${p.prevBoys} boys, ${p.prevGirls} girls)`,
-                `Prev by course — CE: ${(_1 = (_0 = p.prevByCourse) === null || _0 === void 0 ? void 0 : _0['CE']) !== null && _1 !== void 0 ? _1 : 0}, ME: ${(_3 = (_2 = p.prevByCourse) === null || _2 === void 0 ? void 0 : _2['ME']) !== null && _3 !== void 0 ? _3 : 0}, EC: ${(_5 = (_4 = p.prevByCourse) === null || _4 === void 0 ? void 0 : _4['EC']) !== null && _5 !== void 0 ? _5 : 0}, CS: ${(_7 = (_6 = p.prevByCourse) === null || _6 === void 0 ? void 0 : _6['CS']) !== null && _7 !== void 0 ? _7 : 0}, EE: ${(_9 = (_8 = p.prevByCourse) === null || _8 === void 0 ? void 0 : _8['EE']) !== null && _9 !== void 0 ? _9 : 0}`,
-                growthLine,
+        // ── SECTION 3 — All-years cumulative (SECONDARY CONTEXT) ─────────────
+        const overallBlock = (p.overallTotal !== undefined && p.overallTotal !== cyTotal) ? [
+            `*** ALL YEARS COMBINED (secondary context only) ***`,
+            `  Total ever enrolled: ${p.overallTotal} students — ${(_4 = p.overallBoys) !== null && _4 !== void 0 ? _4 : 0} boys, ${(_5 = p.overallGirls) !== null && _5 !== void 0 ? _5 : 0} girls`,
+            `  By course — CE:${(_7 = (_6 = p.overallByCourse) === null || _6 === void 0 ? void 0 : _6['CE']) !== null && _7 !== void 0 ? _7 : 0}, ME:${(_9 = (_8 = p.overallByCourse) === null || _8 === void 0 ? void 0 : _8['ME']) !== null && _9 !== void 0 ? _9 : 0}, EC:${(_11 = (_10 = p.overallByCourse) === null || _10 === void 0 ? void 0 : _10['EC']) !== null && _11 !== void 0 ? _11 : 0}, CS:${(_13 = (_12 = p.overallByCourse) === null || _12 === void 0 ? void 0 : _12['CS']) !== null && _13 !== void 0 ? _13 : 0}, EE:${(_15 = (_14 = p.overallByCourse) === null || _14 === void 0 ? void 0 : _14['EE']) !== null && _15 !== void 0 ? _15 : 0}`,
+            `  Boys  — ${genderCourseRow('BOY', p.overallByGenderByCourse)}`,
+            `  Girls — ${genderCourseRow('GIRL', p.overallByGenderByCourse)}`,
+            ...(p.overallByCategory ? [
+                `  Category — GM:${(_16 = p.overallByCategory['GM']) !== null && _16 !== void 0 ? _16 : 0}, SC:${(_17 = p.overallByCategory['SC']) !== null && _17 !== void 0 ? _17 : 0}, ST:${(_18 = p.overallByCategory['ST']) !== null && _18 !== void 0 ? _18 : 0}, C1:${(_19 = p.overallByCategory['C1']) !== null && _19 !== void 0 ? _19 : 0}, 2A:${(_20 = p.overallByCategory['2A']) !== null && _20 !== void 0 ? _20 : 0}, 2B:${(_21 = p.overallByCategory['2B']) !== null && _21 !== void 0 ? _21 : 0}, 3A:${(_22 = p.overallByCategory['3A']) !== null && _22 !== void 0 ? _22 : 0}, 3B:${(_23 = p.overallByCategory['3B']) !== null && _23 !== void 0 ? _23 : 0}`,
             ] : []),
+        ].join('\n') : '';
+        // ── SECTION 4 — Year-over-year comparison ────────────────────────────
+        const prevBlock = hasPrev ? (() => {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+            const base = activeIsCurrent ? p.total : cyTotal;
+            const diff = base - ((_a = p.prevTotal) !== null && _a !== void 0 ? _a : 0);
+            const sign = diff >= 0 ? '+' : '';
+            const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
+            return [
+                `*** YEAR-OVER-YEAR COMPARISON ***`,
+                `  Previous year (${p.prevAcademicYear}): ${p.prevTotal} students — ${(_b = p.prevBoys) !== null && _b !== void 0 ? _b : 0} boys, ${(_c = p.prevGirls) !== null && _c !== void 0 ? _c : 0} girls`,
+                `  Prev courses — CE:${(_e = (_d = p.prevByCourse) === null || _d === void 0 ? void 0 : _d['CE']) !== null && _e !== void 0 ? _e : 0}, ME:${(_g = (_f = p.prevByCourse) === null || _f === void 0 ? void 0 : _f['ME']) !== null && _g !== void 0 ? _g : 0}, EC:${(_j = (_h = p.prevByCourse) === null || _h === void 0 ? void 0 : _h['EC']) !== null && _j !== void 0 ? _j : 0}, CS:${(_l = (_k = p.prevByCourse) === null || _k === void 0 ? void 0 : _k['CS']) !== null && _l !== void 0 ? _l : 0}, EE:${(_o = (_m = p.prevByCourse) === null || _m === void 0 ? void 0 : _m['EE']) !== null && _o !== void 0 ? _o : 0}`,
+                `  Change vs ${cyLabel}: ${sign}${diff} students (${sign}${pct}%)`,
+            ].join('\n');
+        })() : '';
+        const APP_FEATURES = [
+            'APP FEATURES (use these to generate 3–4 tip insights mixed with the statistics):',
+            '  Dashboard Search: Type any student name, mobile number, or registration number in the search bar on the Dashboard to find students instantly. Right-click (or long-press) on any search result to issue a Transfer Certificate (TC), Study Certificate, Provisional Certificate, or Course Completion Certificate.',
+            '  Dashboard Filters: Use the Course, Study Year, Gender, Category, Admission Type, and Status filters on the Dashboard to slice the data any way you need.',
+            '  Year Chips: Click a year chip (e.g. 2024-25) on the Dashboard to see stats for just that batch.',
+            '  Enroll Student: Go to the Enroll page to add a new student or edit an existing one. Edit mode is triggered by searching and selecting a student from the Dashboard.',
+            '  Students Page: Browse the full student list with search and filters; double-click a student row to open their full profile; export filtered lists as PDF reports.',
+            '  Fee Collection (Admin): Admins can collect fees directly from the Dashboard search results — click the "Collect Fee" button next to any student.',
+            '  Fee Register: View all fee records and payment history across all students and years.',
+            '  Settings (Admin): Manage the current academic year, configure fee structures per course and year, create and manage staff accounts, set up SMS messaging, and backup or restore data.',
+            '  About Section: Click the "About" button at the bottom of the sidebar to learn about this application and its developer.',
+            '',
+            'ABOUT THIS APP:',
+            '  Name: SMP Admissions',
+            '  College: Sanjay Memorial Polytechnic, Sagar, Karnataka',
+            '  Description: A purpose-built web app for the complete administrative workflow — student enrollment, fee collection with itemised receipts, document management, and certificate issuance (TC, Study Cert, Provisional Cert, Course Completion Cert) — all from one interface.',
+            '  Developer: Thejaraj R, FDA (First Division Assistant) at Sanjay Memorial Polytechnic, Sagar.',
+            '  Tech: React 19, TypeScript, Tailwind CSS 4, Google Firebase (Firestore + Auth). Role-based access: admins have full access; staff are restricted to permitted operations. Data is cloud-hosted with offline caching.',
+            '  Special thanks to the college Principal and staff for their support in developing this software.',
+        ].join('\n');
+        const prompt = [
+            'You are a friendly assistant for SMP Admissions — the student management app of Sanjay Memorial Polytechnic, Sagar, Karnataka.',
+            `Generate exactly 15 insights: 10–11 about admission statistics and 4–5 tips about app features, interleaved (do NOT group all tips at the end).`,
+            '',
+            'PRIORITY RULE: The section marked "CURRENT ACADEMIC YEAR" is your PRIMARY data source.',
+            'AT LEAST 7 of your statistics insights MUST be about the current academic year specifically.',
+            'Use the overall/all-years data only for 1–2 additional context insights (e.g. cumulative totals).',
+            '',
+            'LANGUAGE RULES:',
+            '  • Each insight must have a short title in English AND Kannada.',
+            '  • Each insight must have one simple sentence in English AND one natural sentence in Kannada.',
+            '  • Use plain, everyday language. Avoid jargon.',
+            '  • In the Kannada sentence, keep ALL of the following in English exactly as shown:',
+            '      – Course codes: CE, ME, EC, CS, EE',
+            '      – Study years: 1ST YEAR, 2ND YEAR, 3RD YEAR',
+            '      – App feature names: Dashboard, Search, Filter, Enroll, Settings, Fee Register, TC, Study Certificate, Provisional Certificate',
+            '      – Any registration numbers or academic year strings (e.g. 2024-25)',
+            '  • Kannada text must otherwise be natural Karnataka Kannada — not a word-for-word translation.',
+            '',
+            `REQUIRED STATISTICS TOPICS for ${cyLabel} (cover ALL of these using the CURRENT YEAR data):`,
+            `  1. Total confirmed students in ${cyLabel} with boys/girls split`,
+            `  2. Boys per course in ${cyLabel} — which course has the most boys`,
+            `  3. Girls per course in ${cyLabel} — which course has the most/least girls`,
+            `  4. Which course has the highest total enrollment in ${cyLabel}`,
+            `  5. Which course has the lowest enrollment in ${cyLabel}`,
+            ...(activeIsCurrent && p.byCategory ? [
+                `  6. Category breakdown in ${cyLabel} — highlight SC/ST or GM counts`,
+                `  7. Admission type mix in ${cyLabel} — regular vs lateral vs SNQ`,
+                `  8. Study year breakdown — 1ST YEAR vs 2ND YEAR vs 3RD YEAR fill rate`,
+                `  9. Pending admissions in ${cyLabel} — students not yet confirmed`,
+                ...(p.recentEnrollmentsCount !== undefined ? [`  10. New students confirmed in the last 7 days`] : []),
+            ] : [`  6. Total combined enrollment across all years for broader context`]),
+            ...(hasPrev ? [`  (Additional) Year-over-year change: ${cyLabel} vs ${p.prevAcademicYear}`] : []),
+            '',
+            'APP TIP TOPICS (exactly 4–5 of these, interleaved with statistics):',
+            '  • How to search a student and issue a TC or certificate from the Dashboard',
+            '  • How to use the year chips or filters to view specific batches or course data',
+            '  • How to enroll a new student or edit an existing student record',
+            '  • How to collect a fee or view payment history in the Fee Register',
+            '  • What is in the About section and who built this app',
+            '',
+            'OUTPUT FORMAT — return ONLY a valid JSON array of exactly 15 objects. No markdown, no explanation, no trailing text.',
+            'Each object must have exactly these 4 keys:',
+            '  title    — short English title (2–4 words)',
+            '  titleKn  — same title in Kannada (2–4 words)',
+            '  en       — one clear English sentence with exact numbers from the data',
+            '  kn       — same sentence in natural Kannada (keep course codes, year labels, and feature names in English)',
+            '',
+            APP_FEATURES,
+            '',
+            '=== ADMISSION DATA ===',
+            currentYearBlock,
+            ...(matrixBlock ? ['', matrixBlock] : []),
+            ...(overallBlock ? ['', overallBlock] : []),
+            ...(prevBlock ? ['', prevBlock] : []),
         ].join('\n');
         const body = JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 1100,
+            model: 'claude-sonnet-4-6',
+            max_tokens: 5000,
             messages: [{ role: 'user', content: prompt }],
         });
         const req = https.request({
@@ -246,18 +310,35 @@ function callClaude(apiKey, p) {
             let raw = '';
             res.on('data', (chunk) => { raw += chunk.toString(); });
             res.on('end', () => {
-                var _a, _b, _c, _d;
+                var _a, _b, _c, _d, _e;
                 try {
+                    // Surface HTTP-level errors from Anthropic (4xx / 5xx)
+                    if (res.statusCode !== 200) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
+                                apiMsg += `: ${errBody.error.message}`;
+                        }
+                        catch ( /* raw may not be JSON */_f) { /* raw may not be JSON */ }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
                     const parsed = JSON.parse(raw);
-                    const rawText = (_d = (_c = (_b = (_a = parsed.content) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : '';
-                    const match = rawText.match(/\[[\s\S]*\]/);
+                    const rawText = (_e = (_d = (_c = (_b = parsed.content) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) === null || _d === void 0 ? void 0 : _d.trim()) !== null && _e !== void 0 ? _e : '';
+                    // Strip optional markdown fences Claude sometimes adds
+                    const stripped = rawText
+                        .replace(/^```(?:json)?\s*/i, '')
+                        .replace(/\s*```\s*$/i, '')
+                        .trim();
+                    const match = stripped.match(/\[[\s\S]*\]/);
                     if (!match) {
-                        reject(new Error('Invalid AI response format'));
+                        reject(new Error(`No JSON array in response. Got: ${stripped.slice(0, 200)}`));
                         return;
                     }
                     const insights = JSON.parse(match[0]);
                     if (!Array.isArray(insights) || insights.length === 0) {
-                        reject(new Error('Empty AI response'));
+                        reject(new Error('Empty insights array'));
                         return;
                     }
                     resolve(insights);
@@ -272,7 +353,7 @@ function callClaude(apiKey, p) {
         req.end();
     });
 }
-exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 30 }, async (request) => {
+exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 90 }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Sign in required.');
     }
@@ -292,8 +373,9 @@ exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', 
         const insights = await callClaude(anthropicApiKey.trim(), payload);
         return { insights, generatedAt: new Date().toISOString() };
     }
-    catch (_a) {
-        throw new https_1.HttpsError('internal', 'AI generation failed. Check the API key and try again.');
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
     }
 });
 //# sourceMappingURL=index.js.map
