@@ -188,6 +188,24 @@ interface SummaryPayload {
   byGenderByCourse?: Record<string, Record<string, number>>;
   recentEnrollmentsCount?: number;
   byAdmCat?: Record<string, number>;
+  currentAcademicYear?: string;
+  overallTotal?: number;
+  overallBoys?: number;
+  overallGirls?: number;
+  overallByCourse?: Record<string, number>;
+  overallByCategory?: Record<string, number>;
+  overallByGenderByCourse?: Record<string, Record<string, number>>;
+  currentYearTotal?: number;
+  currentYearBoys?: number;
+  currentYearGirls?: number;
+  currentYearByCourse?: Record<string, number>;
+}
+
+interface Insight {
+  title: string;
+  titleKn: string;
+  en: string;
+  kn: string;
 }
 
 interface AnthropicMessage {
@@ -199,99 +217,114 @@ interface AnthropicResponse {
   content: AnthropicMessage[];
 }
 
-function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
+function callClaude(apiKey: string, p: SummaryPayload): Promise<Insight[]> {
   return new Promise((resolve, reject) => {
     const hasPrev = !!p.prevAcademicYear && p.prevTotal !== undefined;
-    const growthLine = hasPrev
-      ? (() => {
-          const diff = p.total - (p.prevTotal ?? 0);
-          const sign = diff >= 0 ? '+' : '';
-          const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
-          return `Year-over-year: ${sign}${diff} students (${sign}${pct}%) vs ${p.prevAcademicYear} (${p.prevTotal} confirmed)`;
-        })()
-      : '';
 
-    const courseYearLines = p.byCourseByYear
-      ? ['Course × Year matrix:',
-          ...['CE','ME','EC','CS','EE'].map((c) => {
-            const row = p.byCourseByYear![c] ?? {};
-            return `  ${c}: 1st=${row['1ST YEAR'] ?? 0}, 2nd=${row['2ND YEAR'] ?? 0}, 3rd=${row['3RD YEAR'] ?? 0}`;
-          }),
-        ]
-      : [];
+    // ── helper: course row for Boys/Girls ────────────────────────────────
+    const genderCourseRow = (gender: string, src?: Record<string, Record<string, number>>) =>
+      ['CE','ME','EC','CS','EE'].map((c) => `${c}:${src?.[gender]?.[c] ?? 0}`).join(', ');
 
-    const categoryLine = p.byCategory
-      ? `Category breakdown — GM: ${p.byCategory['GM'] ?? 0}, C1: ${p.byCategory['C1'] ?? 0}, 2A: ${p.byCategory['2A'] ?? 0}, 2B: ${p.byCategory['2B'] ?? 0}, 3A: ${p.byCategory['3A'] ?? 0}, 3B: ${p.byCategory['3B'] ?? 0}, SC: ${p.byCategory['SC'] ?? 0}, ST: ${p.byCategory['ST'] ?? 0}`
-      : '';
-
-    const genderCourseLines = p.byGenderByCourse
-      ? ['Gender per course (Boys / Girls):',
-          ...['CE','ME','EC','CS','EE'].map((c) => {
-            const boys = p.byGenderByCourse!['BOY']?.[c] ?? 0;
-            const girls = p.byGenderByCourse!['GIRL']?.[c] ?? 0;
-            return `  ${c}: ${boys}B / ${girls}G`;
-          }),
-        ]
-      : [];
-
-    const recentLine = p.recentEnrollmentsCount !== undefined
-      ? `Recent enrollments (last 7 days): ${p.recentEnrollmentsCount} new confirmed students`
-      : '';
-
-    const admCatLine = p.byAdmCat
-      ? `Admission category — GM seats: ${p.byAdmCat['GM'] ?? 0}, SNQ seats: ${p.byAdmCat['SNQ'] ?? 0}, Others: ${p.byAdmCat['OTHERS'] ?? 0}`
-      : '';
-
+    // ── Active-view data block ────────────────────────────────────────────
     const YEAR_INTAKE = 63;
     const y1 = p.byYear['1ST YEAR'] ?? 0;
     const y2 = p.byYear['2ND YEAR'] ?? 0;
     const y3 = p.byYear['3RD YEAR'] ?? 0;
-    const fillLine = `Year-wise fill (intake ${YEAR_INTAKE}/year) — 1st: ${y1} (${Math.round(y1/YEAR_INTAKE*100)}%), 2nd: ${y2} (${Math.round(y2/YEAR_INTAKE*100)}%), 3rd: ${y3} (${Math.round(y3/YEAR_INTAKE*100)}%)`;
+
+    const activeBlock = [
+      `Active view (${p.academicYear || 'All years'}): ${p.total} confirmed students — ${p.boys} boys, ${p.girls} girls`,
+      `  Courses — CE:${p.byCourse['CE']??0}, ME:${p.byCourse['ME']??0}, EC:${p.byCourse['EC']??0}, CS:${p.byCourse['CS']??0}, EE:${p.byCourse['EE']??0}`,
+      `  Study year — 1st:${y1} (${Math.round(y1/YEAR_INTAKE*100)}% of ${YEAR_INTAKE} seats), 2nd:${y2}, 3rd:${y3}`,
+      `  Boys per course  — ${genderCourseRow('BOY',  p.byGenderByCourse)}`,
+      `  Girls per course — ${genderCourseRow('GIRL', p.byGenderByCourse)}`,
+      p.byCategory
+        ? `  Category — GM:${p.byCategory['GM']??0}, SC:${p.byCategory['SC']??0}, ST:${p.byCategory['ST']??0}, C1:${p.byCategory['C1']??0}, 2A:${p.byCategory['2A']??0}, 2B:${p.byCategory['2B']??0}, 3A:${p.byCategory['3A']??0}, 3B:${p.byCategory['3B']??0}`
+        : null,
+      `  Admission type — Regular:${p.byAdmType['REGULAR']??0}, Lateral:${p.byAdmType['LATERAL']??0}, Repeater:${p.byAdmType['REPEATER']??0}, SNQ:${p.byAdmType['SNQ']??0}`,
+      p.byAdmCat
+        ? `  Adm category — GM seats:${p.byAdmCat['GM']??0}, SNQ seats:${p.byAdmCat['SNQ']??0}`
+        : null,
+      `  Pending (not yet confirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
+      p.recentEnrollmentsCount !== undefined
+        ? `  New in last 7 days: ${p.recentEnrollmentsCount} students`
+        : null,
+    ].filter(Boolean).join('\n');
+
+    // ── Course × Year matrix ──────────────────────────────────────────────
+    const matrixBlock = p.byCourseByYear
+      ? ['Course-year breakdown:', ...['CE','ME','EC','CS','EE'].map((c) => {
+          const row = p.byCourseByYear![c] ?? {};
+          return `  ${c}: 1st=${row['1ST YEAR']??0}, 2nd=${row['2ND YEAR']??0}, 3rd=${row['3RD YEAR']??0}`;
+        })].join('\n')
+      : '';
+
+    // ── Overall all-years block ───────────────────────────────────────────
+    const overallBlock = p.overallTotal !== undefined ? [
+      `All-years totals (every batch combined): ${p.overallTotal} confirmed — ${p.overallBoys??0} boys, ${p.overallGirls??0} girls`,
+      `  Courses — CE:${p.overallByCourse?.['CE']??0}, ME:${p.overallByCourse?.['ME']??0}, EC:${p.overallByCourse?.['EC']??0}, CS:${p.overallByCourse?.['CS']??0}, EE:${p.overallByCourse?.['EE']??0}`,
+      `  Boys  — ${genderCourseRow('BOY',  p.overallByGenderByCourse)}`,
+      `  Girls — ${genderCourseRow('GIRL', p.overallByGenderByCourse)}`,
+      p.overallByCategory
+        ? `  Category — GM:${p.overallByCategory['GM']??0}, SC:${p.overallByCategory['SC']??0}, ST:${p.overallByCategory['ST']??0}, C1:${p.overallByCategory['C1']??0}, 2A:${p.overallByCategory['2A']??0}, 2B:${p.overallByCategory['2B']??0}, 3A:${p.overallByCategory['3A']??0}, 3B:${p.overallByCategory['3B']??0}`
+        : null,
+    ].filter(Boolean).join('\n') : '';
+
+    // ── Current academic year block (if different from active view) ───────
+    const showCurrentYr = p.currentYearTotal !== undefined && p.currentAcademicYear && p.currentAcademicYear !== p.academicYear;
+    const currentYrBlock = showCurrentYr ? [
+      `Current academic year (${p.currentAcademicYear}): ${p.currentYearTotal} confirmed — ${p.currentYearBoys??0} boys, ${p.currentYearGirls??0} girls`,
+      `  Courses — CE:${p.currentYearByCourse?.['CE']??0}, ME:${p.currentYearByCourse?.['ME']??0}, EC:${p.currentYearByCourse?.['EC']??0}, CS:${p.currentYearByCourse?.['CS']??0}, EE:${p.currentYearByCourse?.['EE']??0}`,
+    ].join('\n') : '';
+
+    // ── Year-over-year block ──────────────────────────────────────────────
+    const prevBlock = hasPrev ? (() => {
+      const diff = p.total - (p.prevTotal ?? 0);
+      const sign = diff >= 0 ? '+' : '';
+      const pct = p.prevTotal ? Math.round((diff / p.prevTotal) * 100) : 0;
+      return [
+        `Previous year (${p.prevAcademicYear}): ${p.prevTotal} students — ${p.prevBoys??0} boys, ${p.prevGirls??0} girls`,
+        `  Prev courses — CE:${p.prevByCourse?.['CE']??0}, ME:${p.prevByCourse?.['ME']??0}, EC:${p.prevByCourse?.['EC']??0}, CS:${p.prevByCourse?.['CS']??0}, EE:${p.prevByCourse?.['EE']??0}`,
+        `  Change vs this year: ${sign}${diff} students (${sign}${pct}%)`,
+      ].join('\n');
+    })() : '';
 
     const prompt = [
-      'You are an admissions intelligence analyst for Sanjay Memorial Polytechnic, Sagar.',
-      'Generate between 10 and 15 sharp, engaging one-sentence insights from the data below.',
-      'Cover as many DIFFERENT angles as the data supports — pick from this pool:',
-      '  • Overall enrollment strength and gender ratio',
-      '  • Year-over-year growth or decline (only if prior year data is present)',
-      '  • Course rankings — top performer and one needing attention',
-      '  • Course × Year matrix — which cell is highest or lowest',
-      '  • Year-wise fill rate vs 63-seat-per-year intake',
-      '  • Pending conversions — regular vs lateral urgency',
-      '  • Recent activity — last 7 days enrollment momentum',
-      '  • Category diversity — SC/ST/OBC share vs GM',
-      '  • Gender representation per course — most and least female-friendly',
-      '  • Admission type mix — regular / lateral / SNQ / repeater ratios',
-      '  • GM vs SNQ seat allocation',
-      '  • A standout or surprising specific number from the data',
-      '  • Actionable opportunity (e.g. converting pending students or boosting a weak course)',
-      '  • One positive or celebratory highlight',
-      'Style rules: cite exact numbers, one sentence each, active voice, no filler phrases, no preamble.',
-      'Return ONLY a valid JSON array of 10–15 strings. No markdown, no labels, no explanation.',
+      'You are a friendly data analyst for Sanjay Memorial Polytechnic, Sagar — a polytechnic college in Karnataka.',
+      'Generate 8 to 12 insights from the admission data below.',
       '',
-      `Current Academic Year: ${p.academicYear || 'All years (aggregated)'}`,
-      `Confirmed: ${p.total} students (${p.boys} boys, ${p.girls} girls)`,
-      `By course — CE: ${p.byCourse['CE'] ?? 0}, ME: ${p.byCourse['ME'] ?? 0}, EC: ${p.byCourse['EC'] ?? 0}, CS: ${p.byCourse['CS'] ?? 0}, EE: ${p.byCourse['EE'] ?? 0}`,
-      `By study year — 1st: ${y1}, 2nd: ${y2}, 3rd: ${y3}`,
-      fillLine,
-      `Admission type — Regular: ${p.byAdmType['REGULAR'] ?? 0}, Lateral: ${p.byAdmType['LATERAL'] ?? 0}, Repeater: ${p.byAdmType['REPEATER'] ?? 0}, SNQ: ${p.byAdmType['SNQ'] ?? 0}, External: ${p.byAdmType['EXTERNAL'] ?? 0}`,
-      `Pending (unconfirmed): ${p.pendingTotal} (${p.pendingRegular} regular, ${p.pendingLateral} lateral)`,
-      ...(recentLine ? [recentLine] : []),
-      ...(categoryLine ? [categoryLine] : []),
-      ...(admCatLine ? [admCatLine] : []),
-      ...courseYearLines,
-      ...genderCourseLines,
-      ...(hasPrev ? [
-        '',
-        `Previous Year (${p.prevAcademicYear}): ${p.prevTotal} students (${p.prevBoys} boys, ${p.prevGirls} girls)`,
-        `Prev by course — CE: ${p.prevByCourse?.['CE'] ?? 0}, ME: ${p.prevByCourse?.['ME'] ?? 0}, EC: ${p.prevByCourse?.['EC'] ?? 0}, CS: ${p.prevByCourse?.['CS'] ?? 0}, EE: ${p.prevByCourse?.['EE'] ?? 0}`,
-        growthLine,
-      ] : []),
+      'LANGUAGE RULES:',
+      '  • Each insight must have a short title in English AND Kannada.',
+      '  • Each insight must have one simple sentence in English AND one in Kannada.',
+      '  • Use plain everyday language — avoid jargon. Say "has the most girls" not "leads gender diversity".',
+      '  • Kannada must be natural, grammatically correct Karnataka Kannada (not literal translation).',
+      '',
+      'TOPICS TO COVER (pick the most interesting ones from the data):',
+      '  • Total students — overall all-years count and current year count',
+      '  • Boy vs girl count — total and per course (which course has most girls / most boys)',
+      '  • Course comparison — which course has the most / least students',
+      '  • Category breakdown — how many SC, ST, OBC (2A/2B/3A/3B), GM students',
+      '  • Year-over-year change — if previous year data is present',
+      '  • Pending students — how many still need to confirm',
+      '  • Recent activity — if any new students enrolled this week',
+      '  • A positive or celebratory highlight',
+      '',
+      'OUTPUT FORMAT — return ONLY a valid JSON array. No markdown, no explanation. Each element must be an object with exactly these 4 keys:',
+      '  title    — short English title (2–4 words, e.g. "Top Course")',
+      '  titleKn  — same title in Kannada (2–4 words)',
+      '  en       — one simple English sentence with exact numbers',
+      '  kn       — same sentence in natural Kannada',
+      '',
+      '=== DATA ===',
+      activeBlock,
+      ...(matrixBlock ? ['', matrixBlock] : []),
+      ...(overallBlock ? ['', overallBlock] : []),
+      ...(currentYrBlock ? ['', currentYrBlock] : []),
+      ...(prevBlock ? ['', prevBlock] : []),
     ].join('\n');
 
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1100,
+      max_tokens: 2400,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -316,7 +349,7 @@ function callClaude(apiKey: string, p: SummaryPayload): Promise<string[]> {
             const rawText = parsed.content?.[0]?.text?.trim() ?? '';
             const match = rawText.match(/\[[\s\S]*\]/);
             if (!match) { reject(new Error('Invalid AI response format')); return; }
-            const insights = JSON.parse(match[0]) as string[];
+            const insights = JSON.parse(match[0]) as Insight[];
             if (!Array.isArray(insights) || insights.length === 0) { reject(new Error('Empty AI response')); return; }
             resolve(insights);
           } catch (err) {

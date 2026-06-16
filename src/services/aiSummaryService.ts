@@ -1,6 +1,13 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../config/firebase';
 
+export interface Insight {
+  title: string;
+  titleKn: string;
+  en: string;
+  kn: string;
+}
+
 export interface AISummaryPayload {
   academicYear: string;
   total: number;
@@ -22,10 +29,23 @@ export interface AISummaryPayload {
   byGenderByCourse?: Record<string, Record<string, number>>;
   recentEnrollmentsCount?: number;
   byAdmCat?: Record<string, number>;
+  // Overall all-years stats
+  currentAcademicYear?: string;
+  overallTotal?: number;
+  overallBoys?: number;
+  overallGirls?: number;
+  overallByCourse?: Record<string, number>;
+  overallByCategory?: Record<string, number>;
+  overallByGenderByCourse?: Record<string, Record<string, number>>;
+  // Current active year stats (even when a different year is filtered)
+  currentYearTotal?: number;
+  currentYearBoys?: number;
+  currentYearGirls?: number;
+  currentYearByCourse?: Record<string, number>;
 }
 
 export interface AISummaryResult {
-  insights: string[];
+  insights: Insight[];
   generatedAt: string;
 }
 

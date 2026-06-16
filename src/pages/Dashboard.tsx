@@ -278,6 +278,9 @@ export function Dashboard() {
   const [courseBreakIdx, setCourseBreakIdx] = useState(0);
   // ── Gender card breakup flip (cycles through COURSES: CE,ME,EC,CS,EE) ───
   const [genderBreakIdx, setGenderBreakIdx] = useState(0);
+  // ── Bar chart mode flip (Total → Boys → Girls → Adm Type) ───────────────
+  const [barChartMode, setBarChartMode] = useState(0);
+  const [chartBarsReady, setChartBarsReady] = useState(false);
 
   // ── Fee status for search result rows ────────────────────────────────────
   type FeeStatus = 'collect' | 'dues' | 'no-dues';
@@ -758,6 +761,27 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [barsReady, isSearchMode]);
 
+  // Cycle bar chart through modes — depends only on isSearchMode so filter changes
+  // don't reset the 10 s interval; barsReady is handled separately in chartBarsReady
+  useEffect(() => {
+    if (isSearchMode) { setBarChartMode(0); return; }
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => setBarChartMode((m) => (m + 1) % 4), 10000);
+    }, 1600);
+    return () => { clearTimeout(delayId); if (intervalId !== null) clearInterval(intervalId); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearchMode]);
+
+  // Re-animate bars whenever the chart mode changes or barsReady triggers
+  useEffect(() => {
+    setChartBarsReady(false);
+    if (!barsReady) return;
+    let r1: number, r2: number;
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setChartBarsReady(true)); });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+  }, [barsReady, barChartMode]);
+
   const confirmedActiveCount = useMemo(
     () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
     [activeSource]
@@ -847,6 +871,47 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [isSearchMode, academicYearFilter, sortedAcademicYears, allStudents]);
 
+  // ── All-years aggregate stats (for AI overall context) ───────────────────
+  const overallAIStats = useMemo(() => {
+    const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    const byCategory: Record<string, number> = { GM: 0, SC: 0, ST: 0, C1: 0, '2A': 0, '2B': 0, '3A': 0, '3B': 0 };
+    const byGenderByCourse: Record<string, Record<string, number>> = {
+      BOY:  { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+      GIRL: { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
+    };
+    for (const s of confirmed) {
+      if (s.course in byCourse) byCourse[s.course]++;
+      if (s.category in byCategory) byCategory[s.category]++;
+      if (s.gender in byGenderByCourse && s.course in byGenderByCourse[s.gender]) {
+        byGenderByCourse[s.gender][s.course]++;
+      }
+    }
+    return {
+      total: confirmed.length,
+      boys: confirmed.filter((s) => s.gender === 'BOY').length,
+      girls: confirmed.filter((s) => s.gender === 'GIRL').length,
+      byCourse,
+      byCategory,
+      byGenderByCourse,
+    };
+  }, [allStudents]);
+
+  // ── Current active academic year stats ────────────────────────────────────
+  const currentYearAIStats = useMemo(() => {
+    const cy = settings?.currentAcademicYear;
+    if (!cy) return null;
+    const confirmed = allStudents.filter((s) => s.academicYear === cy && s.admissionStatus === 'CONFIRMED');
+    const byCourse: Record<string, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const s of confirmed) { if (s.course in byCourse) byCourse[s.course]++; }
+    return {
+      total: confirmed.length,
+      boys: confirmed.filter((s) => s.gender === 'BOY').length,
+      girls: confirmed.filter((s) => s.gender === 'GIRL').length,
+      byCourse,
+    };
+  }, [allStudents, settings]);
+
   const aiPayload = useMemo<AISummaryPayload>(() => {
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const yr = isSearchMode ? '' : (academicYearFilter || settings?.currentAcademicYear || '');
@@ -893,8 +958,21 @@ const [barsReady, setBarsReady] = useState(false);
         prevGirls: prevYearStats.girls,
         prevByCourse: prevYearStats.byCourse,
       }),
+      currentAcademicYear: settings?.currentAcademicYear ?? '',
+      overallTotal: overallAIStats.total,
+      overallBoys: overallAIStats.boys,
+      overallGirls: overallAIStats.girls,
+      overallByCourse: overallAIStats.byCourse,
+      overallByCategory: overallAIStats.byCategory,
+      overallByGenderByCourse: overallAIStats.byGenderByCourse,
+      ...(currentYearAIStats && {
+        currentYearTotal: currentYearAIStats.total,
+        currentYearBoys: currentYearAIStats.boys,
+        currentYearGirls: currentYearAIStats.girls,
+        currentYearByCourse: currentYearAIStats.byCourse,
+      }),
     };
-  }, [stats, confirmedStudents, allStudents, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats]);
+  }, [stats, confirmedStudents, allStudents, admissionPendingStats, academicYearFilter, isSearchMode, settings, prevYearStats, overallAIStats, currentYearAIStats]);
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
@@ -1770,90 +1848,189 @@ const [barsReady, setBarsReady] = useState(false);
             {/* Course Strength + Adm Type */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-              {/* Course-wise vertical bar chart — all 3 years */}
-              <div className="bg-emerald-50 rounded-2xl border border-emerald-400 p-4" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                {/* Header + legend */}
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Course-wise</p>
+              {/* Course-wise vertical bar chart — cycling modes */}
+              {(() => {
+                type BarSpec = { fill: string; text: string; label: string };
+                type ChartMode = {
+                  title: string; subtitle: string; accent: string;
+                  titleClass: string; subtitleClass: string; footerLabelClass: string;
+                  cardBg: string; cardBorder: string; dividerColor: string; inactiveDot: string;
+                  bars: [BarSpec, BarSpec, BarSpec];
+                  getValue: (course: Course, bi: number) => number;
+                  footerLabel: (bi: number) => string;
+                  footerTotal: (bi: number) => number;
+                };
+                const modes: ChartMode[] = [
+                  {
+                    title: 'Course Strength', subtitle: 'confirmed · all years',
+                    accent: 'text-emerald-500', titleClass: 'text-emerald-800',
+                    subtitleClass: 'text-emerald-500/70', footerLabelClass: 'text-emerald-500/70',
+                    cardBg: '#ecfdf5', cardBorder: '#6ee7b7', dividerColor: '#a7f3d0', inactiveDot: 'bg-emerald-300',
+                    bars: [
+                      { fill: 'bg-lime-400',    text: 'text-lime-700',    label: '1st' },
+                      { fill: 'bg-green-500',   text: 'text-green-700',   label: '2nd' },
+                      { fill: 'bg-emerald-700', text: 'text-emerald-800', label: '3rd' },
+                    ],
+                    getValue:    (c, i) => stats.byCourseByYear[c][YEARS[i]!],
+                    footerLabel: (i)    => ['1st Yr', '2nd Yr', '3rd Yr'][i],
+                    footerTotal: (i)    => COURSES.reduce((s, c) => s + stats.byCourseByYear[c][YEARS[i]!], 0),
+                  },
+                  {
+                    title: 'Boys', subtitle: 'confirmed · by course & year',
+                    accent: 'text-sky-500', titleClass: 'text-sky-800',
+                    subtitleClass: 'text-sky-500/70', footerLabelClass: 'text-sky-500/70',
+                    cardBg: '#f0f9ff', cardBorder: '#7dd3fc', dividerColor: '#bae6fd', inactiveDot: 'bg-sky-300',
+                    bars: [
+                      { fill: 'bg-sky-300', text: 'text-sky-500', label: '1st' },
+                      { fill: 'bg-sky-500', text: 'text-sky-700', label: '2nd' },
+                      { fill: 'bg-sky-700', text: 'text-sky-800', label: '3rd' },
+                    ],
+                    getValue:    (c, i) => stats.byGenderByCourseByYear['BOY'][c][YEARS[i]!],
+                    footerLabel: (i)    => ['1st Yr', '2nd Yr', '3rd Yr'][i],
+                    footerTotal: (i)    => COURSES.reduce((s, c) => s + stats.byGenderByCourseByYear['BOY'][c][YEARS[i]!], 0),
+                  },
+                  {
+                    title: 'Girls', subtitle: 'confirmed · by course & year',
+                    accent: 'text-rose-500', titleClass: 'text-rose-800',
+                    subtitleClass: 'text-rose-500/70', footerLabelClass: 'text-rose-500/70',
+                    cardBg: '#fff1f2', cardBorder: '#fda4af', dividerColor: '#fecdd3', inactiveDot: 'bg-rose-300',
+                    bars: [
+                      { fill: 'bg-rose-300', text: 'text-rose-500', label: '1st' },
+                      { fill: 'bg-rose-500', text: 'text-rose-600', label: '2nd' },
+                      { fill: 'bg-rose-700', text: 'text-rose-800', label: '3rd' },
+                    ],
+                    getValue:    (c, i) => stats.byGenderByCourseByYear['GIRL'][c][YEARS[i]!],
+                    footerLabel: (i)    => ['1st Yr', '2nd Yr', '3rd Yr'][i],
+                    footerTotal: (i)    => COURSES.reduce((s, c) => s + stats.byGenderByCourseByYear['GIRL'][c][YEARS[i]!], 0),
+                  },
+                  {
+                    title: 'Adm Type', subtitle: 'regular · lateral · snq',
+                    accent: 'text-amber-600', titleClass: 'text-amber-900',
+                    subtitleClass: 'text-amber-600/70', footerLabelClass: 'text-amber-600/70',
+                    cardBg: '#fffbeb', cardBorder: '#fcd34d', dividerColor: '#fde68a', inactiveDot: 'bg-amber-300',
+                    bars: [
+                      { fill: 'bg-amber-400',  text: 'text-amber-700',  label: 'Reg' },
+                      { fill: 'bg-violet-400', text: 'text-violet-700', label: 'Lat' },
+                      { fill: 'bg-cyan-500',   text: 'text-cyan-700',   label: 'SNQ' },
+                    ],
+                    getValue:    (c, i) => ([courseAdmTotals[c].regular, courseAdmTotals[c].ltrl, courseAdmTotals[c].snq])[i] ?? 0,
+                    footerLabel: (i)    => ['Regular', 'Lateral', 'SNQ'][i],
+                    footerTotal: (i)    => COURSES.reduce((s, c) => s + (([courseAdmTotals[c].regular, courseAdmTotals[c].ltrl, courseAdmTotals[c].snq])[i] ?? 0), 0),
+                  },
+                ];
+
+                const mode = modes[barChartMode];
+                const CHART_H = 148;
+                const maxBarCount = Math.max(1, ...COURSES.flatMap((c) => [0, 1, 2].map((i) => mode.getValue(c, i))));
+                const BAR_COURSES: Record<Course, string> = {
+                  CE: 'text-amber-600', ME: 'text-green-700', EC: 'text-sky-600', CS: 'text-teal-700', EE: 'text-violet-600',
+                };
+
+                return (
+                <div
+                  className="rounded-2xl p-4 flex flex-col border"
+                  style={{
+                    backgroundColor: mode.cardBg,
+                    borderColor: mode.cardBorder,
+                    boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)',
+                    transition: 'background-color 700ms ease, border-color 700ms ease',
+                  }}
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3 shrink-0">
+                    <div key={barChartMode} style={{ animation: 'page-enter 0.28s ease-out' }}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`${mode.accent} font-black text-sm leading-none tracking-tighter select-none`}>//</span>
+                        <p className={`text-xs font-semibold uppercase tracking-wider ${mode.titleClass}`}>{mode.title}</p>
+                      </div>
+                      <p className={`text-[10px] font-medium mt-0.5 ml-4 ${mode.subtitleClass}`}>{mode.subtitle}</p>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-medium mt-0.5 ml-3">confirmed · 63 seats ref</p>
+                    {/* Mode pill indicators — click to jump */}
+                    <div className="flex items-center gap-1.5">
+                      {modes.map((m, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setBarChartMode(i)}
+                          className={`rounded-full cursor-pointer transition-all duration-300 ${
+                            i === barChartMode
+                              ? `w-4 h-2 ${m.bars[1].fill} opacity-90`
+                              : `w-2 h-2 ${mode.inactiveDot} opacity-40 hover:opacity-70`
+                          }`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-row gap-2.5 items-center">
-                    {YEARS.map((yr) => {
-                      const y = yearConfig[yr];
+
+                  {/* Pill bars */}
+                  <div className="flex gap-3 flex-1">
+                    {COURSES.map((course, ci) => {
+                      const courseTotal = [0, 1, 2].reduce((s, i) => s + mode.getValue(course, i), 0);
                       return (
-                        <span key={yr} className="flex items-center gap-1">
-                          <span className={`inline-block w-2.5 h-2 rounded-sm ${y.barFill}`} />
-                          <span className="text-[9px] text-gray-400 font-medium">{y.label}</span>
-                        </span>
+                        <div key={course} className="flex-1 flex flex-col items-center gap-1">
+                          {/* Course total above */}
+                          <span
+                            key={`${barChartMode}-${course}`}
+                            className={`text-[11px] font-black tabular-nums leading-none ${BAR_COURSES[course]}`}
+                            style={{
+                              opacity: chartBarsReady ? 1 : 0,
+                              transition: chartBarsReady ? `opacity 350ms ease-out ${ci * 70 + 480}ms` : 'none',
+                            }}
+                          >
+                            {courseTotal}
+                          </span>
+                          {/* 3 pill bars */}
+                          <div className="flex gap-1 w-full" style={{ height: CHART_H }}>
+                            {([0, 1, 2] as const).map((bi) => {
+                              const bar = mode.bars[bi];
+                              const count = mode.getValue(course, bi);
+                              const fillPct = count > 0 ? Math.max(6, Math.round((count / maxBarCount) * 100)) : 0;
+                              return (
+                                <div key={bi} className="flex-1 relative rounded-full overflow-hidden">
+                                  <div
+                                    className={`absolute bottom-0 left-0 right-0 rounded-full ${bar.fill}`}
+                                    style={{
+                                      height: chartBarsReady ? `${fillPct}%` : '0%',
+                                      opacity: 0.88,
+                                      transition: chartBarsReady
+                                        ? `height 680ms cubic-bezier(0.34,1.08,0.64,1) ${(ci * 3 + bi) * 55}ms`
+                                        : 'none',
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* Course label */}
+                          <span className={`text-[9px] font-bold leading-none ${BAR_COURSES[course]}`}>{course}</span>
+                        </div>
                       );
                     })}
                   </div>
-                </div>
 
-                {/* Bars — explicit px heights so percentage-height CSS issues don't apply */}
-                {(() => {
-                  const CHART_H = 160;
-                  const maxBarCount = Math.max(
-                    1,
-                    ...COURSES.flatMap((c) => YEARS.map((yr) => stats.byCourseByYear[c][yr]))
-                  );
-                  return (
-                    <div className="flex items-end gap-2 border-b border-gray-200" style={{ height: CHART_H }}>
-                      {COURSES.map((course) => (
-                        <div key={course} className="flex-1 flex items-end gap-px">
-                          {YEARS.map((year) => {
-                            const y = yearConfig[year];
-                            const count = stats.byCourseByYear[course][year];
-                            const px = count > 0
-                              ? Math.max(4, Math.round((count / maxBarCount) * CHART_H))
-                              : 0;
-                            return (
-                              <div key={year} className="flex-1 flex flex-col items-center justify-end">
-                                {count > 0 && (
-                                  <span className="text-[7px] font-bold text-gray-400 tabular-nums leading-none mb-px">{count}</span>
-                                )}
-                                <div
-                                  className={`w-full rounded-t-sm ${y.barFill} opacity-90 transition-all duration-700 ease-out`}
-                                  style={{ height: px }}
-                                />
-                              </div>
-                            );
-                          })}
+                  {/* Divider */}
+                  <div className="mt-3 border-t shrink-0" style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }} />
+
+                  {/* Footer totals */}
+                  <div className="mt-2 grid grid-cols-3 shrink-0">
+                    {([0, 1, 2] as const).map((bi) => {
+                      const bar = mode.bars[bi];
+                      return (
+                        <div
+                          key={bi}
+                          className={`flex flex-row items-center justify-center gap-1 ${bi > 0 ? 'border-l' : ''}`}
+                          style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }}
+                        >
+                          <span className={`text-sm font-black tabular-nums ${bar.text}`}>{mode.footerTotal(bi)}</span>
+                          <span className={`text-[9px] font-medium ${mode.footerLabelClass}`}>{mode.footerLabel(bi)}</span>
                         </div>
-                      ))}
-                    </div>
-                  );
-                })()}
+                      );
+                    })}
+                  </div>
 
-                {/* Course labels — sit below the baseline */}
-                <div className="flex gap-2 mt-1.5">
-                  {COURSES.map((course) => {
-                    const c = courseConfig[course];
-                    return (
-                      <div key={course} className={`flex-1 text-center text-[9px] font-bold ${c.textColor}`}>{course}</div>
-                    );
-                  })}
                 </div>
-
-                {/* Per-year totals */}
-                <div className="mt-2.5 grid grid-cols-3 divide-x divide-emerald-50">
-                  {YEARS.map((year) => {
-                    const y = yearConfig[year];
-                    const total = COURSES.reduce((s, c) => s + stats.byCourseByYear[c][year], 0);
-                    return (
-                      <div key={year} className="flex flex-col items-center">
-                        <span className={`text-sm font-black tabular-nums ${y.textColor}`}>{total}</span>
-                        <span className="text-[9px] text-gray-400 font-medium">{y.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-              </div>
+                );
+              })()}
 
               {/* Dedicated AI Insights card — relative wrapper contributes 0 intrinsic height
                   so only the chart card sets the grid row height; absolute div fills the result */}

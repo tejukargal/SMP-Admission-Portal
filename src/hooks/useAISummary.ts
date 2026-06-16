@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
 import { callGenerateAdmissionSummary } from '../services/aiSummaryService';
-import type { AISummaryPayload } from '../services/aiSummaryService';
+import type { AISummaryPayload, Insight } from '../services/aiSummaryService';
 
 interface CacheEntry {
   key: string;
-  insights: string[];
+  insights: Insight[];
   generatedAt: string;
   ts: number;
 }
@@ -15,7 +15,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const summaryCache = new Map<string, CacheEntry>();
 
 export interface UseAISummaryReturn {
-  insights: string[] | null;
+  insights: Insight[] | null;
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
@@ -23,7 +23,7 @@ export interface UseAISummaryReturn {
 }
 
 export function useAISummary(): UseAISummaryReturn {
-  const [insights, setInsights] = useState<string[] | null>(null);
+  const [insights, setInsights] = useState<Insight[] | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
