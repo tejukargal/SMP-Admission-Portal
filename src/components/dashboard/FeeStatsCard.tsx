@@ -46,6 +46,12 @@ function StatusBadge({ dues, allotted, collected }: { dues: number; allotted: nu
 const MODES = ['Course-wise', 'Year-wise', 'Pending'] as const;
 type Mode = typeof MODES[number];
 
+const MODE_THEME: Record<Mode, { cardBg: string; cardBorder: string; divider: string; track: string }> = {
+  'Course-wise': { cardBg: '#eff6ff', cardBorder: '#93c5fd', divider: '#bfdbfe', track: 'rgba(59,130,246,0.08)' },
+  'Year-wise':   { cardBg: '#ecfdf5', cardBorder: '#6ee7b7', divider: '#a7f3d0', track: 'rgba(16,185,129,0.08)' },
+  'Pending':     { cardBg: '#fff1f2', cardBorder: '#fda4af', divider: '#fecdd3', track: 'rgba(244,63,94,0.08)'  },
+};
+
 // Column header label cell
 function ColHd({ children, right }: { children: ReactNode; right?: boolean }) {
   return (
@@ -106,9 +112,16 @@ export function FeeStatsCard({ data, loading }: Props) {
 
   const collPct = data.totalAllotted > 0 ? Math.round((data.totalCollected / data.totalAllotted) * 100) : 0;
 
+  const theme = MODE_THEME[mode];
+
   return (
-    <div className="rounded-2xl h-full flex flex-col bg-white border border-gray-100"
-      style={{ boxShadow: '0 1px 6px 0 rgba(0,0,0,0.07)' }}>
+    <div className="rounded-2xl h-full flex flex-col border"
+      style={{
+        backgroundColor: theme.cardBg,
+        borderColor: theme.cardBorder,
+        boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)',
+        transition: 'background-color 700ms ease, border-color 700ms ease',
+      }}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0">
@@ -116,18 +129,18 @@ export function FeeStatsCard({ data, loading }: Props) {
           <p className="text-[13px] font-bold text-gray-800 leading-tight">Fee Statistics</p>
           <p className="text-[10px] text-gray-400 font-medium mt-0.5">{data.academicYear} · confirmed</p>
         </div>
-        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ backgroundColor: theme.divider, transition: 'background-color 700ms ease' }}>
           {MODES.map((m) => (
             <button key={m} type="button" onClick={() => switchMode(m)}
               className={`text-[9px] font-semibold px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-200 whitespace-nowrap ${
-                m === mode ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                m === mode ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >{m}</button>
           ))}
         </div>
       </div>
 
-      <div className="border-t border-gray-100 mx-4 shrink-0" />
+      <div className="mx-4 shrink-0 border-t" style={{ borderColor: theme.divider, transition: 'border-color 700ms ease' }} />
 
       {/* Content — flex-1 + min-h-0 so it never overflows the card */}
       <div className="flex-1 min-h-0 flex flex-col px-4 pb-3 overflow-hidden"
@@ -146,7 +159,7 @@ export function FeeStatsCard({ data, loading }: Props) {
             </div>
 
             {/* Rows — overflow-hidden clips if somehow too tall */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-gray-50">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-gray-100">
               {COURSES.map((c) => {
                 const b = data.byCourse[c];
                 return (
@@ -168,7 +181,7 @@ export function FeeStatsCard({ data, loading }: Props) {
             </div>
 
             {/* Totals */}
-            <div className="border-t border-gray-200 shrink-0 pt-2">
+            <div className="border-t shrink-0 pt-2" style={{ borderColor: theme.cardBorder, transition: 'border-color 700ms ease' }}>
               <div className="grid items-center" style={{ gridTemplateColumns: '1fr auto auto auto auto', gap: '0 12px' }}>
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Total</span>
                 <span className="text-[11px] tabular-nums font-bold text-gray-600 text-right">{fmt(data.totalAllotted)}</span>
@@ -191,7 +204,7 @@ export function FeeStatsCard({ data, loading }: Props) {
               <ColHd right>Status</ColHd>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-gray-50">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-gray-100">
               {YEARS.map((y, i) => {
                 const b = data.byYear[y];
                 return (
@@ -212,12 +225,12 @@ export function FeeStatsCard({ data, loading }: Props) {
             </div>
 
             {/* Collection rate bar */}
-            <div className="border-t border-gray-200 pt-2.5 shrink-0">
+            <div className="border-t pt-2.5 shrink-0" style={{ borderColor: theme.cardBorder, transition: 'border-color 700ms ease' }}>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Collection rate</span>
                 <span className="text-[11px] font-black text-emerald-600">{collPct}%</span>
               </div>
-              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-2 w-full rounded-full overflow-hidden" style={{ background: theme.track, transition: 'background 700ms ease' }}>
                 <div className="h-full rounded-full bg-emerald-400" style={{ width: `${collPct}%` }} />
               </div>
               <div className="flex justify-between mt-1.5">
@@ -243,7 +256,7 @@ export function FeeStatsCard({ data, loading }: Props) {
               </div>
             </div>
 
-            <div className="border-t border-gray-100 shrink-0" />
+            <div className="border-t shrink-0" style={{ borderColor: theme.divider, transition: 'border-color 700ms ease' }} />
 
             {/* By course */}
             <div className="shrink-0 pt-2.5 pb-2">
@@ -258,7 +271,7 @@ export function FeeStatsCard({ data, loading }: Props) {
                         <span className={`w-2 h-2 rounded-full ${COURSE_DOT[c]}`} />
                         <span className="text-[10px] font-bold text-gray-600">{c}</span>
                       </div>
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: theme.track, transition: 'background 700ms ease' }}>
                         <div className="h-full rounded-full bg-rose-400" style={{ width: `${p}%` }} />
                       </div>
                       <span className="text-[11px] font-bold text-rose-600 tabular-nums w-5 text-right">{b.pending}</span>
@@ -269,7 +282,7 @@ export function FeeStatsCard({ data, loading }: Props) {
               </div>
             </div>
 
-            <div className="border-t border-gray-100 shrink-0" />
+            <div className="border-t shrink-0" style={{ borderColor: theme.divider, transition: 'border-color 700ms ease' }} />
 
             {/* By year */}
             <div className="flex-1 min-h-0 pt-2.5 overflow-hidden">
