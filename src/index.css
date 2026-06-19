@@ -236,3 +236,22 @@
 .scroll-y-thin::-webkit-scrollbar {
   display: none; /* Chrome / Safari / Edge */
 }
+
+/* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
+.scroll-indigo {
+  scrollbar-width: thin;
+  scrollbar-color: #c7d2fe transparent;
+}
+.scroll-indigo::-webkit-scrollbar {
+  width: 3px;
+}
+.scroll-indigo::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-indigo::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 99px;
+}
+.scroll-indigo::-webkit-scrollbar-thumb:hover {
+  background: #a5b4fc;
+}

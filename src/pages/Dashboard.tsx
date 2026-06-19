@@ -23,8 +23,7 @@ import {
 } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import { FeeStatsCard } from '../components/dashboard/FeeStatsCard';
-import type { FeeStatsData } from '../components/dashboard/FeeStatsCard';
+import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -852,85 +851,6 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [allStudents, settings]);
 
-
-  // ── Fee statistics for the fee stats card ────────────────────────────────
-  const [feeStatsData, setFeeStatsData] = useState<FeeStatsData | null>(null);
-  const [feeStatsLoading, setFeeStatsLoading] = useState(false);
-
-  useEffect(() => {
-    const yr = (academicYearFilter || settings?.currentAcademicYear) as AcademicYear | undefined;
-    if (!yr) return;
-    const scopedStudents = allStudents.filter(
-      (s) => s.academicYear === yr && s.admissionStatus === 'CONFIRMED',
-    );
-    if (scopedStudents.length === 0) { setFeeStatsData(null); return; }
-
-    let cancelled = false;
-    setFeeStatsLoading(true);
-
-    async function load() {
-      const [records, structures, overrides] = await Promise.all([
-        getFeeRecordsByAcademicYear(yr!),
-        getFeeStructuresByAcademicYear(yr!),
-        getFeeOverridesByYear(yr!),
-      ]);
-      if (cancelled) return;
-
-      const paidById = new Map<string, number>();
-      for (const r of records) {
-        const smp = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (r.smp[k] ?? 0), 0);
-        const addl = (r.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
-        paidById.set(r.studentId, (paidById.get(r.studentId) ?? 0) + smp + r.svk + addl);
-      }
-
-      const allottedByKey = new Map<string, number>();
-      for (const fs of structures) {
-        const k = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
-        const smp = SMP_FEE_HEADS.reduce((t, { key: fk }) => t + (fs.smp[fk] ?? 0), 0);
-        const addl = (fs.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
-        allottedByKey.set(k, smp + fs.svk + addl);
-      }
-
-      const overrideById = new Map<string, number>();
-      for (const o of overrides) {
-        const smp = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
-        const addl = (o.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
-        overrideById.set(o.studentId, smp + o.svk + addl);
-      }
-
-      const mkBucket = () => ({ allotted: 0, collected: 0, dues: 0, pending: 0, total: 0 });
-      const byCourse: FeeStatsData['byCourse'] = { CE: mkBucket(), ME: mkBucket(), EC: mkBucket(), CS: mkBucket(), EE: mkBucket() };
-      const byYear: FeeStatsData['byYear'] = { '1ST YEAR': mkBucket(), '2ND YEAR': mkBucket(), '3RD YEAR': mkBucket() };
-      let totalAllotted = 0, totalCollected = 0, totalDues = 0, totalPending = 0;
-
-      for (const s of scopedStudents) {
-        const collected = paidById.get(s.id) ?? 0;
-        const allotted = overrideById.has(s.id)
-          ? overrideById.get(s.id)!
-          : (allottedByKey.get(`${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? 0);
-        const dues = Math.max(0, allotted - collected);
-        const hasDues = dues > 0;
-
-        totalAllotted   += allotted;
-        totalCollected  += collected;
-        totalDues       += dues;
-        if (hasDues) totalPending++;
-
-        const cb = byCourse[s.course as Course];
-        const yb = byYear[s.year as Year];
-        if (cb) { cb.allotted += allotted; cb.collected += collected; cb.dues += dues; cb.total++; if (hasDues) cb.pending++; }
-        if (yb) { yb.allotted += allotted; yb.collected += collected; yb.dues += dues; yb.total++; if (hasDues) yb.pending++; }
-      }
-
-      if (!cancelled) {
-        setFeeStatsData({ totalAllotted, totalCollected, totalDues, totalPending, totalStudents: scopedStudents.length, byCourse, byYear, academicYear: yr! });
-        setFeeStatsLoading(false);
-      }
-    }
-
-    load().catch(() => { if (!cancelled) setFeeStatsLoading(false); });
-    return () => { cancelled = true; };
-  }, [academicYearFilter, settings?.currentAcademicYear, allStudents]);
 
   const hasActiveFilters =
     !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
@@ -1997,10 +1917,14 @@ const [barsReady, setBarsReady] = useState(false);
                 );
               })()}
 
-              {/* Fee stats card — absolute fill so bar chart card sets the row height */}
+              {/* Recent activity card — absolute fill so bar chart card sets the row height */}
               <div className="relative">
                 <div className="absolute inset-0 overflow-hidden rounded-2xl">
-                  <FeeStatsCard data={feeStatsData} loading={feeStatsLoading} />
+                  <RecentActivityCard
+                    students={allStudents}
+                    feeRecords={feeRecords}
+                    academicYear={feeAcademicYear}
+                  />
                 </div>
               </div>
             </div>
