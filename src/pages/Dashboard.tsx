@@ -1822,29 +1822,42 @@ const [barsReady, setBarsReady] = useState(false);
                       </div>
                       <p className={`text-[10px] font-medium mt-0.5 ml-4 ${mode.subtitleClass}`}>{mode.subtitle}</p>
                     </div>
-                    {/* Mode pill indicators — click to jump */}
-                    <div className="flex items-center gap-1.5">
-                      {modes.map((m, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setBarChartMode(i)}
-                          className={`rounded-full cursor-pointer transition-all duration-300 ${
-                            i === barChartMode
-                              ? `w-4 h-2 ${m.bars[1].fill} opacity-90`
-                              : `w-2 h-2 ${mode.inactiveDot} opacity-40 hover:opacity-70`
-                          }`}
-                        />
-                      ))}
+                    {/* Mode pill indicators + year counts */}
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {modes.map((m, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setBarChartMode(i)}
+                            className={`rounded-full cursor-pointer transition-all duration-300 ${
+                              i === barChartMode
+                                ? `w-4 h-2 ${m.bars[1].fill} opacity-90`
+                                : `w-2 h-2 ${mode.inactiveDot} opacity-40 hover:opacity-70`
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        {([0, 1, 2] as const).map((bi) => {
+                          const bar = mode.bars[bi];
+                          return (
+                            <div key={bi} className="flex items-center gap-0.5">
+                              <span className={`text-xs font-black tabular-nums ${bar.text}`}>{mode.footerTotal(bi)}</span>
+                              <span className={`text-[9px] font-medium ${mode.footerLabelClass}`}>{mode.footerLabel(bi)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
                   {/* Bars */}
-                  <div className="flex gap-2 flex-1">
+                  <div className="flex gap-4 flex-1 mt-2">
                     {COURSES.map((course, ci) => {
                       const courseTotal = [0, 1, 2].reduce((s, i) => s + mode.getValue(course, i), 0);
                       return (
-                        <div key={course} className="flex-1 flex flex-col items-center gap-1">
+                        <div key={course} className="flex-1 flex flex-col items-center gap-1 px-1.5">
                           {/* Course total above */}
                           <span
                             key={`${barChartMode}-${course}`}
@@ -1886,32 +1899,22 @@ const [barsReady, setBarsReady] = useState(false);
                               );
                             })}
                           </div>
-                          {/* Course label */}
-                          <span className={`text-[9px] font-bold leading-none ${BAR_COURSES[course]}`}>{course}</span>
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Course labels */}
+                  <div className="flex gap-2 mt-1.5 shrink-0">
+                    {COURSES.map((course) => (
+                      <div key={course} className="flex-1 flex justify-center">
+                        <span className={`text-[9px] font-bold leading-none ${BAR_COURSES[course]}`}>{course}</span>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Divider */}
-                  <div className="mt-3 border-t shrink-0" style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }} />
-
-                  {/* Footer totals */}
-                  <div className="mt-2 grid grid-cols-3 shrink-0">
-                    {([0, 1, 2] as const).map((bi) => {
-                      const bar = mode.bars[bi];
-                      return (
-                        <div
-                          key={bi}
-                          className={`flex flex-row items-center justify-center gap-1 ${bi > 0 ? 'border-l' : ''}`}
-                          style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }}
-                        >
-                          <span className={`text-sm font-black tabular-nums ${bar.text}`}>{mode.footerTotal(bi)}</span>
-                          <span className={`text-[9px] font-medium ${mode.footerLabelClass}`}>{mode.footerLabel(bi)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <div className="mt-2 border-t shrink-0" style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }} />
 
                 </div>
                 );

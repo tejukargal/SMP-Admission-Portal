@@ -63,10 +63,10 @@ function ColHd({ children, right }: { children: ReactNode; right?: boolean }) {
   );
 }
 
-// Card theme — indigo tint, matching the dashboard's per-card colour personality
-const CARD_BG     = '#eef2ff'; // indigo-50
-const CARD_BORDER = '#a5b4fc'; // indigo-300
-const CARD_DIV    = '#c7d2fe'; // indigo-200
+// Card theme — sage/emerald pastel, matching the dashboard's nature palette
+const CARD_BG     = '#ecfdf5'; // emerald-50
+const CARD_BORDER = '#6ee7b7'; // emerald-300
+const CARD_DIV    = '#a7f3d0'; // emerald-200
 
 interface Props {
   students: Student[];
@@ -163,19 +163,19 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
       <div className="rounded-2xl h-full flex flex-col border p-4"
         style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-3.5 rounded-full bg-indigo-200 shrink-0 animate-pulse" />
-          <div className="h-3.5 w-28 bg-indigo-100 rounded animate-pulse" />
+          <div className="w-1 h-3.5 rounded-full bg-emerald-200 shrink-0 animate-pulse" />
+          <div className="h-3.5 w-28 bg-emerald-100 rounded animate-pulse" />
         </div>
         <div className="border-t mb-2" style={{ borderColor: CARD_DIV }} />
         <div className="space-y-2.5 flex-1">
           {[...Array(7)].map((_, i) => (
             <div key={i} className="grid items-center" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
-              <div className="h-4 bg-indigo-100 rounded-full animate-pulse" />
-              <div className="h-3 bg-indigo-100 rounded animate-pulse" />
-              <div className="h-3 w-5 bg-indigo-100 rounded animate-pulse" />
-              <div className="h-3 w-4 bg-indigo-100 rounded animate-pulse" />
-              <div className="h-3 bg-indigo-100 rounded animate-pulse" />
-              <div className="h-3 bg-indigo-100 rounded animate-pulse" />
+              <div className="h-4 bg-emerald-100 rounded-full animate-pulse" />
+              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-3 w-5 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-3 w-4 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -194,7 +194,7 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="w-1 h-3.5 rounded-full bg-indigo-400 shrink-0" />
+          <span className="w-1 h-3.5 rounded-full bg-emerald-400 shrink-0" />
           <div>
             <p className="text-[13px] font-bold text-gray-800 leading-tight">Recent Activity</p>
             <p className="text-[10px] text-gray-400 font-medium mt-0.5">
@@ -205,11 +205,11 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
         {/* Legend — plain coloured text */}
         <div className="flex items-center gap-2 text-[9px] font-semibold">
           <span className="text-emerald-600">Enrolled</span>
-          <span className="text-indigo-300">·</span>
+          <span className="text-emerald-300">·</span>
           <span className="text-blue-600">Fee</span>
-          <span className="text-indigo-300">·</span>
+          <span className="text-emerald-300">·</span>
           <span className="text-amber-600">TC</span>
-          <span className="text-indigo-300">·</span>
+          <span className="text-emerald-300">·</span>
           <span className="text-violet-600">PC</span>
         </div>
       </div>
@@ -230,11 +230,11 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
       <div className="mx-3 shrink-0 border-t" style={{ borderColor: CARD_DIV }} />
 
       {/* ── List ───────────────────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-y-auto scroll-indigo px-3 pb-2">
+      <div className="flex-1 min-h-0 overflow-y-auto scroll-emerald px-3 pb-2">
         {events.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-1 py-6">
-            <p className="text-[12px] font-semibold text-indigo-300">No recent activity</p>
-            <p className="text-[10px] text-indigo-200 text-center">Appears here as students enroll or receive TC / PC</p>
+            <p className="text-[12px] font-semibold text-emerald-400">No recent activity</p>
+            <p className="text-[10px] text-emerald-300 text-center">Appears here as students enroll or receive TC / PC</p>
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: CARD_DIV }}>
