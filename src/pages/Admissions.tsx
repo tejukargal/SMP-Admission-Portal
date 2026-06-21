@@ -1171,8 +1171,6 @@ export function Admissions() {
                   <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-28">ಆದಾಯ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಗ+ವಿ %</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-28">SSLC ಅಂಕ</th>
                   <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಶೇಕಡಾ</th>
                   <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-16">ಅರ್ಹತೆ</th>
@@ -1198,14 +1196,6 @@ export function Admissions() {
                       <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap">{student.category}</td>
                       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap tabular-nums">
                         {student.annualIncome ? student.annualIncome.toLocaleString('en-IN') : '—'}
-                      </td>
-                      <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap tabular-nums">
-                        {student.mathsScienceObtainedTotal}/{student.mathsScienceMaxTotal}
-                      </td>
-                      <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap tabular-nums">
-                        {student.mathsScienceMaxTotal
-                          ? ((student.mathsScienceObtainedTotal / student.mathsScienceMaxTotal) * 100).toFixed(2) + '%'
-                          : '—'}
                       </td>
                       <td className="px-2 py-2 text-center text-gray-700 whitespace-nowrap tabular-nums">{student.sslcObtainedTotal}/{student.sslcMaxTotal}</td>
                       <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap tabular-nums">

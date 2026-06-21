@@ -311,8 +311,6 @@ export function exportLateralMeritListPdf(
       <td class="c">${fmtDOB(s.dateOfBirth)}</td>
       <td class="c">${esc(s.category)}</td>
       <td class="r">${fmtIncome(s.annualIncome)}</td>
-      <td class="c">${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}</td>
-      <td class="r">${s.mathsScienceMaxTotal ? ((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2) : '—'}</td>
       <td class="c">${s.sslcObtainedTotal}/${s.sslcMaxTotal}</td>
       <td class="r">${sslcPct(s).toFixed(2)}</td>
       <td class="c pq">${esc(s.priorQualification)}</td>
@@ -406,8 +404,6 @@ export function exportLateralMeritListPdf(
       <th style="width:34pt">ಹುಟ್ಟಿದ<br>ದಿನಾಂಕ</th>
       <th style="width:24pt">ಅರ್ಹ<br>ಪ್ರವರ್ಗ</th>
       <th style="width:46pt">ಆದಾಯ</th>
-      <th style="width:30pt">ಗ+ವಿ<br>ಅಂಕ</th>
-      <th style="width:24pt">ಗ+ವಿ<br>ಶೇಕಡಾ</th>
       <th style="width:34pt">SSLC<br>ಅಂಕ</th>
       <th style="width:24pt">ಶೇಕಡಾ</th>
       <th style="width:20pt">ಅರ್ಹತೆ</th>
@@ -718,8 +714,8 @@ export async function exportLateralMeritListExcel(
   };
 
   // A=Sl B=Merit C=App D=Name E=Gender F=Father G=DOB H=Cat I=Income
-  // J=StMob K=FatMob L=M+S Marks M=M+S% N=SSLC Marks(Obt/Max) O=SSLC%
-  // P=Prior Qual Q=Trade/Combo R=ITI/PUC Max S=ITI/PUC Obt T=ITI/PUC% → 20 cols
+  // J=StMob K=FatMob L=SSLC Marks(Obt/Max) M=SSLC%
+  // N=Prior Qual O=Trade/Combo P=ITI/PUC Max Q=ITI/PUC Obt R=ITI/PUC% → 18 cols
   ws.columns = [
     { width: 5  },   // A  Sl
     { width: 9  },   // B  Merit No.
@@ -732,19 +728,17 @@ export async function exportLateralMeritListExcel(
     { width: 13 },   // I  Annual Income
     { width: 13 },   // J  Student Mobile
     { width: 13 },   // K  Father Mobile
-    { width: 12 },   // L  M+S Marks
-    { width: 9  },   // M  M+S %
-    { width: 16 },   // N  SSLC Marks (Obt/Max)
-    { width: 9  },   // O  SSLC %
-    { width: 10 },   // P  Prior Qual
-    { width: 22 },   // Q  Trade/Combination
-    { width: 12 },   // R  ITI/PUC Max
-    { width: 14 },   // S  ITI/PUC Obtained
-    { width: 10 },   // T  ITI/PUC %
+    { width: 16 },   // L  SSLC Marks (Obt/Max)
+    { width: 9  },   // M  SSLC %
+    { width: 10 },   // N  Prior Qual
+    { width: 22 },   // O  Trade/Combination
+    { width: 12 },   // P  ITI/PUC Max
+    { width: 14 },   // Q  ITI/PUC Obtained
+    { width: 10 },   // R  ITI/PUC %
   ];
 
-  const LCOLS = 20;
-  const LCOL_LAST = 'T';
+  const LCOLS = 18;
+  const LCOL_LAST = 'R';
 
   const addTitle = (
     text: string,
@@ -805,7 +799,6 @@ export async function exportLateralMeritListExcel(
     'Sl', 'Merit\nNo.', 'App.\nNo.', 'Name (SSLC)', 'Gender',
     'Father Name', 'Date of\nBirth', 'Category', 'Annual\nIncome',
     'Student\nMobile', 'Father\nMobile',
-    'M+S\nMarks', 'M+S\n%',
     'SSLC\nMarks\n(Obt/Max)', 'SSLC\n%',
     'Prior\nQual', 'Trade /\nCombination',
     'ITI/PUC\nMax', 'ITI/PUC\nObtained', 'ITI/PUC\n%',
@@ -821,9 +814,6 @@ export async function exportLateralMeritListExcel(
   ws.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
 
   sorted.forEach((s, i) => {
-    const msPctVal = s.mathsScienceMaxTotal
-      ? parseFloat(((s.mathsScienceObtainedTotal / s.mathsScienceMaxTotal) * 100).toFixed(2))
-      : 0;
     const lMax = s.priorQualification === 'ITI' ? (s.itiMaxTotal ?? 0) : (s.pucMaxTotal ?? 0);
     const lObt = s.priorQualification === 'ITI' ? (s.itiObtainedTotal ?? 0) : (s.pucObtainedTotal ?? 0);
     const lPct = parseFloat(lateralPct(s).toFixed(2));
@@ -840,8 +830,6 @@ export async function exportLateralMeritListExcel(
       s.annualIncome || 0,
       s.studentMobile || '',
       s.fatherMobile || '',
-      `${s.mathsScienceObtainedTotal}/${s.mathsScienceMaxTotal}`,
-      msPctVal,
       `${s.sslcObtainedTotal}/${s.sslcMaxTotal}`,
       parseFloat(sslcPct(s).toFixed(2)),
       s.priorQualification,
@@ -863,9 +851,9 @@ export async function exportLateralMeritListExcel(
       cell.font   = { name: 'Arial', size: 10 };
       cell.border = thinBorder;
       if (colNum === 2) cell.font = { name: 'Arial', size: 10, bold: true };
-      if (colNum === 4 || colNum === 6 || colNum === 17) {
+      if (colNum === 4 || colNum === 6 || colNum === 15) {
         cell.alignment = { horizontal: 'left', vertical: 'middle' };
-      } else if (colNum === 9 || colNum === 13 || colNum === 15 || colNum === 20) {
+      } else if (colNum === 9 || colNum === 13 || colNum === 18) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
       } else {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
