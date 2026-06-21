@@ -1823,118 +1823,140 @@ const [barsReady, setBarsReady] = useState(false);
                   CE: 'text-amber-600', ME: 'text-green-700', EC: 'text-sky-600', CS: 'text-teal-700', EE: 'text-violet-600',
                 };
 
+                // Y-axis scale: round up to a "nice" ceiling
+                const niceMax = (() => {
+                  if (maxBarCount <= 5)  return 5;
+                  if (maxBarCount <= 10) return 10;
+                  if (maxBarCount <= 15) return 15;
+                  if (maxBarCount <= 20) return 20;
+                  if (maxBarCount <= 30) return 30;
+                  const step = maxBarCount <= 60 ? 10 : 20;
+                  return Math.ceil(maxBarCount / step) * step;
+                })();
+                const yTicks = [niceMax, Math.round(niceMax * 0.75), Math.round(niceMax * 0.5), Math.round(niceMax * 0.25), 0];
+
                 return (
                 <div
-                  className="rounded-2xl p-4 flex flex-col border"
-                  style={{
-                    backgroundColor: mode.cardBg,
-                    borderColor: mode.cardBorder,
-                    boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)',
-                    transition: 'background-color 700ms ease, border-color 700ms ease',
-                  }}
+                  className="rounded-2xl p-4 flex flex-col border border-gray-100"
+                  style={{ background: '#f9fafb', boxShadow: '0 2px 8px 0 rgba(0,0,0,0.07), 0 1px 3px -1px rgba(0,0,0,0.05)' }}
                 >
                   {/* Header */}
                   <div className="flex items-start justify-between mb-3 shrink-0">
                     <div key={barChartMode} style={{ animation: 'page-enter 0.28s ease-out' }}>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`${mode.accent} font-black text-sm leading-none tracking-tighter select-none`}>//</span>
-                        <p className={`text-xs font-semibold uppercase tracking-wider ${mode.titleClass}`}>{mode.title}</p>
-                      </div>
-                      <p className={`text-[10px] font-medium mt-0.5 ml-4 ${mode.subtitleClass}`}>{mode.subtitle}</p>
-                    </div>
-                    {/* Mode pill indicators + year counts */}
-                    <div className="flex flex-col items-end gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {modes.map((m, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setBarChartMode(i)}
-                            className={`rounded-full cursor-pointer transition-all duration-300 ${
-                              i === barChartMode
-                                ? `w-4 h-2 ${m.bars[1].fill} opacity-90`
-                                : `w-2 h-2 ${mode.inactiveDot} opacity-40 hover:opacity-70`
-                            }`}
-                          />
+                      <p className={`text-sm font-bold leading-tight ${mode.titleClass}`}>{mode.title}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{mode.subtitle}</p>
+                      {/* Legend */}
+                      <div className="flex items-center gap-3 mt-2">
+                        {([0, 1, 2] as const).map((bi) => (
+                          <div key={bi} className="flex items-center gap-1">
+                            <span className={`inline-block w-2 h-2 rounded-full ${mode.bars[bi].fill}`} />
+                            <span className="text-[9px] text-gray-400 font-medium">{mode.footerLabel(bi)}</span>
+                          </div>
                         ))}
                       </div>
-                      <div className="flex items-center gap-2.5">
-                        {([0, 1, 2] as const).map((bi) => {
-                          const bar = mode.bars[bi];
-                          return (
-                            <div key={bi} className="flex items-center gap-0.5">
-                              <span className={`text-xs font-black tabular-nums ${bar.text}`}>{mode.footerTotal(bi)}</span>
-                              <span className={`text-[9px] font-medium ${mode.footerLabelClass}`}>{mode.footerLabel(bi)}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    </div>
+                    {/* Mode nav dots */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {modes.map((m, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setBarChartMode(i)}
+                          className={`rounded-full cursor-pointer transition-all duration-300 ${
+                            i === barChartMode
+                              ? `w-4 h-2 ${m.bars[1].fill} opacity-90`
+                              : 'w-2 h-2 bg-gray-200 hover:bg-gray-300'
+                          }`}
+                        />
+                      ))}
                     </div>
                   </div>
 
-                  {/* Bars */}
-                  <div className="flex gap-4 flex-1 mt-2">
-                    {COURSES.map((course, ci) => {
-                      const courseTotal = [0, 1, 2].reduce((s, i) => s + mode.getValue(course, i), 0);
-                      return (
-                        <div key={course} className="flex-1 flex flex-col items-center gap-1 px-1.5">
-                          {/* Course total above */}
-                          <span
-                            key={`${barChartMode}-${course}`}
-                            className={`text-[11px] font-black tabular-nums leading-none ${BAR_COURSES[course]}`}
-                            style={{
-                              opacity: chartBarsReady ? 1 : 0,
-                              transition: chartBarsReady ? `opacity 350ms ease-out ${ci * 70 + 480}ms` : 'none',
-                            }}
-                          >
-                            {courseTotal}
-                          </span>
-                          {/* 3 track bars */}
-                          <div className="flex gap-1 w-full" style={{ height: CHART_H }}>
-                            {([0, 1, 2] as const).map((bi) => {
-                              const bar = mode.bars[bi];
-                              const count = mode.getValue(course, bi);
-                              const fillPct = count > 0 ? Math.max(4, Math.round((count / maxBarCount) * 100)) : 0;
-                              return (
-                                <div
-                                  key={bi}
-                                  className="flex-1 relative overflow-hidden"
-                                  style={{
-                                    borderRadius: 8,
-                                    background: 'rgba(0,0,0,0.03)',
-                                  }}
-                                >
+                  {/* Chart: Y-axis + bars */}
+                  <div className="flex flex-1 gap-1.5">
+                    {/* Y-axis labels — spacer (14px) aligns labels with bar area below course totals */}
+                    <div className="flex flex-col shrink-0" style={{ width: 20 }}>
+                      <div style={{ height: 14 }} />
+                      <div className="flex flex-col justify-between items-end" style={{ height: CHART_H }}>
+                        {yTicks.map((t) => (
+                          <span key={t} className="text-[8px] text-gray-300 tabular-nums leading-none">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Plot column */}
+                    <div className="flex-1 flex flex-col min-w-0">
+                      {/* Course totals row */}
+                      <div className="flex gap-3 shrink-0" style={{ height: 14 }}>
+                        {COURSES.map((course, ci) => (
+                          <div key={course} className="flex-1 flex justify-center">
+                            <span
+                              key={`${barChartMode}-${course}`}
+                              className={`text-[10px] font-black tabular-nums leading-none ${BAR_COURSES[course]}`}
+                              style={{
+                                opacity: chartBarsReady ? 1 : 0,
+                                transition: chartBarsReady ? `opacity 350ms ease-out ${ci * 70 + 480}ms` : 'none',
+                              }}
+                            >
+                              {[0, 1, 2].reduce((s, i) => s + mode.getValue(course, i), 0)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Bar area with gridlines */}
+                      <div className="relative shrink-0" style={{ height: CHART_H }}>
+                        {/* Horizontal gridlines */}
+                        {yTicks.map((t) => (
+                          <div
+                            key={t}
+                            className="absolute left-0 right-0 border-t"
+                            style={{ bottom: `${(t / niceMax) * 100}%`, borderColor: t === 0 ? '#d1d5db' : '#f3f4f6' }}
+                          />
+                        ))}
+                        {/* Bar groups */}
+                        <div className="absolute inset-0 flex gap-3">
+                          {COURSES.map((course, ci) => (
+                            <div key={course} className="flex-1 flex items-end gap-0.5 h-full">
+                              {([0, 1, 2] as const).map((bi) => {
+                                const count = mode.getValue(course, bi);
+                                const fillPct = count > 0 ? Math.max(3, Math.round((count / niceMax) * 100)) : 0;
+                                return (
                                   <div
-                                    className={`absolute bottom-0 left-0 right-0 ${bar.fill}`}
+                                    key={bi}
+                                    className={`flex-1 ${mode.bars[bi].fill}`}
                                     style={{
-                                      borderRadius: 8,
+                                      borderRadius: '4px 4px 0 0',
                                       height: chartBarsReady ? `${fillPct}%` : '0%',
-                                      opacity: 0.9,
+                                      opacity: 0.88,
                                       transition: chartBarsReady
                                         ? `height 680ms cubic-bezier(0.34,1.08,0.64,1) ${(ci * 3 + bi) * 55}ms`
                                         : 'none',
                                     }}
                                   />
-                                </div>
-                              );
-                            })}
-                          </div>
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Course labels */}
-                  <div className="flex gap-2 mt-1.5 shrink-0">
-                    {COURSES.map((course) => (
-                      <div key={course} className="flex-1 flex justify-center">
-                        <span className={`text-[9px] font-bold leading-none ${BAR_COURSES[course]}`}>{course}</span>
                       </div>
-                    ))}
+
+                      {/* Baseline */}
+                      <div className="border-t border-gray-200 shrink-0" />
+
+                      {/* Course name labels */}
+                      <div className="flex gap-3 mt-1.5 shrink-0">
+                        {COURSES.map((course) => (
+                          <div key={course} className="flex-1 flex justify-center">
+                            <span className={`text-[9px] font-bold leading-none ${BAR_COURSES[course]}`}>{course}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Divider */}
-                  <div className="mt-2 border-t shrink-0" style={{ borderColor: mode.dividerColor, transition: 'border-color 700ms ease' }} />
+                  {/* Bottom divider */}
+                  <div className="mt-3 border-t border-gray-100 shrink-0" />
 
                 </div>
                 );
