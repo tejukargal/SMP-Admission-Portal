@@ -1927,6 +1927,7 @@ const [barsReady, setBarsReady] = useState(false);
                     students={allStudents}
                     feeRecords={feeRecords}
                     academicYear={feeAcademicYear}
+                    cycleIdx={barChartMode}
                   />
                 </div>
               </div>

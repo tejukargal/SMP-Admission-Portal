@@ -18,7 +18,6 @@ interface ActivityEvent {
   displayDate: string;
 }
 
-// Matches the course dot palette used across the dashboard
 const COURSE_DOT: Record<Course, string> = {
   CE: 'bg-amber-400', ME: 'bg-green-500', EC: 'bg-sky-400', CS: 'bg-teal-500', EE: 'bg-violet-400',
 };
@@ -39,9 +38,8 @@ const KIND_LABEL: Record<EventKind, { label: string; cls: string }> = {
 
 const PER_KIND = 3;
 
-// Grid column widths — shared between header row and every data row for perfect alignment
-// type-badge | name | course | yr | reg/rpt | date
-const GRID_COLS = '62px 1fr 26px 18px 68px 40px';
+// Date column removed — date shown as slide header instead
+const GRID_COLS = '62px 1fr 26px 18px 68px';
 const GRID_GAP = '0 10px';
 
 function fmtDate(iso: string): string {
@@ -55,28 +53,27 @@ function byDateDesc(a: ActivityEvent, b: ActivityEvent): number {
   return b.isoDate.localeCompare(a.isoDate);
 }
 
-function ColHd({ children, right }: { children: ReactNode; right?: boolean }) {
+function ColHd({ children }: { children: ReactNode }) {
   return (
-    <span className={`text-[9px] font-bold uppercase tracking-wider text-gray-400 ${right ? 'text-right' : ''}`}>
+    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
       {children}
     </span>
   );
 }
 
-// Card theme — sage/emerald pastel, matching the dashboard's nature palette
-const CARD_BG     = '#ecfdf5'; // emerald-50
-const CARD_BORDER = '#6ee7b7'; // emerald-300
-const CARD_DIV    = '#a7f3d0'; // emerald-200
+const CARD_BG     = '#ecfdf5';
+const CARD_BORDER = '#6ee7b7';
+const CARD_DIV    = '#a7f3d0';
 
 interface Props {
   students: Student[];
   feeRecords: FeeRecord[];
   academicYear: AcademicYear | null;
+  cycleIdx: number;
 }
 
-export function RecentActivityCard({ students, feeRecords, academicYear }: Props) {
+export function RecentActivityCard({ students, feeRecords, academicYear, cycleIdx }: Props) {
   const events = useMemo<ActivityEvent[]>(() => {
-    // ── ENROLLED: earliest fee record per confirmed student ───────────────────
     const confirmedIds = new Set(
       students.filter((s) => s.admissionStatus === 'CONFIRMED').map((s) => s.id),
     );
@@ -99,7 +96,6 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
         displayDate: fmtDate(r.date),
       }));
 
-    // ── FEE PAID: 3 most recently dated fee records (any payment) ─────────────
     const feePaidEvents: ActivityEvent[] = [...feeRecords]
       .filter((r) => !!r.date)
       .sort((a, b) => {
@@ -118,7 +114,6 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
         displayDate: fmtDate(r.date),
       }));
 
-    // ── TC events: latest 3 across all students ───────────────────────────────
     const tcEvents: ActivityEvent[] = [];
     for (const s of students as StudentWithHistory[]) {
       for (const tc of s.tcHistory ?? []) {
@@ -135,7 +130,6 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
     }
     const recentTc = tcEvents.sort(byDateDesc).slice(0, PER_KIND);
 
-    // ── PC events: latest 3 across all students ───────────────────────────────
     const pcEvents: ActivityEvent[] = [];
     for (const s of students as StudentWithHistory[]) {
       for (const pc of s.pcHistory ?? []) {
@@ -155,13 +149,37 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
     return [...enrolledEvents, ...feePaidEvents, ...recentTc, ...recentPc].sort(byDateDesc);
   }, [students, feeRecords]);
 
+  // Group events by calendar date (ISO date prefix), most recent first
+  const dateGroups = useMemo(() => {
+    if (events.length === 0) return [];
+    const map = new Map<string, ActivityEvent[]>();
+    for (const ev of events) {
+      if (!ev.isoDate) continue;
+      const key = ev.isoDate.split('T')[0];
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(ev);
+    }
+    return Array.from(map.entries())
+      .map(([isoDate, evs]) => ({
+        isoDate,
+        displayDate: evs[0].displayDate,
+        evs: evs.sort(byDateDesc),
+      }))
+      .sort((a, b) => b.isoDate.localeCompare(a.isoDate));
+  }, [events]);
+
+  const numGroups = dateGroups.length;
+  const activeIdx = numGroups > 0 ? cycleIdx % numGroups : 0;
+  const activeGroup = numGroups > 0 ? dateGroups[activeIdx] : null;
+
   const isEmpty = students.length === 0 && feeRecords.length === 0;
 
-  // ── Loading skeleton ────────────────────────────────────────────────────────
   if (isEmpty) {
     return (
-      <div className="rounded-2xl h-full flex flex-col border p-4"
-        style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
+      <div
+        className="rounded-2xl h-full flex flex-col border p-4"
+        style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+      >
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-3.5 rounded-full bg-emerald-200 shrink-0 animate-pulse" />
           <div className="h-3.5 w-28 bg-emerald-100 rounded animate-pulse" />
@@ -175,7 +193,6 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
               <div className="h-3 w-5 bg-emerald-100 rounded animate-pulse" />
               <div className="h-3 w-4 bg-emerald-100 rounded animate-pulse" />
               <div className="h-3 bg-emerald-100 rounded animate-pulse" />
-              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -184,13 +201,14 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
   }
 
   return (
-    <div className="rounded-2xl h-full flex flex-col border"
+    <div
+      className="rounded-2xl h-full flex flex-col border"
       style={{
         backgroundColor: CARD_BG,
         borderColor: CARD_BORDER,
         boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)',
-      }}>
-
+      }}
+    >
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -202,7 +220,6 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
             </p>
           </div>
         </div>
-        {/* Legend — plain coloured text */}
         <div className="flex items-center gap-2 text-[9px] font-semibold">
           <span className="text-emerald-600">Enrolled</span>
           <span className="text-emerald-300">·</span>
@@ -224,64 +241,92 @@ export function RecentActivityCard({ students, feeRecords, academicYear }: Props
         <ColHd>Crs</ColHd>
         <ColHd>Yr</ColHd>
         <ColHd>Reg / Rpt</ColHd>
-        <ColHd right>Date</ColHd>
       </div>
 
       <div className="mx-3 shrink-0 border-t" style={{ borderColor: CARD_DIV }} />
 
-      {/* ── List ───────────────────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-y-auto scroll-emerald px-3 pb-2">
+      {/* ── Cycling content ─────────────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {events.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center gap-1 py-6">
+          <div className="flex-1 flex flex-col items-center justify-center gap-1 py-6">
             <p className="text-[12px] font-semibold text-emerald-400">No recent activity</p>
             <p className="text-[10px] text-emerald-300 text-center">Appears here as students enroll or receive TC / PC</p>
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: CARD_DIV }}>
-            {events.map((ev, i) => {
-              const dot  = COURSE_DOT[ev.course as Course]  ?? 'bg-gray-300';
-              const ctxt = COURSE_TEXT[ev.course as Course] ?? 'text-gray-500';
-              const secondary = ev.kind === 'FEE_PAID' && ev.receiptNumber
-                ? ev.receiptNumber
-                : (ev.regNumber || '—');
-              return (
-                <div key={i} className="grid items-center py-1.5" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
-
-                  {/* Type label — plain coloured text, no box */}
-                  <span className={`text-[9px] font-semibold leading-tight truncate ${KIND_LABEL[ev.kind].cls}`}>
-                    {KIND_LABEL[ev.kind].label}
+          <>
+            {/* Slide — re-keyed on every cycleIdx change so page-enter fires in sync with bar chart */}
+            <div
+              key={cycleIdx}
+              className="flex-1 min-h-0 overflow-y-auto scroll-emerald px-3"
+              style={{ animation: 'page-enter 0.28s ease-out' }}
+            >
+              {/* Date header for this slide */}
+              {activeGroup && (
+                <div className="flex items-center gap-2 pt-2 pb-1.5">
+                  <span className="text-[13px] font-black text-emerald-700 leading-none">
+                    {activeGroup.displayDate}
                   </span>
-
-                  {/* Name */}
-                  <span className="text-[11px] font-semibold text-gray-700 truncate">
-                    {ev.name}
+                  <span className="w-px h-3 bg-emerald-200 shrink-0" />
+                  <span className="text-[9px] text-emerald-500 font-semibold uppercase tracking-wide">
+                    {activeGroup.evs.length} event{activeGroup.evs.length !== 1 ? 's' : ''}
                   </span>
-
-                  {/* Course (dot + code) */}
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                    <span className={`text-[10px] font-bold ${ctxt}`}>{ev.course}</span>
-                  </div>
-
-                  {/* Year */}
-                  <span className="text-[10px] font-semibold text-gray-400">
-                    {YR_SHORT[ev.year] ?? ev.year}
-                  </span>
-
-                  {/* Reg / Receipt */}
-                  <span className="text-[9px] text-gray-400 font-mono truncate">
-                    {secondary}
-                  </span>
-
-                  {/* Date */}
-                  <span className="text-[9px] text-gray-400 text-right">
-                    {ev.displayDate}
-                  </span>
-
+                  {numGroups > 1 && (
+                    <>
+                      <span className="w-px h-3 bg-emerald-200 shrink-0" />
+                      <span className="text-[9px] text-emerald-400 font-medium">
+                        {activeIdx + 1} / {numGroups}
+                      </span>
+                    </>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+              )}
+
+              {/* Event rows */}
+              <div className="divide-y" style={{ borderColor: CARD_DIV }}>
+                {activeGroup?.evs.map((ev, i) => {
+                  const dot  = COURSE_DOT[ev.course as Course]  ?? 'bg-gray-300';
+                  const ctxt = COURSE_TEXT[ev.course as Course] ?? 'text-gray-500';
+                  const secondary = ev.kind === 'FEE_PAID' && ev.receiptNumber
+                    ? ev.receiptNumber
+                    : (ev.regNumber || '—');
+                  return (
+                    <div key={i} className="grid items-center py-1.5" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
+                      <span className={`text-[9px] font-semibold leading-tight truncate ${KIND_LABEL[ev.kind].cls}`}>
+                        {KIND_LABEL[ev.kind].label}
+                      </span>
+                      <span className="text-[11px] font-semibold text-gray-700 truncate">
+                        {ev.name}
+                      </span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                        <span className={`text-[10px] font-bold ${ctxt}`}>{ev.course}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-gray-400">
+                        {YR_SHORT[ev.year] ?? ev.year}
+                      </span>
+                      <span className="text-[9px] text-gray-400 font-mono truncate">
+                        {secondary}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Navigation dots — same style as bar chart mode dots */}
+            {numGroups > 1 && (
+              <div className="flex items-center justify-center gap-1.5 py-2 shrink-0">
+                {dateGroups.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-full bg-emerald-400 transition-all duration-300 ${
+                      i === activeIdx ? 'w-4 h-2 opacity-90' : 'w-2 h-2 opacity-30'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
