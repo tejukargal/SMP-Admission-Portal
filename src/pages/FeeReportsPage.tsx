@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -106,7 +106,7 @@ function ExportBar({ onPdf, onExcel }: { onPdf: () => void; onExcel: () => void 
 // ── Shared: grouped 2-row header for fee detail tables ─────────────────────────
 function FeeTableHead({ headerColor }: { headerColor: string }) {
   return (
-    <thead className={`${headerColor} text-white text-[10px]`}>
+    <thead className={`sticky top-0 z-10 ${headerColor} text-white text-[10px]`}>
       <tr>
         <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Name</th>
@@ -335,14 +335,17 @@ function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academi
   }), [rows]);
 
   return (
-    <div className="space-y-3">
-      <CommonFilters fp={fp} />
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">{rows.length} student{rows.length !== 1 ? 's' : ''}</p>
-        <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <div className="shrink-0">
+        <CommonFilters fp={fp} extra={
+          <>
+            <span className="text-xs text-gray-500">{rows.length} student{rows.length !== 1 ? 's' : ''}</span>
+            <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
+          </>
+        } />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full">
+      <div className="flex-1 min-h-0 rounded-lg border border-gray-200 overflow-auto">
+        <table className="w-full bg-white">
           <FeeTableHead headerColor="bg-blue-700" />
           <tbody>
             {rows.map((r, i) => <FeeDetailRow key={r.student.id} r={r} i={i} stripe={i % 2 !== 0} />)}
@@ -351,7 +354,7 @@ function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academi
             )}
           </tbody>
           {rows.length > 0 && (
-            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {rows.length} student{rows.length !== 1 ? 's' : ''}</td>
@@ -384,13 +387,16 @@ function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYe
   }), [dueRows]);
 
   return (
-    <div className="space-y-3">
-      <CommonFilters fp={fp} />
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with outstanding balance</p>
-        <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <div className="shrink-0">
+        <CommonFilters fp={fp} extra={
+          <>
+            <span className="text-xs text-gray-500">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with dues</span>
+            <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
+          </>
+        } />
       </div>
-      <div className="bg-white rounded-lg border border-red-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-red-200 overflow-auto">
         <table className="w-full">
           <FeeTableHead headerColor="bg-red-600" />
           <tbody>
@@ -400,7 +406,7 @@ function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYe
             )}
           </tbody>
           {dueRows.length > 0 && (
-            <tfoot className="bg-red-50 font-bold border-t-2 border-red-200 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-red-50 font-bold border-t-2 border-red-200 text-[10px]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
@@ -913,7 +919,7 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
   const hasFilter = !!dateFrom || !!dateTo || modeFilter !== 'ALL';
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
       {selectedDay && (
         <DayBreakdownModal
           day={selectedDay}
@@ -922,24 +928,23 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         />
       )}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Summary strip */}
+      <div className="shrink-0 flex flex-wrap gap-2">
         {[
-          { label: 'Total Cash',  value: fmt(totals.cashTotal),    color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200',  sub: 'To deposit in bank'  },
-          { label: 'Total UPI',   value: fmt(totals.upiTotal),     color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   sub: 'To verify with bank' },
-          { label: 'Grand Total', value: fmt(totals.dayTotal),     color: 'text-gray-900',   bg: 'bg-gray-50',   border: 'border-gray-200',   sub: 'Cash + UPI'          },
-          { label: 'Receipts',    value: totals.receiptCount,      color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200', sub: 'Payments in range'   },
+          { label: 'Cash',    value: fmt(totals.cashTotal),  color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'UPI',     value: fmt(totals.upiTotal),   color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+          { label: 'Total',   value: fmt(totals.dayTotal),   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Receipts',value: totals.receiptCount,    color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
         ].map((c) => (
-          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{c.label}</p>
-            <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
-            <p className="text-[9px] text-gray-400 mt-0.5">{c.sub}</p>
+          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
+            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
           </div>
         ))}
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="shrink-0 flex flex-wrap gap-2 items-center">
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -969,15 +974,10 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         </div>
       </div>
 
-      {/* Hint */}
-      {filteredDays.length > 0 && (
-        <p className="text-[10px] text-gray-400">Click any row to view a detailed breakup of that day's collections.</p>
-      )}
-
       {/* Day-wise summary table — 13 columns */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full text-[10px]">
-          <thead className="bg-emerald-700 text-white">
+          <thead className="sticky top-0 z-10 bg-emerald-700 text-white">
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Date</th>
@@ -1029,7 +1029,7 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
             )}
           </tbody>
           {filteredDays.length > 0 && (
-            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
@@ -1125,9 +1125,9 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
   const n = (v: number) => (v > 0 ? fmt(v) : '—');
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* Filters + export */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="shrink-0 flex flex-wrap gap-2 items-center">
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -1152,26 +1152,25 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Summary strip */}
+      <div className="shrink-0 flex flex-wrap gap-2">
         {[
-          { label: 'Total Cash',   value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', sub: 'SMP + SVK + Add (cash)' },
-          { label: 'Total UPI',    value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200',    sub: 'SMP + SVK + Add (UPI)'  },
-          { label: 'Grand Total',  value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200',    sub: 'Cash + UPI'             },
-          { label: 'Days Shown',   value: filteredDays.length,                                    color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200',  sub: `of ${allDays.length} total days` },
+          { label: 'Cash',      value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'UPI',       value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+          { label: 'Total',     value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Days',      value: `${filteredDays.length} / ${allDays.length}`,           color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
         ].map((c) => (
-          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">{c.label}</p>
-            <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
-            <p className="text-[9px] text-gray-400 mt-0.5">{c.sub}</p>
+          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
+            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
           </div>
         ))}
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full text-[10px] whitespace-nowrap">
-          <thead className="bg-slate-700 text-white">
+          <thead className="sticky top-0 z-10 bg-slate-700 text-white">
             <tr>
               <th className="px-3 py-2 text-left font-semibold" rowSpan={2}>Date</th>
               <th className="px-2 py-2 text-center font-semibold" rowSpan={2}>Students</th>
@@ -1212,7 +1211,7 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
             )}
           </tbody>
           {filteredDays.length > 0 && (
-            <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-slate-100 font-bold border-t-2 border-slate-300 text-[10px]">
               <tr>
                 <td className="px-3 py-2 text-slate-700">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-center text-slate-700">{totals.studentCount}</td>
@@ -1251,30 +1250,31 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
   );
 
   return (
-    <div className="space-y-3">
-      <CommonFilters fp={fp} />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <p className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</p>
-          {grandTotal > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-700">
-              Total: {fmt(grandTotal)}
-            </span>
-          )}
-          {showAllYears && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
-              Incl. Prior Year Dues
-            </span>
-          )}
-        </div>
-        <ExportBar
-          onPdf={() => exportDatewiseHeadwisePdf(entries, academicYear)}
-          onExcel={() => exportDatewiseHeadwiseExcel(entries, academicYear)}
-        />
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <div className="shrink-0">
+        <CommonFilters fp={fp} extra={
+          <>
+            <span className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</span>
+            {grandTotal > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-700">
+                {fmt(grandTotal)}
+              </span>
+            )}
+            {showAllYears && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+                Incl. Prior Dues
+              </span>
+            )}
+            <ExportBar
+              onPdf={() => exportDatewiseHeadwisePdf(entries, academicYear)}
+              onExcel={() => exportDatewiseHeadwiseExcel(entries, academicYear)}
+            />
+          </>
+        } />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full text-[10px] whitespace-nowrap">
-          <thead className="bg-teal-700 text-white">
+          <thead className="sticky top-0 z-10 bg-teal-700 text-white">
             <tr>
               <th className="px-2 py-1.5 text-left font-semibold">Date</th>
               {SMP_FEE_HEADS.map(({ key, label }) => (
@@ -1304,7 +1304,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
             )}
           </tbody>
           {entries.length > 0 && (
-            <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
               <tr>
                 <td className="px-2 py-2">Total</td>
                 {SMP_FEE_HEADS.map(({ key }) => (
@@ -2231,7 +2231,7 @@ function RemittanceModal({
   const payeeLabel = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
   const refLabel   = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
   const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400';
-  const amtInp  = inp + ' text-right tabular-nums';
+  const amtInp  = inp + ' text-right tabular-nums [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -3443,9 +3443,9 @@ interface CommonFilterProps {
   clearFilters: () => void;
 }
 
-function CommonFilters({ fp }: { fp: CommonFilterProps }) {
+function CommonFilters({ fp, extra }: { fp: CommonFilterProps; extra?: ReactNode }) {
   return (
-    <div className="space-y-2 pb-3 mb-4 border-b border-gray-100">
+    <div className="space-y-1.5 pb-2 border-b border-gray-100">
       {fp.stats.total > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-gray-400 bg-gray-100 text-gray-700"         onClick={() => fp.setFeeStatusFilter('ALL')} />
@@ -3494,6 +3494,7 @@ function CommonFilters({ fp }: { fp: CommonFilterProps }) {
         >
           Clear
         </button>
+        {extra && <div className="ml-auto flex items-center gap-3">{extra}</div>}
       </div>
     </div>
   );
@@ -3694,9 +3695,9 @@ export function FeeReportsPage() {
   };
 
   return (
-    <div style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="h-full flex flex-col" style={{ animation: 'page-enter 0.22s ease-out' }}>
       {/* Header — stays at top, not sticky */}
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+      <div className="shrink-0 px-5 pt-4 pb-2 flex items-center justify-between">
         <div>
           <h1 className="text-base font-bold text-gray-900">Fee Reports</h1>
           {academicYear && <p className="text-xs text-gray-400 mt-0.5">{academicYear}</p>}
@@ -3755,7 +3756,7 @@ export function FeeReportsPage() {
       </div>
 
       {/* Tab content */}
-      <div className="p-5">
+      <div className="flex-1 min-h-0 flex flex-col p-5 pt-3">
         {loading ? (
           <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
         ) : !academicYear ? (
