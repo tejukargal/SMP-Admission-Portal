@@ -20,6 +20,8 @@ import { PageSpinner } from '../components/common/PageSpinner';
 import { ACADEMIC_YEARS } from '../types';
 import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear } from '../types';
 
+const PAGE_SIZE = 100;
+
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
@@ -289,6 +291,7 @@ export function StudentReports() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [savingPdf,   setSavingPdf]   = useState(false);
   const [savingExcel, setSavingExcel] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // TC clear modal (double-click on a TC row)
   const [tcClearModal,          setTcClearModal]          = useState<TcRow | null>(null);
@@ -339,6 +342,14 @@ export function StudentReports() {
     }
     return sortStudents(result);
   }, [allStudents, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch]);
+
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredStudents, reportType]);
+
+  const visibleStudents = useMemo(
+    () => filteredStudents.slice(0, visibleCount),
+    [filteredStudents, visibleCount]
+  );
+  const hasMore = visibleCount < filteredStudents.length;
 
   // ── TC Issued rows ────────────────────────────────────────────────────────────
   const tcRows = useMemo((): TcRow[] => {
@@ -1405,7 +1416,7 @@ export function StudentReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-50/60">
-              {filteredStudents.map((s, idx) => (
+              {visibleStudents.map((s, idx) => (
                 <tr
                   key={s.id}
                   className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-yellow-50/50`}
@@ -1433,10 +1444,22 @@ export function StudentReports() {
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap"></td>
                 </tr>
               ))}
+              {hasMore && (
+                <tr>
+                  <td colSpan={11} className="px-3 py-2 text-center border-t border-emerald-100/50">
+                    <button
+                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredStudents.length - visibleCount} remaining)
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}
@@ -1466,7 +1489,7 @@ export function StudentReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-50/60">
-              {filteredStudents.map((s, idx) => (
+              {visibleStudents.map((s, idx) => (
                 <tr
                   key={s.id}
                   className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-emerald-50/50`}
@@ -1507,10 +1530,22 @@ export function StudentReports() {
                   </td>
                 </tr>
               ))}
+              {hasMore && (
+                <tr>
+                  <td colSpan={12} className="px-3 py-2 text-center border-t border-emerald-100/50">
+                    <button
+                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredStudents.length - visibleCount} remaining)
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}
@@ -1534,7 +1569,7 @@ export function StudentReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-green-50/60">
-              {filteredStudents.map((s, idx) => (
+              {visibleStudents.map((s, idx) => (
                 <tr
                   key={s.id}
                   className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-green-50/50`}
@@ -1547,10 +1582,22 @@ export function StudentReports() {
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || <span className="text-gray-300">—</span>}</td>
                 </tr>
               ))}
+              {hasMore && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-2 text-center border-t border-green-100/50">
+                    <button
+                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredStudents.length - visibleCount} remaining)
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-green-50 text-xs text-gray-500 mt-auto">
-            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}
@@ -1579,7 +1626,7 @@ export function StudentReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-indigo-50/60">
-              {filteredStudents.map((s, idx) => (
+              {visibleStudents.map((s, idx) => (
                 <tr
                   key={s.id}
                   className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-indigo-50/40`}
@@ -1609,10 +1656,22 @@ export function StudentReports() {
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.fatherMobile || '—'}</td>
                 </tr>
               ))}
+              {hasMore && (
+                <tr>
+                  <td colSpan={11} className="px-3 py-2 text-center border-t border-indigo-100/50">
+                    <button
+                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredStudents.length - visibleCount} remaining)
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-indigo-50 text-xs text-gray-500 mt-auto">
-            Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
             {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
               <span className="text-gray-400"> (filtered from {stats.total} total)</span>
             )}

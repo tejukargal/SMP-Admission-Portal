@@ -11,16 +11,22 @@ interface UseStudentsResult {
   refetch: () => void;
 }
 
+// Module-level cache keyed by query fingerprint — survives page navigation.
+// Pages that call useStudents(academicYear) with no filters share the same cache entry
+// so navigating back is instant without a loading flash.
+const _cache = new Map<string, Student[]>();
+
 export function useStudents(
   academicYear: AcademicYear | null,
   filters: StudentFilters = {}
 ): UseStudentsResult {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(() => academicYear !== null);
+  const { course, year, gender } = filters;
+  const cacheKey = `${academicYear ?? ''}|${course ?? ''}|${year ?? ''}|${gender ?? ''}`;
+
+  const [students, setStudents] = useState<Student[]>(() => _cache.get(cacheKey) ?? []);
+  const [loading, setLoading] = useState(() => !_cache.has(cacheKey) && academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-
-  const { course, year, gender } = filters;
 
   useEffect(() => {
     if (!academicYear) {
@@ -28,7 +34,7 @@ export function useStudents(
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!_cache.has(cacheKey)) setLoading(true);
     setError(null);
 
     const constraints: QueryConstraint[] = [
@@ -44,7 +50,9 @@ export function useStudents(
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        setStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student)));
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+        _cache.set(cacheKey, data);
+        setStudents(data);
         setLoading(false);
       },
       (err) => {
@@ -54,9 +62,10 @@ export function useStudents(
     );
 
     return unsubscribe;
-  }, [academicYear, course, year, gender, tick]);
+  }, [academicYear, course, year, gender, tick, cacheKey]);
 
   function refetch() {
+    _cache.delete(cacheKey);
     setTick((t) => t + 1);
   }
 

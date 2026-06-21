@@ -44,10 +44,12 @@ function AppRoutes() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={<PageSpinner fullScreen />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -57,33 +59,35 @@ function AppRoutes() {
     <SettingsProvider>
     <FiltersProvider>
     <Layout>
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/enroll" element={<EnrollStudent />} />
-        <Route path="/admissions" element={<Admissions />} />
-        <Route path="/inquiries" element={<Inquiries />} />
-        <Route path="/students" element={<Students />} />
-        <Route path="/student-reports" element={<StudentReports />} />
-        <Route
-          path="/fees"
-          element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route path="/fee-register" element={<FeeRegister />} />
-        <Route
-          path="/fee-reports"
-          element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route
-          path="/messaging"
-          element={isAdmin ? <Messaging /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route
-          path="/settings"
-          element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />}
-        />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+      <Suspense fallback={<PageSpinner />}>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/enroll" element={<EnrollStudent />} />
+          <Route path="/admissions" element={<Admissions />} />
+          <Route path="/inquiries" element={<Inquiries />} />
+          <Route path="/students" element={<Students />} />
+          <Route path="/student-reports" element={<StudentReports />} />
+          <Route
+            path="/fees"
+            element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route path="/fee-register" element={<FeeRegister />} />
+          <Route
+            path="/fee-reports"
+            element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route
+            path="/messaging"
+            element={isAdmin ? <Messaging /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route
+            path="/settings"
+            element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
     </Layout>
     </FiltersProvider>
     </SettingsProvider>
@@ -94,9 +98,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={<PageSpinner fullScreen />}>
-          <AppRoutes />
-        </Suspense>
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   );

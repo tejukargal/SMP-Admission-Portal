@@ -638,7 +638,7 @@ export function FeeRegister() {
     return { smp, svk, additional, grandTotal };
   }, [filteredRecords]);
 
-  const isLoading = settingsLoading || recordsLoading;
+  const isLoading = settingsLoading || !selectedYear || recordsLoading;
 
   if (isLoading) return <LoadingGate />;
 

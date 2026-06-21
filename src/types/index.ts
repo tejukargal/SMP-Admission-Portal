@@ -306,3 +306,35 @@ export interface ExamFeeRecord {
   paid: boolean;
   updatedAt: string;
 }
+
+// ─── Fee Remittance ───────────────────────────────────────────────────────────
+
+export type RemittancePayee = 'GOV' | 'SVK' | 'SMP';
+export type RemittanceMode  = 'Online' | 'NEFT' | 'Cheque';
+
+/** Per-fee-head amounts for a Government (K2) remittance */
+export interface GovHeadAmounts {
+  tuition:  number;
+  dvp:      number;
+  adm:      number;
+  lab:      number;
+  rr:       number;
+  magazine: number;
+  idCard:   number;
+  fine:     number;
+}
+
+export interface FeeRemittance {
+  id:          string;
+  academicYear: AcademicYear;
+  payee:       RemittancePayee;
+  phase:       string;          // e.g. "1st Phase", "2nd Phase"
+  date:        string;          // YYYY-MM-DD
+  paymentMode: RemittanceMode;
+  reference:   string;          // challan / cheque / NEFT ref
+  amount:      number;          // total (sum of govHeads for GOV payee)
+  govHeads?:   GovHeadAmounts; // present only when payee === 'GOV'
+  remarks:     string;
+  createdAt:   string;
+  updatedAt:   string;
+}

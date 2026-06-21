@@ -20,8 +20,10 @@ import {
   exportCourseYearExcel, exportConsolidatedExcel,
   exportDatewiseHeadwiseExcel,
 } from '../utils/feeReportExcel';
-import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead } from '../types';
+import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts } from '../types';
 import { SMP_FEE_HEADS } from '../types';
+import { addFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
+import { useFeeRemittances } from '../hooks/useFeeRemittances';
 
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
@@ -36,6 +38,23 @@ const ADM_CATS:  AdmCat[]  = ['GM', 'SNQ', 'OTHERS'];
 
 const fs =
   'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+
+const GOV_HEADS: { key: keyof GovHeadAmounts; label: string }[] = [
+  { key: 'tuition',  label: 'Tuition'  },
+  { key: 'dvp',      label: 'DVP'      },
+  { key: 'adm',      label: 'Adm'      },
+  { key: 'lab',      label: 'Lab'      },
+  { key: 'rr',       label: 'R R'      },
+  { key: 'magazine', label: 'Magazine' },
+  { key: 'idCard',   label: 'ID Card'  },
+  { key: 'fine',     label: 'Fine'     },
+];
+
+const EMPTY_GOV_HEADS: GovHeadAmounts = { tuition: 0, dvp: 0, adm: 0, lab: 0, rr: 0, magazine: 0, idCard: 0, fine: 0 };
+
+function ordinal(n: number) {
+  return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
+}
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'statistics',         label: 'Statistics'          },
@@ -2149,11 +2168,178 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
   );
 }
 
+// ── Remittance Modal ─────────────────────────────────────────────────────────
+
+function RemittanceModal({
+  payee,
+  academicYear,
+  existingPhases,
+  onClose,
+}: {
+  payee: RemittancePayee;
+  academicYear: AcademicYear;
+  existingPhases: string[];
+  onClose: () => void;
+}) {
+  const nextNum = existingPhases.reduce((max, ph) => {
+    const n = parseInt(ph);
+    return !isNaN(n) && n > max ? n : max;
+  }, 0) + 1;
+
+  const [phase,       setPhase]       = useState(`${ordinal(nextNum)} Phase`);
+  const [date,        setDate]        = useState(new Date().toISOString().split('T')[0]);
+  const [paymentMode, setPaymentMode] = useState<RemittanceMode>(payee === 'GOV' ? 'Online' : 'NEFT');
+  const [reference,   setReference]   = useState('');
+  const [remarks,     setRemarks]     = useState('');
+  const [govHeads,    setGovHeads]    = useState<GovHeadAmounts>({ ...EMPTY_GOV_HEADS });
+  const [amount,      setAmount]      = useState<number | ''>('');
+  const [saving,      setSaving]      = useState(false);
+  const [err,         setErr]         = useState('');
+
+  const govTotal = GOV_HEADS.reduce((s, { key }) => s + (govHeads[key] || 0), 0);
+
+  function updateHead(key: keyof GovHeadAmounts, val: string) {
+    setGovHeads((prev) => ({ ...prev, [key]: parseFloat(val) || 0 }));
+  }
+
+  async function handleSave() {
+    if (!phase.trim()) { setErr('Phase is required'); return; }
+    if (!date)         { setErr('Date is required');  return; }
+    const finalAmount = payee === 'GOV' ? govTotal : (typeof amount === 'number' ? amount : 0);
+    if (finalAmount <= 0) { setErr('Enter a valid amount'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      await addFeeRemittance({
+        academicYear,
+        payee,
+        phase: phase.trim(),
+        date,
+        paymentMode,
+        reference: reference.trim(),
+        amount: finalAmount,
+        ...(payee === 'GOV' ? { govHeads } : {}),
+        remarks: remarks.trim(),
+      });
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to save');
+      setSaving(false);
+    }
+  }
+
+  const payeeLabel = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
+  const refLabel   = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
+  const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400';
+  const amtInp  = inp + ' text-right tabular-nums';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+          <div>
+            <p className="text-sm font-bold text-gray-800">Record Remittance</p>
+            <p className="text-xs text-gray-400 mt-0.5">{payeeLabel}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-3 overflow-y-auto max-h-[70vh]">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-0.5">Phase</label>
+              <input className={inp} value={phase} onChange={(e) => setPhase(e.target.value)} placeholder="e.g. 1st Phase" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-0.5">Date</label>
+              <input type="date" className={inp} value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-0.5">Payment Mode</label>
+              <select className={inp} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as RemittanceMode)}>
+                <option value="Online">Online</option>
+                <option value="NEFT">NEFT</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-0.5">{refLabel}</label>
+              <input className={inp} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ref / Challan No." />
+            </div>
+          </div>
+
+          {payee === 'GOV' ? (
+            <>
+              <div className="border-t border-gray-100 pt-3 space-y-1.5">
+                <p className="text-xs font-bold uppercase text-gray-400 mb-2">Amount per Fee Head (₹)</p>
+                {GOV_HEADS.map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 w-20 shrink-0">{label}</span>
+                    <input
+                      type="number" min="0" step="1"
+                      className={amtInp}
+                      value={govHeads[key] || ''}
+                      onChange={(e) => updateHead(key, e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                <span className="text-sm font-bold text-blue-700">Total</span>
+                <span className="text-base font-bold text-blue-700 tabular-nums">{fmt(govTotal)}</span>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs font-semibold text-gray-500 block mb-0.5">Amount (₹)</label>
+              <input
+                type="number" min="0" step="1"
+                className={amtInp}
+                value={amount === '' ? '' : amount}
+                onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                placeholder="0"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-semibold text-gray-500 block mb-0.5">Remarks</label>
+            <input className={inp} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
+          </div>
+
+          {err && <p className="text-red-500 text-xs">{err}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 justify-end px-5 py-3 border-t border-gray-100">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Fee Distribution ─────────────────────────────────────────────────────
+
 function FeeDistributionTab({
   students,
   feeStructures,
   feeRecords,
-  academicYear: _academicYear,
+  academicYear,
 }: {
   students: Student[];
   feeStructures: FeeStructure[];
@@ -2224,6 +2410,69 @@ function FeeDistributionTab({
     svk: aidedTotals.svk + unaidedTotals.svk,
     smp: aidedTotals.smp + unaidedTotals.smp,
   }), [aidedTotals, unaidedTotals]);
+
+  // ── Remittance tracker ────────────────────────────────────────────────────
+  const { remittances } = useFeeRemittances((academicYear as AcademicYear) || null);
+
+  const govRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'GOV').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+  const svkRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'SVK').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+  const smpRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'SMP').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+
+  const govPayableByHead = useMemo((): GovHeadAmounts => {
+    const all = [...aidedDist, ...unaidedDist];
+    const sg = (fn: (t: string) => boolean) => all.filter((r) => fn(r.feeType)).reduce((s, r) => s + r.toGov, 0);
+    return {
+      tuition:  sg((t) => t.startsWith('Tuition')),
+      dvp:      sg((t) => t === 'DVP'),
+      adm:      sg((t) => t === 'ADMISSION'),
+      lab:      sg((t) => t === 'LAB'),
+      rr:       sg((t) => t === 'RR'),
+      magazine: sg((t) => t === 'MAGAZINE'),
+      idCard:   sg((t) => t === 'ID CARD'),
+      fine:     sg((t) => t === 'FINE'),
+    };
+  }, [aidedDist, unaidedDist]);
+
+  const govPaidByHead = useMemo((): GovHeadAmounts => {
+    const h = { ...EMPTY_GOV_HEADS };
+    for (const r of govRemittances) if (r.govHeads) for (const k of Object.keys(h) as (keyof GovHeadAmounts)[]) h[k] += r.govHeads[k] ?? 0;
+    return h;
+  }, [govRemittances]);
+
+  const govPhaseMap = useMemo(() => {
+    const m = new Map<string, GovHeadAmounts & { total: number }>();
+    for (const r of govRemittances) {
+      if (!r.govHeads) continue;
+      const e = m.get(r.phase) ?? { ...EMPTY_GOV_HEADS, total: 0 };
+      for (const k of Object.keys(EMPTY_GOV_HEADS) as (keyof GovHeadAmounts)[]) e[k] += r.govHeads[k] ?? 0;
+      e.total += r.amount;
+      m.set(r.phase, e);
+    }
+    return m;
+  }, [govRemittances]);
+
+  const govPhases     = useMemo(() => [...govPhaseMap.keys()].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999)), [govPhaseMap]);
+  const govTotalPaid  = useMemo(() => govRemittances.reduce((s, r) => s + r.amount, 0), [govRemittances]);
+  const svkPaid       = useMemo(() => svkRemittances.reduce((s, r) => s + r.amount, 0), [svkRemittances]);
+  const smpPaid       = useMemo(() => smpRemittances.reduce((s, r) => s + r.amount, 0), [smpRemittances]);
+
+  const [trackerTab,       setTrackerTab]       = useState<RemittancePayee | 'CONSOLIDATED'>('GOV');
+  const [showModal,        setShowModal]        = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    try { await deleteFeeRemittance(id); } catch { /* snapshot listener auto-updates on success */ }
+    setDeleteConfirming(null);
+  }
 
   // ── Student statistics for summary table ──
   const studentStats = useMemo(() => {
@@ -2334,19 +2583,19 @@ function FeeDistributionTab({
   return (
     <div className="space-y-5">
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-7 gap-2">
         {[
-          { label: 'Total Students',    value: filteredStudents.length.toString(),    color: 'text-blue-700',  bg: 'bg-blue-50',  border: 'border-blue-200'  },
-          { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),                 color: 'text-gray-700',  bg: 'bg-gray-50',  border: 'border-gray-200'  },
-          { label: 'To Government',     value: fmt(grandTotals.gov),                  color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
-          { label: 'To SVK Management', value: fmt(grandTotals.svk),                  color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
-          { label: 'To SMP',            value: fmt(grandTotals.smp),                  color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200'  },
-          { label: 'Aided Students',    value: aidedFiltered.length.toString(),        color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-          { label: 'Unaided Students',  value: unaidedFiltered.length.toString(),      color: 'text-amber-700', bg: 'bg-amber-50',  border: 'border-amber-200' },
+          { label: 'Total Students',    value: filteredStudents.length.toString(),    color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-200'   },
+          { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),                 color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200'   },
+          { label: 'To Government',     value: fmt(grandTotals.gov),                  color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
+          { label: 'To SVK Management', value: fmt(grandTotals.svk),                  color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
+          { label: 'To SMP',            value: fmt(grandTotals.smp),                  color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
+          { label: 'Aided Students',    value: aidedFiltered.length.toString(),        color: 'text-indigo-700', bg: 'bg-indigo-50',  border: 'border-indigo-200' },
+          { label: 'Unaided Students',  value: unaidedFiltered.length.toString(),      color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200'  },
         ].map(c => (
-          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{c.label}</p>
-            <p className={`text-lg font-bold ${c.color}`}>{c.value}</p>
+          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-2.5 py-2`}>
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5 leading-tight">{c.label}</p>
+            <p className={`text-sm font-bold ${c.color} leading-tight`}>{c.value}</p>
           </div>
         ))}
       </div>
@@ -2605,6 +2854,341 @@ function FeeDistributionTab({
         <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP | Fine → 100% Govt</p>
         <p className="text-gray-400">Library fee applies only to 1st Year students and Lateral entry 2nd Year students. Fine is based on actual paid amounts from fee records.</p>
       </div>
+
+      {/* ── Remittance Tracker ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <div>
+            <h3 className="text-xs font-bold text-gray-800">Remittance Tracker</h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">Record outgoing payments to Govt, SVK &amp; SMP — phase by phase</p>
+          </div>
+        </div>
+
+        {/* Payee tabs */}
+        <div className="flex border-b border-gray-100">
+          {(['GOV', 'SVK', 'SMP', 'CONSOLIDATED'] as const).map((tab) => {
+            const label = tab === 'GOV' ? 'Government (K2)' : tab === 'SVK' ? 'SVK Management' : tab === 'SMP' ? 'SMP' : 'Consolidated';
+            const active = trackerTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => { setTrackerTab(tab); setDeleteConfirming(null); }}
+                className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+                  active
+                    ? 'border-blue-500 text-blue-700 bg-blue-50/30'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* ── GOV panel ── */}
+          {trackerTab === 'GOV' && (() => {
+            const balance = grandTotals.gov - govTotalPaid;
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Total Payable', value: grandTotals.gov, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
+                    { label: 'Total Paid',    value: govTotalPaid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                    {
+                      label: 'Balance',
+                      value: balance,
+                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                  ].map((c) => (
+                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
+                      <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Headwise phase table */}
+                <div className="overflow-auto rounded-lg border border-gray-200">
+                  <table className="w-full text-xs">
+                    <thead className="bg-yellow-50 border-b border-yellow-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
+                        {govPhases.map((ph) => (
+                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
+                        ))}
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {GOV_HEADS.map(({ key, label }, i) => {
+                        const payable = govPayableByHead[key];
+                        const paid    = govPaidByHead[key];
+                        const bal     = payable - paid;
+                        return (
+                          <tr key={key} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
+                            <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
+                            {govPhases.map((ph) => {
+                              const amt = govPhaseMap.get(ph)?.[key] ?? 0;
+                              return (
+                                <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
+                                  {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
+                                </td>
+                              );
+                            })}
+                            <td className={`px-3 py-1.5 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {bal === 0 ? '✓' : fmt(bal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                      <tr>
+                        <td className="px-3 py-1.5 text-gray-800">Total</td>
+                        <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
+                        {govPhases.map((ph) => {
+                          const tot = govPhaseMap.get(ph)?.total ?? 0;
+                          return (
+                            <td key={ph} className="px-3 py-1.5 text-right text-gray-800">
+                              {tot > 0 ? fmt(tot) : <span className="text-gray-300 font-normal">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={`px-3 py-1.5 text-right ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {balance === 0 ? '✓' : fmt(balance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Phase log */}
+                {govRemittances.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
+                    {govRemittances.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0">{r.date}</span>
+                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                        {deleteConfirming === r.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button className="text-gray-300 hover:text-red-400 transition-colors shrink-0 text-base leading-none" onClick={() => setDeleteConfirming(r.id)} title="Delete">×</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  <span className="text-sm leading-none">+</span> Record Govt Payment
+                </button>
+              </>
+            );
+          })()}
+
+          {/* ── SVK / SMP panel (shared layout) ── */}
+          {(trackerTab === 'SVK' || trackerTab === 'SMP') && (() => {
+            const isSVK      = trackerTab === 'SVK';
+            const rem        = isSVK ? svkRemittances : smpRemittances;
+            const paid       = isSVK ? svkPaid        : smpPaid;
+            const payable    = isSVK ? grandTotals.svk : grandTotals.smp;
+            const balance    = payable - paid;
+            const label      = isSVK ? 'SVK' : 'SMP';
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Total Payable', value: payable, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
+                    { label: 'Total Paid',    value: paid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                    {
+                      label: 'Balance',
+                      value: balance,
+                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                  ].map((c) => (
+                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
+                      <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {rem.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
+                    {rem.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0">{r.date}</span>
+                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                        {deleteConfirming === r.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <button className="text-gray-300 hover:text-red-400 transition-colors shrink-0 text-base leading-none" onClick={() => setDeleteConfirming(r.id)} title="Delete">×</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  <span className="text-sm leading-none">+</span> Record {label} Payment
+                </button>
+              </>
+            );
+          })()}
+
+          {/* ── Consolidated panel ── */}
+          {trackerTab === 'CONSOLIDATED' && (() => {
+            const totalPayable = grandTotals.gov + grandTotals.svk + grandTotals.smp;
+            const totalPaid    = govTotalPaid + svkPaid + smpPaid;
+            const totalBalance = totalPayable - totalPaid;
+
+            const rows = [
+              { label: 'Government (K2)', payable: grandTotals.gov, paid: govTotalPaid, color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+              { label: 'SVK Management',  payable: grandTotals.svk, paid: svkPaid,      color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
+              { label: 'SMP',             payable: grandTotals.smp, paid: smpPaid,      color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
+            ];
+
+            const allRemittances = [
+              ...govRemittances.map((r) => ({ ...r, payeeLabel: 'Govt' })),
+              ...svkRemittances.map((r) => ({ ...r, payeeLabel: 'SVK'  })),
+              ...smpRemittances.map((r) => ({ ...r, payeeLabel: 'SMP'  })),
+            ].sort((a, b) => a.date.localeCompare(b.date));
+
+            return (
+              <>
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
+                    { label: 'Total Remitted', value: totalPaid,   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
+                    {
+                      label: 'Balance',
+                      value: totalBalance,
+                      color:  totalBalance > 0 ? 'text-amber-700'   : totalBalance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     totalBalance > 0 ? 'bg-amber-50'      : totalBalance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: totalBalance > 0 ? 'border-amber-200' : totalBalance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                    { label: 'Entries', value: allRemittances.length as unknown as number, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', isCount: true },
+                  ].map((c) => (
+                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
+                      <p className={`text-base font-bold ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Payee summary table */}
+                <div className="overflow-auto rounded-lg border border-gray-200">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-700 text-white">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Payee</th>
+                        <th className="px-3 py-2 text-right font-semibold">Payable</th>
+                        <th className="px-3 py-2 text-right font-semibold">Remitted</th>
+                        <th className="px-3 py-2 text-right font-semibold">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rows.map((row, i) => {
+                        const bal = row.payable - row.paid;
+                        return (
+                          <tr key={row.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className="px-3 py-2 font-medium text-gray-700">{row.label}</td>
+                            <td className="px-3 py-2 text-right text-gray-600">{fmt(row.payable)}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${row.color}`}>{fmt(row.paid)}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {bal === 0 ? '✓ Settled' : fmt(bal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                      <tr>
+                        <td className="px-3 py-2 text-gray-800">Grand Total</td>
+                        <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
+                        <td className="px-3 py-2 text-right text-green-700">{fmt(totalPaid)}</td>
+                        <td className={`px-3 py-2 text-right ${totalBalance > 0 ? 'text-amber-700' : totalBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {totalBalance === 0 ? '✓ Settled' : fmt(totalBalance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Combined payment log */}
+                {allRemittances.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">All Payments — Chronological</p>
+                    {allRemittances.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                        <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded ${
+                          r.payeeLabel === 'Govt' ? 'bg-red-100 text-red-700' :
+                          r.payeeLabel === 'SVK'  ? 'bg-violet-100 text-violet-700' :
+                                                    'bg-green-100 text-green-700'
+                        }`}>{r.payeeLabel}</span>
+                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0">{r.date}</span>
+                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {allRemittances.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">No remittances recorded yet.</p>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {showModal && trackerTab !== 'CONSOLIDATED' && (
+        <RemittanceModal
+          payee={trackerTab}
+          academicYear={academicYear as AcademicYear}
+          existingPhases={
+            trackerTab === 'GOV' ? govPhases :
+            trackerTab === 'SVK' ? svkRemittances.map((r) => r.phase) :
+                                   smpRemittances.map((r) => r.phase)
+          }
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }

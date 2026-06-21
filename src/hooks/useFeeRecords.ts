@@ -3,12 +3,10 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { FeeRecord, AcademicYear } from '../types';
 
-/**
- * Derives the financial year date range (01-Apr to 31-Mar) from an academic year
- * string like '2025-26'. Used to query fee records by payment date instead of
- * academicYear field — so previous-year dues collected in the current financial
- * year still appear in the current year's Fee Register.
- */
+// Derives the financial year date range (01-Apr to 31-Mar) from an academic year
+// string like '2025-26'. Used to query fee records by payment date instead of
+// academicYear field — so previous-year dues collected in the current financial
+// year still appear in the current year's Fee Register.
 function financialYearDateRange(academicYear: AcademicYear): { startDate: string; endDate: string } {
   const startYear = parseInt(academicYear.split('-')[0], 10);
   return {
@@ -17,13 +15,19 @@ function financialYearDateRange(academicYear: AcademicYear): { startDate: string
   };
 }
 
+// Module-level cache keyed by "${academicYear}|${mode}" — survives page navigation
+// so returning to Fee Register, Dashboard, or StudentReports is instant.
+const _cache = new Map<string, FeeRecord[]>();
+
 export function useFeeRecords(
   academicYear: AcademicYear | null,
   options?: { mode?: 'by-year' | 'by-date' },
 ) {
   const mode = options?.mode ?? 'by-year';
-  const [records, setRecords] = useState<FeeRecord[]>([]);
-  const [loading, setLoading] = useState(() => academicYear !== null);
+  const cacheKey = `${academicYear ?? ''}|${mode}`;
+
+  const [records, setRecords] = useState<FeeRecord[]>(() => _cache.get(cacheKey) ?? []);
+  const [loading, setLoading] = useState(() => !_cache.has(cacheKey) && academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -33,7 +37,7 @@ export function useFeeRecords(
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!_cache.has(cacheKey)) setLoading(true);
     setError(null);
 
     const q = mode === 'by-date'
@@ -53,7 +57,9 @@ export function useFeeRecords(
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
-        setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord)));
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord));
+        _cache.set(cacheKey, data);
+        setRecords(data);
         setLoading(false);
       },
       (err) => {
@@ -63,9 +69,12 @@ export function useFeeRecords(
     );
 
     return unsubscribe;
-  }, [academicYear, mode, tick]);
+  }, [academicYear, mode, tick, cacheKey]);
 
-  function refetch() { setTick((t) => t + 1); }
+  function refetch() {
+    _cache.delete(cacheKey);
+    setTick((t) => t + 1);
+  }
 
   return { records, loading, error, refetch };
 }
