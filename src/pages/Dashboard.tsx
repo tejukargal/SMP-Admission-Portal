@@ -461,38 +461,56 @@ export function Dashboard() {
 
       // Total paid per studentId (SMP + SVK + Additional)
       const paidByStudent = new Map<string, number>();
+      const finePaidByStudent = new Map<string, number>();
       for (const r of allRecords) {
         const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (r.smp[key] ?? 0), 0);
         const addlSum = (r.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
         paidByStudent.set(r.studentId, (paidByStudent.get(r.studentId) ?? 0) + smpSum + r.svk + addlSum);
+        finePaidByStudent.set(r.studentId, (finePaidByStudent.get(r.studentId) ?? 0) + (r.smp.fine ?? 0));
       }
 
       // Total allotted per `${academicYear}__${course}__${year}__${admType}__${admCat}` (structure fallback)
       const allottedByKey = new Map<string, number>();
+      const fineAllottedByKey = new Map<string, number>();
       for (const fs of allStructures) {
         const structKey = `${fs.academicYear}__${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
         const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (fs.smp[k] ?? 0), 0);
         const addlSum = (fs.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
         allottedByKey.set(structKey, smpSum + fs.svk + addlSum);
+        fineAllottedByKey.set(structKey, fs.smp.fine ?? 0);
       }
 
       // Override allotted per studentId (takes precedence over structure)
       const overrideByStudent = new Map<string, number>();
+      const fineOverrideByStudent = new Map<string, number>();
       for (const o of allOverrides) {
         const smpSum = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (o.smp[k] ?? 0), 0);
         const addlSum = (o.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
         overrideByStudent.set(o.studentId, smpSum + o.svk + addlSum);
+        fineOverrideByStudent.set(o.studentId, o.smp.fine ?? 0);
+      }
+
+      // Returns allotted adjusted for effectiveFine — mirrors FeeHistoryModal/StudentDetailModal logic.
+      // When fine paid > fine allotted, clamps fine contribution to 0 (prevents overpaid fine reducing other dues).
+      function effectiveAllotted(studentId: string, allottedKey: string, rawAllotted: number): number {
+        const fineAllotted = overrideByStudent.has(studentId)
+          ? (fineOverrideByStudent.get(studentId) ?? 0)
+          : (fineAllottedByKey.get(allottedKey) ?? 0);
+        const finePaid = finePaidByStudent.get(studentId) ?? 0;
+        return rawAllotted + Math.max(0, finePaid - fineAllotted);
       }
 
       const statusMap = new Map<string, FeeStatus>();
       for (const s of searchResults) {
         const paid = paidByStudent.get(s.id) ?? 0;
+        const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
         let allotted: number | null;
         if (overrideByStudent.has(s.id)) {
-          allotted = overrideByStudent.get(s.id)!;
+          allotted = effectiveAllotted(s.id, allottedKey, overrideByStudent.get(s.id)!);
         } else {
-          const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-          allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+          allotted = allottedByKey.has(allottedKey)
+            ? effectiveAllotted(s.id, allottedKey, allottedByKey.get(allottedKey)!)
+            : null;
         }
         let status: FeeStatus;
         if (allotted !== null && paid >= allotted) {
@@ -516,12 +534,14 @@ export function Dashboard() {
         if (s.academicYear < '2021-22') continue;
         const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
         const paid = paidByStudent.get(s.id) ?? 0;
+        const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
         let allotted: number | null;
         if (overrideByStudent.has(s.id)) {
-          allotted = overrideByStudent.get(s.id)!;
+          allotted = effectiveAllotted(s.id, allottedKey, overrideByStudent.get(s.id)!);
         } else {
-          const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-          allotted = allottedByKey.has(allottedKey) ? allottedByKey.get(allottedKey)! : null;
+          allotted = allottedByKey.has(allottedKey)
+            ? effectiveAllotted(s.id, allottedKey, allottedByKey.get(allottedKey)!)
+            : null;
         }
         const prev = groupDueMap.get(groupKey);
         if (allotted !== null) {

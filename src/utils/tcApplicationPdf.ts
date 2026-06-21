@@ -88,6 +88,7 @@ async function loadFeeDues(records: Student[]): Promise<YearDueRow[]> {
       getFeeOverride(r.id, r.academicYear),
     ]);
 
+    const finePaid = feeRecs.reduce((sum, rec) => sum + (rec.smp.fine ?? 0), 0);
     const paid = feeRecs.reduce((sum, rec) => {
       const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (rec.smp[key] ?? 0), 0);
       const addlSum = (rec.additionalPaid ?? []).reduce((t, h) => t + h.amount, 0);
@@ -96,7 +97,9 @@ async function loadFeeDues(records: Student[]): Promise<YearDueRow[]> {
 
     let allotted: number | null = null;
     if (override) {
-      const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (override.smp[key] ?? 0), 0);
+      const fineAllotted = override.smp.fine ?? 0;
+      const effectiveFine = Math.max(fineAllotted, finePaid);
+      const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (key === 'fine' ? effectiveFine : (override.smp[key] ?? 0)), 0);
       const addlSum = (override.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
       allotted = smpSum + override.svk + addlSum;
     } else {
@@ -104,7 +107,9 @@ async function loadFeeDues(records: Student[]): Promise<YearDueRow[]> {
         (s) => s.course === r.course && s.year === r.year && s.admType === r.admType && s.admCat === r.admCat
       );
       if (struct) {
-        const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (struct.smp[key] ?? 0), 0);
+        const fineAllotted = struct.smp.fine ?? 0;
+        const effectiveFine = Math.max(fineAllotted, finePaid);
+        const smpSum = SMP_FEE_HEADS.reduce((t, { key }) => t + (key === 'fine' ? effectiveFine : (struct.smp[key] ?? 0)), 0);
         const addlSum = (struct.additionalHeads ?? []).reduce((t, h) => t + h.amount, 0);
         allotted = smpSum + struct.svk + addlSum;
       }
