@@ -263,20 +263,23 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
   const breakdown   = useMemo(() => buildBreakdown(rows), [rows]);
 
   return (
-    <div className="space-y-5">
-      <CommonFilters fp={fp} />
-      {/* Count cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div className="space-y-2">
+      <CommonFilters fp={fp} extra={
+        <ExportBar onPdf={() => exportStatsPdf(rows, academicYear)} onExcel={() => exportStatsExcel(rows, academicYear)} />
+      } />
+
+      {/* Count summary strip */}
+      <div className="shrink-0 flex flex-wrap gap-2">
         {[
-          { label: 'Total',      value: total,       color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'   },
-          { label: 'Paid',       value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
-          { label: 'Not Paid',   value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
-          { label: 'Fee Dues',   value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
-          { label: 'No Dues',    value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'Total',    value: total,       color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'   },
+          { label: 'Paid',     value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
+          { label: 'Not Paid', value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
+          { label: 'Fee Dues', value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
+          { label: 'No Dues',  value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
         ].map((c) => (
-          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} p-3`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">{c.label}</p>
-            <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
+          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
+            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
           </div>
         ))}
       </div>
@@ -314,13 +317,6 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
         breakdown={breakdown}
         totals={{ students: total, paid: paidCount, smpAllt: totSmpAllt, svkAllt: totSvkAllt, smpColl: totSmpPaid, svkColl: totSvkPaid }}
       />
-
-      <div className="flex justify-end">
-        <ExportBar
-          onPdf={() => exportStatsPdf(rows, academicYear)}
-          onExcel={() => exportStatsExcel(rows, academicYear)}
-        />
-      </div>
     </div>
   );
 }
@@ -442,10 +438,9 @@ function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
 
   return (
     <div className="space-y-3">
-      <CommonFilters fp={fp} />
-      <div className="flex justify-end">
+      <CommonFilters fp={fp} extra={
         <ExportBar onPdf={() => exportCourseYearPdf(rows, academicYear)} onExcel={() => exportCourseYearExcel(rows, academicYear)} />
-      </div>
+      } />
       <GroupTable breakdown={breakdown} totals={totals} />
     </div>
   );
@@ -907,11 +902,17 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         (a, e) => ({
           receiptCount: a.receiptCount + e.receiptCount,
           studentCount: a.studentCount + e.studentCount,
+          smpCash:      a.smpCash      + e.smpCash,
+          svkCash:      a.svkCash      + e.svkCash,
+          addCash:      a.addCash      + e.addCash,
           cashTotal:    a.cashTotal    + e.cashTotal,
+          smpUpi:       a.smpUpi       + e.smpUpi,
+          svkUpi:       a.svkUpi       + e.svkUpi,
+          addUpi:       a.addUpi       + e.addUpi,
           upiTotal:     a.upiTotal     + e.upiTotal,
           dayTotal:     a.dayTotal     + e.dayTotal,
         }),
-        { receiptCount: 0, studentCount: 0, cashTotal: 0, upiTotal: 0, dayTotal: 0 },
+        { receiptCount: 0, studentCount: 0, smpCash: 0, svkCash: 0, addCash: 0, cashTotal: 0, smpUpi: 0, svkUpi: 0, addUpi: 0, upiTotal: 0, dayTotal: 0 },
       ),
     [filteredDays],
   );
@@ -928,23 +929,20 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         />
       )}
 
-      {/* Summary strip */}
-      <div className="shrink-0 flex flex-wrap gap-2">
+      {/* Summary strip + filters on one row */}
+      <div className="shrink-0 flex flex-wrap gap-2 items-center">
         {[
-          { label: 'Cash',    value: fmt(totals.cashTotal),  color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-          { label: 'UPI',     value: fmt(totals.upiTotal),   color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
-          { label: 'Total',   value: fmt(totals.dayTotal),   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
-          { label: 'Receipts',value: totals.receiptCount,    color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
+          { label: 'Cash',     value: fmt(totals.cashTotal), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'UPI',      value: fmt(totals.upiTotal),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+          { label: 'Total',    value: fmt(totals.dayTotal),  color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Receipts', value: totals.receiptCount,   color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
         ].map((c) => (
           <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
             <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
           </div>
         ))}
-      </div>
-
-      {/* Filters */}
-      <div className="shrink-0 flex flex-wrap gap-2 items-center">
+        <span className="w-px h-5 bg-gray-200 mx-1" />
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -1035,13 +1033,13 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
                 <td className="px-2 py-2">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-center">{totals.receiptCount}</td>
                 <td className="px-2 py-2 text-center">{totals.studentCount}</td>
-                <td className="px-2 py-2 border-l border-gray-200"></td>
-                <td className="px-2 py-2"></td>
-                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-green-800">{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
+                <td className="px-2 py-2 text-right text-green-800">{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
+                <td className="px-2 py-2 text-right text-green-800">{totals.addCash > 0 ? fmt(totals.addCash) : '—'}</td>
                 <td className="px-2 py-2 text-right font-bold text-green-700">{fmt(totals.cashTotal)}</td>
-                <td className="px-2 py-2 border-l border-gray-200"></td>
-                <td className="px-2 py-2"></td>
-                <td className="px-2 py-2"></td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-blue-800">{totals.smpUpi > 0 ? fmt(totals.smpUpi) : '—'}</td>
+                <td className="px-2 py-2 text-right text-blue-800">{totals.svkUpi > 0 ? fmt(totals.svkUpi) : '—'}</td>
+                <td className="px-2 py-2 text-right text-blue-800">{totals.addUpi > 0 ? fmt(totals.addUpi) : '—'}</td>
                 <td className="px-2 py-2 text-right font-bold text-blue-700">{fmt(totals.upiTotal)}</td>
                 <td className="px-2 py-2 text-right font-bold border-l border-gray-200">{fmt(totals.dayTotal)}</td>
               </tr>
@@ -3204,12 +3202,57 @@ interface Reg1Row {
   total:   number;
 }
 
+function exportFeeReg1Excel(rows: Reg1Row[], academicYear: string): void {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const header = ['Sl','Date','Rpt No','Name','Course','Year','SMP Cash','SMP Pay','SVK Cash','SVK Pay','RC Cash','RC Pay','Ins Cash','Ins Pay','Total','Remarks'];
+  const dataRows = rows.map((r, i) => {
+    const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+    return [
+      i + 1,
+      `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`,
+      r.record.receiptNumber || '',
+      r.record.studentName,
+      r.record.course,
+      r.record.year,
+      r.smpCash || null, r.smpPay  || null,
+      r.svkCash || null, r.svkPay  || null,
+      r.rcCash  || null, r.rcPay   || null,
+      r.insCash || null, r.insPay  || null,
+      r.total,
+      r.record.remarks || '',
+    ];
+  });
+  const tot = rows.reduce(
+    (a, r) => ({
+      smpCash: a.smpCash + r.smpCash, smpPay: a.smpPay + r.smpPay,
+      svkCash: a.svkCash + r.svkCash, svkPay: a.svkPay + r.svkPay,
+      rcCash:  a.rcCash  + r.rcCash,  rcPay:  a.rcPay  + r.rcPay,
+      insCash: a.insCash + r.insCash, insPay: a.insPay + r.insPay,
+      total:   a.total   + r.total,
+    }),
+    { smpCash: 0, smpPay: 0, svkCash: 0, svkPay: 0, rcCash: 0, rcPay: 0, insCash: 0, insPay: 0, total: 0 },
+  );
+  const totRow = [
+    'TOTAL','','','','','',
+    tot.smpCash || null, tot.smpPay  || null,
+    tot.svkCash || null, tot.svkPay  || null,
+    tot.rcCash  || null, tot.rcPay   || null,
+    tot.insCash || null, tot.insPay  || null,
+    tot.total, '',
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Fee Register 1');
+  XLSX.writeFile(wb, `Fee_Register_1_${academicYear}.xlsx`);
+}
+
 function FeeReg1Tab({
-  feeRecords, allStudents, showAllYears,
+  feeRecords, allStudents, showAllYears, academicYear,
 }: {
   feeRecords: FeeRecord[];
   allStudents: Student[];
   showAllYears: boolean;
+  academicYear: string;
 }) {
   const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
   const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
@@ -3297,57 +3340,59 @@ function FeeReg1Tab({
   const tdC = 'px-2 py-1.5 text-center text-[10px]';
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* Filters */}
-      <div className="pb-3 mb-1 border-b border-gray-100">
-        <div className="flex flex-wrap gap-2 items-center">
-          <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
-            <option value="">Aided &amp; Unaided</option>
-            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-            <option value="UNAIDED">Unaided (EE)</option>
-          </select>
-          <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
-            <option value="">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={yearFilter}    onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
-            <option value="">All Years</option>
-            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-            <option value="">All Adm Types</option>
-            {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={admCatFilter}  onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
-            <option value="">All Adm Cats</option>
-            {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-            className={fs} title="From date" />
-          <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
-            className={fs} title="To date" />
-          <button
-            onClick={clearFilters}
-            className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
-              hasActiveFilters
-                ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
-                : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
-            }`}
-          >Clear</button>
-          {showAllYears && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
-              Incl. Prior Year Dues
-            </span>
-          )}
+      <div className="shrink-0 flex flex-wrap gap-2 items-center">
+        <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+          <option value="">Aided &amp; Unaided</option>
+          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+          <option value="UNAIDED">Unaided (EE)</option>
+        </select>
+        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
+          <option value="">All Courses</option>
+          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={yearFilter}    onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
+          <option value="">All Years</option>
+          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
+          <option value="">All Adm Types</option>
+          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={admCatFilter}  onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
+          <option value="">All Adm Cats</option>
+          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+          className={fs} title="From date" />
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
+          className={fs} title="To date" />
+        <button
+          onClick={clearFilters}
+          className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
+            hasActiveFilters
+              ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
+              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+          }`}
+        >Clear</button>
+        {showAllYears && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+            Incl. Prior Year Dues
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-gray-500">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
+          <Button variant="secondary" size="sm" onClick={() => exportFeeReg1Excel(rows, academicYear)}>
+            Excel
+          </Button>
         </div>
       </div>
 
-      <p className="text-xs text-gray-500">{rows.length} record{rows.length !== 1 ? 's' : ''}</p>
-
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full text-[10px] border-collapse">
-          <thead className="bg-indigo-700 text-white">
+          <thead className="sticky top-0 z-10 bg-indigo-700 text-white">
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Date</th>
@@ -3401,7 +3446,7 @@ function FeeReg1Tab({
             })}
           </tbody>
           {rows.length > 0 && (
-            <tfoot className="bg-indigo-800 text-white font-bold text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-indigo-800 text-white font-bold text-[10px]">
               <tr>
                 <td className="px-2 py-2 text-center text-indigo-400">—</td>
                 <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
@@ -3773,7 +3818,7 @@ export function FeeReportsPage() {
             {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={dateTabFilteredRecords}  academicYear={academicYear} fp={fp} showAllYears={showAllYears} />}
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
-            {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} />}
+            {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'fee-structure'     && <FeeStructureView />}
           </>
         )}
