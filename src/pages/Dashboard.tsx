@@ -29,6 +29,8 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 // Labels for the course-card flip cycle (4 adm types; total is always shown separately)
 const COURSE_BREAK_LABELS = ['Regular', 'Lateral', 'SNQ', 'Repeater'] as const;
+const REGULAR_INTAKE = 60;
+const LATERAL_BASE_PCT = 0.10;
 
 const fs =
   'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
@@ -594,6 +596,7 @@ export function Dashboard() {
       CS: { nonSnqConfirmed: 0, snqConfirmed: 0 },
       EE: { nonSnqConfirmed: 0, snqConfirmed: 0 },
     };
+    const lateralSecondYearSeats: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
     const byYearByCourse: Record<Year, Record<Course, number>> = {
       '1ST YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
       '2ND YEAR': { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 },
@@ -665,6 +668,9 @@ export function Dashboard() {
           firstYearSeats[s.course as Course].nonSnqConfirmed++;
         }
       }
+      if (s.year === '2ND YEAR' && s.admType === 'LATERAL' && s.course in lateralSecondYearSeats) {
+        lateralSecondYearSeats[s.course as Course]++;
+      }
 
       if (s.year in summaryTable && s.course in summaryTable[s.year]) {
         const sc = summaryTable[s.year][s.course];
@@ -688,7 +694,7 @@ export function Dashboard() {
       }
     }
 
-    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, byGenderByCourseByYear, byGenderByCategory, byGenderByCatByCourseByYear };
+    return { total, boys, girls, byCourse, byYear, byStatus, byAdmType, summaryTable, catTable, byCourseByYear, byYearByCourse, firstYearSeats, lateralSecondYearSeats, byGenderByCourseByYear, byGenderByCategory, byGenderByCatByCourseByYear };
   }, [filteredStudents, admStatusFilter]);
 
   const confirmedStudents = useMemo(
@@ -697,6 +703,37 @@ export function Dashboard() {
       : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED'),
     [filteredStudents, admStatusFilter],
   );
+
+  // Lateral allotments: 10% of intake + carryover from previous year's 1st-year pending
+  const lateralAllotments = useMemo((): Record<Course, number> | null => {
+    if (!academicYearFilter || isSearchMode) return null;
+    const match = academicYearFilter.match(/^(\d{4})-\d{2}$/);
+    if (!match) return null;
+    const prevStart = parseInt(match[1]!) - 1;
+    const prevAcYear = `${prevStart}-${String(prevStart + 1).slice(-2)}`;
+
+    const prevConfirmed: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const s of allStudents) {
+      if (
+        s.academicYear === prevAcYear &&
+        s.year === '1ST YEAR' &&
+        s.admissionStatus === 'CONFIRMED' &&
+        s.admCat !== 'SNQ' &&
+        s.admType !== 'REPEATER' &&
+        s.course in prevConfirmed
+      ) {
+        prevConfirmed[s.course as Course]++;
+      }
+    }
+
+    const base = Math.ceil(LATERAL_BASE_PCT * REGULAR_INTAKE);
+    const allotments: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const course of COURSES) {
+      const carryover = Math.max(0, REGULAR_INTAKE - prevConfirmed[course]);
+      allotments[course] = base + carryover;
+    }
+    return allotments;
+  }, [allStudents, academicYearFilter, isSearchMode]);
 
   // Course totals per gender (summed across all years) for the flip display
   const genderCourseTotals = useMemo(() => {
@@ -1673,9 +1710,9 @@ const [barsReady, setBarsReady] = useState(false);
               </div>
             </div>
 
-            {/* 1st Year Pending Seats */}
+            {/* Pending Seats */}
             <div>
-              <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }} onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}>1st Year — Pending Seats</SectionLabel>
+              <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }} onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}>{lateralAllotments !== null ? 'Pending Seats — 1st Yr & Lateral 2nd Yr' : '1st Year — Pending Seats'}</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const c = courseConfig[course];
@@ -1683,58 +1720,76 @@ const [barsReady, setBarsReady] = useState(false);
                   const snqAllotted = snqConfirmed > 0;
 
                   // Regular seats: first 60 slots go to non-SNQ students
-                  const regularFilled    = Math.min(nonSnqConfirmed, 60);
-                  const regularPending   = Math.max(0, 60 - regularFilled);
-                  const overflowToSnq    = Math.max(0, nonSnqConfirmed - 60); // enrolled beyond 60
-                  const regularFillPct   = Math.min(100, Math.round((regularFilled / 60) * 100));
+                  const regularFilled  = Math.min(nonSnqConfirmed, 60);
+                  const regularPending = Math.max(0, 60 - regularFilled);
+                  const overflowToSnq  = Math.max(0, nonSnqConfirmed - 60);
 
                   // SNQ seats: if allotted use admCat count; otherwise use overflow as estimate
                   const snqFilled  = snqAllotted ? snqConfirmed : overflowToSnq;
                   const snqPending = Math.max(0, 3 - snqFilled);
 
+                  // Lateral seats (2nd Year only) — dynamic: 10% of intake + prev year carryover
+                  const showLateral     = lateralAllotments !== null;
+                  const lateralFilled   = stats.lateralSecondYearSeats[course];
+                  const lateralAllotted = lateralAllotments?.[course] ?? 0;
+                  const lateralPending  = showLateral ? Math.max(0, lateralAllotted - lateralFilled) : 0;
+
                   return (
-                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-4 flex flex-col gap-2 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
-                      <span aria-hidden="true" className={`absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1 h-3.5 rounded-full shrink-0 ${c.barFill}`} />
-                        <p className={`text-[15px] font-semibold uppercase tracking-wider ${c.textColor}`}>{course}</p>
+                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-3 flex flex-col gap-1.5 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
+                      <span aria-hidden="true" className={`absolute -bottom-2 -right-2 text-7xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
+
+                      {/* Course header */}
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-1 h-3 rounded-full shrink-0 ${c.barFill}`} />
+                        <p className={`text-[13px] font-semibold uppercase tracking-wider ${c.textColor}`}>{course}</p>
                       </div>
 
-                      {/* Regular seats */}
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-end justify-between">
-                          <span className="text-[10px] text-gray-400 font-semibold">Regular</span>
-                          <span className={`text-2xl font-black leading-none tabular-nums ${regularPending === 0 ? 'text-emerald-600' : c.textColor}`}>
+                      {/* 2-column body */}
+                      <div className="flex gap-0 min-h-0">
+
+                        {/* Left — Regular */}
+                        <div className="flex flex-col gap-0.5 flex-1 pr-2">
+                          <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">Regular</span>
+                          <span className={`text-[22px] font-black leading-none tabular-nums ${regularPending === 0 ? 'text-emerald-600' : c.textColor}`}>
                             <AnimNum value={regularPending} />
                           </span>
+                          <p className="text-[9px] text-gray-400 tabular-nums">{regularFilled}/{REGULAR_INTAKE} filled</p>
                         </div>
-                        <div className="h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${c.barFill} transition-all duration-700 ease-out`}
-                            style={{ width: `${regularFillPct}%` }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-gray-400 tabular-nums">{regularFilled} / 60 filled</p>
-                      </div>
 
-                      {/* SNQ seats */}
-                      <div className="pt-1.5 border-t border-white/50 flex items-center justify-between gap-2">
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] text-gray-400 font-semibold">SNQ</span>
-                            {!snqAllotted && (
-                              <span className="px-1 py-px rounded text-[8px] font-bold bg-amber-100 border border-amber-300 text-amber-600 leading-tight whitespace-nowrap">
-                                To be allotted
+                        {/* Right — SNQ + Lateral */}
+                        <div className="flex flex-col gap-1.5 flex-1 pl-2 border-l border-white/60">
+
+                          {/* SNQ */}
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between gap-0.5">
+                              <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">SNQ</span>
+                              <span className={`text-base font-black tabular-nums shrink-0 ${snqPending === 0 ? 'text-emerald-600' : snqAllotted ? 'text-gray-600' : 'text-amber-500'}`}>
+                                <AnimNum value={snqPending} />
                               </span>
-                            )}
+                            </div>
+                            {snqAllotted
+                              ? <p className="text-[9px] text-gray-400 tabular-nums">{snqFilled}/3 filled</p>
+                              : <span className="px-1 py-px rounded text-[7px] font-bold bg-amber-100 border border-amber-300 text-amber-600 leading-tight self-start">To be allotted</span>
+                            }
                           </div>
-                          <p className="text-[10px] text-gray-400 tabular-nums">
-                            {snqFilled} / 3 {snqAllotted ? 'filled' : 'pre-filled'}
-                          </p>
+
+                          {/* Lateral */}
+                          {showLateral && (
+                            <div className="flex flex-col gap-0.5 pt-1 border-t border-white/60">
+                              <div className="flex items-center justify-between gap-0.5">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">Lateral</span>
+                                  <span className="px-0.5 py-px rounded text-[7px] font-bold bg-sky-100 border border-sky-200 text-sky-500 leading-tight whitespace-nowrap">2Y</span>
+                                </div>
+                                <span className={`text-base font-black tabular-nums shrink-0 ${lateralPending === 0 ? 'text-emerald-600' : 'text-sky-600'}`}>
+                                  <AnimNum value={lateralPending} />
+                                </span>
+                              </div>
+                              <p className="text-[9px] text-gray-400 tabular-nums">{lateralFilled}/{lateralAllotted} filled</p>
+                            </div>
+                          )}
+
                         </div>
-                        <span className={`text-lg font-black tabular-nums shrink-0 ${snqPending === 0 ? 'text-emerald-600' : snqAllotted ? 'text-gray-600' : 'text-amber-500'}`}>
-                          <AnimNum value={snqPending} />
-                        </span>
                       </div>
                     </div>
                   );
