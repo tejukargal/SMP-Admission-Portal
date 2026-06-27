@@ -2474,6 +2474,40 @@ const [barsReady, setBarsReady] = useState(false);
               </button>
             )}
             {isAdmin && (() => {
+              const YEAR_ORDER: Record<Year, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
+              const NEXT_YEAR: Record<Year, Year | null> = { '1ST YEAR': '2ND YEAR', '2ND YEAR': '3RD YEAR', '3RD YEAR': null };
+              const YEAR_LABEL: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
+              const activeGroup = studentGroups.find((g) => g.records.some((r) => r.id === ctxMenu.student.id));
+              const maxYearRecord = activeGroup?.records.reduce((best, r) =>
+                YEAR_ORDER[r.year] > YEAR_ORDER[best.year] ? r : best
+              , activeGroup.records[0]) ?? ctxMenu.student;
+              const nextEnrollYear = NEXT_YEAR[maxYearRecord.year];
+              const alreadyEnrolledCurrentYear = activeGroup?.records.some(
+                (r) => r.academicYear === settings?.currentAcademicYear
+              ) ?? false;
+              if (!nextEnrollYear || alreadyEnrolledCurrentYear) return null;
+              return (
+                <button
+                  className="group w-full text-left px-3 py-[5px] text-[12px] text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100 font-semibold"
+                  onClick={() => {
+                    void navigate('/enroll?from=dashboard', {
+                      state: {
+                        reEnrollStudent: maxYearRecord,
+                        targetYear: nextEnrollYear,
+                        targetAcademicYear: settings?.currentAcademicYear,
+                      },
+                    });
+                    setCtxMenu(null);
+                  }}
+                >
+                  <span className="w-[16px] h-[16px] rounded-[4px] bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+                  </span>
+                  {`Enroll for ${YEAR_LABEL[nextEnrollYear]} in ${settings?.currentAcademicYear ?? ''}`}
+                </button>
+              );
+            })()}
+            {isAdmin && (() => {
               const feeStatus = searchFeeLoading ? null : (searchFeeStatus.get(ctxMenu.student.id) ?? 'collect');
               if (feeStatus === 'no-dues') {
                 return (

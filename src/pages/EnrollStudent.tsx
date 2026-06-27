@@ -446,6 +446,9 @@ export function EnrollStudent() {
   const navigate = useNavigate();
   const location = useLocation();
   const navStudent = (location.state as { student?: Student } | null)?.student ?? null;
+  const reEnrollStudent = (location.state as { reEnrollStudent?: Student } | null)?.reEnrollStudent ?? null;
+  const reEnrollTargetYear = (location.state as { targetYear?: Year } | null)?.targetYear ?? null;
+  const reEnrollAcademicYear = (location.state as { targetAcademicYear?: AcademicYear } | null)?.targetAcademicYear ?? null;
   const { settings } = useSettings();
 
   const [form, setForm] = useState<StudentFormData>(emptyForm());
@@ -621,8 +624,30 @@ export function EnrollStudent() {
   }, [editId, form, errors]);
 
 
+  // Pre-fill form from dashboard "Re-Enroll" context menu action
   useEffect(() => {
-    if (!editId && settings?.currentAcademicYear) {
+    if (!reEnrollStudent || !reEnrollTargetYear || !reEnrollAcademicYear) return;
+    const { id: _id, createdAt: _c, updatedAt: _u,
+            meritNumber: _m, applicationNumber: _a,
+            allottedCategory: _ac, ...rest } = reEnrollStudent;
+    const dob = rest.dateOfBirth?.match(/^\d{4}-\d{2}-\d{2}$/)
+      ? rest.dateOfBirth.split('-').reverse().join('/')
+      : rest.dateOfBirth;
+    setForm((prev) => ({
+      ...prev,
+      ...rest,
+      dateOfBirth: dob,
+      year: reEnrollTargetYear,
+      academicYear: reEnrollAcademicYear,
+      admissionStatus: 'CONFIRMED',
+      enrollmentDate: new Date().toISOString().slice(0, 10),
+      applicationNumber: '',
+      meritNumber: '',
+    }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!editId && !reEnrollStudent && settings?.currentAcademicYear) {
       setForm((prev) => ({ ...prev, academicYear: settings.currentAcademicYear }));
     }
   }, [settings, editId]);
@@ -1159,6 +1184,18 @@ export function EnrollStudent() {
       )}
       {errorMsg && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">{errorMsg}</p>
+      )}
+
+      {/* Dashboard re-enroll info banner */}
+      {reEnrollStudent && reEnrollTargetYear && reEnrollAcademicYear && (
+        <div className="mb-5 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 flex items-center gap-2">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 flex-shrink-0"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+          <span>
+            Re-enrolling <span className="font-bold">{reEnrollStudent.studentNameSSLC}</span> for{' '}
+            <span className="font-bold">{reEnrollTargetYear}</span> in{' '}
+            <span className="font-bold">{reEnrollAcademicYear}</span>
+          </span>
+        </div>
       )}
 
       {/* Re-enroll banner — admin only */}
