@@ -151,7 +151,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [titleIdx, setTitleIdx] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setLogoFace((f) => (f === 0 ? 1 : 0)), 5000);
+    const id = setInterval(() => setLogoFace((f) => (f === 0 ? 1 : 0)), 10000);
     return () => clearInterval(id);
   }, []);
 
@@ -259,7 +259,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <img
                 src={INSTITUTE_LOGO_B64}
                 alt="College Logo"
-                style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '1px', animation: 'logo-spin 12s linear infinite' }}
+                style={{ width: '105%', height: '105%', objectFit: 'contain' }}
               />
             </div>
           </div>
