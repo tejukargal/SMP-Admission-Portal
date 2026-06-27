@@ -1319,7 +1319,7 @@ const [barsReady, setBarsReady] = useState(false);
                       {group.records.map((s) => (
                         <tr
                           key={s.id}
-                          className="hover:bg-emerald-50/50 transition-colors cursor-context-menu"
+                          className={`transition-colors cursor-context-menu ${ctxMenu?.student.id === s.id ? 'row-ctx-active' : 'hover:bg-emerald-50/50'}`}
                           onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
                         >
                           <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{s.academicYear}</td>
