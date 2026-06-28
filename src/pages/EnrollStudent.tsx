@@ -1067,10 +1067,14 @@ export function EnrollStudent() {
           if (prevAllottedCategory) {
             await updateStudentAllottedCategory(newStudentId, prevAllottedCategory);
           }
-          navigate('/students');
+          navigate(fromDashboard ? '/fees' : '/students');
         } else {
-          setSuccessMsg(`Student enrolled successfully! App No: ${applicationNumber} · Merit No: ${meritNumber} · Reg No: ${regNumber}`);
-          topRef.current?.scrollIntoView({ behavior: 'smooth' });
+          if (fromDashboard) {
+            navigate('/fees');
+          } else {
+            setSuccessMsg(`Student enrolled successfully! App No: ${applicationNumber} · Merit No: ${meritNumber} · Reg No: ${regNumber}`);
+            topRef.current?.scrollIntoView({ behavior: 'smooth' });
+          }
         }
       }
     } catch (err: unknown) {

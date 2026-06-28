@@ -199,8 +199,10 @@ export function CollectFee() {
         return matchName || matchMobile || matchReg;
       });
     }
-    // Sort: Year → Course → Name (same as Students page)
+    // Sort: newest enrollment first (createdAt DESC), then Year → Course → Name
     return result.slice().sort((a, b) => {
+      const tDiff = (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+      if (tDiff !== 0) return tDiff;
       const y = (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
       if (y !== 0) return y;
       const c = a.course.localeCompare(b.course);
