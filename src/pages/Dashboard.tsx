@@ -1246,8 +1246,8 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
 
         {/* Collapsible dropdown filters */}
-        {showFilters && (
-          <div className="filter-slide-down flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald pt-1.5 pb-0.5">
+        <div className={`filter-panel${showFilters ? ' open' : ''}`}>
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald pt-1.5 pb-0.5">
             <select className={`${fs} w-[82px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
               <option value="">Course</option>
               {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -1293,7 +1293,7 @@ const [barsReady, setBarsReady] = useState(false);
               <option value="PENDING">PENDING</option>
             </select>
           </div>
-        )}
+        </div>
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
