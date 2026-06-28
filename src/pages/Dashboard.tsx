@@ -33,7 +33,7 @@ const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 
 const fs =
-  'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+  'rounded-full border border-emerald-200 px-3 py-1.5 text-[13px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function statusBadgeClass(status: string): string {
   if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
@@ -289,6 +289,9 @@ export function Dashboard() {
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
+
+  // ── Filter panel visibility ───────────────────────────────────────────────
+  const [showFilters, setShowFilters] = useState(false);
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -909,9 +912,16 @@ const [barsReady, setBarsReady] = useState(false);
   }, [allStudents, settings]);
 
 
+  const hasNonSearchFilters =
+    !!courseFilter || !!yearFilter || !!genderFilter ||
+    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+
   const hasActiveFilters =
-    !!inputValue || !!academicYearFilter || !!courseFilter || !!yearFilter ||
-    !!genderFilter || !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!admStatusFilter;
+    !!inputValue || !!academicYearFilter || hasNonSearchFilters;
+
+  useEffect(() => {
+    if (hasNonSearchFilters) setShowFilters(true);
+  }, [hasNonSearchFilters]);
 
   function clearFilters() {
     setInputValue('');
@@ -978,7 +988,10 @@ const [barsReady, setBarsReady] = useState(false);
 
   return (
     <>
-    <div className="h-full flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className="flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
+
+      {/* ── Top panel: header → year chips → pending admissions (uniform bg) ── */}
+      <div className="-mx-4 -mt-4 px-4 pt-4 pb-0.5 flex flex-col gap-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
@@ -1014,34 +1027,41 @@ const [barsReady, setBarsReady] = useState(false);
       {/* ── Year chips bar ──────────────────────────────────────────────── */}
       {allStudents.length > 0 && (
         <div
-          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-1 px-1.5 py-1.5"
+          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-2 px-3 py-1.5"
           style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
         >
-          {/* Left arrow */}
-          <button
-            type="button"
-            onClick={() => scrollChips('left')}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-xl leading-none select-none"
-            aria-label="Scroll left"
-          >
-            ‹
-          </button>
+          {/* Total — fixed left, aligned with dashboard accent labels */}
+          <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
+            <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+            <span className="text-[13px] font-semibold uppercase tracking-wider text-emerald-700">Total</span>
+            <span className="text-[13px] font-bold tabular-nums text-emerald-800">
+              <AnimNum value={confirmedActiveCount} />
+            </span>
+            {confirmedActiveCount < confirmedTotalCount && (
+              <span className="text-[13px] text-emerald-500/60 font-medium">/{confirmedTotalCount}</span>
+            )}
+          </div>
 
-          {/* Labels — scrollable, no scrollbar */}
+          {/* Arrow controls — grouped next to Total */}
+          <div className="flex items-center shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollChips('left')}
+              className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+              aria-label="Scroll left"
+            >‹</button>
+            <button
+              type="button"
+              onClick={() => scrollChips('right')}
+              className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+              aria-label="Scroll right"
+            >›</button>
+          </div>
+
+          <span className="w-px h-3.5 rounded-full bg-emerald-200 shrink-0" />
+
+          {/* Per-year chips — scrollable */}
           <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1">
-            {/* Total label */}
-            <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
-              <span className="text-[13px] font-semibold uppercase tracking-wider text-emerald-700">Total</span>
-              <span className="text-[13px] font-bold tabular-nums text-emerald-800">
-                <AnimNum value={confirmedActiveCount} />
-              </span>
-              {confirmedActiveCount < confirmedTotalCount && (
-                <span className="text-[13px] text-emerald-500/60 font-medium">/{confirmedTotalCount}</span>
-              )}
-            </div>
-            <span className="w-px h-3.5 rounded-full bg-emerald-200 shrink-0" />
-            {/* Per-year labels */}
             {activeStats.map(({ year, count }, idx) => {
               const isSelected = !isSearchMode && academicYearFilter === year;
               const isDimmed = count === 0;
@@ -1065,111 +1085,8 @@ const [barsReady, setBarsReady] = useState(false);
               );
             })}
           </div>
-
-          {/* Right arrow */}
-          <button
-            type="button"
-            onClick={() => scrollChips('right')}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-xl leading-none select-none"
-            aria-label="Scroll right"
-          >
-            ›
-          </button>
         </div>
       )}
-
-      {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 bg-white/50 rounded-lg border border-emerald-100/70 overflow-hidden" style={{ backdropFilter: 'blur(8px)' }}>
-        <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald px-3 py-1">
-          <div className="relative shrink-0 w-52">
-            {/* Search icon */}
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-            <input
-              type="text"
-              placeholder="Search"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value.toUpperCase())}
-              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
-            />
-            {inputValue && (
-              <button
-                type="button"
-                onClick={() => setInputValue('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
-                aria-label="Clear search"
-              >
-                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </button>
-            )}
-          </div>
-          <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-            <option value="">Course</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-            <option value="">Study Yr</option>
-            {YEARS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-          </select>
-          <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-            <option value="">Gender</option>
-            <option value="BOY">BOY</option>
-            <option value="GIRL">GIRL</option>
-          </select>
-          <select className={`${fs} w-[66px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
-            <option value="">Cat</option>
-            <option value="GM">GM</option>
-            <option value="SC">SC</option>
-            <option value="ST">ST</option>
-            <option value="C1">C1</option>
-            <option value="2A">2A</option>
-            <option value="2B">2B</option>
-            <option value="3A">3A</option>
-            <option value="3B">3B</option>
-          </select>
-          <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-            <option value="">Adm Type</option>
-            <option value="REGULAR">REGULAR</option>
-            <option value="REPEATER">REPEATER</option>
-            <option value="LATERAL">LATERAL</option>
-            <option value="EXTERNAL">EXTERNAL</option>
-            <option value="SNQ">SNQ</option>
-          </select>
-          <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-            <option value="">Adm Cat</option>
-            <option value="GM">GM</option>
-            <option value="SNQ">SNQ</option>
-            <option value="OTHERS">OTHERS</option>
-          </select>
-          <select className={`${fs} w-[86px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
-            <option value="">Status</option>
-            <option value="CONFIRMED">CONFIRMED</option>
-            <option value="CANCELLED">CANCELLED</option>
-            <option value="PENDING">PENDING</option>
-          </select>
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="shrink-0 rounded-lg border border-amber-300 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
-            >
-              Clear
-            </button>
-          )}
-          {!isSearchMode && academicYearFilter && (
-            <button
-              onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
-              className="flex items-center gap-1.5 group cursor-pointer shrink-0 ml-auto"
-              title="Export Summary PDF"
-            >
-              <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
@@ -1217,24 +1134,30 @@ const [barsReady, setBarsReady] = useState(false);
 
           <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
-          {/* Per-course counts */}
-          <div className="flex items-center gap-0 flex-wrap">
-            {COURSES.map((course, i) => {
+          {/* Per-course pill chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {COURSES.map((course) => {
               const c = courseConfig[course];
               const reg = admissionPendingStats.byCourseRegular[course];
               const lat = admissionPendingStats.byCourseLatear[course];
               const isEmpty = reg === 0 && lat === 0;
               return (
-                <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
-                  {i > 0 && <span className="w-[1.5px] h-3.5 bg-emerald-300 mx-3 shrink-0 rounded-full" />}
-                  <span className={`text-xs font-bold uppercase ${c.textColor} mr-1`}>{course}</span>
-                  <span className={`text-xs font-black tabular-nums ${c.textColor}`}>
+                <div
+                  key={course}
+                  className={`flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 border ${c.border} bg-white/70 ${isEmpty ? 'opacity-25' : ''}`}
+                >
+                  <span className={`text-[10px] font-bold uppercase ${c.textColor}`}>{course}</span>
+                  <span className={`text-[10px] font-black tabular-nums ${c.textColor}`}>
                     <AnimNum value={reg} />
                   </span>
-                  <span className="w-px h-2.5 bg-emerald-200 mx-1 shrink-0" />
-                  <span className="text-xs font-black tabular-nums text-teal-600">
-                    <AnimNum value={lat} />
-                  </span>
+                  {lat > 0 && (
+                    <>
+                      <span className="w-px h-2.5 bg-current opacity-20 shrink-0" />
+                      <span className="text-[10px] font-black tabular-nums text-teal-600">
+                        <AnimNum value={lat} />
+                      </span>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1246,13 +1169,140 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
       )}
 
+      </div>{/* end top panel */}
+
+      {/* ── Filters ────────────────────────────────────────────────────── */}
+      <div className="sticky -top-4 z-20 -mx-4 px-4 pt-1 pb-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', borderBottom: '1px solid rgba(16,185,129,0.10)', boxShadow: '0 4px 10px -2px rgba(16,185,129,0.09)' }}>
+        {/* Always-visible row: search + actions */}
+        <div className="flex items-center gap-2">
+          <div className="relative shrink-0 w-52">
+            {/* Search icon */}
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value.toUpperCase())}
+              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
+            />
+            {inputValue && (
+              <button
+                type="button"
+                onClick={() => setInputValue('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                aria-label="Clear search"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {hasActiveFilters && (
+            <>
+              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <button
+                onClick={clearFilters}
+                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </>
+          )}
+
+          <div className="flex-1" />
+
+          {!isSearchMode && academicYearFilter && (
+            <button
+              onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter)}
+              className="flex items-center gap-1.5 group cursor-pointer shrink-0"
+              title="Export Summary PDF"
+            >
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
+            </button>
+          )}
+
+          {/* Filter toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            title={showFilters ? 'Hide filters' : 'Show filters'}
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              showFilters || hasNonSearchFilters
+                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+            }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+              <line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Collapsible dropdown filters */}
+        {showFilters && (
+          <div className="filter-slide-down flex items-center gap-1.5 flex-nowrap overflow-x-auto scroll-emerald pt-1.5 pb-0.5">
+            <select className={`${fs} w-[82px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
+              <option value="">Course</option>
+              {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className={`${fs} w-[92px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
+              <option value="">Study Yr</option>
+              {YEARS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+            </select>
+            <select className={`${fs} w-[84px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
+              <option value="">Gender</option>
+              <option value="BOY">BOY</option>
+              <option value="GIRL">GIRL</option>
+            </select>
+            <select className={`${fs} w-[76px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
+              <option value="">Cat</option>
+              <option value="GM">GM</option>
+              <option value="SC">SC</option>
+              <option value="ST">ST</option>
+              <option value="C1">C1</option>
+              <option value="2A">2A</option>
+              <option value="2B">2B</option>
+              <option value="3A">3A</option>
+              <option value="3B">3B</option>
+            </select>
+            <select className={`${fs} w-[96px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
+              <option value="">Adm Type</option>
+              <option value="REGULAR">REGULAR</option>
+              <option value="REPEATER">REPEATER</option>
+              <option value="LATERAL">LATERAL</option>
+              <option value="EXTERNAL">EXTERNAL</option>
+              <option value="SNQ">SNQ</option>
+            </select>
+            <select className={`${fs} w-[84px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
+              <option value="">Adm Cat</option>
+              <option value="GM">GM</option>
+              <option value="SNQ">SNQ</option>
+              <option value="OTHERS">OTHERS</option>
+            </select>
+            <select className={`${fs} w-[98px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
+              <option value="">Status</option>
+              <option value="CONFIRMED">CONFIRMED</option>
+              <option value="CANCELLED">CANCELLED</option>
+              <option value="PENDING">PENDING</option>
+            </select>
+          </div>
+        )}
+      </div>
+
       {/* ── Content ────────────────────────────────────────────────────── */}
       {error ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+        <div className="flex items-center justify-center h-32 text-sm text-red-500">{error}</div>
       ) : isSearchMode ? (
 
         /* ── Search results ─────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto space-y-3 scroll-y-thin">
+        <div className="space-y-3 pb-4">
           {studentGroups.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-gray-400">
               No students found.
@@ -1392,7 +1442,7 @@ const [barsReady, setBarsReady] = useState(false);
       ) : (
 
         /* ── Metric cards ───────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 overflow-auto pb-4 scroll-y-thin -mx-2 px-2">
+        <div className="pb-4 -mx-2 px-2">
           <div className="space-y-3 min-w-0 mt-1">
 
             {/* Overview row */}
