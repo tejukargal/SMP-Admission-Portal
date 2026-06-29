@@ -1489,52 +1489,6 @@ const [barsReady, setBarsReady] = useState(false);
                 className="rounded-2xl border border-violet-200 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                 style={{ background: '#ede9fb', boxShadow: '0 2px 8px 0 rgba(139,92,246,0.15)' }}
               >
-                {/* Peacock fan watermark — top-right */}
-                <svg
-                  aria-hidden="true"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 96 78"
-                  className="absolute top-0 right-0 w-24 pointer-events-none select-none"
-                  style={{ opacity: 0.11, color: '#6d28d9' }}
-                >
-                  {/* 6 feather shafts from top-right corner origin (92, 4) */}
-                  <line x1="92" y1="4" x2="82" y2="61" stroke="currentColor" strokeWidth="1.3"/>
-                  <line x1="92" y1="4" x2="65" y2="63" stroke="currentColor" strokeWidth="1.3"/>
-                  <line x1="92" y1="4" x2="48" y2="56" stroke="currentColor" strokeWidth="1.3"/>
-                  <line x1="92" y1="4" x2="36" y2="43" stroke="currentColor" strokeWidth="1.3"/>
-                  <line x1="92" y1="4" x2="31" y2="26" stroke="currentColor" strokeWidth="1.3"/>
-                  <line x1="92" y1="4" x2="34" y2="9" stroke="currentColor" strokeWidth="1.3"/>
-                  {/* Outer arc connecting feather tips */}
-                  <path d="M 82 61 Q 58 76 48 60 Q 28 50 31 28 Q 31 12 34 9"
-                        fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                  {/* Feather eyes: outer filled oval + inner ring + pupil dot */}
-                  {/* Tip 1 — 100° */}
-                  <ellipse cx="82" cy="61" rx="4.5" ry="7" transform="rotate(10 82 61)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="82" cy="61" rx="2.2" ry="3.8" transform="rotate(10 82 61)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="82" cy="61" r="1.3" fill="currentColor"/>
-                  {/* Tip 2 — 115° */}
-                  <ellipse cx="65" cy="63" rx="4.5" ry="7" transform="rotate(25 65 63)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="65" cy="63" rx="2.2" ry="3.8" transform="rotate(25 65 63)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="65" cy="63" r="1.3" fill="currentColor"/>
-                  {/* Tip 3 — 130° */}
-                  <ellipse cx="48" cy="56" rx="4.5" ry="7" transform="rotate(40 48 56)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="48" cy="56" rx="2.2" ry="3.8" transform="rotate(40 48 56)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="48" cy="56" r="1.3" fill="currentColor"/>
-                  {/* Tip 4 — 145° */}
-                  <ellipse cx="36" cy="43" rx="4.5" ry="7" transform="rotate(55 36 43)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="36" cy="43" rx="2.2" ry="3.8" transform="rotate(55 36 43)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="36" cy="43" r="1.3" fill="currentColor"/>
-                  {/* Tip 5 — 160° */}
-                  <ellipse cx="31" cy="26" rx="4.5" ry="7" transform="rotate(70 31 26)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="31" cy="26" rx="2.2" ry="3.8" transform="rotate(70 31 26)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="31" cy="26" r="1.3" fill="currentColor"/>
-                  {/* Tip 6 — 175° */}
-                  <ellipse cx="34" cy="9" rx="4.5" ry="7" transform="rotate(85 34 9)" fill="currentColor" opacity="0.45"/>
-                  <ellipse cx="34" cy="9" rx="2.2" ry="3.8" transform="rotate(85 34 9)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
-                  <circle cx="34" cy="9" r="1.3" fill="currentColor"/>
-                  {/* Fan base */}
-                  <circle cx="92" cy="4" r="4.5" fill="currentColor"/>
-                </svg>
                 <div
                   className="flex items-center gap-2 cursor-pointer select-none"
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
@@ -1660,7 +1614,6 @@ const [barsReady, setBarsReady] = useState(false);
                     className="rounded-2xl border border-sky-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: '#e0f2fe', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.15)' }}
                   >
-                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-gray-700 opacity-[0.06]">B</span>
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
                       <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800">Boys</p>
@@ -1703,7 +1656,6 @@ const [barsReady, setBarsReady] = useState(false);
                     className="rounded-2xl border border-rose-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: '#ffe4e6', boxShadow: '0 2px 8px 0 rgba(244,63,94,0.15)' }}
                   >
-                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-gray-700 opacity-[0.06]">G</span>
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
                       <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800">Girls</p>
