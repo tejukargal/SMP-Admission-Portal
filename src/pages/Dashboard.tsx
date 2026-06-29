@@ -290,8 +290,9 @@ export function Dashboard() {
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
 
-  // ── Filter panel visibility ───────────────────────────────────────────────
+  // ── Filter / chips panel visibility ─────────────────────────────────────
   const [showFilters, setShowFilters] = useState(false);
+  const [showChips,   setShowChips]   = useState(() => localStorage.getItem('smp_chips_visible') !== 'false');
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -1024,70 +1025,6 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
       </div>
 
-      {/* ── Year chips bar ──────────────────────────────────────────────── */}
-      {allStudents.length > 0 && (
-        <div
-          className="flex-shrink-0 bg-white/40 rounded-lg border border-emerald-100/70 flex items-center gap-2 px-3 py-1.5"
-          style={{ boxShadow: '0 1px 3px 0 rgba(16,185,129,0.05)' }}
-        >
-          {/* Total — fixed left, aligned with dashboard accent labels */}
-          <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
-            <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
-            <span className="text-[13px] font-semibold uppercase tracking-wider text-emerald-700">Total</span>
-            <span className="text-[13px] font-bold tabular-nums text-emerald-800">
-              <AnimNum value={confirmedActiveCount} />
-            </span>
-            {confirmedActiveCount < confirmedTotalCount && (
-              <span className="text-[13px] text-emerald-500/60 font-medium">/{confirmedTotalCount}</span>
-            )}
-          </div>
-
-          {/* Arrow controls — grouped next to Total */}
-          <div className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => scrollChips('left')}
-              className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
-              aria-label="Scroll left"
-            >‹</button>
-            <button
-              type="button"
-              onClick={() => scrollChips('right')}
-              className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
-              aria-label="Scroll right"
-            >›</button>
-          </div>
-
-          <span className="w-px h-3.5 rounded-full bg-emerald-200 shrink-0" />
-
-          {/* Per-year chips — scrollable */}
-          <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1">
-            {activeStats.map(({ year, count }, idx) => {
-              const isSelected = !isSearchMode && academicYearFilter === year;
-              const isDimmed = count === 0;
-              const p = CHIP_PALETTE[idx % CHIP_PALETTE.length];
-              return (
-                <button
-                  key={year}
-                  type="button"
-                  disabled={isSearchMode}
-                  onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-opacity ${
-                    isSearchMode ? 'cursor-default' : 'cursor-pointer'
-                  } ${isDimmed ? 'opacity-30' : ''}`}
-                >
-                  <span className={`w-1 h-3.5 rounded-full shrink-0 transition-colors ${isDimmed ? 'bg-gray-300' : isSelected ? p.selDot : p.dot}`} />
-                  <span className={`text-[13px] font-semibold uppercase tracking-wider transition-colors ${isDimmed ? 'text-gray-400' : isSelected ? p.selText : p.text}`}>{year}</span>
-                  <span className={`text-[13px] font-bold tabular-nums transition-colors ${isDimmed ? 'text-gray-300' : isSelected ? p.selText : 'text-gray-500'}`}>
-                    <AnimNum value={count} />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
@@ -1285,11 +1222,28 @@ const [barsReady, setBarsReady] = useState(false);
             </button>
           )}
 
+          {/* Chips toggle */}
+          {allStudents.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowChips((v) => { const next = !v; localStorage.setItem('smp_chips_visible', String(next)); return next; })}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+                showChips || !!academicYearFilter
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+              }`}
+              title="Toggle year chips"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+          )}
+
           {/* Filter toggle */}
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
-
             className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
                 ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
@@ -1303,6 +1257,78 @@ const [barsReady, setBarsReady] = useState(false);
             </svg>
           </button>
         </div>
+
+        {/* ── Collapsible year chips row ──────────────────────────────── */}
+        {allStudents.length > 0 && (
+          <div
+            className="grid"
+            style={{
+              gridTemplateRows: showChips ? '1fr' : '0fr',
+              opacity: showChips ? 1 : 0,
+              transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="flex items-center gap-2 pt-1.5 pb-0.5 px-px">
+                {/* Total */}
+                <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                  <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
+                  <span className="text-[13px] font-semibold uppercase tracking-wider text-emerald-700">Total</span>
+                  <span className="text-[13px] font-bold tabular-nums text-emerald-800">
+                    <AnimNum value={confirmedActiveCount} />
+                  </span>
+                  {confirmedActiveCount < confirmedTotalCount && (
+                    <span className="text-[13px] text-emerald-500/60 font-medium">/{confirmedTotalCount}</span>
+                  )}
+                </div>
+
+                {/* Arrow controls */}
+                <div className="flex items-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => scrollChips('left')}
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+                    aria-label="Scroll left"
+                  >‹</button>
+                  <button
+                    type="button"
+                    onClick={() => scrollChips('right')}
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+                    aria-label="Scroll right"
+                  >›</button>
+                </div>
+
+                <span className="w-px h-3.5 rounded-full bg-emerald-200 shrink-0" />
+
+                {/* Per-year chips — scrollable */}
+                <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-4 flex-1 overflow-x-auto no-scrollbar">
+                  {activeStats.map(({ year, count }, idx) => {
+                    const isSelected = !isSearchMode && academicYearFilter === year;
+                    const isDimmed = count === 0;
+                    const p = CHIP_PALETTE[idx % CHIP_PALETTE.length];
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        disabled={isSearchMode}
+                        onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
+                        className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-opacity ${
+                          isSearchMode ? 'cursor-default' : 'cursor-pointer'
+                        } ${isDimmed ? 'opacity-30' : ''}`}
+                      >
+                        <span className={`w-1 h-3.5 rounded-full shrink-0 transition-colors ${isDimmed ? 'bg-gray-300' : isSelected ? p.selDot : p.dot}`} />
+                        <span className={`text-[13px] font-semibold uppercase tracking-wider transition-colors ${isDimmed ? 'text-gray-400' : isSelected ? p.selText : p.text}`}>{year}</span>
+                        <span className={`text-[13px] font-bold tabular-nums transition-colors ${isDimmed ? 'text-gray-300' : isSelected ? p.selText : 'text-gray-500'}`}>
+                          <AnimNum value={count} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
