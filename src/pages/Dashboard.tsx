@@ -1489,9 +1489,36 @@ const [barsReady, setBarsReady] = useState(false);
                 className="rounded-2xl border border-violet-200 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                 style={{ background: '#ede9fb', boxShadow: '0 2px 8px 0 rgba(139,92,246,0.15)' }}
               >
-                <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-violet-600 opacity-[0.05]">
-                  ALL
-                </span>
+                {/* Flower watermark — top-right */}
+                <svg
+                  aria-hidden="true"
+                  className="absolute -top-3 -right-3 pointer-events-none select-none"
+                  width="88" height="88" viewBox="0 0 88 88" fill="none"
+                  style={{ opacity: 0.10 }}
+                >
+                  {/* 8 petals radiating from centre */}
+                  {[0,45,90,135,180,225,270,315].map((deg) => (
+                    <ellipse
+                      key={deg}
+                      cx="44" cy="44"
+                      rx="7" ry="18"
+                      fill="#7c3aed"
+                      transform={`rotate(${deg} 44 44) translate(0 -14)`}
+                    />
+                  ))}
+                  {/* Inner ring of smaller petals */}
+                  {[22.5,67.5,112.5,157.5,202.5,247.5,292.5,337.5].map((deg) => (
+                    <ellipse
+                      key={deg}
+                      cx="44" cy="44"
+                      rx="4" ry="10"
+                      fill="#a855f7"
+                      transform={`rotate(${deg} 44 44) translate(0 -8)`}
+                    />
+                  ))}
+                  {/* Centre circle */}
+                  <circle cx="44" cy="44" r="7" fill="#6d28d9" />
+                </svg>
                 <div
                   className="flex items-center gap-2 cursor-pointer select-none"
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
