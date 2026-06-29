@@ -231,9 +231,10 @@ function LoadingGate() {
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="space-y-5">
           <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-2 rounded-2xl border border-sky-400 bg-sky-50 h-24 animate-pulse" />
-            <div className="rounded-2xl border border-sky-400 bg-sky-50 h-24 animate-pulse" />
-            <div className="rounded-2xl border border-rose-400 bg-rose-50 h-24 animate-pulse" />
+            <div className="rounded-2xl border border-violet-200 h-24 animate-pulse" style={{ background: '#ede9fb' }} />
+            <div className="rounded-2xl border border-green-200 h-24 animate-pulse" style={{ background: '#dcfce7' }} />
+            <div className="rounded-2xl border border-sky-200 h-24 animate-pulse" style={{ background: '#e0f2fe' }} />
+            <div className="rounded-2xl border border-rose-200 h-24 animate-pulse" style={{ background: '#ffe4e6' }} />
           </div>
           <div className="space-y-2.5">
             <div className="h-3.5 w-20 bg-white/60 rounded animate-pulse" />
@@ -1485,10 +1486,10 @@ const [barsReady, setBarsReady] = useState(false);
               {/* Total card */}
               <div
                 onClick={() => setTotalModal(true)}
-                className="rounded-2xl border border-sky-400 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
-                style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.18)' }}
+                className="rounded-2xl border border-violet-200 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                style={{ background: '#ede9fb', boxShadow: '0 2px 8px 0 rgba(139,92,246,0.15)' }}
               >
-                <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-600 opacity-[0.05]">
+                <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-violet-600 opacity-[0.05]">
                   ALL
                 </span>
                 <div
@@ -1496,14 +1497,14 @@ const [barsReady, setBarsReady] = useState(false);
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
                   title="Double-click to export PDF"
                 >
-                  <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
-                  <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700">Total Enrolled</p>
+                  <span className="w-1 h-3.5 rounded-full shrink-0 bg-violet-400" />
+                  <p className="text-[15px] font-semibold uppercase tracking-wider text-violet-700">Total Enrolled</p>
                 </div>
-                <p className="text-3xl font-black leading-none text-sky-700">
+                <p className="text-3xl font-black leading-none text-violet-700">
                   <AnimNum value={stats.total} />
                 </p>
                 <div className="mt-auto space-y-0.5">
-                  <p className="text-xs text-sky-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
+                  <p className="text-xs text-violet-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
                   <div className="flex items-center">
                     {YEARS.map((yr, i) => {
                       const y = yearConfig[yr];
@@ -1529,23 +1530,23 @@ const [barsReady, setBarsReady] = useState(false);
                 return (
                   <div
                     onClick={() => setIntakeModal(true)}
-                    className="rounded-2xl border border-sky-300 px-3 pt-4 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
-                    style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.10)' }}
+                    className="rounded-2xl border border-green-200 px-3 pt-4 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ background: '#dcfce7', boxShadow: '0 2px 8px 0 rgba(34,197,94,0.14)' }}
                   >
                     {/* Label (left) + year breakdown (right) */}
                     <div className="flex items-center justify-between mb-1.5 shrink-0">
                       <div className="flex items-center gap-2">
-                        <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
-                        <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700 leading-none">Total</p>
-                        <span className="text-[13px] font-black text-sky-700/60 tabular-nums leading-none">{overallPct}%</span>
+                        <span className="w-1 h-3.5 rounded-full shrink-0 bg-green-400" />
+                        <p className="text-[15px] font-semibold uppercase tracking-wider text-green-700 leading-none">Total</p>
+                        <span className="text-[13px] font-black text-green-700/60 tabular-nums leading-none">{overallPct}%</span>
                       </div>
                       <div className="flex items-baseline gap-2">
                         {YEARS.map((yr, i) => {
                           const yrPct = Math.round((stats.byYear[yr] / YEAR_INTAKE) * 100);
                           return (
                             <span key={yr} className="flex items-baseline gap-0.5">
-                              <span className="text-[9px] font-semibold text-sky-400/70 leading-none">{i + 1}Y</span>
-                              <span className="text-[11px] font-bold text-sky-500/80 tabular-nums leading-none">{yrPct}%</span>
+                              <span className="text-[9px] font-semibold text-green-400/70 leading-none">{i + 1}Y</span>
+                              <span className="text-[11px] font-bold text-green-500/80 tabular-nums leading-none">{yrPct}%</span>
                             </span>
                           );
                         })}
@@ -1562,7 +1563,7 @@ const [barsReady, setBarsReady] = useState(false);
                             return (
                               <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
                                 <span
-                                  className="text-[10px] font-bold text-sky-600/80 tabular-nums leading-none mb-0.5"
+                                  className="text-[10px] font-bold text-green-600/80 tabular-nums leading-none mb-0.5"
                                   style={{
                                     opacity: barsReady ? 1 : 0,
                                     transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
@@ -1574,7 +1575,7 @@ const [barsReady, setBarsReady] = useState(false);
                                   style={{
                                     height: barH,
                                     width: '100%',
-                                    background: 'rgba(56,189,248,0.28)',
+                                    background: 'rgba(134,239,172,0.55)',
                                     borderRadius: '3px 3px 0 0',
                                     transformOrigin: 'bottom',
                                     transform: barsReady ? 'scaleY(1)' : 'scaleY(0)',
@@ -1593,7 +1594,7 @@ const [barsReady, setBarsReady] = useState(false);
                       {COURSES.map((course) => {
                         return (
                           <div key={course} className="flex-1 flex flex-col items-center">
-                            <span className="text-[9px] font-bold text-sky-500/60 leading-none">{course}</span>
+                            <span className="text-[9px] font-bold text-green-500/60 leading-none">{course}</span>
                           </div>
                         );
                       })}
@@ -1613,8 +1614,8 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('BOY')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown'); }}
-                    className="rounded-2xl border border-sky-400 bg-sky-50 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
-                    style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+                    className="rounded-2xl border border-sky-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ background: '#e0f2fe', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.15)' }}
                   >
                     <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-700 opacity-[0.07]">B</span>
                     <div className="flex items-center gap-2">
@@ -1656,8 +1657,8 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('GIRL')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown'); }}
-                    className="rounded-2xl border border-rose-400 bg-rose-50 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
-                    style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+                    className="rounded-2xl border border-rose-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
+                    style={{ background: '#ffe4e6', boxShadow: '0 2px 8px 0 rgba(244,63,94,0.15)' }}
                   >
                     <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-rose-600 opacity-[0.07]">G</span>
                     <div className="flex items-center gap-2">
