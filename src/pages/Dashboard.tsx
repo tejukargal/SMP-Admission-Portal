@@ -1489,35 +1489,51 @@ const [barsReady, setBarsReady] = useState(false);
                 className="rounded-2xl border border-violet-200 p-3 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                 style={{ background: '#ede9fb', boxShadow: '0 2px 8px 0 rgba(139,92,246,0.15)' }}
               >
-                {/* Flower watermark — top-right */}
+                {/* Peacock fan watermark — top-right */}
                 <svg
                   aria-hidden="true"
-                  className="absolute -top-3 -right-3 pointer-events-none select-none"
-                  width="88" height="88" viewBox="0 0 88 88" fill="none"
-                  style={{ opacity: 0.10 }}
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 96 78"
+                  className="absolute top-0 right-0 w-24 pointer-events-none select-none"
+                  style={{ opacity: 0.11, color: '#6d28d9' }}
                 >
-                  {/* 8 petals radiating from centre */}
-                  {[0,45,90,135,180,225,270,315].map((deg) => (
-                    <ellipse
-                      key={deg}
-                      cx="44" cy="44"
-                      rx="7" ry="18"
-                      fill="#7c3aed"
-                      transform={`rotate(${deg} 44 44) translate(0 -14)`}
-                    />
-                  ))}
-                  {/* Inner ring of smaller petals */}
-                  {[22.5,67.5,112.5,157.5,202.5,247.5,292.5,337.5].map((deg) => (
-                    <ellipse
-                      key={deg}
-                      cx="44" cy="44"
-                      rx="4" ry="10"
-                      fill="#a855f7"
-                      transform={`rotate(${deg} 44 44) translate(0 -8)`}
-                    />
-                  ))}
-                  {/* Centre circle */}
-                  <circle cx="44" cy="44" r="7" fill="#6d28d9" />
+                  {/* 6 feather shafts from top-right corner origin (92, 4) */}
+                  <line x1="92" y1="4" x2="82" y2="61" stroke="currentColor" strokeWidth="1.3"/>
+                  <line x1="92" y1="4" x2="65" y2="63" stroke="currentColor" strokeWidth="1.3"/>
+                  <line x1="92" y1="4" x2="48" y2="56" stroke="currentColor" strokeWidth="1.3"/>
+                  <line x1="92" y1="4" x2="36" y2="43" stroke="currentColor" strokeWidth="1.3"/>
+                  <line x1="92" y1="4" x2="31" y2="26" stroke="currentColor" strokeWidth="1.3"/>
+                  <line x1="92" y1="4" x2="34" y2="9" stroke="currentColor" strokeWidth="1.3"/>
+                  {/* Outer arc connecting feather tips */}
+                  <path d="M 82 61 Q 58 76 48 60 Q 28 50 31 28 Q 31 12 34 9"
+                        fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  {/* Feather eyes: outer filled oval + inner ring + pupil dot */}
+                  {/* Tip 1 — 100° */}
+                  <ellipse cx="82" cy="61" rx="4.5" ry="7" transform="rotate(10 82 61)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="82" cy="61" rx="2.2" ry="3.8" transform="rotate(10 82 61)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="82" cy="61" r="1.3" fill="currentColor"/>
+                  {/* Tip 2 — 115° */}
+                  <ellipse cx="65" cy="63" rx="4.5" ry="7" transform="rotate(25 65 63)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="65" cy="63" rx="2.2" ry="3.8" transform="rotate(25 65 63)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="65" cy="63" r="1.3" fill="currentColor"/>
+                  {/* Tip 3 — 130° */}
+                  <ellipse cx="48" cy="56" rx="4.5" ry="7" transform="rotate(40 48 56)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="48" cy="56" rx="2.2" ry="3.8" transform="rotate(40 48 56)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="48" cy="56" r="1.3" fill="currentColor"/>
+                  {/* Tip 4 — 145° */}
+                  <ellipse cx="36" cy="43" rx="4.5" ry="7" transform="rotate(55 36 43)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="36" cy="43" rx="2.2" ry="3.8" transform="rotate(55 36 43)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="36" cy="43" r="1.3" fill="currentColor"/>
+                  {/* Tip 5 — 160° */}
+                  <ellipse cx="31" cy="26" rx="4.5" ry="7" transform="rotate(70 31 26)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="31" cy="26" rx="2.2" ry="3.8" transform="rotate(70 31 26)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="31" cy="26" r="1.3" fill="currentColor"/>
+                  {/* Tip 6 — 175° */}
+                  <ellipse cx="34" cy="9" rx="4.5" ry="7" transform="rotate(85 34 9)" fill="currentColor" opacity="0.45"/>
+                  <ellipse cx="34" cy="9" rx="2.2" ry="3.8" transform="rotate(85 34 9)" fill="none" stroke="currentColor" strokeWidth="0.9"/>
+                  <circle cx="34" cy="9" r="1.3" fill="currentColor"/>
+                  {/* Fan base */}
+                  <circle cx="92" cy="4" r="4.5" fill="currentColor"/>
                 </svg>
                 <div
                   className="flex items-center gap-2 cursor-pointer select-none"
