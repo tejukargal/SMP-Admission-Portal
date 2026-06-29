@@ -33,7 +33,7 @@ const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 
 const fs =
-  'rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+  'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function statusBadgeClass(status: string): string {
   if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
@@ -1212,21 +1212,21 @@ const [barsReady, setBarsReady] = useState(false);
               }}
             >
               <div className="overflow-hidden">
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pr-1">
-                  <select className={`${fs} w-[82px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-px py-1">
+                  <select className={`${fs} w-[78px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
                     <option value="">Course</option>
                     {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <select className={`${fs} w-[92px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
+                  <select className={`${fs} w-[88px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
                     <option value="">Study Yr</option>
                     {YEARS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
                   </select>
-                  <select className={`${fs} w-[84px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
+                  <select className={`${fs} w-[80px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
                     <option value="">Gender</option>
                     <option value="BOY">BOY</option>
                     <option value="GIRL">GIRL</option>
                   </select>
-                  <select className={`${fs} w-[76px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
+                  <select className={`${fs} w-[70px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
                     <option value="">Cat</option>
                     <option value="GM">GM</option>
                     <option value="SC">SC</option>
@@ -1237,7 +1237,7 @@ const [barsReady, setBarsReady] = useState(false);
                     <option value="3A">3A</option>
                     <option value="3B">3B</option>
                   </select>
-                  <select className={`${fs} w-[96px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
+                  <select className={`${fs} w-[92px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
                     <option value="">Adm Type</option>
                     <option value="REGULAR">REGULAR</option>
                     <option value="REPEATER">REPEATER</option>
@@ -1245,13 +1245,13 @@ const [barsReady, setBarsReady] = useState(false);
                     <option value="EXTERNAL">EXTERNAL</option>
                     <option value="SNQ">SNQ</option>
                   </select>
-                  <select className={`${fs} w-[84px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
+                  <select className={`${fs} w-[80px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
                     <option value="">Adm Cat</option>
                     <option value="GM">GM</option>
                     <option value="SNQ">SNQ</option>
                     <option value="OTHERS">OTHERS</option>
                   </select>
-                  <select className={`${fs} w-[98px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
+                  <select className={`${fs} w-[94px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
                     <option value="">Status</option>
                     <option value="CONFIRMED">CONFIRMED</option>
                     <option value="CANCELLED">CANCELLED</option>
