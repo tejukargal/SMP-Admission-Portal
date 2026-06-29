@@ -1498,13 +1498,13 @@ const [barsReady, setBarsReady] = useState(false);
                   title="Double-click to export PDF"
                 >
                   <span className="w-1 h-3.5 rounded-full shrink-0 bg-violet-400" />
-                  <p className="text-[15px] font-semibold uppercase tracking-wider text-violet-700">Total Enrolled</p>
+                  <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800">Total Enrolled</p>
                 </div>
-                <p className="text-3xl font-black leading-none text-violet-700">
+                <p className="text-3xl font-black leading-none text-gray-900">
                   <AnimNum value={stats.total} />
                 </p>
                 <div className="mt-auto space-y-0.5">
-                  <p className="text-xs text-violet-500/80 font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
+                  <p className="text-xs text-gray-500 font-medium">{stats.boys} Boys · {stats.girls} Girls</p>
                   <div className="flex items-center">
                     {YEARS.map((yr, i) => {
                       const y = yearConfig[yr];
@@ -1537,16 +1537,16 @@ const [barsReady, setBarsReady] = useState(false);
                     <div className="flex items-center justify-between mb-1.5 shrink-0">
                       <div className="flex items-center gap-2">
                         <span className="w-1 h-3.5 rounded-full shrink-0 bg-green-400" />
-                        <p className="text-[15px] font-semibold uppercase tracking-wider text-green-700 leading-none">Total</p>
-                        <span className="text-[13px] font-black text-green-700/60 tabular-nums leading-none">{overallPct}%</span>
+                        <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800 leading-none">Total</p>
+                        <span className="text-[13px] font-black text-gray-600 tabular-nums leading-none">{overallPct}%</span>
                       </div>
                       <div className="flex items-baseline gap-2">
                         {YEARS.map((yr, i) => {
                           const yrPct = Math.round((stats.byYear[yr] / YEAR_INTAKE) * 100);
                           return (
                             <span key={yr} className="flex items-baseline gap-0.5">
-                              <span className="text-[9px] font-semibold text-green-400/70 leading-none">{i + 1}Y</span>
-                              <span className="text-[11px] font-bold text-green-500/80 tabular-nums leading-none">{yrPct}%</span>
+                              <span className="text-[9px] font-semibold text-gray-400 leading-none">{i + 1}Y</span>
+                              <span className="text-[11px] font-bold text-gray-600 tabular-nums leading-none">{yrPct}%</span>
                             </span>
                           );
                         })}
@@ -1563,7 +1563,7 @@ const [barsReady, setBarsReady] = useState(false);
                             return (
                               <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
                                 <span
-                                  className="text-[10px] font-bold text-green-600/80 tabular-nums leading-none mb-0.5"
+                                  className="text-[10px] font-bold text-gray-600 tabular-nums leading-none mb-0.5"
                                   style={{
                                     opacity: barsReady ? 1 : 0,
                                     transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
@@ -1594,7 +1594,7 @@ const [barsReady, setBarsReady] = useState(false);
                       {COURSES.map((course) => {
                         return (
                           <div key={course} className="flex-1 flex flex-col items-center">
-                            <span className="text-[9px] font-bold text-green-500/60 leading-none">{course}</span>
+                            <span className="text-[9px] font-bold text-gray-400 leading-none">{course}</span>
                           </div>
                         );
                       })}
@@ -1617,18 +1617,18 @@ const [barsReady, setBarsReady] = useState(false);
                     className="rounded-2xl border border-sky-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: '#e0f2fe', boxShadow: '0 2px 8px 0 rgba(14,165,233,0.15)' }}
                   >
-                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-sky-700 opacity-[0.07]">B</span>
+                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-gray-700 opacity-[0.06]">B</span>
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
-                      <p className="text-[15px] font-semibold uppercase tracking-wider text-sky-700">Boys</p>
+                      <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800">Boys</p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-bold leading-none text-sky-700 opacity-50">Total</span>
-                        <p className="text-3xl font-black leading-none text-sky-700"><AnimNum value={boysTotal} /></p>
+                        <span className="text-xs font-bold leading-none text-gray-500">Total</span>
+                        <p className="text-3xl font-black leading-none text-gray-900"><AnimNum value={boysTotal} /></p>
                       </div>
                       <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
-                        <SlotTicker label={boysBreakCourse} value={boysBreakVal} textColor="text-sky-700" />
+                        <SlotTicker label={boysBreakCourse} value={boysBreakVal} textColor="text-gray-700" />
                       </div>
                     </div>
                     <div className="mt-auto pt-2 space-y-1">
@@ -1660,18 +1660,18 @@ const [barsReady, setBarsReady] = useState(false);
                     className="rounded-2xl border border-rose-200 p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.025]"
                     style={{ background: '#ffe4e6', boxShadow: '0 2px 8px 0 rgba(244,63,94,0.15)' }}
                   >
-                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-rose-600 opacity-[0.07]">G</span>
+                    <span aria-hidden="true" className="absolute -bottom-3 -right-2 text-8xl font-black leading-none select-none pointer-events-none text-gray-700 opacity-[0.06]">G</span>
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
-                      <p className="text-[15px] font-semibold uppercase tracking-wider text-rose-600">Girls</p>
+                      <p className="text-[15px] font-semibold uppercase tracking-wider text-gray-800">Girls</p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-bold leading-none text-rose-600 opacity-50">Total</span>
-                        <p className="text-3xl font-black leading-none text-rose-600"><AnimNum value={girlsTotal} /></p>
+                        <span className="text-xs font-bold leading-none text-gray-500">Total</span>
+                        <p className="text-3xl font-black leading-none text-gray-900"><AnimNum value={girlsTotal} /></p>
                       </div>
                       <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
-                        <SlotTicker label={girlsBreakCourse} value={girlsBreakVal} textColor="text-rose-600" />
+                        <SlotTicker label={girlsBreakCourse} value={girlsBreakVal} textColor="text-gray-700" />
                       </div>
                     </div>
                     <div className="mt-auto pt-2 space-y-1">
