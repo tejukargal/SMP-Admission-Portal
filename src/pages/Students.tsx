@@ -212,6 +212,19 @@ export function Students() {
     return { yearCount, courseCount, total: confirmed.length };
   }, [allStudents]);
 
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const recentlyEnrolled = useMemo(() => {
+    return allStudents
+      .filter(s => s.admissionStatus === 'CONFIRMED' && s.updatedAt.startsWith(todayStr))
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, 2);
+  }, [allStudents, todayStr]);
+
   function handleSavePdf() {
     setSavingPdf(true);
     // Defer to next tick so the button state renders before the synchronous PDF work
@@ -523,6 +536,56 @@ export function Students() {
           )}
         </div>
       </div>
+
+      {/* Recently Enrolled strip — filter-independent quick-access section */}
+      {recentlyEnrolled.length > 0 && (
+        <div
+          className="flex-shrink-0 rounded-2xl border border-emerald-200 overflow-hidden"
+          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
+        >
+          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500">
+            <span className="text-white text-xs font-bold tracking-wide">Recently Enrolled</span>
+            <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              {recentlyEnrolled.length}
+            </span>
+            <span className="ml-auto text-emerald-100 text-[10px]">Today · {todayStr}</span>
+          </div>
+          <div className="overflow-x-auto" style={{ background: 'rgba(236,253,245,0.4)' }}>
+            <table className="min-w-full divide-y divide-emerald-100 text-xs">
+              <thead>
+                <tr style={{ background: 'linear-gradient(90deg, #d1fae5, #ecfdf5)' }}>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-8">#</th>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap">Name (SSLC)</th>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-24">Reg No</th>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-14">Course</th>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-20">Year</th>
+                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100/60">
+                {recentlyEnrolled.map((student, idx) => (
+                  <tr
+                    key={student.id}
+                    className="hover:bg-emerald-100/70 transition-colors cursor-context-menu"
+                    onContextMenu={(e) => handleContextMenu(e, student)}
+                  >
+                    <td className="px-3 py-1.5 text-emerald-400 whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-1.5 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
+                    <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
+                    <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{student.course}</td>
+                    <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{student.year}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        Recently Enrolled
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Table area — the only thing that scrolls */}
       {error ? (

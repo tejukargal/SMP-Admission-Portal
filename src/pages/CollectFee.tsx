@@ -63,6 +63,14 @@ export function CollectFee() {
     if (prefill) {
       setSearchTerm(prefill);
       setDebouncedSearch(prefill);
+      // Clear all filters so the student surfaces at the top unobstructed
+      setCourseFilter('');
+      setYearFilter('');
+      setGenderFilter('');
+      setAdmTypeFilter('');
+      setAdmCatFilter('');
+      setFeeStatusFilter('ALL');
+      setVisibleCount(PAGE_SIZE);
       // Clear state so back-navigation doesn't re-apply the prefill
       window.history.replaceState({}, '');
     }
