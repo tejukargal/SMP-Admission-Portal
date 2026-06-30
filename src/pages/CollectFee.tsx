@@ -7,6 +7,7 @@ import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { Button } from '../components/common/Button';
+import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
 import type {
@@ -28,7 +29,6 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
-const fs = 'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function AnimNum({ value }: { value: number }) {
   return (
@@ -492,47 +492,65 @@ export function CollectFee() {
               }}
             >
               <div className="overflow-hidden">
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-px py-0.5">
-                  <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-                    <option value="">Course</option>
-                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-                    <option value="">Study Yr</option>
-                    <option value="1ST YEAR">1ST YEAR</option>
-                    <option value="2ND YEAR">2ND YEAR</option>
-                    <option value="3RD YEAR">3RD YEAR</option>
-                  </select>
-                  <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-                    <option value="">Gender</option>
-                    <option value="BOY">BOY</option>
-                    <option value="GIRL">GIRL</option>
-                  </select>
-                  <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-                    <option value="">Adm Type</option>
-                    <option value="REGULAR">REGULAR</option>
-                    <option value="REPEATER">REPEATER</option>
-                    <option value="LATERAL">LATERAL</option>
-                    <option value="EXTERNAL">EXTERNAL</option>
-                    <option value="SNQ">SNQ</option>
-                  </select>
-                  <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-                    <option value="">Adm Cat</option>
-                    <option value="GM">GM</option>
-                    <option value="SNQ">SNQ</option>
-                    <option value="OTHERS">OTHERS</option>
-                  </select>
-                  <select
-                    className={`${fs} w-[90px] shrink-0`}
-                    value={feeStatusFilter}
-                    onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
-                  >
-                    <option value="ALL">Fee Status</option>
-                    <option value="PAID">Fee Paid</option>
-                    <option value="NOT_PAID">Not Paid</option>
-                    <option value="FEE_DUES">Has Dues</option>
-                    <option value="NO_FEE_DUES">No Dues</option>
-                  </select>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
+                  <FilterDropdown<Course | ''>
+                    value={courseFilter}
+                    onChange={(v) => setCourseFilter(v as Course | '')}
+                    placeholder="Course"
+                    options={COURSES.map((c) => ({ value: c, label: c }))}
+                  />
+                  <FilterDropdown<Year | ''>
+                    value={yearFilter}
+                    onChange={(v) => setYearFilter(v as Year | '')}
+                    placeholder="Study Yr"
+                    options={[
+                      { value: '1ST YEAR', label: '1ST YEAR' },
+                      { value: '2ND YEAR', label: '2ND YEAR' },
+                      { value: '3RD YEAR', label: '3RD YEAR' },
+                    ]}
+                  />
+                  <FilterDropdown<Gender | ''>
+                    value={genderFilter}
+                    onChange={(v) => setGenderFilter(v as Gender | '')}
+                    placeholder="Gender"
+                    options={[
+                      { value: 'BOY', label: 'BOY' },
+                      { value: 'GIRL', label: 'GIRL' },
+                    ]}
+                  />
+                  <FilterDropdown<AdmType | ''>
+                    value={admTypeFilter}
+                    onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                    placeholder="Adm Type"
+                    options={[
+                      { value: 'REGULAR', label: 'REGULAR' },
+                      { value: 'REPEATER', label: 'REPEATER' },
+                      { value: 'LATERAL', label: 'LATERAL' },
+                      { value: 'EXTERNAL', label: 'EXTERNAL' },
+                      { value: 'SNQ', label: 'SNQ' },
+                    ]}
+                  />
+                  <FilterDropdown<AdmCat | ''>
+                    value={admCatFilter}
+                    onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                    placeholder="Adm Cat"
+                    options={[
+                      { value: 'GM', label: 'GM' },
+                      { value: 'SNQ', label: 'SNQ' },
+                      { value: 'OTHERS', label: 'OTHERS' },
+                    ]}
+                  />
+                  <FilterDropdown<'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES'>
+                    value={feeStatusFilter === 'ALL' ? '' : feeStatusFilter}
+                    onChange={(v) => setFeeStatusFilter((v || 'ALL') as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
+                    placeholder="Fee Status"
+                    options={[
+                      { value: 'PAID', label: 'Fee Paid' },
+                      { value: 'NOT_PAID', label: 'Not Paid' },
+                      { value: 'FEE_DUES', label: 'Has Dues' },
+                      { value: 'NO_FEE_DUES', label: 'No Dues' },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
