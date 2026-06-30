@@ -272,6 +272,10 @@ export function Dashboard() {
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
   const [totalModal, setTotalModal] = useState(false);
   const [intakeModal, setIntakeModal] = useState(false);
+  const [catModal, setCatModal] = useState(false);
+  const [admTypeModal, setAdmTypeModal] = useState(false);
+  const [catGenderModal, setCatGenderModal] = useState(false);
+  const [yearGenderModal, setYearGenderModal] = useState(false);
 
   // ── Collect Fee from dashboard search (admin only) ───────────────────────
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
@@ -291,9 +295,10 @@ export function Dashboard() {
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
 
-  // ── Filter / chips panel visibility ─────────────────────────────────────
-  const [showFilters, setShowFilters] = useState(false);
-  const [showChips,   setShowChips]   = useState(() => localStorage.getItem('smp_chips_visible') !== 'false');
+  // ── Filter / chips / stats pills panel visibility ────────────────────────
+  const [showFilters,    setShowFilters]    = useState(false);
+  const [showChips,      setShowChips]      = useState(() => localStorage.getItem('smp_chips_visible') !== 'false');
+  const [showStatsPills, setShowStatsPills] = useState(() => localStorage.getItem('smp_statspills_visible') === 'true');
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -1229,7 +1234,7 @@ const [barsReady, setBarsReady] = useState(false);
               type="button"
               onClick={() => setShowChips((v) => { const next = !v; localStorage.setItem('smp_chips_visible', String(next)); return next; })}
               className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
-                showChips || !!academicYearFilter
+                showChips
                   ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
                   : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
               }`}
@@ -1237,6 +1242,25 @@ const [barsReady, setBarsReady] = useState(false);
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Stats pills toggle */}
+          {!isSearchMode && (
+            <button
+              type="button"
+              onClick={() => setShowStatsPills((v) => { const next = !v; localStorage.setItem('smp_statspills_visible', String(next)); return next; })}
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+                showStatsPills
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+              }`}
+              title="Toggle stats tables"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
               </svg>
             </button>
           )}
@@ -1326,6 +1350,40 @@ const [barsReady, setBarsReady] = useState(false);
                     );
                   })}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Collapsible stats pills row ─────────────────────────────── */}
+        {!isSearchMode && (
+          <div
+            className="grid"
+            style={{
+              gridTemplateRows: showStatsPills ? '1fr' : '0fr',
+              opacity: showStatsPills ? 1 : 0,
+              transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="flex items-center gap-2 pt-1.5 pb-0.5 px-px flex-wrap">
+                {([
+                  { label: 'Category-wise',  border: 'border-emerald-300', bg: 'bg-emerald-50', text: 'text-emerald-700', fn: () => setCatModal(true)      },
+                  { label: 'Adm Type-wise',  border: 'border-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
+                  { label: 'Cat & Gender',   border: 'border-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
+                  { label: 'Year & Gender',  border: 'border-teal-300',    bg: 'bg-teal-50',    text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
+                ] as const).map(({ label, border, bg, text, fn }) => (
+                  <button
+                    key={label}
+                    onClick={fn}
+                    className={`group flex items-center gap-1.5 rounded-full border ${border} ${bg} px-3 py-1 cursor-pointer hover:bg-white/80 transition-colors`}
+                  >
+                    <span className={`text-[11px] font-semibold uppercase tracking-wider ${text}`}>{label}</span>
+                    <svg className={`w-2.5 h-2.5 ${text} opacity-40 group-hover:opacity-80 transition-opacity`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <path d="M7 17L17 7M7 7h10v10"/>
+                    </svg>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -2113,313 +2171,6 @@ const [barsReady, setBarsReady] = useState(false);
               </div>
             </div>
 
-            {/* Report tables */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-              {/* Category Report */}
-              {(() => {
-                const catRows = YEARS.flatMap((yr) => {
-                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
-                  const sub = { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 };
-                  const courseRows = COURSES.map((course) => {
-                    const c = stats.catTable[yr]?.[course] ?? { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0 };
-                    const total = c.gm + c.c1 + c.twoA + c.twoB + c.threeA + c.threeB + c.sc + c.st;
-                    sub.gm += c.gm; sub.c1 += c.c1; sub.twoA += c.twoA; sub.twoB += c.twoB; sub.threeA += c.threeA;
-                    sub.threeB += c.threeB; sub.sc += c.sc; sub.st += c.st; sub.total += total;
-                    return { yrLabel, course, ...c, total, isSubtotal: false };
-                  });
-                  return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
-                });
-                const grand = catRows.filter((r) => r.isSubtotal).reduce(
-                  (acc, r) => ({ gm: acc.gm + r.gm, c1: acc.c1 + r.c1, twoA: acc.twoA + r.twoA, twoB: acc.twoB + r.twoB,
-                    threeA: acc.threeA + r.threeA, threeB: acc.threeB + r.threeB, sc: acc.sc + r.sc, st: acc.st + r.st, total: acc.total + r.total }),
-                  { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 }
-                );
-                const tc = 'px-2 py-1 text-right tabular-nums';
-                const tl = 'px-2 py-1 text-left';
-                return (
-                  <div className="bg-emerald-50 rounded-2xl border border-emerald-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div
-                      className="px-4 py-1.5 border-b border-emerald-100 flex items-center gap-2 cursor-pointer select-none"
-                      onDoubleClick={() => exportCategoryReport(confirmedStudents, displayYear)}
-                      title="Double-click to export PDF"
-                    >
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Category-wise Count</p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px] border-collapse">
-                        <thead>
-                          <tr style={{ background: 'linear-gradient(90deg, #065f46, #047857)' }}>
-                            {['Year','Course','GM','C1','2A','2B','3A','3B','SC','ST','Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {catRows.map((r, i) => r.isSubtotal ? (
-                            <tr key={i} className="text-white font-semibold" style={{ background: '#059669' }}>
-                              <td className={tl}>{r.yrLabel}</td>
-                              <td className={tl}>{r.course}</td>
-                              {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                            </tr>
-                          ) : (
-                            <tr key={i} className="border-b border-emerald-50 hover:bg-emerald-50/40 transition-colors">
-                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
-                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
-                              {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
-                            </tr>
-                          ))}
-                          <tr className="text-white font-bold" style={{ background: '#064e3b' }}>
-                            <td className={tl}>GRAND TOTAL</td>
-                            <td className={tl}></td>
-                            {[grand.gm, grand.c1, grand.twoA, grand.twoB, grand.threeA, grand.threeB, grand.sc, grand.st, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Summary Report */}
-              {(() => {
-                const sumRows = YEARS.flatMap((yr) => {
-                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
-                  const sub = { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 };
-                  const courseRows = COURSES.map((course) => {
-                    const c = stats.summaryTable[yr]?.[course] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
-                    const total = c.regular + c.ltrl + c.snq + c.rptr;
-                    sub.regular += c.regular; sub.ltrl += c.ltrl; sub.snq += c.snq; sub.rptr += c.rptr; sub.total += total;
-                    return { yrLabel, course, ...c, total, isSubtotal: false };
-                  });
-                  return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
-                });
-                const grand = sumRows.filter((r) => r.isSubtotal).reduce(
-                  (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
-                  { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
-                );
-                const tc = 'px-2 py-1 text-right tabular-nums';
-                const tl = 'px-2 py-1 text-left';
-                return (
-                  <div className="bg-sky-50 rounded-2xl border border-sky-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div
-                      className="px-4 py-1.5 border-b border-sky-100 flex items-center gap-2 cursor-pointer select-none"
-                      onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}
-                      title="Double-click to export PDF"
-                    >
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">Admission Type-wise Count</p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px] border-collapse">
-                        <thead>
-                          <tr style={{ background: 'linear-gradient(90deg, #0c4a6e, #075985)' }}>
-                            {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sumRows.map((r, i) => r.isSubtotal ? (
-                            <tr key={i} className="text-white font-semibold" style={{ background: '#0284c7' }}>
-                              <td className={tl}>{r.yrLabel}</td>
-                              <td className={tl}>{r.course}</td>
-                              {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                            </tr>
-                          ) : (
-                            <tr key={i} className="border-b border-sky-50 hover:bg-sky-50/40 transition-colors">
-                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
-                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
-                              {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
-                            </tr>
-                          ))}
-                          <tr className="text-white font-bold" style={{ background: '#082f49' }}>
-                            <td className={tl}>GRAND TOTAL</td>
-                            <td className={tl}></td>
-                            {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-            </div>
-
-            {/* Gender stats — merged category+gender table + course-year-gender */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-              {/* Merged: Category-wise Gender Count by Year & Course */}
-              {(() => {
-                const CATS = ['GM','C1','2A','2B','3A','3B','SC','ST'] as const;
-                type CatPair = { boys: number; girls: number };
-                const tc = 'px-1.5 py-1 text-right tabular-nums text-[10px]';
-                const tl = 'px-1.5 py-1 text-left text-[10px]';
-
-                const rows = YEARS.flatMap((yr) => {
-                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
-                  const sub: Record<string, CatPair> = Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }]));
-                  let subB = 0, subG = 0;
-                  const courseRows = COURSES.map((course) => {
-                    const cats: Record<string, CatPair> = {};
-                    let tB = 0, tG = 0;
-                    for (const cat of CATS) {
-                      const p = stats.byGenderByCatByCourseByYear[cat][course as Course][yr as Year];
-                      cats[cat] = p; tB += p.boys; tG += p.girls;
-                      sub[cat].boys += p.boys; sub[cat].girls += p.girls;
-                    }
-                    subB += tB; subG += tG;
-                    return { yrLabel, course, cats, tB, tG, isSubtotal: false };
-                  });
-                  return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', cats: sub, tB: subB, tG: subG, isSubtotal: true }];
-                });
-
-                const grand = { cats: Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }])) as Record<string, CatPair>, tB: 0, tG: 0 };
-                for (const r of rows.filter((r) => r.isSubtotal)) {
-                  for (const cat of CATS) { grand.cats[cat].boys += r.cats[cat].boys; grand.cats[cat].girls += r.cats[cat].girls; }
-                  grand.tB += r.tB; grand.tG += r.tG;
-                }
-
-                return (
-                  <div className="bg-rose-50 rounded-2xl border border-rose-400 overflow-hidden flex flex-col h-full" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div
-                      className="px-4 py-1.5 border-b border-rose-100 shrink-0 flex items-center gap-2 cursor-pointer select-none"
-                      onDoubleClick={() => exportGenderCategoryReport(confirmedStudents, displayYear)}
-                      title="Double-click to export PDF"
-                    >
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Category &amp; Gender-wise Count</p>
-                    </div>
-                    <div className="overflow-x-auto flex-1">
-                      <table className="w-full h-full text-[10px] border-collapse">
-                        <thead>
-                          <tr style={{ background: 'linear-gradient(90deg, #9f1239, #be123c)' }}>
-                            <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Year</th>
-                            <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Course</th>
-                            {CATS.map((cat) => (
-                              <th key={cat} colSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">{cat}</th>
-                            ))}
-                            <th colSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">Total</th>
-                          </tr>
-                          <tr style={{ background: 'linear-gradient(90deg, #be123c, #e11d48)' }}>
-                            {[...CATS, 'T' as const].flatMap((cat) => [
-                              <th key={`${cat}-b`} className="px-1.5 py-0.5 text-[9px] text-white/80 font-medium text-right border-l border-rose-600">B</th>,
-                              <th key={`${cat}-g`} className="px-1.5 py-0.5 text-[9px] text-white/80 font-medium text-right">G</th>,
-                            ])}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((r, i) => r.isSubtotal ? (
-                            <tr key={i} className="text-white font-semibold" style={{ background: '#e11d48' }}>
-                              <td className={tl}>{r.yrLabel}</td>
-                              <td className={tl}>{r.course}</td>
-                              {CATS.flatMap((cat) => [
-                                <td key={`${cat}-b`} className={tc + ' border-l border-rose-300'}>{r.cats[cat].boys}</td>,
-                                <td key={`${cat}-g`} className={tc}>{r.cats[cat].girls}</td>,
-                              ])}
-                              <td className={tc + ' border-l border-rose-300'}>{r.tB}</td>
-                              <td className={tc}>{r.tG}</td>
-                            </tr>
-                          ) : (
-                            <tr key={i} className="border-b border-rose-50 hover:bg-rose-50/40 transition-colors">
-                              <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
-                              <td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
-                              {CATS.flatMap((cat) => [
-                                <td key={`${cat}-b`} className={tc + ' text-gray-700 border-l border-rose-50'}>{r.cats[cat].boys}</td>,
-                                <td key={`${cat}-g`} className={tc + ' text-gray-700'}>{r.cats[cat].girls}</td>,
-                              ])}
-                              <td className={tc + ' text-gray-800 font-semibold border-l border-rose-100'}>{r.tB}</td>
-                              <td className={tc + ' text-gray-800 font-semibold'}>{r.tG}</td>
-                            </tr>
-                          ))}
-                          <tr className="text-white font-bold" style={{ background: '#4c0519' }}>
-                            <td className={tl}>GRAND TOTAL</td>
-                            <td className={tl} />
-                            {CATS.flatMap((cat) => [
-                              <td key={`${cat}-b`} className={tc + ' border-l border-rose-900'}>{grand.cats[cat].boys}</td>,
-                              <td key={`${cat}-g`} className={tc}>{grand.cats[cat].girls}</td>,
-                            ])}
-                            <td className={tc + ' border-l border-rose-900'}>{grand.tB}</td>
-                            <td className={tc}>{grand.tG}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Year & Course-wise Gender */}
-              {(() => {
-                const tc = 'px-2 py-1 text-right tabular-nums';
-                const tl = 'px-2 py-1 text-left';
-                const rows = YEARS.flatMap((yr) => {
-                  const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
-                  const sub = { boys: 0, girls: 0, total: 0 };
-                  const courseRows = COURSES.map((course) => {
-                    const boys  = stats.byGenderByCourseByYear['BOY'][course][yr];
-                    const girls = stats.byGenderByCourseByYear['GIRL'][course][yr];
-                    const total = boys + girls;
-                    sub.boys += boys; sub.girls += girls; sub.total += total;
-                    return { yrLabel, course, boys, girls, total, isSubtotal: false };
-                  });
-                  return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', ...sub, isSubtotal: true }];
-                });
-                const grand = rows.filter((r) => r.isSubtotal).reduce(
-                  (acc, r) => ({ boys: acc.boys + r.boys, girls: acc.girls + r.girls, total: acc.total + r.total }),
-                  { boys: 0, girls: 0, total: 0 }
-                );
-                return (
-                  <div className="bg-teal-50 rounded-2xl border border-teal-400 overflow-hidden h-full flex flex-col" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                    <div
-                      className="px-4 py-1.5 border-b border-teal-100 shrink-0 flex items-center gap-2 cursor-pointer select-none"
-                      onDoubleClick={() => exportGenderCourseYearReport(confirmedStudents, displayYear)}
-                      title="Double-click to export PDF"
-                    >
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-teal-400" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Year &amp; Course-wise Gender</p>
-                    </div>
-                    <div className="overflow-x-auto flex-1">
-                      <table className="w-full h-full text-[10px] border-collapse">
-                        <thead>
-                          <tr style={{ background: 'linear-gradient(90deg, #134e4a, #0f766e)' }}>
-                            {['Year', 'Course', 'Boys', 'Girls', 'Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="h-full">
-                          {rows.map((r, i) => {
-                            const c = courseConfig[r.course as Course];
-                            return r.isSubtotal ? (
-                              <tr key={i} className="font-semibold" style={{ background: '#ccfbf1', height: '1%' }}>
-                                <td className={tl + ' text-teal-700 font-bold'}>{r.yrLabel}</td>
-                                <td className={tl + ' text-teal-600'} />
-                                {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-teal-800'}>{v}</td>)}
-                              </tr>
-                            ) : (
-                              <tr key={i} className="border-b border-teal-50 hover:bg-teal-50/40 transition-colors" style={{ height: '1%' }}>
-                                <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
-                                <td className={tl + ` ${c.textColor} font-bold`}>{r.course}</td>
-                                {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
-                              </tr>
-                            );
-                          })}
-                          <tr className="text-white font-bold" style={{ background: '#042f2e', height: '1%' }}>
-                            <td className={tl}>GRAND TOTAL</td>
-                            <td className={tl} />
-                            {[grand.boys, grand.girls, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
-
-            </div>
 
             {/* Date-wise Admission Course-wise Counts — full width */}
             {(() => {
@@ -3106,6 +2857,311 @@ const [barsReady, setBarsReady] = useState(false);
                     ))}
                   </tr>
                 </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Category-wise Count modal ─────────────────────────────────────── */}
+    {catModal && (() => {
+      const catRows = YEARS.flatMap((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const sub = { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 };
+        const courseRows = COURSES.map((course) => {
+          const c = stats.catTable[yr]?.[course] ?? { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0 };
+          const total = c.gm + c.c1 + c.twoA + c.twoB + c.threeA + c.threeB + c.sc + c.st;
+          sub.gm += c.gm; sub.c1 += c.c1; sub.twoA += c.twoA; sub.twoB += c.twoB;
+          sub.threeA += c.threeA; sub.threeB += c.threeB; sub.sc += c.sc; sub.st += c.st; sub.total += total;
+          return { yrLabel, course, ...c, total, isSubtotal: false };
+        });
+        return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
+      });
+      const grand = catRows.filter((r) => r.isSubtotal).reduce(
+        (acc, r) => ({ gm: acc.gm + r.gm, c1: acc.c1 + r.c1, twoA: acc.twoA + r.twoA, twoB: acc.twoB + r.twoB,
+          threeA: acc.threeA + r.threeA, threeB: acc.threeB + r.threeB, sc: acc.sc + r.sc, st: acc.st + r.st, total: acc.total + r.total }),
+        { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 }
+      );
+      const tc = 'px-2 py-0.5 text-right tabular-nums';
+      const tl = 'px-2 py-0.5 text-left';
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCatModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-emerald-400 bg-emerald-50 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-emerald-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-emerald-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Category-wise Count</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => exportCategoryReport(confirmedStudents, displayYear)} className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setCatModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr style={{ background: 'linear-gradient(90deg, #065f46, #047857)' }}>
+                    {['Year','Course','GM','C1','2A','2B','3A','3B','SC','ST','Total'].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {catRows.map((r, i) => r.isSubtotal ? (
+                    <tr key={i} className="text-white font-semibold" style={{ background: '#059669' }}>
+                      <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
+                      {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                    </tr>
+                  ) : (
+                    <tr key={i} className="border-b border-emerald-50 hover:bg-white/40 transition-colors">
+                      <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
+                      {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="text-white font-bold" style={{ background: '#064e3b' }}>
+                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
+                    {[grand.gm, grand.c1, grand.twoA, grand.twoB, grand.threeA, grand.threeB, grand.sc, grand.st, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Admission Type-wise Count modal ──────────────────────────────────── */}
+    {admTypeModal && (() => {
+      const sumRows = YEARS.flatMap((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const sub = { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 };
+        const courseRows = COURSES.map((course) => {
+          const c = stats.summaryTable[yr]?.[course] ?? { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+          const total = c.regular + c.ltrl + c.snq + c.rptr;
+          sub.regular += c.regular; sub.ltrl += c.ltrl; sub.snq += c.snq; sub.rptr += c.rptr; sub.total += total;
+          return { yrLabel, course, ...c, total, isSubtotal: false };
+        });
+        return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
+      });
+      const grand = sumRows.filter((r) => r.isSubtotal).reduce(
+        (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
+        { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
+      );
+      const tc = 'px-2 py-0.5 text-right tabular-nums';
+      const tl = 'px-2 py-0.5 text-left';
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdmTypeModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-sky-400 bg-sky-50 shadow-2xl w-full max-w-xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-sky-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-sky-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Admission Type-wise Count</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => exportSummaryReport(confirmedStudents, displayYear)} className="text-[10px] font-semibold text-sky-600 hover:text-sky-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setAdmTypeModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr style={{ background: 'linear-gradient(90deg, #0c4a6e, #075985)' }}>
+                    {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sumRows.map((r, i) => r.isSubtotal ? (
+                    <tr key={i} className="text-white font-semibold" style={{ background: '#0284c7' }}>
+                      <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
+                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                    </tr>
+                  ) : (
+                    <tr key={i} className="border-b border-sky-50 hover:bg-white/40 transition-colors">
+                      <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
+                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="text-white font-bold" style={{ background: '#082f49' }}>
+                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
+                    {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Category & Gender-wise Count modal ───────────────────────────────── */}
+    {catGenderModal && (() => {
+      const CATS = ['GM','C1','2A','2B','3A','3B','SC','ST'] as const;
+      type CatPair = { boys: number; girls: number };
+      const tc = 'px-1 py-0.5 text-right tabular-nums text-[9px]';
+      const tl = 'px-1.5 py-0.5 text-left text-[9px]';
+      const rows = YEARS.flatMap((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const sub: Record<string, CatPair> = Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }]));
+        let subB = 0, subG = 0;
+        const courseRows = COURSES.map((course) => {
+          const cats: Record<string, CatPair> = {};
+          let tB = 0, tG = 0;
+          for (const cat of CATS) {
+            const p = stats.byGenderByCatByCourseByYear[cat][course as Course][yr as Year];
+            cats[cat] = p; tB += p.boys; tG += p.girls;
+            sub[cat].boys += p.boys; sub[cat].girls += p.girls;
+          }
+          subB += tB; subG += tG;
+          return { yrLabel, course, cats, tB, tG, isSubtotal: false };
+        });
+        return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', cats: sub, tB: subB, tG: subG, isSubtotal: true }];
+      });
+      const grand = { cats: Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }])) as Record<string, CatPair>, tB: 0, tG: 0 };
+      for (const r of rows.filter((r) => r.isSubtotal)) {
+        for (const cat of CATS) { grand.cats[cat].boys += r.cats[cat].boys; grand.cats[cat].girls += r.cats[cat].girls; }
+        grand.tB += r.tB; grand.tG += r.tG;
+      }
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCatGenderModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-rose-400 bg-rose-50 shadow-2xl w-full max-w-5xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-rose-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-rose-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-rose-700">Category &amp; Gender-wise Count</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => exportGenderCategoryReport(confirmedStudents, displayYear)} className="text-[10px] font-semibold text-rose-600 hover:text-rose-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setCatGenderModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3">
+              <table className="w-full text-[9px] border-collapse">
+                <thead>
+                  <tr style={{ background: 'linear-gradient(90deg, #9f1239, #be123c)' }}>
+                    <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Year</th>
+                    <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Course</th>
+                    {CATS.map((cat) => (
+                      <th key={cat} colSpan={2} className="px-1 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">{cat}</th>
+                    ))}
+                    <th colSpan={2} className="px-1 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">Total</th>
+                  </tr>
+                  <tr style={{ background: 'linear-gradient(90deg, #be123c, #e11d48)' }}>
+                    {[...CATS, 'T' as const].flatMap((cat) => [
+                      <th key={`${cat}-b`} className="px-1 py-0.5 text-[8px] text-white/80 font-medium text-right border-l border-rose-600">B</th>,
+                      <th key={`${cat}-g`} className="px-1 py-0.5 text-[8px] text-white/80 font-medium text-right">G</th>,
+                    ])}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => r.isSubtotal ? (
+                    <tr key={i} className="text-white font-semibold" style={{ background: '#e11d48' }}>
+                      <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
+                      {CATS.flatMap((cat) => [
+                        <td key={`${cat}-b`} className={tc + ' border-l border-rose-300'}>{r.cats[cat].boys}</td>,
+                        <td key={`${cat}-g`} className={tc}>{r.cats[cat].girls}</td>,
+                      ])}
+                      <td className={tc + ' border-l border-rose-300'}>{r.tB}</td>
+                      <td className={tc}>{r.tG}</td>
+                    </tr>
+                  ) : (
+                    <tr key={i} className="border-b border-rose-50 hover:bg-white/40 transition-colors">
+                      <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
+                      {CATS.flatMap((cat) => [
+                        <td key={`${cat}-b`} className={tc + ' text-gray-700 border-l border-rose-50'}>{r.cats[cat].boys}</td>,
+                        <td key={`${cat}-g`} className={tc + ' text-gray-700'}>{r.cats[cat].girls}</td>,
+                      ])}
+                      <td className={tc + ' text-gray-800 font-semibold border-l border-rose-100'}>{r.tB}</td>
+                      <td className={tc + ' text-gray-800 font-semibold'}>{r.tG}</td>
+                    </tr>
+                  ))}
+                  <tr className="text-white font-bold" style={{ background: '#4c0519' }}>
+                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
+                    {CATS.flatMap((cat) => [
+                      <td key={`${cat}-b`} className={tc + ' border-l border-rose-900'}>{grand.cats[cat].boys}</td>,
+                      <td key={`${cat}-g`} className={tc}>{grand.cats[cat].girls}</td>,
+                    ])}
+                    <td className={tc + ' border-l border-rose-900'}>{grand.tB}</td>
+                    <td className={tc}>{grand.tG}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Year & Course-wise Gender modal ──────────────────────────────────── */}
+    {yearGenderModal && (() => {
+      const tc = 'px-2 py-0.5 text-right tabular-nums';
+      const tl = 'px-2 py-0.5 text-left';
+      const rows = YEARS.flatMap((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const sub = { boys: 0, girls: 0, total: 0 };
+        const courseRows = COURSES.map((course) => {
+          const boys  = stats.byGenderByCourseByYear['BOY'][course][yr];
+          const girls = stats.byGenderByCourseByYear['GIRL'][course][yr];
+          const total = boys + girls;
+          sub.boys += boys; sub.girls += girls; sub.total += total;
+          return { yrLabel, course, boys, girls, total, isSubtotal: false };
+        });
+        return [...courseRows, { yrLabel: `${yrLabel} SUB`, course: 'All', ...sub, isSubtotal: true }];
+      });
+      const grand = rows.filter((r) => r.isSubtotal).reduce(
+        (acc, r) => ({ boys: acc.boys + r.boys, girls: acc.girls + r.girls, total: acc.total + r.total }),
+        { boys: 0, girls: 0, total: 0 }
+      );
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setYearGenderModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-teal-400 bg-teal-50 shadow-2xl w-full max-w-sm mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-teal-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-teal-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-teal-700">Year &amp; Course-wise Gender</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => exportGenderCourseYearReport(confirmedStudents, displayYear)} className="text-[10px] font-semibold text-teal-600 hover:text-teal-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setYearGenderModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3">
+              <table className="w-full text-[10px] border-collapse">
+                <thead>
+                  <tr style={{ background: 'linear-gradient(90deg, #134e4a, #0f766e)' }}>
+                    {['Year', 'Course', 'Boys', 'Girls', 'Total'].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const c = courseConfig[r.course as Course];
+                    return r.isSubtotal ? (
+                      <tr key={i} className="font-semibold" style={{ background: '#ccfbf1' }}>
+                        <td className={tl + ' text-teal-700 font-bold'}>{r.yrLabel}</td>
+                        <td className={tl + ' text-teal-600'} />
+                        {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-teal-800'}>{v}</td>)}
+                      </tr>
+                    ) : (
+                      <tr key={i} className="border-b border-teal-50 hover:bg-white/40 transition-colors">
+                        <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
+                        <td className={tl + ` ${c?.textColor ?? 'text-gray-700'} font-bold`}>{r.course}</td>
+                        {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                      </tr>
+                    );
+                  })}
+                  <tr className="text-white font-bold" style={{ background: '#042f2e' }}>
+                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
+                    {[grand.boys, grand.girls, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                  </tr>
+                </tbody>
               </table>
             </div>
           </div>
