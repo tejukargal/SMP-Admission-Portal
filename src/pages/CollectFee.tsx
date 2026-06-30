@@ -305,89 +305,63 @@ export function CollectFee() {
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
 
               {/* Total */}
-              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-gray-400 font-medium">Total</span>
-                <AnimNum value={stats.total} />
+              <div className="flex items-center gap-1 bg-white/80 border border-emerald-100 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-gray-500 font-semibold">Total</span>
+                <span className="font-bold tabular-nums text-gray-800"><AnimNum value={stats.total} /></span>
               </div>
 
-              {/* Filtered count — right after Total so it's always visible */}
+              {/* Filtered count */}
               {hasActiveFilters && (
                 <>
-                  <span className="text-gray-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-blue-500 font-medium">Filtered</span>
-                    <AnimNum value={filteredStudents.length} />
+                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-emerald-600 font-semibold">Filtered</span>
+                    <span className="font-bold tabular-nums text-emerald-800"><AnimNum value={filteredStudents.length} /></span>
                   </div>
                 </>
               )}
 
-              <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
               {/* Fee status chips */}
               <button
                 onClick={() => setFeeStatusFilter(feeStatusFilter === 'PAID' ? 'ALL' : 'PAID')}
-                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                  feeStatusFilter === 'PAID'
-                    ? 'bg-green-50 border-green-300'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
+                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                  feeStatusFilter === 'PAID' ? 'bg-green-500 border-green-500' : 'bg-white/80 border-emerald-100 hover:border-green-300 hover:bg-green-50'
                 }`}
               >
-                <span className={`font-medium ${feeStatusFilter === 'PAID' ? 'text-green-700' : 'text-gray-500'}`}>
-                  Paid
-                </span>
-                <AnimNum value={stats.paidCount} />
+                <span className={`font-semibold ${feeStatusFilter === 'PAID' ? 'text-white' : 'text-gray-600'}`}>Paid</span>
+                <span className={`font-bold tabular-nums ${feeStatusFilter === 'PAID' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.paidCount} /></span>
               </button>
               <button
-                onClick={() =>
-                  setFeeStatusFilter(feeStatusFilter === 'NOT_PAID' ? 'ALL' : 'NOT_PAID')
-                }
-                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                  feeStatusFilter === 'NOT_PAID'
-                    ? 'bg-red-50 border-red-300'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
+                onClick={() => setFeeStatusFilter(feeStatusFilter === 'NOT_PAID' ? 'ALL' : 'NOT_PAID')}
+                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                  feeStatusFilter === 'NOT_PAID' ? 'bg-red-500 border-red-500' : 'bg-white/80 border-emerald-100 hover:border-red-300 hover:bg-red-50'
                 }`}
               >
-                <span
-                  className={`font-medium ${
-                    feeStatusFilter === 'NOT_PAID' ? 'text-red-700' : 'text-gray-500'
-                  }`}
-                >
-                  Not Paid
-                </span>
-                <AnimNum value={stats.unpaidCount} />
+                <span className={`font-semibold ${feeStatusFilter === 'NOT_PAID' ? 'text-white' : 'text-gray-600'}`}>Not Paid</span>
+                <span className={`font-bold tabular-nums ${feeStatusFilter === 'NOT_PAID' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.unpaidCount} /></span>
               </button>
               <button
-                onClick={() =>
-                  setFeeStatusFilter(feeStatusFilter === 'FEE_DUES' ? 'ALL' : 'FEE_DUES')
-                }
-                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                  feeStatusFilter === 'FEE_DUES'
-                    ? 'bg-amber-50 border-amber-300'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
+                onClick={() => setFeeStatusFilter(feeStatusFilter === 'FEE_DUES' ? 'ALL' : 'FEE_DUES')}
+                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                  feeStatusFilter === 'FEE_DUES' ? 'bg-amber-500 border-amber-500' : 'bg-white/80 border-emerald-100 hover:border-amber-300 hover:bg-amber-50'
                 }`}
               >
-                <span className={`font-medium ${feeStatusFilter === 'FEE_DUES' ? 'text-amber-700' : 'text-gray-500'}`}>
-                  Fee Dues
-                </span>
-                <AnimNum value={stats.duesCount} />
+                <span className={`font-semibold ${feeStatusFilter === 'FEE_DUES' ? 'text-white' : 'text-gray-600'}`}>Fee Dues</span>
+                <span className={`font-bold tabular-nums ${feeStatusFilter === 'FEE_DUES' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.duesCount} /></span>
               </button>
               <button
-                onClick={() =>
-                  setFeeStatusFilter(feeStatusFilter === 'NO_FEE_DUES' ? 'ALL' : 'NO_FEE_DUES')
-                }
-                className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                  feeStatusFilter === 'NO_FEE_DUES'
-                    ? 'bg-green-50 border-green-300'
-                    : 'bg-white border-gray-200 hover:border-gray-300'
+                onClick={() => setFeeStatusFilter(feeStatusFilter === 'NO_FEE_DUES' ? 'ALL' : 'NO_FEE_DUES')}
+                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                  feeStatusFilter === 'NO_FEE_DUES' ? 'bg-emerald-500 border-emerald-500' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
                 }`}
               >
-                <span className={`font-medium ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-green-700' : 'text-gray-500'}`}>
-                  No Fee Dues
-                </span>
-                <AnimNum value={stats.noDuesCount} />
+                <span className={`font-semibold ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-white' : 'text-gray-600'}`}>No Dues</span>
+                <span className={`font-bold tabular-nums ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.noDuesCount} /></span>
               </button>
 
-              <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
               {/* Study-year chips */}
               {YEARS.map((yr) => {
@@ -399,25 +373,17 @@ export function CollectFee() {
                   <button
                     key={yr}
                     onClick={() => setYearFilter(isSelected ? '' : yr)}
-                    className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                      isSelected
-                        ? 'bg-blue-50 border-blue-300'
-                        : isDimmed
-                        ? 'bg-white border-gray-100'
-                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      isSelected ? 'bg-emerald-500 border-emerald-500' : isDimmed ? 'bg-white/50 border-gray-100' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
                     }`}
                   >
-                    <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
-                      {label}
-                    </span>
-                    <span className={isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}>
-                      <AnimNum value={count} />
-                    </span>
+                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>{label}</span>
+                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}><AnimNum value={count} /></span>
                   </button>
                 );
               })}
 
-              <span className="text-gray-200 text-xs select-none shrink-0">·</span>
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
 
               {/* Course chips */}
               {COURSES.map((c) => {
@@ -428,20 +394,12 @@ export function CollectFee() {
                   <button
                     key={c}
                     onClick={() => setCourseFilter(isSelected ? '' : c)}
-                    className={`flex items-center gap-1 border rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-colors duration-150 cursor-pointer ${
-                      isSelected
-                        ? 'bg-blue-50 border-blue-300'
-                        : isDimmed
-                        ? 'bg-white border-gray-100'
-                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      isSelected ? 'bg-emerald-500 border-emerald-500' : isDimmed ? 'bg-white/50 border-gray-100' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
                     }`}
                   >
-                    <span className={`font-medium ${isSelected ? 'text-blue-700' : isDimmed ? 'text-gray-300' : 'text-gray-500'}`}>
-                      {c}
-                    </span>
-                    <span className={isSelected ? 'text-blue-800' : isDimmed ? 'text-gray-300' : 'text-gray-800'}>
-                      <AnimNum value={count} />
-                    </span>
+                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
+                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}><AnimNum value={count} /></span>
                   </button>
                 );
               })}
