@@ -582,8 +582,9 @@ export function CollectFee() {
                 const isFullyPaid = allotted !== null && totalPaid >= allotted;
                 return (
                   <tr
-                    key={student.id}
+                    key={`${student.id}-${debouncedSearch}`}
                     className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                    style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, student, hasFeeRecord, isFullyPaid });

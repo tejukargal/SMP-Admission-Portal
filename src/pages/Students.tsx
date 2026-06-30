@@ -716,9 +716,10 @@ export function Students() {
             <tbody className="divide-y divide-emerald-50/60">
               {visibleStudents.map((student, idx) => (
                 <tr
-                  key={student.id}
+                  key={`${student.id}-${debouncedSearch}`}
                   className="hover:bg-emerald-100/70 transition-colors cursor-context-menu"
                   onContextMenu={(e) => handleContextMenu(e, student)}
+                  style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
                 >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
