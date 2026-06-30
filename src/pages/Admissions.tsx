@@ -43,7 +43,15 @@ export function Admissions() {
 
   const { students: allStudents, loading, error } = useStudents(academicYear);
 
-  const [activeTab, setActiveTab] = useState<Tab>('pending');
+  const VALID_TABS: Tab[] = ['pending', 'merit', 'pendingLateral', 'meritLateral', 'saved', 'cancelled'];
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const saved = sessionStorage.getItem('admissions_activeTab');
+    return (saved && VALID_TABS.includes(saved as Tab) ? saved : 'pending') as Tab;
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('admissions_activeTab', activeTab);
+  }, [activeTab]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all');
