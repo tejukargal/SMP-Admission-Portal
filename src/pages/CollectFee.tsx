@@ -231,7 +231,7 @@ export function CollectFee() {
 
   const hasMore = visibleCount < filteredStudents.length;
 
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_collectfee_filters_visible') === 'true');
 
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
@@ -554,7 +554,7 @@ export function CollectFee() {
           {/* Filter toggle */}
           <button
             type="button"
-            onClick={() => setShowFilters((v) => !v)}
+            onClick={() => setShowFilters((v) => { const next = !v; localStorage.setItem('smp_collectfee_filters_visible', String(next)); return next; })}
             className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
                 ? 'bg-emerald-100 border-emerald-300 text-emerald-600'

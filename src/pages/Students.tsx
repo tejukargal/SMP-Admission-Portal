@@ -106,7 +106,7 @@ export function Students() {
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
   const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_students_filters_visible') === 'true');
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -590,7 +590,7 @@ export function Students() {
           {/* Filter toggle */}
           <button
             type="button"
-            onClick={() => setShowFilters((v) => !v)}
+            onClick={() => setShowFilters((v) => { const next = !v; localStorage.setItem('smp_students_filters_visible', String(next)); return next; })}
             className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
                 ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
