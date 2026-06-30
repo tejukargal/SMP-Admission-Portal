@@ -28,8 +28,7 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
-const fs =
-  'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+const fs = 'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function AnimNum({ value }: { value: number }) {
   return (
@@ -232,9 +231,19 @@ export function CollectFee() {
 
   const hasMore = visibleCount < filteredStudents.length;
 
+  const [showFilters, setShowFilters] = useState(false);
+
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
     !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
+
+  const hasNonSearchFilters =
+    !!courseFilter || !!yearFilter || !!genderFilter ||
+    !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
+
+  useEffect(() => {
+    if (hasNonSearchFilters) setShowFilters(true);
+  }, [hasNonSearchFilters]);
 
   function clearFilters() {
     setSearchTerm('');
@@ -443,63 +452,123 @@ export function CollectFee() {
       </div>
 
       {/* Filters */}
-      <div className="flex-shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2.5">
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto">
-          <input
-            type="text"
-            placeholder="Search name / mobile…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-40 shrink-0 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-            <option value="">Course</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-            <option value="">Study Yr</option>
-            <option value="1ST YEAR">1ST YEAR</option>
-            <option value="2ND YEAR">2ND YEAR</option>
-            <option value="3RD YEAR">3RD YEAR</option>
-          </select>
-          <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-            <option value="">Gender</option>
-            <option value="BOY">BOY</option>
-            <option value="GIRL">GIRL</option>
-          </select>
-          <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-            <option value="">Adm Type</option>
-            <option value="REGULAR">REGULAR</option>
-            <option value="REPEATER">REPEATER</option>
-            <option value="LATERAL">LATERAL</option>
-            <option value="EXTERNAL">EXTERNAL</option>
-            <option value="SNQ">SNQ</option>
-          </select>
-          <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-            <option value="">Adm Cat</option>
-            <option value="GM">GM</option>
-            <option value="SNQ">SNQ</option>
-            <option value="OTHERS">OTHERS</option>
-          </select>
-          <select
-            className={`${fs} w-[90px] shrink-0`}
-            value={feeStatusFilter}
-            onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
-          >
-            <option value="ALL">Fee Status</option>
-            <option value="PAID">Fee Paid</option>
-            <option value="NOT_PAID">Not Paid</option>
-            <option value="FEE_DUES">Has Dues</option>
-            <option value="NO_FEE_DUES">No Dues</option>
-          </select>
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="shrink-0 rounded border border-orange-400 px-2 py-1.5 text-xs text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
+      <div className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}>
+        <div className="flex items-center gap-2 px-3 py-2">
+
+          {/* Search — rounded-full with icon + amber clear */}
+          <div className="relative shrink-0 w-52">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search name / mobile…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                aria-label="Clear search"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Collapsible filter selects */}
+          <div className="flex-1 min-w-0">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: showFilters ? '1fr' : '0fr',
+                opacity: showFilters ? 1 : 0,
+                transition: 'grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
             >
-              Clear
-            </button>
+              <div className="overflow-hidden">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-px py-0.5">
+                  <select className={`${fs} w-[72px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
+                    <option value="">Course</option>
+                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select className={`${fs} w-[80px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
+                    <option value="">Study Yr</option>
+                    <option value="1ST YEAR">1ST YEAR</option>
+                    <option value="2ND YEAR">2ND YEAR</option>
+                    <option value="3RD YEAR">3RD YEAR</option>
+                  </select>
+                  <select className={`${fs} w-[74px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
+                    <option value="">Gender</option>
+                    <option value="BOY">BOY</option>
+                    <option value="GIRL">GIRL</option>
+                  </select>
+                  <select className={`${fs} w-[84px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
+                    <option value="">Adm Type</option>
+                    <option value="REGULAR">REGULAR</option>
+                    <option value="REPEATER">REPEATER</option>
+                    <option value="LATERAL">LATERAL</option>
+                    <option value="EXTERNAL">EXTERNAL</option>
+                    <option value="SNQ">SNQ</option>
+                  </select>
+                  <select className={`${fs} w-[74px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
+                    <option value="">Adm Cat</option>
+                    <option value="GM">GM</option>
+                    <option value="SNQ">SNQ</option>
+                    <option value="OTHERS">OTHERS</option>
+                  </select>
+                  <select
+                    className={`${fs} w-[90px] shrink-0`}
+                    value={feeStatusFilter}
+                    onChange={(e) => setFeeStatusFilter(e.target.value as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
+                  >
+                    <option value="ALL">Fee Status</option>
+                    <option value="PAID">Fee Paid</option>
+                    <option value="NOT_PAID">Not Paid</option>
+                    <option value="FEE_DUES">Has Dues</option>
+                    <option value="NO_FEE_DUES">No Dues</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Clear — only when filters active */}
+          {hasActiveFilters && (
+            <>
+              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <button
+                onClick={clearFilters}
+                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </>
           )}
+
+          {/* Filter toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              showFilters || hasNonSearchFilters
+                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+            }`}
+            title="Toggle filters"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+              <line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+          </button>
+
         </div>
       </div>
 
