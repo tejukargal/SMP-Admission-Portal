@@ -1815,14 +1815,16 @@ const [barsReady, setBarsReady] = useState(false);
                   const lateralAllotted = lateralAllotments?.[course] ?? 0;
                   const lateralPending  = showLateral ? Math.max(0, lateralAllotted - lateralFilled) : 0;
 
+                  const lightBorder = ({ CE: 'border-amber-200', ME: 'border-green-200', EC: 'border-sky-200', CS: 'border-teal-200', EE: 'border-violet-200' } as Record<string,string>)[course];
+                  const shadowColor = ({ CE: 'rgba(245,158,11,0.13)', ME: 'rgba(34,197,94,0.13)', EC: 'rgba(14,165,233,0.13)', CS: 'rgba(20,184,166,0.13)', EE: 'rgba(139,92,246,0.13)' } as Record<string,string>)[course];
+
                   return (
-                    <div key={course} className={`rounded-2xl border ${c.border} ${c.bg} p-3 flex flex-col gap-1.5 relative overflow-hidden`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10)' }}>
-                      <span aria-hidden="true" className={`absolute -bottom-2 -right-2 text-7xl font-black leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>{course}</span>
+                    <div key={course} className={`rounded-2xl border ${lightBorder} ${c.bg} p-3 flex flex-col gap-1.5 relative overflow-hidden`} style={{ boxShadow: `0 2px 8px 0 ${shadowColor}` }}>
 
                       {/* Course header */}
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1 h-3 rounded-full shrink-0 ${c.barFill}`} />
-                        <p className={`text-[13px] font-semibold uppercase tracking-wider ${c.textColor}`}>{course}</p>
+                        <p className="text-[13px] font-semibold uppercase tracking-wider text-gray-900">{course}</p>
                       </div>
 
                       {/* 2-column body */}
@@ -1830,11 +1832,11 @@ const [barsReady, setBarsReady] = useState(false);
 
                         {/* Left — Regular */}
                         <div className="flex flex-col gap-0.5 flex-1 pr-2">
-                          <span className={`text-[10px] font-bold uppercase tracking-wide ${c.textColor}`}>Regular</span>
-                          <span className={`text-2xl font-black leading-none tabular-nums ${regularPending === 0 ? 'text-emerald-600' : c.textColor}`}>
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Regular</span>
+                          <span className="text-2xl font-black leading-none tabular-nums text-gray-900">
                             <AnimNum value={regularPending} />
                           </span>
-                          <p className={`text-[10px] tabular-nums ${c.textColor} opacity-60`}>{regularFilled}/{REGULAR_INTAKE} filled</p>
+                          <p className="text-[10px] tabular-nums text-gray-500">{regularFilled}/{REGULAR_INTAKE} filled</p>
                         </div>
 
                         {/* Right — SNQ + Lateral */}
@@ -1843,14 +1845,14 @@ const [barsReady, setBarsReady] = useState(false);
                           {/* SNQ */}
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">SNQ</span>
-                              <span className={`text-[17px] font-black leading-none tabular-nums shrink-0 ${snqPending === 0 ? 'text-emerald-600' : snqAllotted ? 'text-amber-600' : 'text-amber-400'}`}>
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-500">SNQ</span>
+                              <span className="text-[17px] font-black leading-none tabular-nums shrink-0 text-gray-900">
                                 <AnimNum value={snqPending} />
                               </span>
                             </div>
                             {snqAllotted
-                              ? <p className="text-[10px] text-amber-600/60 tabular-nums">{snqFilled}/3 filled</p>
-                              : <span className="px-1 py-px rounded text-[8px] font-bold bg-amber-100 border border-amber-300 text-amber-600 leading-tight self-start">To be allotted</span>
+                              ? <p className="text-[10px] text-gray-500 tabular-nums">{snqFilled}/3 filled</p>
+                              : <span className="px-1 py-px rounded text-[8px] font-bold bg-amber-50 border border-amber-200 text-amber-500 leading-tight self-start">To be allotted</span>
                             }
                           </div>
 
@@ -1859,14 +1861,14 @@ const [barsReady, setBarsReady] = useState(false);
                             <div className="flex flex-col gap-0.5 pt-1 border-t border-white/60">
                               <div className="flex items-center justify-between gap-0.5">
                                 <div className="flex items-center gap-1 min-w-0">
-                                  <span className="text-[10px] font-bold uppercase tracking-wide text-sky-600">Lateral</span>
-                                  <span className="px-0.5 py-px rounded text-[8px] font-bold bg-sky-100 border border-sky-200 text-sky-500 leading-tight whitespace-nowrap">2Y</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-wide text-sky-500">Lateral</span>
+                                  <span className="px-0.5 py-px rounded text-[8px] font-bold bg-sky-50 border border-sky-200 text-sky-400 leading-tight whitespace-nowrap">2Y</span>
                                 </div>
-                                <span className={`text-[17px] font-black leading-none tabular-nums shrink-0 ${lateralPending === 0 ? 'text-emerald-600' : 'text-sky-600'}`}>
+                                <span className="text-[17px] font-black leading-none tabular-nums shrink-0 text-gray-900">
                                   <AnimNum value={lateralPending} />
                                 </span>
                               </div>
-                              <p className="text-[10px] text-sky-600/60 tabular-nums">{lateralFilled}/{lateralAllotted} filled</p>
+                              <p className="text-[10px] text-gray-500 tabular-nums">{lateralFilled}/{lateralAllotted} filled</p>
                             </div>
                           )}
 
