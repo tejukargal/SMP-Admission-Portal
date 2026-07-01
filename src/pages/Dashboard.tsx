@@ -2883,8 +2883,8 @@ const [barsReady, setBarsReady] = useState(false);
           threeA: acc.threeA + r.threeA, threeB: acc.threeB + r.threeB, sc: acc.sc + r.sc, st: acc.st + r.st, total: acc.total + r.total }),
         { gm: 0, c1: 0, twoA: 0, twoB: 0, threeA: 0, threeB: 0, sc: 0, st: 0, total: 0 }
       );
-      const tc = 'px-2 py-0.5 text-right tabular-nums';
-      const tl = 'px-2 py-0.5 text-left';
+      const tc = 'px-2.5 py-1 text-right tabular-nums text-xs';
+      const tl = 'px-2.5 py-1 text-left text-xs';
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCatModal(false)} aria-hidden="true" />
@@ -2899,28 +2899,28 @@ const [barsReady, setBarsReady] = useState(false);
                 <button onClick={() => setCatModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
               </div>
             </div>
-            <div className="p-3">
-              <table className="w-full text-[10px] border-collapse">
+            <div className="p-3 bg-white">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ background: 'linear-gradient(90deg, #065f46, #047857)' }}>
+                  <tr className="border-b-2 border-emerald-300">
                     {['Year','Course','GM','C1','2A','2B','3A','3B','SC','ST','Total'].map((h) => (
-                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                      <th key={h} className="px-2.5 py-1.5 text-emerald-800 font-bold whitespace-nowrap text-right text-[11px] uppercase tracking-wide [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {catRows.map((r, i) => r.isSubtotal ? (
-                    <tr key={i} className="text-white font-semibold" style={{ background: '#059669' }}>
+                    <tr key={i} className="font-semibold text-emerald-800 bg-emerald-50/80 border-y border-emerald-200">
                       <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
                       {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                     </tr>
                   ) : (
-                    <tr key={i} className="border-b border-emerald-50 hover:bg-white/40 transition-colors">
+                    <tr key={i} className="border-b border-gray-100 hover:bg-emerald-50/40 transition-colors">
                       <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
                       {[r.gm, r.c1, r.twoA, r.twoB, r.threeA, r.threeB, r.sc, r.st, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
                     </tr>
                   ))}
-                  <tr className="text-white font-bold" style={{ background: '#064e3b' }}>
+                  <tr className="text-white font-bold" style={{ background: '#047857' }}>
                     <td className={tl}>GRAND TOTAL</td><td className={tl} />
                     {[grand.gm, grand.c1, grand.twoA, grand.twoB, grand.threeA, grand.threeB, grand.sc, grand.st, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                   </tr>
@@ -2949,12 +2949,12 @@ const [barsReady, setBarsReady] = useState(false);
         (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
         { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
       );
-      const tc = 'px-2 py-0.5 text-right tabular-nums';
-      const tl = 'px-2 py-0.5 text-left';
+      const tc = 'px-2.5 py-1 text-right tabular-nums text-xs';
+      const tl = 'px-2.5 py-1 text-left text-xs';
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdmTypeModal(false)} aria-hidden="true" />
-          <div className="relative rounded-2xl border-2 border-sky-400 bg-sky-50 shadow-2xl w-full max-w-xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+          <div className="relative rounded-2xl border-2 border-sky-400 bg-sky-50 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-sky-300">
               <div className="flex items-center gap-2.5">
                 <span className="w-1 h-4 rounded-full shrink-0 bg-sky-400" />
@@ -2965,28 +2965,28 @@ const [barsReady, setBarsReady] = useState(false);
                 <button onClick={() => setAdmTypeModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
               </div>
             </div>
-            <div className="p-3">
-              <table className="w-full text-[10px] border-collapse">
+            <div className="p-3 bg-white">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ background: 'linear-gradient(90deg, #0c4a6e, #075985)' }}>
+                  <tr className="border-b-2 border-sky-300">
                     {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h) => (
-                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                      <th key={h} className="px-2.5 py-1.5 text-sky-800 font-bold whitespace-nowrap text-right text-[11px] uppercase tracking-wide [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {sumRows.map((r, i) => r.isSubtotal ? (
-                    <tr key={i} className="text-white font-semibold" style={{ background: '#0284c7' }}>
+                    <tr key={i} className="font-semibold text-sky-800 bg-sky-50/80 border-y border-sky-200">
                       <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
                       {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                     </tr>
                   ) : (
-                    <tr key={i} className="border-b border-sky-50 hover:bg-white/40 transition-colors">
+                    <tr key={i} className="border-b border-gray-100 hover:bg-sky-50/40 transition-colors">
                       <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
                       {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
                     </tr>
                   ))}
-                  <tr className="text-white font-bold" style={{ background: '#082f49' }}>
+                  <tr className="text-white font-bold" style={{ background: '#0369a1' }}>
                     <td className={tl}>GRAND TOTAL</td><td className={tl} />
                     {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                   </tr>
@@ -3002,8 +3002,8 @@ const [barsReady, setBarsReady] = useState(false);
     {catGenderModal && (() => {
       const CATS = ['GM','C1','2A','2B','3A','3B','SC','ST'] as const;
       type CatPair = { boys: number; girls: number };
-      const tc = 'px-1 py-0.5 text-right tabular-nums text-[9px]';
-      const tl = 'px-1.5 py-0.5 text-left text-[9px]';
+      const tc = 'px-1.5 py-1 text-right tabular-nums text-[10px]';
+      const tl = 'px-2 py-1 text-left text-[10px]';
       const rows = YEARS.flatMap((yr) => {
         const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
         const sub: Record<string, CatPair> = Object.fromEntries(CATS.map((c) => [c, { boys: 0, girls: 0 }]));
@@ -3040,47 +3040,47 @@ const [barsReady, setBarsReady] = useState(false);
                 <button onClick={() => setCatGenderModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
               </div>
             </div>
-            <div className="p-3">
-              <table className="w-full text-[9px] border-collapse">
+            <div className="p-3 bg-white">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ background: 'linear-gradient(90deg, #9f1239, #be123c)' }}>
-                    <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Year</th>
-                    <th rowSpan={2} className="px-1.5 py-1.5 text-white font-semibold text-left align-middle whitespace-nowrap border-r border-rose-700">Course</th>
+                  <tr className="bg-rose-50">
+                    <th rowSpan={2} className="px-2 py-1.5 text-rose-800 font-bold text-left align-middle whitespace-nowrap text-[11px] uppercase tracking-wide border-r border-rose-200">Year</th>
+                    <th rowSpan={2} className="px-2 py-1.5 text-rose-800 font-bold text-left align-middle whitespace-nowrap text-[11px] uppercase tracking-wide border-r border-rose-200">Course</th>
                     {CATS.map((cat) => (
-                      <th key={cat} colSpan={2} className="px-1 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">{cat}</th>
+                      <th key={cat} colSpan={2} className="px-1 py-1 text-rose-800 font-bold text-center whitespace-nowrap text-[11px] uppercase tracking-wide border-l border-rose-200">{cat}</th>
                     ))}
-                    <th colSpan={2} className="px-1 py-1.5 text-white font-semibold text-center whitespace-nowrap border-l border-rose-700">Total</th>
+                    <th colSpan={2} className="px-1 py-1 text-rose-800 font-bold text-center whitespace-nowrap text-[11px] uppercase tracking-wide border-l border-rose-200">Total</th>
                   </tr>
-                  <tr style={{ background: 'linear-gradient(90deg, #be123c, #e11d48)' }}>
+                  <tr className="bg-rose-50 border-b-2 border-rose-300">
                     {[...CATS, 'T' as const].flatMap((cat) => [
-                      <th key={`${cat}-b`} className="px-1 py-0.5 text-[8px] text-white/80 font-medium text-right border-l border-rose-600">B</th>,
-                      <th key={`${cat}-g`} className="px-1 py-0.5 text-[8px] text-white/80 font-medium text-right">G</th>,
+                      <th key={`${cat}-b`} className="px-1 py-1 text-[9px] text-rose-500 font-semibold text-right border-l border-rose-200">B</th>,
+                      <th key={`${cat}-g`} className="px-1 py-1 text-[9px] text-rose-500 font-semibold text-right">G</th>,
                     ])}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => r.isSubtotal ? (
-                    <tr key={i} className="text-white font-semibold" style={{ background: '#e11d48' }}>
+                    <tr key={i} className="font-semibold text-rose-800 bg-rose-50/80 border-y border-rose-200">
                       <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
                       {CATS.flatMap((cat) => [
-                        <td key={`${cat}-b`} className={tc + ' border-l border-rose-300'}>{r.cats[cat].boys}</td>,
+                        <td key={`${cat}-b`} className={tc + ' border-l border-rose-200'}>{r.cats[cat].boys}</td>,
                         <td key={`${cat}-g`} className={tc}>{r.cats[cat].girls}</td>,
                       ])}
-                      <td className={tc + ' border-l border-rose-300'}>{r.tB}</td>
+                      <td className={tc + ' border-l border-rose-200'}>{r.tB}</td>
                       <td className={tc}>{r.tG}</td>
                     </tr>
                   ) : (
-                    <tr key={i} className="border-b border-rose-50 hover:bg-white/40 transition-colors">
+                    <tr key={i} className="border-b border-gray-100 hover:bg-rose-50/40 transition-colors">
                       <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
                       {CATS.flatMap((cat) => [
-                        <td key={`${cat}-b`} className={tc + ' text-gray-700 border-l border-rose-50'}>{r.cats[cat].boys}</td>,
+                        <td key={`${cat}-b`} className={tc + ' text-gray-700 border-l border-gray-50'}>{r.cats[cat].boys}</td>,
                         <td key={`${cat}-g`} className={tc + ' text-gray-700'}>{r.cats[cat].girls}</td>,
                       ])}
                       <td className={tc + ' text-gray-800 font-semibold border-l border-rose-100'}>{r.tB}</td>
                       <td className={tc + ' text-gray-800 font-semibold'}>{r.tG}</td>
                     </tr>
                   ))}
-                  <tr className="text-white font-bold" style={{ background: '#4c0519' }}>
+                  <tr className="text-white font-bold" style={{ background: '#be123c' }}>
                     <td className={tl}>GRAND TOTAL</td><td className={tl} />
                     {CATS.flatMap((cat) => [
                       <td key={`${cat}-b`} className={tc + ' border-l border-rose-900'}>{grand.cats[cat].boys}</td>,
@@ -3099,8 +3099,8 @@ const [barsReady, setBarsReady] = useState(false);
 
     {/* ── Year & Course-wise Gender modal ──────────────────────────────────── */}
     {yearGenderModal && (() => {
-      const tc = 'px-2 py-0.5 text-right tabular-nums';
-      const tl = 'px-2 py-0.5 text-left';
+      const tc = 'px-2.5 py-1 text-right tabular-nums text-xs';
+      const tl = 'px-2.5 py-1 text-left text-xs';
       const rows = YEARS.flatMap((yr) => {
         const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
         const sub = { boys: 0, girls: 0, total: 0 };
@@ -3120,7 +3120,7 @@ const [barsReady, setBarsReady] = useState(false);
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setYearGenderModal(false)} aria-hidden="true" />
-          <div className="relative rounded-2xl border-2 border-teal-400 bg-teal-50 shadow-2xl w-full max-w-sm mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+          <div className="relative rounded-2xl border-2 border-teal-400 bg-teal-50 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-teal-300">
               <div className="flex items-center gap-2.5">
                 <span className="w-1 h-4 rounded-full shrink-0 bg-teal-400" />
@@ -3131,12 +3131,12 @@ const [barsReady, setBarsReady] = useState(false);
                 <button onClick={() => setYearGenderModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
               </div>
             </div>
-            <div className="p-3">
-              <table className="w-full text-[10px] border-collapse">
+            <div className="p-3 bg-white">
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr style={{ background: 'linear-gradient(90deg, #134e4a, #0f766e)' }}>
+                  <tr className="border-b-2 border-teal-300">
                     {['Year', 'Course', 'Boys', 'Girls', 'Total'].map((h) => (
-                      <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
+                      <th key={h} className="px-2.5 py-1.5 text-teal-800 font-bold whitespace-nowrap text-right text-[11px] uppercase tracking-wide [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -3144,20 +3144,20 @@ const [barsReady, setBarsReady] = useState(false);
                   {rows.map((r, i) => {
                     const c = courseConfig[r.course as Course];
                     return r.isSubtotal ? (
-                      <tr key={i} className="font-semibold" style={{ background: '#ccfbf1' }}>
-                        <td className={tl + ' text-teal-700 font-bold'}>{r.yrLabel}</td>
-                        <td className={tl + ' text-teal-600'} />
-                        {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-teal-800'}>{v}</td>)}
+                      <tr key={i} className="font-semibold text-teal-800 bg-teal-50/80 border-y border-teal-200">
+                        <td className={tl + ' font-bold'}>{r.yrLabel}</td>
+                        <td className={tl} />
+                        {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                       </tr>
                     ) : (
-                      <tr key={i} className="border-b border-teal-50 hover:bg-white/40 transition-colors">
+                      <tr key={i} className="border-b border-gray-100 hover:bg-teal-50/40 transition-colors">
                         <td className={tl + ' text-gray-400'}>{r.yrLabel}</td>
                         <td className={tl + ` ${c?.textColor ?? 'text-gray-700'} font-bold`}>{r.course}</td>
                         {[r.boys, r.girls, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
                       </tr>
                     );
                   })}
-                  <tr className="text-white font-bold" style={{ background: '#042f2e' }}>
+                  <tr className="text-white font-bold" style={{ background: '#0f766e' }}>
                     <td className={tl}>GRAND TOTAL</td><td className={tl} />
                     {[grand.boys, grand.girls, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
                   </tr>
