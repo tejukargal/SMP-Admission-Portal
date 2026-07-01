@@ -276,6 +276,7 @@ export function Dashboard() {
   const [admTypeModal, setAdmTypeModal] = useState(false);
   const [catGenderModal, setCatGenderModal] = useState(false);
   const [yearGenderModal, setYearGenderModal] = useState(false);
+  const [dateWiseModal, setDateWiseModal] = useState(false);
 
   // ── Collect Fee from dashboard search (admin only) ───────────────────────
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
@@ -1372,6 +1373,7 @@ const [barsReady, setBarsReady] = useState(false);
                   { label: 'Adm Type-wise',  border: 'border-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
                   { label: 'Cat & Gender',   border: 'border-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
                   { label: 'Year & Gender',  border: 'border-teal-300',    bg: 'bg-teal-50',    text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
+                  { label: 'Date-wise Adm',  border: 'border-violet-300',  bg: 'bg-violet-50',  text: 'text-violet-700',  fn: () => setDateWiseModal(true) },
                 ] as const).map(({ label, border, bg, text, fn }) => (
                   <button
                     key={label}
@@ -2170,75 +2172,6 @@ const [barsReady, setBarsReady] = useState(false);
                 </div>
               </div>
             </div>
-
-
-            {/* Date-wise Admission Course-wise Counts — full width */}
-            {(() => {
-              const grandTotal = dateTable.reduce((a, r) => a + r.total, 0);
-              const grandByCourse = COURSES.reduce((acc, c) => {
-                acc[c] = dateTable.reduce((a, r) => a + r.byCourse[c], 0);
-                return acc;
-              }, {} as Record<Course, number>);
-              const tc = 'px-2 py-1 text-right tabular-nums';
-              const tl = 'px-2 py-1 text-left';
-              function fmtDate(iso: string) {
-                const [y, m, d] = iso.split('-');
-                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                return `${d} ${months[parseInt(m) - 1]} ${y}`;
-              }
-              return (
-                <div className="bg-violet-50 rounded-2xl border border-violet-400 overflow-hidden" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}>
-                  <div
-                    className="px-4 py-1.5 border-b border-violet-100 flex items-center gap-2 flex-wrap cursor-pointer select-none"
-                    onDoubleClick={() => feeAcademicYear && exportDatewiseAdmissionsReport(dateTable, feeAcademicYear)}
-                    title="Double-click to export PDF"
-                  >
-                    <span className="w-1 h-3.5 rounded-full shrink-0 bg-violet-400" />
-                    <p className="text-xs font-semibold uppercase tracking-wider text-violet-700">Date-wise Admissions — Course Count</p>
-                    {feeAcademicYear && (
-                      <span className="text-[10px] font-semibold text-violet-500/70 whitespace-nowrap">
-                        {feeAcademicYear}{!academicYearFilter ? ' (current year)' : ''}
-                      </span>
-                    )}
-                  </div>
-                  {dateTable.length === 0 ? (
-                    <p className="px-4 py-6 text-xs text-gray-400 text-center">No admission fee payments recorded for this selection.</p>
-                  ) : (
-                    <div className="overflow-x-auto overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(5 * 30px + 60px)' }}>
-                      <table className="w-full text-[10px] border-collapse">
-                        <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                          <tr style={{ background: 'linear-gradient(90deg, #4c1d95, #5b21b6)' }}>
-                            {['Date', ...COURSES, 'Total'].map((h) => (
-                              <th key={h} className="px-2 py-1.5 text-white font-semibold whitespace-nowrap text-right [&:nth-child(1)]:text-left">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dateTable.map((r, i) => (
-                            <tr key={r.date} className={`border-b border-violet-50 hover:bg-violet-50/40 transition-colors ${i % 2 === 1 ? 'bg-violet-50/20' : ''}`}>
-                              <td className={tl + ' font-medium text-gray-700 whitespace-nowrap'}>{fmtDate(r.date)}</td>
-                              {COURSES.map((c) => (
-                                <td key={c} className={tc + ' text-gray-700'}>{r.byCourse[c]}</td>
-                              ))}
-                              <td className={tc + ' font-semibold text-gray-800'}>{r.total}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
-                          <tr className="text-white font-bold" style={{ background: '#2e1065' }}>
-                            <td className={tl}>GRAND TOTAL</td>
-                            {COURSES.map((c) => (
-                              <td key={c} className={tc}>{grandByCourse[c]}</td>
-                            ))}
-                            <td className={tc}>{grandTotal}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
           </div>
         </div>
@@ -3163,6 +3096,81 @@ const [barsReady, setBarsReady] = useState(false);
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Date-wise Admissions — Course Count modal ────────────────────────── */}
+    {dateWiseModal && (() => {
+      const grandTotal = dateTable.reduce((a, r) => a + r.total, 0);
+      const grandByCourse = COURSES.reduce((acc, c) => {
+        acc[c] = dateTable.reduce((a, r) => a + r.byCourse[c], 0);
+        return acc;
+      }, {} as Record<Course, number>);
+      const tc = 'px-2.5 py-1 text-right tabular-nums text-xs';
+      const tl = 'px-2.5 py-1 text-left text-xs';
+      function fmtDate(iso: string) {
+        const [y, m, d] = iso.split('-');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${d} ${months[parseInt(m) - 1]} ${y}`;
+      }
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDateWiseModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-violet-400 bg-violet-50 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-violet-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-violet-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-violet-700">Date-wise Admissions — Course Count</p>
+                {feeAcademicYear && (
+                  <span className="text-[10px] font-semibold text-violet-500/70 whitespace-nowrap">
+                    {feeAcademicYear}{!academicYearFilter ? ' (current year)' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => feeAcademicYear && exportDatewiseAdmissionsReport(dateTable, feeAcademicYear)} className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setDateWiseModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3 bg-white">
+              {dateTable.length === 0 ? (
+                <p className="px-4 py-6 text-xs text-gray-400 text-center">No admission fee payments recorded for this selection.</p>
+              ) : (
+                <div className="overflow-x-auto overflow-y-auto no-scrollbar max-h-[60vh]">
+                  <table className="w-full border-collapse">
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                      <tr className="bg-violet-50 border-b-2 border-violet-300">
+                        {['Date', ...COURSES, 'Total'].map((h) => (
+                          <th key={h} className="px-2.5 py-1.5 text-violet-800 font-bold whitespace-nowrap text-right text-[11px] uppercase tracking-wide [&:nth-child(1)]:text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateTable.map((r, i) => (
+                        <tr key={r.date} className={`border-b border-gray-100 hover:bg-violet-50/40 transition-colors ${i % 2 === 1 ? 'bg-violet-50/20' : ''}`}>
+                          <td className={tl + ' font-medium text-gray-700 whitespace-nowrap'}>{fmtDate(r.date)}</td>
+                          {COURSES.map((c) => (
+                            <td key={c} className={tc + ' text-gray-700'}>{r.byCourse[c]}</td>
+                          ))}
+                          <td className={tc + ' font-semibold text-gray-800'}>{r.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
+                      <tr className="text-white font-bold" style={{ background: '#5b21b6' }}>
+                        <td className={tl}>GRAND TOTAL</td>
+                        {COURSES.map((c) => (
+                          <td key={c} className={tc}>{grandByCourse[c]}</td>
+                        ))}
+                        <td className={tc}>{grandTotal}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

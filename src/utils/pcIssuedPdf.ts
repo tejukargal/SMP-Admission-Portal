@@ -24,6 +24,7 @@ export function exportPcIssuedPdf(rows: PcRow[], filters: {
   yearFilter: string;
   genderFilter: string;
   categoryFilter: string;
+  categoryGroupFilter: string;
   admTypeFilter: string;
   admCatFilter: string;
   searchTerm: string;
@@ -45,6 +46,7 @@ export function exportPcIssuedPdf(rows: PcRow[], filters: {
   if (filters.yearFilter)     chips.push(filters.yearFilter);
   if (filters.genderFilter)   chips.push(filters.genderFilter);
   if (filters.categoryFilter) chips.push(filters.categoryFilter);
+  if (filters.categoryGroupFilter) chips.push(filters.categoryGroupFilter);
   if (filters.admTypeFilter)  chips.push(filters.admTypeFilter);
   if (filters.admCatFilter)   chips.push(filters.admCatFilter);
   if (filters.searchTerm)     chips.push(`"${filters.searchTerm}"`);

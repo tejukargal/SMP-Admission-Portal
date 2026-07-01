@@ -8,6 +8,7 @@ export interface StudentReportFilters {
   yearFilter: string;
   genderFilter: string;
   categoryFilter: string;
+  categoryGroupFilter: string;
   admTypeFilter: string;
   admCatFilter: string;
   searchTerm: string;
@@ -51,6 +52,7 @@ export function exportStudentReportPdf(students: Student[], filters: StudentRepo
   if (filters.yearFilter)    chips.push(filters.yearFilter);
   if (filters.genderFilter)  chips.push(filters.genderFilter);
   if (filters.categoryFilter) chips.push(filters.categoryFilter);
+  if (filters.categoryGroupFilter) chips.push(filters.categoryGroupFilter);
   if (filters.admTypeFilter) chips.push(filters.admTypeFilter);
   if (filters.admCatFilter)  chips.push(filters.admCatFilter);
   if (filters.dateFrom || filters.dateTo) {

@@ -17,15 +17,19 @@ import { CERT_CLEAR_PASSKEY } from '../config/constants';
 import type { PCRecord } from '../services/pcService';
 import { clearPcHistory } from '../services/pcService';
 import { PageSpinner } from '../components/common/PageSpinner';
-import { ACADEMIC_YEARS } from '../types';
-import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear } from '../types';
+import { ColumnPickerDropdown } from '../components/common/ColumnPickerDropdown';
+import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue } from '../utils/studentColumns';
+import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } from '../utils/sortStudents';
+import { exportCustomStudentReportPdf } from '../utils/customStudentReportPdf';
+import { ACADEMIC_YEARS, CATEGORY_GROUPS, CATEGORY_GROUP_LABELS } from '../types';
+import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear, CategoryGroup } from '../types';
 
 const PAGE_SIZE = 100;
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list' | 'custom';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
@@ -34,9 +38,14 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'pc-issued',          label: 'PC Issued List'          },
   { value: 'allotted-category',  label: 'Allotted Category List'  },
   { value: 'student-list',       label: 'Student List'            },
+  { value: 'custom',             label: 'Custom Report'           },
 ];
 
 const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+
+const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
+  left: 'text-left', center: 'text-center', right: 'text-right',
+};
 
 function sortStudents(students: Student[]): Student[] {
   return [...students].sort((a, b) => {
@@ -281,12 +290,32 @@ export function StudentReports() {
   const [yearFilter,     setYearFilter]     = useState<Year | ''>('');
   const [genderFilter,   setGenderFilter]   = useState<Gender | ''>('');
   const [categoryFilter, setCategoryFilter] = useState<Category | ''>('');
+  const [categoryGroupFilter, setCategoryGroupFilter] = useState<CategoryGroup | ''>('');
   const [admTypeFilter,  setAdmTypeFilter]  = useState<AdmType | ''>('');
   const [admCatFilter,   setAdmCatFilter]   = useState<AdmCat | ''>('');
   const [dateFrom,       setDateFrom]       = useState('');
   const [dateTo,         setDateTo]         = useState('');
   const [tcYearFilter,   setTcYearFilter]   = useState<string>('ALL');
   const [pcYearFilter,   setPcYearFilter]   = useState<string>('ALL');
+
+  // ── Custom Report: columns + multi-level sort ────────────────────────────────
+  const [customColumns, setCustomColumns] = useState<Set<keyof Student>>(new Set(DEFAULT_CUSTOM_COLUMNS));
+  const [sortLevels, setSortLevels] = useState<SortLevel[]>([
+    { field: '', direction: 'asc' },
+    { field: '', direction: 'asc' },
+    { field: '', direction: 'asc' },
+  ]);
+  const orderedCustomColumns = useMemo(
+    () => STUDENT_COLUMNS.filter((c) => customColumns.has(c.key)),
+    [customColumns]
+  );
+  function setSortLevel(idx: number, patch: Partial<SortLevel>) {
+    setSortLevels((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  }
+  const sortDescription = sortLevels
+    .filter((l) => l.field)
+    .map((l) => `${SORT_FIELD_OPTIONS.find((o) => o.value === l.field)?.label} (${l.direction === 'asc' ? '↑' : '↓'})`)
+    .join(', ');
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [savingPdf,   setSavingPdf]   = useState(false);
@@ -319,6 +348,7 @@ export function StudentReports() {
     if (yearFilter)     result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)   result = result.filter((s) => s.gender === genderFilter);
     if (categoryFilter) result = result.filter((s) => s.category === categoryFilter);
+    if (categoryGroupFilter) result = result.filter((s) => CATEGORY_GROUPS[categoryGroupFilter].includes(s.category));
     if (admTypeFilter)  result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)   result = result.filter((s) => s.admCat === admCatFilter);
     if (dateFrom || dateTo) {
@@ -340,8 +370,8 @@ export function StudentReports() {
         s.studentMobile?.includes(q)
       );
     }
-    return sortStudents(result);
-  }, [allStudents, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch]);
+    return reportType === 'custom' ? sortByLevels(result, sortLevels) : sortStudents(result);
+  }, [allStudents, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch, reportType, sortLevels]);
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredStudents, reportType]);
 
@@ -360,6 +390,7 @@ export function StudentReports() {
     if (yearFilter)     filtered = filtered.filter((s) => s.year === yearFilter);
     if (genderFilter)   filtered = filtered.filter((s) => s.gender === genderFilter);
     if (categoryFilter) filtered = filtered.filter((s) => s.category === categoryFilter);
+    if (categoryGroupFilter) filtered = filtered.filter((s) => CATEGORY_GROUPS[categoryGroupFilter].includes(s.category));
     if (admTypeFilter)  filtered = filtered.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)   filtered = filtered.filter((s) => s.admCat === admCatFilter);
 
@@ -401,7 +432,7 @@ export function StudentReports() {
         )
       : rows;
     return result.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
-  }, [reportType, allStudentsForTC, tcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+  }, [reportType, allStudentsForTC, tcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, debouncedSearch]);
 
   // ── TC stats (unfiltered counts for header chips) ─────────────────────────────
   const tcStats = useMemo(() => {
@@ -425,6 +456,7 @@ export function StudentReports() {
     if (yearFilter)     filtered = filtered.filter((s) => s.year === yearFilter);
     if (genderFilter)   filtered = filtered.filter((s) => s.gender === genderFilter);
     if (categoryFilter) filtered = filtered.filter((s) => s.category === categoryFilter);
+    if (categoryGroupFilter) filtered = filtered.filter((s) => CATEGORY_GROUPS[categoryGroupFilter].includes(s.category));
     if (admTypeFilter)  filtered = filtered.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)   filtered = filtered.filter((s) => s.admCat === admCatFilter);
 
@@ -461,7 +493,7 @@ export function StudentReports() {
         )
       : rows;
     return result.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
-  }, [reportType, allStudentsForTC, pcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+  }, [reportType, allStudentsForTC, pcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, debouncedSearch]);
 
   // ── PC stats (unfiltered counts for header chips) ─────────────────────────────
   const pcStats = useMemo(() => {
@@ -476,20 +508,29 @@ export function StudentReports() {
     return { totalPCs, byCourse };
   }, [reportType, allStudentsForTC]);
 
+  const hasActiveSort = sortLevels.some((l) => !!l.field);
+
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!categoryFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo ||
+    !!categoryFilter || !!categoryGroupFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo ||
     (reportType === 'tc-issued' && tcYearFilter !== 'ALL') ||
-    (reportType === 'pc-issued' && pcYearFilter !== 'ALL');
+    (reportType === 'pc-issued' && pcYearFilter !== 'ALL') ||
+    (reportType === 'custom' && hasActiveSort);
 
   function clearFilters() {
     setSearchTerm(''); setDebouncedSearch('');
     setCourseFilter(''); setYearFilter('');
     setGenderFilter(''); setCategoryFilter('');
+    setCategoryGroupFilter('');
     setAdmTypeFilter(''); setAdmCatFilter('');
     setDateFrom(''); setDateTo('');
     setTcYearFilter('ALL');
     setPcYearFilter('ALL');
+    setSortLevels([
+      { field: '', direction: 'asc' },
+      { field: '', direction: 'asc' },
+      { field: '', direction: 'asc' },
+    ]);
   }
 
   // ── Stats (SNQ Allotment & WhatsApp Numbers) ──────────────────────────────────
@@ -506,6 +547,7 @@ export function StudentReports() {
 
   // ── Export: PDF ───────────────────────────────────────────────────────────────
   function handleExportPdf() {
+    const categoryGroupLabel = categoryGroupFilter ? CATEGORY_GROUP_LABELS[categoryGroupFilter] : '';
     setSavingPdf(true);
     setTimeout(() => {
       try {
@@ -516,6 +558,7 @@ export function StudentReports() {
             yearFilter,
             genderFilter,
             categoryFilter,
+            categoryGroupFilter: categoryGroupLabel,
             admTypeFilter,
             admCatFilter,
             searchTerm: debouncedSearch,
@@ -538,6 +581,7 @@ export function StudentReports() {
             yearFilter,
             genderFilter,
             categoryFilter,
+            categoryGroupFilter: categoryGroupLabel,
             admTypeFilter,
             admCatFilter,
             searchTerm: debouncedSearch,
@@ -549,6 +593,7 @@ export function StudentReports() {
             yearFilter,
             genderFilter,
             categoryFilter,
+            categoryGroupFilter: categoryGroupLabel,
             admTypeFilter,
             admCatFilter,
             searchTerm: debouncedSearch,
@@ -573,6 +618,19 @@ export function StudentReports() {
             admTypeFilter,
             admCatFilter,
             searchTerm: debouncedSearch,
+          });
+        } else if (reportType === 'custom') {
+          exportCustomStudentReportPdf(filteredStudents, orderedCustomColumns, {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            categoryFilter,
+            categoryGroupFilter: categoryGroupLabel,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+            sortDescription,
           });
         }
       } finally {
@@ -809,6 +867,21 @@ export function StudentReports() {
           if (pcYearFilter !== 'ALL') parts.push(pcYearFilter.replace(/[^0-9-]/g, ''));
           if (courseFilter)           parts.push(courseFilter);
           if (yearFilter)             parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'custom') {
+          const headers = ['Sl No', ...orderedCustomColumns.map((c) => c.label)];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            ...orderedCustomColumns.map((c) => formatColumnValue(c, s)),
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [{ wch: 6 }, ...orderedCustomColumns.map(() => ({ wch: 16 }))];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Custom Report');
+          const parts = ['custom_student_report'];
+          if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter)   parts.push(courseFilter);
+          if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         }
       } finally {
@@ -1146,6 +1219,13 @@ export function StudentReports() {
             <option value="3B">3B</option>
           </select>
 
+          <select className={fs} value={categoryGroupFilter} onChange={(e) => setCategoryGroupFilter(e.target.value as CategoryGroup | '')}>
+            <option value="">All Category Groups</option>
+            <option value="GM">{CATEGORY_GROUP_LABELS.GM}</option>
+            <option value="OBC">{CATEGORY_GROUP_LABELS.OBC}</option>
+            <option value="SC_ST">{CATEGORY_GROUP_LABELS.SC_ST}</option>
+          </select>
+
           <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
             <option value="">All Adm Types</option>
             <option value="REGULAR">REGULAR</option>
@@ -1182,6 +1262,49 @@ export function StudentReports() {
             </div>
           )}
 
+          {/* Column picker + sort — only for Custom Report */}
+          {reportType === 'custom' && (
+            <>
+              <ColumnPickerDropdown
+                columns={STUDENT_COLUMNS}
+                selected={customColumns}
+                onChange={setCustomColumns}
+              />
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Sort by</span>
+                {sortLevels.map((level, idx) => {
+                  const prevChosen = idx === 0 || !!sortLevels[idx - 1].field;
+                  const usedByOthers = sortLevels.filter((_, i) => i !== idx).map((l) => l.field);
+                  return (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      {idx > 0 && <span className="text-[10px] text-gray-400 whitespace-nowrap">then</span>}
+                      <select
+                        className={fs}
+                        value={level.field}
+                        disabled={!prevChosen}
+                        onChange={(e) => setSortLevel(idx, { field: e.target.value as SortableField | '' })}
+                      >
+                        <option value="">{idx === 0 ? 'Default' : '—'}</option>
+                        {SORT_FIELD_OPTIONS.filter((o) => !usedByOthers.includes(o.value)).map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <select
+                        className={fs}
+                        value={level.direction}
+                        disabled={!level.field}
+                        onChange={(e) => setSortLevel(idx, { direction: e.target.value as 'asc' | 'desc' })}
+                      >
+                        <option value="asc">Asc</option>
+                        <option value="desc">Desc</option>
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
           {/* Action buttons */}
           {hasActiveFilters && (
             <button
@@ -1192,7 +1315,7 @@ export function StudentReports() {
             </button>
           )}
 
-          {activeCount > 0 && (
+          {activeCount > 0 && (reportType !== 'custom' || orderedCustomColumns.length > 0) && (
             <>
               <button
                 onClick={handleExportPdf}
@@ -1224,6 +1347,10 @@ export function StudentReports() {
                 </button>
               )}
             </>
+          )}
+
+          {reportType === 'custom' && orderedCustomColumns.length === 0 && (
+            <span className="text-[11px] text-amber-600 font-medium">Select at least one column to preview/export.</span>
           )}
         </div>
       </div>
@@ -1603,6 +1730,67 @@ export function StudentReports() {
             )}
           </div>
         </div>
+      ) : reportType === 'custom' ? (
+        orderedCustomColumns.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            Select at least one column above to preview the report.
+          </div>
+        ) : (
+          /* ── Custom Report table ───────────────────────────────────────── */
+          <div
+            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-violet-100 overflow-auto flex flex-col"
+            style={{ boxShadow: '0 1px 4px 0 rgba(109,40,217,0.06)' }}
+          >
+            <table className="min-w-full divide-y divide-violet-50 text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'linear-gradient(90deg, #f5f3ff, #ede9fe)' }}>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-violet-200">#</th>
+                  {orderedCustomColumns.map((c) => (
+                    <th
+                      key={c.key}
+                      className={`px-3 py-2 font-bold text-gray-700 whitespace-nowrap border-b border-violet-200 ${ALIGN_CLASS[c.align]}`}
+                    >
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-violet-50/60">
+                {visibleStudents.map((s, idx) => (
+                  <tr
+                    key={s.id}
+                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-violet-50/40`}
+                  >
+                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                    {orderedCustomColumns.map((c) => (
+                      <td key={c.key} className={`px-3 py-2 text-gray-700 whitespace-nowrap ${ALIGN_CLASS[c.align]}`}>
+                        {formatColumnValue(c, s)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {hasMore && (
+                  <tr>
+                    <td colSpan={orderedCustomColumns.length + 1} className="px-3 py-2 text-center border-t border-violet-100/50">
+                      <button
+                        className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                      >
+                        Load more ({filteredStudents.length - visibleCount} remaining)
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <div className="px-3 py-2 border-t border-violet-50 text-xs text-gray-500 mt-auto">
+              Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+              {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
+                <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+              )}
+            </div>
+          </div>
+        )
       ) : (
         /* ── Allotted Category table ─────────────────────────────────────── */
         <div

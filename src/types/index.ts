@@ -12,6 +12,15 @@ export interface StaffUser {
 export type Gender = 'BOY' | 'GIRL';
 export type Religion = 'HINDU' | 'MUSLIM' | 'CHRISTIAN' | 'JAIN' | 'BUDDHIST' | 'SIKH';
 export type Category = 'SC' | 'ST' | 'C1' | '2A' | '2B' | '3A' | '3B' | 'GM';
+export type CategoryGroup = 'GM' | 'OBC' | 'SC_ST';
+export const CATEGORY_GROUPS: Record<CategoryGroup, Category[]> = {
+  GM: ['GM'],
+  OBC: ['2A', '2B', '3A', '3B', 'C1'],
+  SC_ST: ['SC', 'ST'],
+};
+export const CATEGORY_GROUP_LABELS: Record<CategoryGroup, string> = {
+  GM: 'GM', OBC: 'OBC', SC_ST: 'SC/ST',
+};
 export type Course = 'CE' | 'ME' | 'EC' | 'CS' | 'EE';
 export type Year = '1ST YEAR' | '2ND YEAR' | '3RD YEAR';
 export type AdmType = 'REGULAR' | 'REPEATER' | 'LATERAL' | 'EXTERNAL' | 'SNQ';
