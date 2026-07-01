@@ -347,3 +347,47 @@ export interface FeeRemittance {
   createdAt:   string;
   updatedAt:   string;
 }
+
+// ─── Exam Results (parsed from Result Ledger PDFs) ─────────────────────────────
+
+export interface ExamResultSubject {
+  sem: number;
+  code: string;
+  subject: string;
+  iaTrPr: string;      // raw "225/--/80" style string
+  result: 'P' | 'F';
+  credit: number;
+  grade: string;
+}
+
+export interface ExamResultSemesterSummary {
+  semester: number;           // 1..6
+  creditsApplied: number;
+  creditsEarned: number;
+  creditPoints: number;
+  sgpa: number | null;
+  attempts: number | null;
+}
+
+/** A single student's parsed result, from a course-wise Result Ledger PDF. */
+export interface ExamResult {
+  id: string;                      // `${regNumber}__${examSession slug}`
+  regNumber: string;
+  studentName: string;
+  parentName: string;
+  course: Course;
+  collegeCode: string;
+  examSession: string;             // "Apr/May-2026(26A)" as printed on the ledger
+  subjects: ExamResultSubject[];
+  semesterSummary: ExamResultSemesterSummary[];
+  creditsEarnedCumulative: number | null;
+  cgpa: number | null;
+  cgpaStatus: string;              // e.g. "Credit(s) Pending" when cgpa is non-numeric
+  percentageConversion: number | null;
+  overallResult: string;           // First Class / Second Class / Distinction / FAILS / etc.
+  studentId: string;               // '' if no matching student found
+  academicYear: string;            // '' if unmatched (AcademicYear string when matched)
+  year: string;                    // '' if unmatched (Year string when matched)
+  importedAt: string;              // ISO
+  updatedAt: string;               // ISO
+}

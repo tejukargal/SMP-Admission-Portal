@@ -59,6 +59,15 @@ function IconStudentReports() {
     </svg>
   );
 }
+function IconResults() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/>
+      <path d="M6 5h12v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/>
+      <path d="M9 13l2 2 4-4"/>
+    </svg>
+  );
+}
 function IconFee() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -114,6 +123,7 @@ const NAV_ITEMS = [
   { to: '/admissions',   label: 'Admissions',     Icon: IconAdmissions },
   { to: '/students',        label: 'Students',        Icon: IconStudents        },
   { to: '/student-reports', label: 'Student Reports', Icon: IconStudentReports  },
+  { to: '/results',         label: 'Results',         Icon: IconResults         },
 ];
 const ADMIN_ITEMS = [
   { to: '/fees',           label: 'Collect Fee',    Icon: IconFee          },

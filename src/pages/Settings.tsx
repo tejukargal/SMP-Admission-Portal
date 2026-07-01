@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents, deleteStudent, getStudentsByAcademicYear, getAllStudents, resetAcademicYearCounters } from '../services/studentService';
@@ -17,10 +18,11 @@ import { ExamFee } from './ExamFee';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
+import { ImportResults } from './ImportResults';
 import { BackupRestore } from './BackupRestore';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'staff' | 'messaging' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -29,6 +31,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'import-students', label: 'Import Students' },
   { id: 'import-fee', label: 'Import Fee Register' },
   { id: 'import-address', label: 'Import Address' },
+  { id: 'import-results', label: 'Import Results' },
   { id: 'staff', label: 'Staff Accounts' },
   { id: 'messaging', label: 'Messaging' },
   { id: 'backup', label: 'Backup & Restore' },
@@ -57,7 +60,10 @@ const ACADEMIC_YEAR_OPTIONS = [
 
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<Tab>('general');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'general';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   const { settings, loading, refetch } = useSettings();
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
@@ -1000,6 +1006,13 @@ export function Settings() {
         {activeTab === 'import-fee' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <ImportFeeRegister />
+          </div>
+        )}
+
+        {/* ── Import Results ── */}
+        {activeTab === 'import-results' && (
+          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
+            <ImportResults />
           </div>
         )}
 
