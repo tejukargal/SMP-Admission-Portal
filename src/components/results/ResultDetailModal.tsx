@@ -13,7 +13,7 @@ export function ResultDetailModal({ result, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col"
+        className="relative bg-white rounded-2xl shadow-2xl w-[720px] max-w-[calc(100vw-2rem)] h-[85vh] mx-4 flex flex-col"
         style={{ animation: 'modal-enter 0.2s ease-out' }}
       >
         {/* Header */}
@@ -40,7 +40,7 @@ export function ResultDetailModal({ result, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-5 overflow-y-auto">
+        <div className="px-5 py-4 space-y-5 overflow-y-auto flex-1 min-h-0">
 
           {/* Outcome summary */}
           <div className="flex flex-wrap gap-2">

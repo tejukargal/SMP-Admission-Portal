@@ -153,12 +153,15 @@ function parseBlock(block: string): RawResult | null {
     });
   }
 
-  // Semester summary grid — each row has 6 whitespace-separated numeric columns.
+  // Semester summary grid — each row has up to 6 numeric columns per semester.
+  // Some ledgers mark pending/backlog semesters with placeholders like "--" or
+  // "*" mixed in with the numbers, so pull out numeric tokens only rather than
+  // requiring the whole remainder of the line to be strictly numeric.
   function row6(label: string): string[] {
-    const re = new RegExp(`${label}\\s+([\\d.\\s()]+)$`, 'm');
+    const re = new RegExp(`${label}\\s+(.+)$`, 'm');
     const rm = block.match(re);
     if (!rm) return [];
-    return rm[1].trim().split(/\s+/);
+    return rm[1].match(/\d+(?:\.\d+)?/g) ?? [];
   }
 
   const creditsApplied = row6('Credits Applied').map(Number);

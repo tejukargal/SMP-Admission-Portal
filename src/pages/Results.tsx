@@ -8,10 +8,11 @@ import { ResultDetailModal } from '../components/results/ResultDetailModal';
 import { Button } from '../components/common/Button';
 import { RESULT_COLUMNS, DEFAULT_RESULT_COLUMNS, formatResultColumnValue, type ResultColumnKey } from '../utils/resultColumns';
 import { PageSpinner } from '../components/common/PageSpinner';
-import type { ExamResult, Course } from '../types';
+import type { ExamResult, Course, Year } from '../types';
 
 const PAGE_SIZE = 100;
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
+const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const RESULT_OPTIONS = ['First Class', 'Second Class', 'Distinction', 'FAILS'];
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   left: 'text-left',
@@ -40,6 +41,8 @@ export function Results() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState<Course | ''>('');
+  const [yearFilter, setYearFilter] = useState<Year | ''>('');
+  const [examSessionFilter, setExamSessionFilter] = useState<string>('');
   const [resultFilter, setResultFilter] = useState<string>('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [selectedColumns, setSelectedColumns] = useState<Set<ResultColumnKey>>(
@@ -52,9 +55,17 @@ export function Results() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  const examSessionOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of results) if (r.examSession) set.add(r.examSession);
+    return Array.from(set).sort();
+  }, [results]);
+
   const filteredResults = useMemo(() => {
     let out = results;
     if (courseFilter) out = out.filter((r) => r.course === courseFilter);
+    if (yearFilter) out = out.filter((r) => r.year === yearFilter);
+    if (examSessionFilter) out = out.filter((r) => r.examSession === examSessionFilter);
     if (resultFilter) out = out.filter((r) => r.overallResult === resultFilter);
     if (debouncedSearch) {
       const q = debouncedSearch.trim().toUpperCase();
@@ -62,8 +73,12 @@ export function Results() {
         (r) => r.regNumber.toUpperCase().includes(q) || r.studentName.toUpperCase().includes(q)
       );
     }
-    return out.slice().sort((a, b) => a.regNumber.localeCompare(b.regNumber));
-  }, [results, courseFilter, resultFilter, debouncedSearch]);
+    return out.slice().sort((a, b) => (
+      a.course.localeCompare(b.course) ||
+      a.year.localeCompare(b.year) ||
+      a.studentName.localeCompare(b.studentName)
+    ));
+  }, [results, courseFilter, yearFilter, examSessionFilter, resultFilter, debouncedSearch]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -81,12 +96,14 @@ export function Results() {
     return { courseCount, total: results.length };
   }, [results]);
 
-  const hasActiveFilters = !!searchTerm || !!courseFilter || !!resultFilter;
+  const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!examSessionFilter || !!resultFilter;
 
   function clearFilters() {
     setSearchTerm('');
     setDebouncedSearch('');
     setCourseFilter('');
+    setYearFilter('');
+    setExamSessionFilter('');
     setResultFilter('');
   }
 
@@ -192,6 +209,18 @@ export function Results() {
                 onChange={(v) => setCourseFilter(v as Course | '')}
                 placeholder="Course"
                 options={COURSES.map((c) => ({ value: c, label: c }))}
+              />
+              <FilterDropdown<Year | ''>
+                value={yearFilter}
+                onChange={(v) => setYearFilter(v as Year | '')}
+                placeholder="Year"
+                options={YEARS.map((y) => ({ value: y, label: y }))}
+              />
+              <FilterDropdown<string>
+                value={examSessionFilter}
+                onChange={setExamSessionFilter}
+                placeholder="Exam Session"
+                options={examSessionOptions.map((s) => ({ value: s, label: s }))}
               />
               <FilterDropdown<string>
                 value={resultFilter}

@@ -37,7 +37,7 @@ export const RESULT_COLUMNS: ResultColumnDef[] = [
 export const RESULT_COLUMN_GROUPS: ResultColumnGroup[] = ['Identity', 'Semester Summary', 'Outcome'];
 
 export const DEFAULT_RESULT_COLUMNS: ResultColumnKey[] = [
-  'regNumber', 'studentName', 'course', 'academicYear', 'cgpa', 'overallResult',
+  'regNumber', 'studentName', 'course', 'year', 'academicYear', 'examSession', 'cgpa', 'overallResult',
 ];
 
 export function formatResultColumnValue(col: ResultColumnDef, r: ExamResult): string {
