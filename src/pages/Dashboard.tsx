@@ -267,6 +267,7 @@ export function Dashboard() {
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
+  const [resultsStudent, setResultsStudent] = useState<Student | null>(null);
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
@@ -2187,6 +2188,14 @@ const [barsReady, setBarsReady] = useState(false);
       />
     )}
 
+    {resultsStudent && (
+      <StudentDetailModal
+        student={resultsStudent}
+        onClose={() => setResultsStudent(null)}
+        defaultTab="results"
+      />
+    )}
+
     {/* ── Collect Fee modal (admin, from dashboard search) ─────────────── */}
     {collectFeeStudent && (
       <FeeCollectionModal
@@ -2228,6 +2237,15 @@ const [barsReady, setBarsReady] = useState(false);
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
               </span>
               View Details
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-sky-50 hover:text-sky-900 flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setResultsStudent(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 group-hover:text-sky-600 transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><path d="M6 5h12v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 13l2 2 4-4"/></svg>
+              </span>
+              View Results
             </button>
             {isAdmin && (
               <button

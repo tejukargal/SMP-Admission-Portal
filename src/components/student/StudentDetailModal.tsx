@@ -4,10 +4,12 @@ import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
 import { getTcRecordsByStudent, type TCRecord } from '../../services/tcService';
 import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
+import { getExamResultsByRegNumber } from '../../services/resultService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
+import { ResultDetailModal } from '../results/ResultDetailModal';
 import type {
   Student, FeeRecord, FeeStructure, AcademicYear,
-  StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat, DocRecord,
+  StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat, DocRecord, ExamResult,
 } from '../../types';
 import { SMP_FEE_HEADS, REQUIRED_DOCS } from '../../types';
 
@@ -1018,9 +1020,105 @@ function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: bool
   );
 }
 
+// ─── Results tab ────────────────────────────────────────────────────────────────
+
+function resultBadgeClass(overallResult: string): string {
+  if (overallResult === 'FAILS') return 'bg-red-50 text-red-700 border-red-200';
+  if (overallResult === 'Distinction') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  return 'bg-blue-50 text-blue-700 border-blue-200';
+}
+
+function ResultsTab({ records, loading }: { records: ExamResult[]; loading: boolean }) {
+  const [selected, setSelected] = useState<ExamResult | null>(null);
+
+  if (loading) {
+    return (
+      <div className="px-6 py-5 space-y-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-gray-100 overflow-hidden">
+            <div className="h-10 bg-gray-50 animate-pulse" />
+            <div className="px-4 py-3 grid grid-cols-3 gap-3">
+              {[1,2,3,4,5,6].map((j) => <div key={j} className="h-6 bg-gray-100 rounded animate-pulse" />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-2xl">
+          📄
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-500">No Exam Results Found</p>
+          <p className="text-xs text-gray-400 mt-0.5">Results will appear here once imported for this student.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-sky-50 text-sky-700 border-sky-200">
+          {records.length} result{records.length > 1 ? 's' : ''} found
+        </span>
+      </div>
+
+      {/* Record cards */}
+      <div className="space-y-3">
+        {records.map((r) => (
+          <div
+            key={r.id}
+            className="rounded-xl border border-sky-200 border-l-4 border-l-sky-400 overflow-hidden shadow-sm"
+          >
+            {/* Card header */}
+            <div className="px-4 py-2.5 flex items-center justify-between bg-sky-50">
+              <span className="text-sm font-bold text-sky-800">{r.examSession}</span>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${resultBadgeClass(r.overallResult)}`}>
+                {r.overallResult}
+              </span>
+            </div>
+
+            {/* Card body */}
+            <div className="px-4 py-3 bg-white grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">CGPA</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.cgpa ?? (r.cgpaStatus || '—')}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">% Conversion</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.percentageConversion ?? 'Not Applicable'}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Credits (Cumulative)</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.creditsEarnedCumulative ?? '—'}</dd>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={() => setSelected(r)}
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-800 cursor-pointer"
+                >
+                  View Full Result →
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selected && <ResultDetailModal result={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc';
+type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results';
 
 const TAB_COLORS: Record<Tab, string> = {
   profile:   'border-blue-500 text-blue-600',
@@ -1028,6 +1126,7 @@ const TAB_COLORS: Record<Tab, string> = {
   fee:       'border-emerald-500 text-emerald-600',
   tc:        'border-purple-500 text-purple-600',
   pc:        'border-rose-500 text-rose-600',
+  results:   'border-sky-500 text-sky-600',
 };
 
 interface Props {
@@ -1057,6 +1156,11 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const [pcRecords, setPcRecords] = useState<PCRecord[]>([]);
   const [pcLoading, setPcLoading] = useState(false);
   const [pcLoaded,  setPcLoaded]  = useState(false);
+
+  // Exam results state — lazy-loaded on first visit to results tab
+  const [examResults, setExamResults] = useState<ExamResult[]>([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [resultsLoaded,  setResultsLoaded]  = useState(false);
 
 
   // Lazy-load fee history when fee tab first activated
@@ -1132,6 +1236,22 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, pcLoaded]);
 
+  // Lazy-load exam results when results tab first activated
+  useEffect(() => {
+    if (activeTab !== 'results' || resultsLoaded) return;
+    setResultsLoading(true);
+    (student.regNumber ? getExamResultsByRegNumber(student.regNumber) : Promise.resolve([] as ExamResult[]))
+      .then((records) => {
+        const sorted = [...records].sort((a, b) =>
+          (b.updatedAt || b.importedAt).localeCompare(a.updatedAt || a.importedAt)
+        );
+        setExamResults(sorted);
+      })
+      .catch(() => { /* non-fatal */ })
+      .finally(() => { setResultsLoading(false); setResultsLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, resultsLoaded]);
+
   // Escape to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -1167,6 +1287,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
     { id: 'fee',       label: 'Fee History' },
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
+    { id: 'results',   label: 'Results' },
   ];
   const tabs = defaultTab === 'profile'
     ? allTabs
@@ -1280,6 +1401,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           )}
           {activeTab === 'pc' && (
             <PcHistoryTab records={pcRecords} loading={pcLoading} />
+          )}
+          {activeTab === 'results' && (
+            <ResultsTab records={examResults} loading={resultsLoading} />
           )}
         </div>
 

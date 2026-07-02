@@ -307,7 +307,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="mx-3 h-px bg-emerald-100 mb-2" />
 
       {/* ── Nav ──────────────────────────────────────────────────────── */}
-      <nav className="flex-1 px-2 pb-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 px-2 pb-2 space-y-0.5 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
 
         {/* Main items */}
         {mainItems.map(({ to, label, Icon }) => (
