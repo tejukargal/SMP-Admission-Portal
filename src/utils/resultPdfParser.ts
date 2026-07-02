@@ -137,56 +137,80 @@ function parseBlock(block: string): RawResult | null {
   const parentName = headerM[3].trim();
 
   // Subject rows: "<sem> <code> <subject...> <ia/tr/pr> <P|F> <credit> <grade>"
+  // Long subject names wrap to a second line in the PDF (e.g. "OBJECT ORIENTED
+  // PROGRAMMING & DESIGN WITH" / "JAVA"); the IA/TR/PR..grade cells stay on the
+  // row's first line, so the wrapped word lands on its own orphan line right
+  // after. Detect those orphan lines and append them to the previous subject.
   const subjects: ExamResultSubject[] = [];
   const subjectRowRe =
-    /^(\d)\s+(\S+)\s+(.+?)\s+(\S+\/\S*\/\S*)\s+([PF])\s+(\d+)\s+(\S+)\s*$/gm;
-  let m: RegExpExecArray | null;
-  while ((m = subjectRowRe.exec(block)) !== null) {
-    subjects.push({
-      sem: parseInt(m[1], 10),
-      code: m[2].trim(),
-      subject: m[3].trim(),
-      iaTrPr: m[4].trim(),
-      result: m[5] as 'P' | 'F',
-      credit: parseInt(m[6], 10),
-      grade: m[7].trim(),
-    });
-  }
+    /^(\d)\s+(\S+)\s+(.+?)\s+(\S+\/\S*\/\S*)\s+([PF])\s+(\d+)\s+(\S+)\s*$/;
+  const nonSubjectLineRe =
+    /^(Sem\s+Code\s+Subject|Semester\b|Credits Applied|Credits Earned\(Cumulative\)|Credits Earned|Credit Points|SGPA \(Attempts\)|CGPA\b|% Conversion|Result\b)/;
 
-  // Semester summary grid — each row has up to 6 numeric columns per semester.
-  // Some ledgers mark pending/backlog semesters with placeholders like "--" or
-  // "*" mixed in with the numbers, so pull out numeric tokens only rather than
-  // requiring the whole remainder of the line to be strictly numeric.
-  function row6(label: string): string[] {
-    const re = new RegExp(`${label}\\s+(.+)$`, 'm');
-    const rm = block.match(re);
-    if (!rm) return [];
-    return rm[1].match(/\d+(?:\.\d+)?/g) ?? [];
-  }
-
-  const creditsApplied = row6('Credits Applied').map(Number);
-  const creditsEarned = row6('Credits Earned').map(Number);
-  const creditPoints = row6('Credit Points').map(Number);
-
-  // "SGPA (Attempts)" row: pairs like "5.89 (6)" repeated 6 times.
-  const sgpaLineM = block.match(/SGPA \(Attempts\)\s+(.+)/);
-  const sgpaPairs: { sgpa: number | null; attempts: number | null }[] = [];
-  if (sgpaLineM) {
-    const pairRe = /(\d+\.\d+)\s*\((\d+)\)/g;
-    let pm: RegExpExecArray | null;
-    while ((pm = pairRe.exec(sgpaLineM[1])) !== null) {
-      sgpaPairs.push({ sgpa: parseFloat(pm[1]), attempts: parseInt(pm[2], 10) });
+  for (const line of block.split('\n')) {
+    const m = line.match(subjectRowRe);
+    if (m) {
+      subjects.push({
+        sem: parseInt(m[1], 10),
+        code: m[2].trim(),
+        subject: m[3].trim(),
+        iaTrPr: m[4].trim(),
+        result: m[5] as 'P' | 'F',
+        credit: parseInt(m[6], 10),
+        grade: m[7].trim(),
+      });
+    } else if (subjects.length > 0 && line.trim() && !nonSubjectLineRe.test(line.trim())) {
+      subjects[subjects.length - 1].subject += ' ' + line.trim();
     }
   }
 
+  // Semester summary grid — each row has up to 6 columns, one per semester.
+  // Semesters not yet attempted (e.g. lateral-entry students skipping sem
+  // 1-2, or future semesters) are marked "--" in the ledger. That placeholder
+  // must be kept as a positional entry (not dropped) or every later semester's
+  // numbers shift left into the wrong column.
+  function row6(label: string): (number | null)[] {
+    const re = new RegExp(`${label}\\s+(.+)$`, 'm');
+    const rm = block.match(re);
+    if (!rm) return [];
+    const tokens = rm[1].match(/--|\d+(?:\.\d+)?/g) ?? [];
+    return tokens.map((t) => (t === '--' ? null : Number(t)));
+  }
+
+  const creditsApplied = row6('Credits Applied');
+  const creditsEarned = row6('Credits Earned');
+  const creditPoints = row6('Credit Points');
+
+  // "SGPA (Attempts)" row: pairs like "5.89 (6)" repeated per semester,
+  // with "--" placeholders for semesters not attempted.
+  const sgpaLineM = block.match(/SGPA \(Attempts\)\s+(.+)/);
+  const sgpaPairs: { sgpa: number | null; attempts: number | null }[] = [];
+  if (sgpaLineM) {
+    const pairRe = /--|(\d+\.\d+)\s*\((\d+)\)/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = pairRe.exec(sgpaLineM[1])) !== null) {
+      if (pm[0] === '--') {
+        sgpaPairs.push({ sgpa: null, attempts: null });
+      } else {
+        sgpaPairs.push({ sgpa: parseFloat(pm[1]), attempts: parseInt(pm[2], 10) });
+      }
+    }
+  }
+
+  const summaryLen = Math.max(
+    creditsApplied.length,
+    creditsEarned.length,
+    creditPoints.length,
+    sgpaPairs.length
+  );
+
   const semesterSummary: ExamResultSemesterSummary[] = [];
-  for (let i = 0; i < 6; i++) {
-    if (creditsApplied[i] === undefined) break;
+  for (let i = 0; i < summaryLen && i < 6; i++) {
     semesterSummary.push({
       semester: i + 1,
-      creditsApplied: creditsApplied[i] ?? 0,
-      creditsEarned: creditsEarned[i] ?? 0,
-      creditPoints: creditPoints[i] ?? 0,
+      creditsApplied: creditsApplied[i] ?? null,
+      creditsEarned: creditsEarned[i] ?? null,
+      creditPoints: creditPoints[i] ?? null,
       sgpa: sgpaPairs[i]?.sgpa ?? null,
       attempts: sgpaPairs[i]?.attempts ?? null,
     });

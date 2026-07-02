@@ -121,19 +121,19 @@ export function ResultDetailModal({ result, onClose }: Props) {
                     <tr>
                       <td className="px-3 py-1.5 text-gray-500">Credits Applied</td>
                       {result.semesterSummary.map((sem) => (
-                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditsApplied}</td>
+                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditsApplied ?? '--'}</td>
                       ))}
                     </tr>
                     <tr>
                       <td className="px-3 py-1.5 text-gray-500">Credits Earned</td>
                       {result.semesterSummary.map((sem) => (
-                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditsEarned}</td>
+                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditsEarned ?? '--'}</td>
                       ))}
                     </tr>
                     <tr>
                       <td className="px-3 py-1.5 text-gray-500">Credit Points</td>
                       {result.semesterSummary.map((sem) => (
-                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditPoints}</td>
+                        <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">{sem.creditPoints ?? '--'}</td>
                       ))}
                     </tr>
                     <tr>

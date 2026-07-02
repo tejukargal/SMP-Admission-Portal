@@ -362,9 +362,9 @@ export interface ExamResultSubject {
 
 export interface ExamResultSemesterSummary {
   semester: number;           // 1..6
-  creditsApplied: number;
-  creditsEarned: number;
-  creditPoints: number;
+  creditsApplied: number | null;  // null = not attempted ("--" in ledger)
+  creditsEarned: number | null;
+  creditPoints: number | null;
   sgpa: number | null;
   attempts: number | null;
 }

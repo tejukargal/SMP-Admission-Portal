@@ -29,11 +29,11 @@ const YR_SHORT: Record<string, string> = {
   '1ST YEAR': '1Y', '2ND YEAR': '2Y', '3RD YEAR': '3Y',
 };
 
-const KIND_LABEL: Record<EventKind, { label: string; cls: string }> = {
-  ENROLLED: { label: 'Enrolled',  cls: 'text-emerald-600' },
-  FEE_PAID: { label: 'Fee Paid',  cls: 'text-blue-600'    },
-  TC:       { label: 'TC Issued', cls: 'text-amber-600'   },
-  PC:       { label: 'PC Issued', cls: 'text-violet-600'  },
+const KIND_LABEL: Record<EventKind, { label: string; color: string }> = {
+  ENROLLED: { label: 'Enrolled',  color: '#4B5320' },
+  FEE_PAID: { label: 'Fee Paid',  color: '#9EA76B' },
+  TC:       { label: 'TC Issued', color: '#C9A227' },
+  PC:       { label: 'PC Issued', color: '#6B4F3B' },
 };
 
 const PER_KIND = 3;
@@ -55,15 +55,18 @@ function byDateDesc(a: ActivityEvent, b: ActivityEvent): number {
 
 function ColHd({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+    <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#4B5320', opacity: 0.55 }}>
       {children}
     </span>
   );
 }
 
-const CARD_BG     = '#ecfdf5';
-const CARD_BORDER = '#6ee7b7';
-const CARD_DIV    = '#a7f3d0';
+const MATCHA     = '#9EA76B';
+const MILKY      = '#EFE8CA';
+const DARK_OLIVE = '#4B5320';
+const CARD_BG    = MILKY;
+const CARD_BORDER = 'rgba(0,0,0,0.1)';
+const CARD_DIV    = 'rgba(75,83,32,0.15)';
 
 interface Props {
   students: Student[];
@@ -178,21 +181,21 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
     return (
       <div
         className="rounded-2xl h-full flex flex-col border p-4"
-        style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)' }}
+        style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
       >
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-3.5 rounded-full bg-emerald-200 shrink-0 animate-pulse" />
-          <div className="h-3.5 w-28 bg-emerald-100 rounded animate-pulse" />
+          <div className="w-1 h-3.5 rounded-full shrink-0 animate-pulse" style={{ background: MATCHA }} />
+          <div className="h-3.5 w-28 rounded animate-pulse" style={{ background: 'rgba(75,83,32,0.15)' }} />
         </div>
         <div className="border-t mb-2" style={{ borderColor: CARD_DIV }} />
         <div className="space-y-2.5 flex-1">
           {[...Array(7)].map((_, i) => (
             <div key={i} className="grid items-center" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
-              <div className="h-4 bg-emerald-100 rounded-full animate-pulse" />
-              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
-              <div className="h-3 w-5 bg-emerald-100 rounded animate-pulse" />
-              <div className="h-3 w-4 bg-emerald-100 rounded animate-pulse" />
-              <div className="h-3 bg-emerald-100 rounded animate-pulse" />
+              <div className="h-4 rounded-full animate-pulse" style={{ background: 'rgba(75,83,32,0.12)' }} />
+              <div className="h-3 rounded animate-pulse" style={{ background: 'rgba(75,83,32,0.12)' }} />
+              <div className="h-3 w-5 rounded animate-pulse" style={{ background: 'rgba(75,83,32,0.12)' }} />
+              <div className="h-3 w-4 rounded animate-pulse" style={{ background: 'rgba(75,83,32,0.12)' }} />
+              <div className="h-3 rounded animate-pulse" style={{ background: 'rgba(75,83,32,0.12)' }} />
             </div>
           ))}
         </div>
@@ -202,40 +205,37 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
 
   return (
     <div
-      className="rounded-2xl h-full flex flex-col border"
+      className="rounded-2xl h-full flex flex-col border overflow-hidden"
       style={{
         backgroundColor: CARD_BG,
         borderColor: CARD_BORDER,
-        boxShadow: '0 2px 8px 0 rgba(0,0,0,0.10), 0 1px 3px -1px rgba(0,0,0,0.06)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-3 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="w-1 h-3.5 rounded-full bg-emerald-400 shrink-0" />
+      {/* ── Header — solid matcha strip, separated by a dark hairline ────────── */}
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-black/10 shrink-0" style={{ background: MATCHA }}>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: MILKY }} />
           <div>
-            <p className="text-[13px] font-bold text-gray-800 leading-tight">Recent Activity</p>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+            <p className="text-[13px] font-bold text-white leading-tight">Recent Activity</p>
+            <p className="text-[10px] text-white/70 font-medium mt-0.5">
               {academicYear ? `${academicYear} · ` : ''}latest {PER_KIND} per type
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[9px] font-semibold">
-          <span className="text-emerald-600">Enrolled</span>
-          <span className="text-emerald-300">·</span>
-          <span className="text-blue-600">Fee</span>
-          <span className="text-emerald-300">·</span>
-          <span className="text-amber-600">TC</span>
-          <span className="text-emerald-300">·</span>
-          <span className="text-violet-600">PC</span>
+        <div className="flex items-center gap-2 text-[9px] font-semibold text-white/85">
+          <span>Enrolled</span>
+          <span className="text-white/40">·</span>
+          <span>Fee</span>
+          <span className="text-white/40">·</span>
+          <span>TC</span>
+          <span className="text-white/40">·</span>
+          <span>PC</span>
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="mx-4 shrink-0 border-t" style={{ borderColor: CARD_DIV }} />
-
       {/* ── Column headers ──────────────────────────────────────────────────── */}
-      <div className="grid px-3 py-2 shrink-0" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
+      <div className="grid px-3 pt-2.5 pb-2 shrink-0" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
         <ColHd>Type</ColHd>
         <ColHd>Student</ColHd>
         <ColHd>Crs</ColHd>
@@ -249,31 +249,31 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {events.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-1 py-6">
-            <p className="text-[12px] font-semibold text-emerald-400">No recent activity</p>
-            <p className="text-[10px] text-emerald-300 text-center">Appears here as students enroll or receive TC / PC</p>
+            <p className="text-[12px] font-semibold" style={{ color: DARK_OLIVE, opacity: 0.6 }}>No recent activity</p>
+            <p className="text-[10px] text-center" style={{ color: DARK_OLIVE, opacity: 0.45 }}>Appears here as students enroll or receive TC / PC</p>
           </div>
         ) : (
           <>
             {/* Slide — re-keyed on every cycleIdx change so page-enter fires in sync with bar chart */}
             <div
               key={cycleIdx}
-              className="flex-1 min-h-0 overflow-y-auto scroll-emerald px-3"
+              className="flex-1 min-h-0 overflow-y-auto px-3"
               style={{ animation: 'page-enter 0.28s ease-out' }}
             >
               {/* Date header for this slide */}
               {activeGroup && (
                 <div className="flex items-center gap-2 pt-2 pb-1.5">
-                  <span className="text-[13px] font-black text-emerald-700 leading-none">
+                  <span className="text-[13px] font-black leading-none" style={{ color: DARK_OLIVE }}>
                     {activeGroup.displayDate}
                   </span>
-                  <span className="w-px h-3 bg-emerald-200 shrink-0" />
-                  <span className="text-[9px] text-emerald-500 font-semibold uppercase tracking-wide">
+                  <span className="w-px h-3 shrink-0" style={{ background: CARD_DIV }} />
+                  <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: DARK_OLIVE, opacity: 0.65 }}>
                     {activeGroup.evs.length} event{activeGroup.evs.length !== 1 ? 's' : ''}
                   </span>
                   {numGroups > 1 && (
                     <>
-                      <span className="w-px h-3 bg-emerald-200 shrink-0" />
-                      <span className="text-[9px] text-emerald-400 font-medium">
+                      <span className="w-px h-3 shrink-0" style={{ background: CARD_DIV }} />
+                      <span className="text-[9px] font-medium" style={{ color: DARK_OLIVE, opacity: 0.45 }}>
                         {activeIdx + 1} / {numGroups}
                       </span>
                     </>
@@ -291,20 +291,20 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
                     : (ev.regNumber || '—');
                   return (
                     <div key={i} className="grid items-center py-1.5" style={{ gridTemplateColumns: GRID_COLS, gap: GRID_GAP }}>
-                      <span className={`text-[9px] font-semibold leading-tight truncate ${KIND_LABEL[ev.kind].cls}`}>
+                      <span className="text-[9px] font-semibold leading-tight truncate" style={{ color: KIND_LABEL[ev.kind].color }}>
                         {KIND_LABEL[ev.kind].label}
                       </span>
-                      <span className="text-[11px] font-semibold text-gray-700 truncate">
+                      <span className="text-[11px] font-semibold truncate" style={{ color: DARK_OLIVE }}>
                         {ev.name}
                       </span>
                       <div className="flex items-center gap-1 min-w-0">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
                         <span className={`text-[10px] font-bold ${ctxt}`}>{ev.course}</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-gray-400">
+                      <span className="text-[10px] font-semibold" style={{ color: DARK_OLIVE, opacity: 0.5 }}>
                         {YR_SHORT[ev.year] ?? ev.year}
                       </span>
-                      <span className="text-[9px] text-gray-400 font-mono truncate">
+                      <span className="text-[9px] font-mono truncate" style={{ color: DARK_OLIVE, opacity: 0.5 }}>
                         {secondary}
                       </span>
                     </div>
@@ -319,9 +319,13 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
                 {dateGroups.map((_, i) => (
                   <div
                     key={i}
-                    className={`rounded-full bg-emerald-400 transition-all duration-300 ${
-                      i === activeIdx ? 'w-4 h-2 opacity-90' : 'w-2 h-2 opacity-30'
-                    }`}
+                    className="rounded-full transition-all duration-300"
+                    style={{
+                      background: MATCHA,
+                      width: i === activeIdx ? 16 : 8,
+                      height: 8,
+                      opacity: i === activeIdx ? 0.9 : 0.35,
+                    }}
                   />
                 ))}
               </div>
