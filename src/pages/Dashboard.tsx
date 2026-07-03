@@ -1610,23 +1610,23 @@ const [barsReady, setBarsReady] = useState(false);
                 return (
                   <div
                     onClick={() => setIntakeModal(true)}
-                    className="col-span-2 rounded-2xl border border-gray-100 bg-white px-3.5 pt-3.5 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+                    className="col-span-2 rounded-2xl border px-3.5 pt-3.5 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#F5F3EC', borderColor: '#DCE3CB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     {/* Label (left) + year breakdown (right) */}
                     <div className="flex items-center justify-between mb-1.5 shrink-0">
                       <div className="flex items-center gap-2">
-                        <span className="w-1 h-3.5 rounded-full shrink-0 bg-green-400" />
-                        <p className="text-[13px] font-semibold uppercase tracking-wider text-gray-700 leading-none">Total</p>
-                        <span className="text-[13px] font-black text-gray-600 tabular-nums leading-none">{overallPct}%</span>
+                        <span className="w-1 h-3.5 rounded-full shrink-0" style={{ background: '#A8C686' }} />
+                        <p className="text-[13px] font-semibold uppercase tracking-wider leading-none" style={{ color: '#5D7042' }}>Total</p>
+                        <span className="text-[13px] font-black tabular-nums leading-none" style={{ color: '#5D7042' }}>{overallPct}%</span>
                       </div>
                       <div className="flex items-baseline gap-2">
                         {YEARS.map((yr, i) => {
                           const yrPct = Math.round((stats.byYear[yr] / YEAR_INTAKE) * 100);
                           return (
                             <span key={yr} className="flex items-baseline gap-0.5">
-                              <span className="text-[9px] font-semibold text-gray-400 leading-none">{i + 1}Y</span>
-                              <span className="text-[11px] font-bold text-gray-600 tabular-nums leading-none">{yrPct}%</span>
+                              <span className="text-[9px] font-semibold leading-none" style={{ color: '#9CAF88' }}>{i + 1}Y</span>
+                              <span className="text-[11px] font-bold tabular-nums leading-none" style={{ color: '#5D7042' }}>{yrPct}%</span>
                             </span>
                           );
                         })}
@@ -1643,8 +1643,9 @@ const [barsReady, setBarsReady] = useState(false);
                             return (
                               <div key={course} className="flex-1 flex flex-col justify-end items-center" style={{ height: 58 }}>
                                 <span
-                                  className="text-[10px] font-bold text-gray-600 tabular-nums leading-none mb-0.5"
+                                  className="text-[10px] font-bold tabular-nums leading-none mb-0.5"
                                   style={{
+                                    color: '#5D7042',
                                     opacity: barsReady ? 1 : 0,
                                     transition: barsReady ? `opacity 400ms ease-out ${i * 80 + 450}ms` : 'none',
                                   }}
@@ -1655,7 +1656,7 @@ const [barsReady, setBarsReady] = useState(false);
                                   style={{
                                     height: barH,
                                     width: '100%',
-                                    background: '#86efac',
+                                    background: '#A8C686',
                                     borderRadius: '3px 3px 0 0',
                                     transformOrigin: 'bottom',
                                     transform: barsReady ? 'scaleY(1)' : 'scaleY(0)',
@@ -1674,7 +1675,7 @@ const [barsReady, setBarsReady] = useState(false);
                       {COURSES.map((course) => {
                         return (
                           <div key={course} className="flex-1 flex flex-col items-center">
-                            <span className="text-[9px] font-bold text-gray-400 leading-none">{course}</span>
+                            <span className="text-[9px] font-bold leading-none" style={{ color: '#9CAF88' }}>{course}</span>
                           </div>
                         );
                       })}
@@ -1694,34 +1695,35 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('BOY')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown'); }}
-                    className="rounded-2xl border border-gray-100 bg-white p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+                    className="rounded-2xl border p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#F1FAFE', borderColor: '#BEE3F2', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400" />
-                      <p className="text-[13px] font-semibold uppercase tracking-wider text-gray-700">Boys</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0" style={{ background: '#0096C7' }} />
+                      <p className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: '#026C8C' }}>Boys</p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-bold leading-none text-gray-500">Total</span>
-                        <p className="text-3xl font-black leading-none text-gray-900"><AnimNum value={boysTotal} /></p>
+                        <span className="text-xs font-bold leading-none" style={{ color: '#4C93AC' }}>Total</span>
+                        <p className="text-3xl font-black leading-none" style={{ color: '#026C8C' }}><AnimNum value={boysTotal} /></p>
                       </div>
                       <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
-                        <SlotTicker label={boysBreakCourse} value={boysBreakVal} textColor="text-gray-700" />
+                        <SlotTicker label={boysBreakCourse} value={boysBreakVal} textColor="text-[#026C8C]" />
                       </div>
                     </div>
                     <div className="mt-auto pt-1.5 space-y-1">
-                      <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: '#D7EEF7' }}>
                         <div
-                          className="h-full w-full rounded-full bg-sky-400"
+                          className="h-full w-full rounded-full"
                           style={{
+                            background: '#0096C7',
                             transformOrigin: "left",
                             transform: barsReady ? `scaleX(${boysPct / 100})` : 'scaleX(0)',
                             transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
                           }}
                         />
                       </div>
-                      <p className="text-xs text-gray-400">{stats.total > 0 ? `${boysPct}% of total` : '—'}</p>
+                      <p className="text-xs" style={{ color: '#6FA6BC' }}>{stats.total > 0 ? `${boysPct}% of total` : '—'}</p>
                     </div>
                   </div>
                 );
@@ -1736,34 +1738,35 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('GIRL')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown'); }}
-                    className="rounded-2xl border border-gray-100 bg-white p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+                    className="rounded-2xl border p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#FFFDF7', borderColor: '#EFDCFF', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-1 h-3.5 rounded-full shrink-0 bg-rose-400" />
-                      <p className="text-[13px] font-semibold uppercase tracking-wider text-gray-700">Girls</p>
+                      <span className="w-1 h-3.5 rounded-full shrink-0" style={{ background: '#E3B5FF' }} />
+                      <p className="text-[13px] font-semibold uppercase tracking-wider" style={{ color: '#9B4FD9' }}>Girls</p>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-bold leading-none text-gray-500">Total</span>
-                        <p className="text-3xl font-black leading-none text-gray-900"><AnimNum value={girlsTotal} /></p>
+                        <span className="text-xs font-bold leading-none" style={{ color: '#C08CE8' }}>Total</span>
+                        <p className="text-3xl font-black leading-none" style={{ color: '#9B4FD9' }}><AnimNum value={girlsTotal} /></p>
                       </div>
                       <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-[0.42]">
-                        <SlotTicker label={girlsBreakCourse} value={girlsBreakVal} textColor="text-gray-700" />
+                        <SlotTicker label={girlsBreakCourse} value={girlsBreakVal} textColor="text-[#9B4FD9]" />
                       </div>
                     </div>
                     <div className="mt-auto pt-1.5 space-y-1">
-                      <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: '#F3E4FF' }}>
                         <div
-                          className="h-full w-full rounded-full bg-rose-400"
+                          className="h-full w-full rounded-full"
                           style={{
+                            background: '#E3B5FF',
                             transformOrigin: "left",
                             transform: barsReady ? `scaleX(${girlsPct / 100})` : 'scaleX(0)',
                             transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
                           }}
                         />
                       </div>
-                      <p className="text-xs text-gray-400">{stats.total > 0 ? `${girlsPct}% of total` : '—'}</p>
+                      <p className="text-xs" style={{ color: '#C9A6E6' }}>{stats.total > 0 ? `${girlsPct}% of total` : '—'}</p>
                     </div>
                   </div>
                 );
@@ -1801,7 +1804,7 @@ const [barsReady, setBarsReady] = useState(false);
                       >
                         <div className="flex items-center gap-1.5">
                           <span className={`w-2 h-2 rounded-full shrink-0 ${c.barFill}`} />
-                          <p className={`text-[13px] font-bold uppercase tracking-wider ${theme.text}`}>{course}</p>
+                          <p className={`text-[15px] font-bold uppercase tracking-wider ${theme.text}`}>{course}</p>
                         </div>
                         <span className={`text-[10px] font-bold tabular-nums ${theme.textMuted}`}>{pct}%</span>
                       </div>
