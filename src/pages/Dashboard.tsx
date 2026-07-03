@@ -32,6 +32,11 @@ const COURSE_BREAK_LABELS = ['Regular', 'Lateral', 'SNQ', 'Repeater'] as const;
 const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 
+// Hex equivalents of each course's accent color (courseConfig.barFill), needed for SVG ring strokes
+const COURSE_RING_HEX: Record<Course, string> = {
+  CE: '#fbbf24', ME: '#4ade80', EC: '#38bdf8', CS: '#2dd4bf', EE: '#a78bfa',
+};
+
 const fs =
   'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
@@ -97,90 +102,25 @@ function SlotTicker({ label, value, textColor }: { label: string; value: string 
   );
 }
 
-// ─── Stat card ───────────────────────────────────────────────────────────────
-interface StatCardProps {
-  label: string;
-  value: number;
-  total: number;
-  textColor: string;
-  barFill: string;
-  subText?: string;
-  breakdown?: { label: string; value: number }[];
-  className?: string;
-  highlightLabel?: boolean;
-  highlightBreakdown?: boolean;
-  watermark?: string;
-  onClick?: () => void;
-  onLabelDoubleClick?: () => void;
-  animated?: boolean;
-}
-
-function StatCard({ label, value, total, textColor, barFill, subText, breakdown, className = '', highlightLabel = false, highlightBreakdown = false, watermark, onClick, onLabelDoubleClick, animated = true }: StatCardProps) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+// ─── Circular fill ring (donut-style progress, replaces the linear seat bars) ─
+function SeatRing({ pct, color, ready, size = 36, stroke = 4 }: { pct: number; color: string; ready: boolean; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - (ready ? pct : 0) / 100);
   return (
-    <div
-      onClick={onClick}
-      className={`rounded-2xl border border-gray-100 bg-white p-3.5 flex flex-col gap-1 relative overflow-hidden ${className} ${onClick ? 'cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]' : ''}`}
-      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
-    >
-      {watermark && (
-        <span
-          aria-hidden="true"
-          className={`absolute -bottom-3 -right-2 text-7xl font-black leading-none select-none pointer-events-none ${textColor} opacity-[0.045]`}
-        >
-          {watermark}
-        </span>
-      )}
-      {highlightLabel ? (
-        <div
-          className={`flex items-center gap-2 ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
-          onDoubleClick={onLabelDoubleClick ? (e) => { e.stopPropagation(); onLabelDoubleClick(); } : undefined}
-          title={onLabelDoubleClick ? 'Double-click to export PDF' : undefined}
-        >
-          <span className={`w-1 h-3.5 rounded-full shrink-0 ${barFill}`} />
-          <p className={`text-[13px] font-semibold uppercase tracking-wider ${textColor}`}>{label}</p>
-        </div>
-      ) : (
-        <p
-          className={`text-[11px] font-bold uppercase tracking-widest text-gray-400/80 truncate leading-tight ${onLabelDoubleClick ? 'cursor-pointer select-none' : ''}`}
-          onDoubleClick={onLabelDoubleClick ? (e) => { e.stopPropagation(); onLabelDoubleClick(); } : undefined}
-          title={onLabelDoubleClick ? 'Double-click to export PDF' : undefined}
-        >
-          {label}
-        </p>
-      )}
-      <p className={`text-3xl font-black leading-none ${textColor}`}>
-        <AnimNum value={value} />
-      </p>
-      <div className="mt-auto pt-1.5 space-y-1">
-        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full w-full rounded-full ${barFill}`}
-            style={{
-              transformOrigin: 'left',
-              transform: animated ? `scaleX(${pct / 100})` : 'scaleX(0)',
-              transition: animated ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
-            }}
-          />
-        </div>
-        {breakdown ? (
-          <div className="flex flex-wrap gap-y-1 pt-0.5 items-center">
-            {breakdown.map((b, i) => (
-              <span key={b.label} className="flex items-center text-[10px] tabular-nums whitespace-nowrap">
-                {i > 0 && <span className="w-px h-3 bg-gray-200 mx-1.5 shrink-0" />}
-                {highlightBreakdown ? (
-                  <span className={`font-semibold ${textColor}`}>{b.label}</span>
-                ) : (
-                  <span className="text-gray-400 font-medium">{b.label}</span>
-                )}
-                <span className="font-bold text-gray-600 ml-1">{b.value}</span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-gray-400">{subText ?? (total > 0 ? `${pct}% of total` : '—')}</p>
-        )}
-      </div>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none"
+          stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={offset}
+          style={{ transition: ready ? 'stroke-dashoffset 800ms cubic-bezier(0.4,0,0.2,1)' : 'none' }}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold tabular-nums" style={{ color }}>
+        {pct}%
+      </span>
     </div>
   );
 }
@@ -1000,6 +940,15 @@ const [barsReady, setBarsReady] = useState(false);
     '3RD YEAR': { label: '3rd Year', bg: 'bg-teal-50',     border: 'border-teal-400',     textColor: 'text-teal-700',     barFill: 'bg-teal-400'     },
   };
 
+  // Card palette for "By Year of Study" tiles — styled like the Boys/Girls cards
+  // (pale tint background, light border, saturated bar accent, deep text colour),
+  // one distinct palette per year sourced from the requested colour swatches.
+  const yearCardTheme: Record<Year, { bg: string; border: string; bar: string; text: string; totalLabel: string; track: string; subText: string; headerBg: string }> = {
+    '1ST YEAR': { bg: '#FDF3F6', border: '#F2C4CE', bar: '#E17FA0', text: '#062045', totalLabel: '#7C6B85', track: '#F8DEE5', subText: '#8B7A94', headerBg: '#F6D9E2' },
+    '2ND YEAR': { bg: '#F8F4FF', border: '#E1D2FF', bar: '#B79CE0', text: '#5E4075', totalLabel: '#8B76A3', track: '#EDE1FF', subText: '#93839F', headerBg: '#EBDFFB' },
+    '3RD YEAR': { bg: '#FFF9F2', border: '#FFDDAF', bar: '#FFA657', text: '#B05F1D', totalLabel: '#C08A52', track: '#FFE9CC', subText: '#C79A6B', headerBg: '#FFEACB' },
+  };
+
 
   if (loading) return <LoadingGate />;
 
@@ -1796,15 +1745,14 @@ const [barsReady, setBarsReady] = useState(false);
                       className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]`}
                       style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
-                      {/* Elegant header — course code + share %, separated by a dark hairline */}
-                      <div
-                        className={`flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 ${theme.headerBg} cursor-pointer select-none relative z-10`}
-                        onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`); }}
-                        title="Double-click to export PDF"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${c.barFill}`} />
-                          <p className={`text-[15px] font-bold uppercase tracking-wider ${theme.text}`}>{course}</p>
+                      {/* Course badge — rounded label circle, top-left corner + share % */}
+                      <div className="flex items-center justify-between px-3.5 pt-3">
+                        <div
+                          className={`w-11 h-11 rounded-full flex items-center justify-center border border-black/10 ${theme.headerBg} cursor-pointer select-none shrink-0`}
+                          onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`); }}
+                          title="Double-click to export PDF"
+                        >
+                          <span className={`text-base font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
                         </div>
                         <span className={`text-[10px] font-bold tabular-nums ${theme.textMuted}`}>{pct}%</span>
                       </div>
@@ -1813,7 +1761,7 @@ const [barsReady, setBarsReady] = useState(false);
                       <div className="px-3.5 pt-2 pb-3 flex flex-col gap-1.5 relative z-10">
                         {/* Total (left, permanent) + cycling breakup (right, animated) */}
                         <div className="flex items-end justify-between">
-                          <p className={`text-3xl font-black leading-none tabular-nums ${theme.text}`}>{courseTotal}</p>
+                          <p className={`text-3xl font-black leading-none tabular-nums ${theme.text}`}><AnimNum value={courseTotal} /></p>
                           <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-60">
                             <SlotTicker label={breakLabel} value={displayValue} textColor={theme.text} />
                           </div>
@@ -1853,24 +1801,80 @@ const [barsReady, setBarsReady] = useState(false);
               <div className="grid grid-cols-3 gap-3">
                 {YEARS.map((year) => {
                   const y = yearConfig[year];
-                  const wm = year === '1ST YEAR' ? '1st' : year === '2ND YEAR' ? '2nd' : '3rd';
+                  const theme = yearCardTheme[year];
+                  const yearTotal = stats.byYear[year];
+                  const yearPct = stats.total > 0 ? Math.round((yearTotal / stats.total) * 100) : 0;
                   const yrShort = year === '1ST YEAR' ? '1st Yr' : year === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  const boysCount  = COURSES.reduce((sum, c) => sum + stats.byGenderByCourseByYear['BOY'][c][year], 0);
+                  const girlsCount = COURSES.reduce((sum, c) => sum + stats.byGenderByCourseByYear['GIRL'][c][year], 0);
                   return (
-                    <StatCard
+                    <div
                       key={year}
-                      label={y.label}
-                      value={stats.byYear[year]}
-                      total={stats.total}
-                      textColor={y.textColor}
-                      barFill={y.barFill}
-                      breakdown={COURSES.map((course) => ({ label: course, value: stats.byYearByCourse[year][course] }))}
-                      highlightLabel
-                      highlightBreakdown
-                      watermark={wm}
                       onClick={() => setYearModalYear(year)}
-                      onLabelDoubleClick={() => exportSummaryReport(confirmedStudents.filter((s) => s.year === year), displayYear, `${yrShort} — Admission Type-wise Count`)}
-                      animated={barsReady}
-                    />
+                      className="rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                      style={{ background: theme.bg, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+                    >
+                      {/* Header strip — label + share % */}
+                      <div
+                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 cursor-pointer select-none"
+                        style={{ background: theme.headerBg }}
+                        onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.year === year), displayYear, `${yrShort} — Admission Type-wise Count`); }}
+                        title="Double-click to export PDF"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: theme.bar }} />
+                          <p className="text-[13px] font-bold uppercase tracking-wider" style={{ color: theme.text }}>{y.label}</p>
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums" style={{ color: theme.text, opacity: 0.6 }}>{yearPct}%</span>
+                      </div>
+
+                      {/* Body */}
+                      <div className="px-3.5 pt-2.5 pb-3 flex flex-col gap-2">
+                        {/* Total + boys/girls split */}
+                        <div className="flex items-end justify-between gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.totalLabel }}>Total</span>
+                            <p className="text-3xl font-black leading-none tabular-nums" style={{ color: theme.text }}><AnimNum value={yearTotal} /></p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-black tabular-nums" style={{ color: theme.text }}>{boysCount}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: theme.subText }}>Boys</span>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#0096C7' }} />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-black tabular-nums" style={{ color: theme.text }}>{girlsCount}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: theme.subText }}>Girls</span>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#E3B5FF' }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Overall share bar */}
+                        <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: theme.track }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              background: theme.bar,
+                              transformOrigin: 'left',
+                              transform: barsReady ? `scaleX(${yearPct / 100})` : 'scaleX(0)',
+                              transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
+                            }}
+                          />
+                        </div>
+
+                        {/* Course-wise breakdown */}
+                        <div className="flex flex-wrap gap-y-1 items-center pt-0.5">
+                          {COURSES.map((course, i) => (
+                            <span key={course} className="flex items-center text-sm tabular-nums whitespace-nowrap">
+                              {i > 0 && <span className="w-px h-4 mx-2 shrink-0" style={{ background: theme.track }} />}
+                              <span className="font-semibold" style={{ color: theme.subText }}>{course}</span>
+                              <span className="font-bold ml-1.5" style={{ color: theme.text }}>{stats.byYearByCourse[year][course]}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1881,7 +1885,7 @@ const [barsReady, setBarsReady] = useState(false);
               <SectionLabel accent={{ bar: 'bg-amber-400', text: 'text-amber-700' }} onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}>{lateralAllotments !== null ? 'Pending Seats — 1st Yr & Lateral 2nd Yr' : '1st Year — Pending Seats'}</SectionLabel>
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
-                  const c = courseConfig[course];
+                  const theme = courseCardTheme[course];
                   const { nonSnqConfirmed, snqConfirmed } = stats.firstYearSeats[course];
                   const snqAllotted = snqConfirmed > 0;
 
@@ -1900,61 +1904,53 @@ const [barsReady, setBarsReady] = useState(false);
                   const lateralAllotted = lateralAllotments?.[course] ?? 0;
                   const lateralPending  = showLateral ? Math.max(0, lateralAllotted - lateralFilled) : 0;
 
-                  return (
-                    <div key={course} className="rounded-2xl border border-gray-100 bg-white p-3 flex flex-col gap-1.5 relative overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                  const rows: { label: string; badge?: string; pending: number; filled: number; total: number; ring: string }[] = [
+                    { label: 'Regular', pending: regularPending, filled: regularFilled, total: REGULAR_INTAKE, ring: COURSE_RING_HEX[course] },
+                    { label: 'SNQ', badge: snqAllotted ? undefined : 'To be allotted', pending: snqPending, filled: snqFilled, total: 3, ring: '#f59e0b' },
+                    ...(showLateral ? [{ label: 'Lateral', pending: lateralPending, filled: lateralFilled, total: lateralAllotted, ring: '#0ea5e9' }] : []),
+                  ];
 
-                      {/* Course header */}
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-1 h-3 rounded-full shrink-0 ${c.barFill}`} />
-                        <p className="text-[13px] font-semibold uppercase tracking-wider text-gray-900">{course}</p>
+                  return (
+                    <div key={course} className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden`} style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+
+                      {/* Header section — retains the strip, course badge matches By Course dimensions */}
+                      <div className={`flex items-center px-3.5 py-2 border-b border-black/10 ${theme.headerBg}`}>
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center border border-black/10 ${theme.cardBg} shrink-0`}>
+                          <span className={`text-base font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
+                        </div>
                       </div>
 
-                      {/* 2-column body */}
-                      <div className="flex gap-0 min-h-0">
-
-                        {/* Left — Regular */}
-                        <div className="flex flex-col gap-0.5 flex-1 pr-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Regular</span>
-                          <span className="text-2xl font-black leading-none tabular-nums text-gray-900">
-                            <AnimNum value={regularPending} />
-                          </span>
-                          <p className="text-[10px] tabular-nums text-gray-500">{regularFilled}/{REGULAR_INTAKE} filled</p>
-                        </div>
-
-                        {/* Right — SNQ + Lateral */}
-                        <div className="flex flex-col gap-1.5 flex-1 pl-2 border-l border-gray-100">
-
-                          {/* SNQ */}
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center justify-between gap-0.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-500">SNQ</span>
-                              <span className="text-[17px] font-black leading-none tabular-nums shrink-0 text-gray-900">
-                                <AnimNum value={snqPending} />
-                              </span>
-                            </div>
-                            {snqAllotted
-                              ? <p className="text-[10px] text-gray-500 tabular-nums">{snqFilled}/3 filled</p>
-                              : <span className="px-1 py-px rounded text-[8px] font-bold bg-amber-50 border border-amber-200 text-amber-500 leading-tight self-start">To be allotted</span>
-                            }
-                          </div>
-
-                          {/* Lateral */}
-                          {showLateral && (
-                            <div className="flex flex-col gap-0.5 pt-1 border-t border-gray-100">
-                              <div className="flex items-center justify-between gap-0.5">
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <span className="text-[10px] font-bold uppercase tracking-wide text-sky-500">Lateral</span>
-                                  <span className="px-0.5 py-px rounded text-[8px] font-bold bg-sky-50 border border-sky-200 text-sky-400 leading-tight whitespace-nowrap">2Y</span>
-                                </div>
-                                <span className="text-[17px] font-black leading-none tabular-nums shrink-0 text-gray-900">
-                                  <AnimNum value={lateralPending} />
-                                </span>
+                      {/* Body — one row per seat type, each with its own fill ring */}
+                      <div className="px-3.5 pt-2 pb-2.5 flex flex-col">
+                        {rows.map((row, i) => {
+                          const pct = row.total > 0 ? Math.min(100, Math.round((row.filled / row.total) * 100)) : 0;
+                          return (
+                            <div key={row.label} className={`flex items-center gap-2 ${i > 0 ? 'pt-1.5 mt-1.5 border-t border-black/10' : ''}`}>
+                              <div className="w-11 flex items-center justify-center shrink-0">
+                                {row.badge ? (
+                                  <div className="w-9 h-9 rounded-full border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'rgba(0,0,0,0.15)' }}>
+                                    <span className="text-[7px] font-bold text-amber-600 leading-none">N/A</span>
+                                  </div>
+                                ) : (
+                                  <SeatRing pct={pct} color={row.ring} ready={barsReady} size={36} stroke={4} />
+                                )}
                               </div>
-                              <p className="text-[10px] text-gray-500 tabular-nums">{lateralFilled}/{lateralAllotted} filled</p>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`text-[10px] font-bold uppercase tracking-wide ${theme.textMuted}`}>{row.label}</span>
+                                  <span className={`text-lg font-black leading-none tabular-nums ${theme.text}`}>
+                                    <AnimNum value={row.pending} />
+                                  </span>
+                                </div>
+                                {row.badge ? (
+                                  <span className="mt-1 inline-block px-1 py-px rounded text-[8px] font-bold bg-amber-50 border border-amber-200 text-amber-600 leading-tight">{row.badge}</span>
+                                ) : (
+                                  <p className={`text-[9px] tabular-nums mt-0.5 ${theme.textMuted}`}>{row.filled}/{row.total} filled</p>
+                                )}
+                              </div>
                             </div>
-                          )}
-
-                        </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
