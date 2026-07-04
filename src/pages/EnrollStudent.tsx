@@ -1047,9 +1047,6 @@ export function EnrollStudent() {
           await applyAdmCatFeeAdjustment(
             editId,
             form.academicYear,
-            form.course,
-            form.year,
-            form.admType,
             editOriginalAdmCat,
             form.admCat,
           );

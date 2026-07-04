@@ -20,6 +20,7 @@ import { CourseCompletionCertificateModal } from '../components/common/CourseCom
 import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
+import { SnqRefundModal } from '../components/common/SnqRefundModal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
 
@@ -106,6 +107,7 @@ export function Students() {
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
   const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
+  const [refundStudent, setRefundStudent] = useState<Student | null>(null);
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_students_filters_visible') === 'true');
 
   // ── Right-click context menu ──────────────────────────────────────────────
@@ -952,6 +954,17 @@ export function Students() {
                 Course Completion Certificate
               </button>
             )}
+            {isAdmin && contextMenu.student.admCat === 'SNQ' && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                onClick={() => { setRefundStudent(contextMenu.student); setContextMenu(null); }}
+              >
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+                </span>
+                SNQ Refund
+              </button>
+            )}
           </div>
         </div>
       </>
@@ -1039,6 +1052,13 @@ export function Students() {
       <AdmissionOrderModal
         student={admOrderStudent}
         onClose={() => setAdmOrderStudent(null)}
+      />
+    )}
+
+    {refundStudent && (
+      <SnqRefundModal
+        student={refundStudent}
+        onClose={() => setRefundStudent(null)}
       />
     )}
     </>

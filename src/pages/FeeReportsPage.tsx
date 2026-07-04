@@ -4,6 +4,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
+import { getRefundRecordsByAcademicYear, type RefundRecord } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
 import { Button } from '../components/common/Button';
 import * as XLSX from 'xlsx';
@@ -3577,6 +3578,20 @@ export function FeeReportsPage() {
     getFeeStructuresByAcademicYear(academicYear).then(setFeeStructures).catch(() => {});
   }, [academicYear]);
 
+  // SNQ refunds for the year — netted against SMP paid so a refunded student shows 0 due,
+  // and Paid totals in Fee List / Dues Report aren't inflated by refunded amounts.
+  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
+  useEffect(() => {
+    if (!academicYear) { setRefunds([]); return; }
+    getRefundRecordsByAcademicYear(academicYear).then(setRefunds).catch(() => {});
+  }, [academicYear]);
+
+  const refundedByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of refunds) map.set(r.studentId, (map.get(r.studentId) ?? 0) + r.refundAmount);
+    return map;
+  }, [refunds]);
+
   // Map: studentId → override (for O(1) lookup per student)
   const overrideByStudent = useMemo(
     () => new Map(feeOverrides.map((o) => [o.studentId, o])),
@@ -3645,15 +3660,22 @@ export function FeeReportsPage() {
       }
 
       const allotted   = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
-      const smpPaid    = smpPaidByStudent.get(s.id) ?? 0;
+      // SNQ refunds are netted against SMP paid: after a GM→SNQ concession refund the
+      // student's net paid matches the SNQ allotted, so due is exactly 0 and Paid totals
+      // aren't inflated by amounts already returned to the student.
+      const refunded   = refundedByStudent.get(s.id) ?? 0;
+      const smpPaid    = Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
       const svkPaid    = svkPaidByStudent.get(s.id) ?? 0;
       const paid       = smpPaid + svkPaid;
-      const smpBalance = smpAllotted !== null ? smpAllotted - smpPaid : null;
-      const svkBalance = svkAllotted !== null ? svkAllotted - svkPaid : null;
-      const balance    = allotted    !== null ? allotted    - paid    : null;
+      // Balances still clamped at 0 as a safety net: a student who paid more than currently
+      // allotted (e.g. a concession granted but not yet refunded) is fully settled, not
+      // "negative due" — and must never subtract from the cohort's total balance.
+      const smpBalance = smpAllotted !== null ? Math.max(0, smpAllotted - smpPaid) : null;
+      const svkBalance = svkAllotted !== null ? Math.max(0, svkAllotted - svkPaid) : null;
+      const balance    = allotted    !== null ? Math.max(0, allotted    - paid)    : null;
       return { student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance };
     }),
-  [allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent]);
+  [allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent, refundedByStudent]);
 
   // ── Stats for chips ───────────────────────────────────────────────────────
   const stats = useMemo(() => {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
+import { getRefundRecordsByStudent } from '../../services/refundService';
 import type { FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 
@@ -80,6 +81,8 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
   const [yearData, setYearData] = useState<YearData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // SNQ refunds per academic year — netted against paid so a refunded student shows 0 due, not negative
+  const [refundedByYear, setRefundedByYear] = useState<Map<string, number>>(new Map());
   const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
 
   function toggleDues(ay: string) {
@@ -160,6 +163,20 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
       .finally(() => setLoading(false));
   }, [student.id]);
 
+  // Load SNQ refunds (by current studentId) and group amounts by academic year
+  useEffect(() => {
+    let cancelled = false;
+    getRefundRecordsByStudent(student.id)
+      .then((refunds) => {
+        if (cancelled) return;
+        const map = new Map<string, number>();
+        for (const r of refunds) map.set(r.academicYear, (map.get(r.academicYear) ?? 0) + r.refundAmount);
+        setRefundedByYear(map);
+      })
+      .catch(() => { /* non-fatal — dues simply won't be netted */ });
+    return () => { cancelled = true; };
+  }, [student.id]);
+
   const overallAllotted = yearData.reduce((s, yd) => {
     const ev = effectiveValues(yd);
     return s + (ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : 0);
@@ -168,10 +185,14 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
     const ev = effectiveValues(yd);
     return s + (ev ? calcEffectiveFine(ev.smp.fine, yd.records) : 0);
   }, 0);
+  const overallRefunded = yearData.reduce(
+    (s, { academicYear }) => s + (refundedByYear.get(academicYear) ?? 0),
+    0,
+  );
   const overallPaid = yearData.reduce(
     (s, { records }) => s + records.reduce((rs, r) => rs + calcRecordTotal(r), 0),
     0,
-  );
+  ) - overallRefunded;
   const overallDue = overallAllotted - overallPaid;
 
   const headerGradient = loading
@@ -210,7 +231,8 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
             </h3>
             {!loading && !error && yearData.length > 0 && yearData.map((yd) => {
               const ev = effectiveValues(yd);
-              const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
+              const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0)
+                - (refundedByYear.get(yd.academicYear) ?? 0);
               const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, yd.records) : null;
               const due = allotted !== null ? allotted - paid : null;
               const noDues = due !== null && due <= 0;
@@ -306,7 +328,9 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
             yearData.map((yd, ydIdx) => {
               const { academicYear, records, structure, override } = yd;
               const ev = effectiveValues(yd);
-              const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
+              // SNQ refunds apply to the SMP component: net them out so due is 0 after refund, not negative
+              const refunded = refundedByYear.get(academicYear) ?? 0;
+              const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0) - refunded;
               const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, records) : null;
               const fine = ev ? calcEffectiveFine(ev.smp.fine, records) : 0;
               const due = allotted !== null ? allotted - totalPaid : null;
@@ -315,7 +339,8 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
               const svkBaseAllotted = ev?.svk ?? 0;
               const additionalAllotted = ev ? ev.additional.reduce((t, h) => t + h.amount, 0) : 0;
               const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
-              const smpPaid = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
+              const smpPaidRaw = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
+              const smpPaid = smpPaidRaw - refunded;
               const svkBasePaid = records.reduce((s, r) => s + r.svk, 0);
               const additionalPaidTotal = records.reduce(
                 (s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0),
@@ -324,6 +349,12 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
               const smpDue = smpAllotted - smpPaid;
               const svkDue = svkBaseAllotted - svkBasePaid;
               const additionalDue = additionalAllotted - additionalPaidTotal;
+              // SNQ students get a tuition concession (lower allotted SMP) that must be refunded.
+              // If they've paid more than the SNQ allotted SMP and no (or only a partial) refund
+              // has been issued yet, flag the outstanding refund so it isn't missed.
+              const pendingRefund = records[0].admCat === 'SNQ' && allotted !== null
+                ? Math.max(0, smpPaidRaw - smpAllotted - refunded)
+                : 0;
 
               return (
                 <div
@@ -349,6 +380,11 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
                           Custom Allotted
                         </span>
                       )}
+                      {refunded > 0 && (
+                        <span className="text-[10px] rounded-full bg-purple-100 border border-purple-200 px-2 py-0.5 text-purple-700 font-semibold shrink-0">
+                          Refunded ₹{refunded.toLocaleString()}
+                        </span>
+                      )}
                     </div>
 
                     {/* Right: stat metrics */}
@@ -371,6 +407,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
                               {smpPaid > 0 && `SMP ₹${smpPaid.toLocaleString()}`}
                               {svkBasePaid > 0 && ` · SVK ₹${svkBasePaid.toLocaleString()}`}
                               {additionalPaidTotal > 0 && ` · Addl ₹${additionalPaidTotal.toLocaleString()}`}
+                              {refunded > 0 && ` · net of ₹${refunded.toLocaleString()} refund`}
                             </span>
                           </div>
                           <div className="flex flex-col items-end pl-3">
@@ -402,6 +439,13 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
                       )}
                     </div>
                   </div>
+
+                  {pendingRefund > 0 && (
+                    <div className="px-4 py-2 bg-red-600 text-white text-xs font-bold flex items-center gap-2">
+                      <span>⚠</span>
+                      <span>SNQ Refund Pending: student has to be refunded ₹{pendingRefund.toLocaleString()} (voucher not yet generated)</span>
+                    </div>
+                  )}
 
                   {/* Receipts table */}
                   <div className="overflow-x-auto">

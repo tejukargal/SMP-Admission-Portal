@@ -148,6 +148,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── SNQ Fee Refunds ───────────────────────────────────────────────────
+    match /refunds/{refundId} {
+      allow read: if request.auth != null;
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+             'studentId', 'academicYear', 'refundAmount', 'paymentType', 'paymentDate'
+           ]);
+      allow delete: if isAdmin();
+    }
+
     // ── Public meta (pre-aggregated stats readable by anyone) ────────────
     // Only the publicStats document lives here; written by authenticated users,
     // read publicly so the login screen can display enrollment statistics.

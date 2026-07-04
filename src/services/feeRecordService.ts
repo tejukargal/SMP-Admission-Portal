@@ -11,11 +11,9 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmType, AdmCat, SMPFeeHead } from '../types';
-import { SMP_FEE_HEADS } from '../types';
+import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmCat } from '../types';
 
 const AIDED_COURSES = new Set<Course>(['CE', 'ME', 'EC', 'CS']);
-import { getFeeStructure } from './feeStructureService';
 
 const COL = 'feeRecords';
 
@@ -311,98 +309,97 @@ export async function applyCourseYearUpdate(
 }
 
 /**
- * When a student's Adm Cat is changed (e.g. GM → SNQ), adjusts existing fee
- * records for that student in the given academic year:
- *  - Zeros out any SMP heads that are 0 in the new fee structure but were > 0
- *    in the old one (e.g. Tuition for SNQ students).
- *  - Updates the `admCat` field on each record so FeeHistoryModal picks up the
- *    correct fee structure for display.
- *  - Appends an auto-generated remark describing what was changed.
+ * When a student's Adm Cat is changed (e.g. GM → SNQ), relabels the `admCat`
+ * field on all existing fee records for that student/year so Fee History /
+ * Fee Register "Due" calculations resolve against the new fee structure going
+ * forward. Never touches paid amounts (smp/svk/additionalPaid) — those always
+ * reflect exactly what was actually collected and receipted, and are the
+ * historical source of truth. Appends a short factual remark noting the change;
+ * any actual refund is handled separately via the SNQ Refund voucher.
  *
  * All updates are committed in a single batch write.
  */
 export async function applyAdmCatFeeAdjustment(
   studentId: string,
   academicYear: AcademicYear,
-  course: Course,
-  year: Year,
-  admType: AdmType,
   oldAdmCat: AdmCat,
   newAdmCat: AdmCat,
 ): Promise<void> {
-  const [oldStructure, newStructure] = await Promise.all([
-    getFeeStructure(academicYear, course, year, admType, oldAdmCat),
-    getFeeStructure(academicYear, course, year, admType, newAdmCat),
-  ]);
-
   const records = await getFeeRecordsByStudent(studentId, academicYear);
   if (records.length === 0) return;
 
-  // Heads where the new structure has 0 (i.e. the student no longer owes anything).
-  const headsToZero = new Set<SMPFeeHead>(
-    newStructure
-      ? (Object.entries(newStructure.smp) as [SMPFeeHead, number][])
-          .filter(([key, newAmt]) => newAmt === 0 && (oldStructure?.smp[key] ?? 0) > 0)
-          .map(([key]) => key)
-      : []
-  );
-
-  // ── Pre-compute aggregate paid totals before any mutation ────────
-  // Used to build a refund note showing what the student paid prior to
-  // the category change and how much is now due back to them.
-  let priorTotalPaid = 0;
-  const refundByHead = new Map<string, number>(); // head label → total zeroed amount
-  for (const record of records) {
-    priorTotalPaid +=
-      (Object.values(record.smp) as number[]).reduce((a, b) => a + b, 0) +
-      record.svk +
-      record.additionalPaid.reduce((a, h) => a + h.amount, 0);
-    for (const key of headsToZero) {
-      if (record.smp[key] > 0) {
-        const label = SMP_FEE_HEADS.find((h) => h.key === key)?.label ?? key;
-        refundByHead.set(label, (refundByHead.get(label) ?? 0) + record.smp[key]);
-      }
-    }
-  }
-  const totalRefund = [...refundByHead.values()].reduce((a, b) => a + b, 0);
-  const refundNote = totalRefund > 0
-    ? `Prior paid ₹${priorTotalPaid}; Refund due ₹${totalRefund}` +
-      ` (${[...refundByHead.entries()].map(([l, a]) => `${l} ₹${a}`).join(', ')})`
-    : '';
-
   const now = new Date().toISOString();
+  const changeNote = `Cat changed ${oldAdmCat}→${newAdmCat}`;
   const batch = writeBatch(db);
 
   for (const record of records) {
-    const updatedSmp = { ...record.smp };
-    const adjustments: string[] = [];
-
-    for (const key of headsToZero) {
-      if (updatedSmp[key] > 0) {
-        const paidAmt = updatedSmp[key];
-        updatedSmp[key] = 0;
-        const label = SMP_FEE_HEADS.find((h) => h.key === key)?.label ?? key;
-        adjustments.push(`${label} ₹${paidAmt}→₹0`);
-      }
-    }
-
-    const catNote = `Cat changed ${oldAdmCat}→${newAdmCat}`;
-    const changeDetail =
-      adjustments.length > 0
-        ? `${catNote}; ${adjustments.join(', ')} (auto-adjusted)`
-        : catNote;
-
-    const updatedRemarks = [record.remarks, changeDetail, refundNote]
-      .filter(Boolean)
-      .join('; ');
-
+    const updatedRemarks = record.remarks
+      ? `${record.remarks}; ${changeNote}`
+      : changeNote;
     batch.update(doc(db, COL, record.id), {
       admCat: newAdmCat,
-      smp: updatedSmp,
       remarks: updatedRemarks,
       updatedAt: now,
     });
   }
 
   await batch.commit();
+}
+
+/**
+ * Appends a short factual note to the `remarks` field of every fee record for a
+ * student/year — used after an SNQ refund voucher is generated so the refund
+ * (amount + date) is visible in Fee History / Fee Register alongside the
+ * original payment remarks, without touching the paid amounts themselves.
+ */
+export async function appendFeeRecordRemark(
+  studentId: string,
+  academicYear: AcademicYear,
+  note: string,
+): Promise<void> {
+  const records = await getFeeRecordsByStudent(studentId, academicYear);
+  if (records.length === 0) return;
+
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+
+  for (const record of records) {
+    const updatedRemarks = record.remarks ? `${record.remarks}; ${note}` : note;
+    batch.update(doc(db, COL, record.id), {
+      remarks: updatedRemarks,
+      updatedAt: now,
+    });
+  }
+
+  await batch.commit();
+}
+
+/**
+ * Removes a previously-appended note (added via {@link appendFeeRecordRemark}) from the
+ * `remarks` field of every fee record for a student/year — used when an SNQ refund record
+ * is deleted, so the "Refunded ₹X on DD/MM/YYYY" note doesn't linger after the refund itself
+ * is gone. Only removes the exact matching segment; leaves other remarks untouched.
+ */
+export async function removeFeeRecordRemark(
+  studentId: string,
+  academicYear: AcademicYear,
+  note: string,
+): Promise<void> {
+  const records = await getFeeRecordsByStudent(studentId, academicYear);
+  const now = new Date().toISOString();
+  const batch = writeBatch(db);
+  let hasUpdates = false;
+
+  for (const record of records) {
+    if (!record.remarks) continue;
+    const segments = record.remarks.split('; ').filter((s) => s !== note);
+    if (segments.length === record.remarks.split('; ').length) continue;
+    hasUpdates = true;
+    batch.update(doc(db, COL, record.id), {
+      remarks: segments.join('; '),
+      updatedAt: now,
+    });
+  }
+
+  if (hasUpdates) await batch.commit();
 }

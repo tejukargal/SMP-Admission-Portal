@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber } from '../../services/feeRecordService';
+import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber, removeFeeRecordRemark } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
 import { getTcRecordsByStudent, type TCRecord } from '../../services/tcService';
 import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
+import { getRefundRecordsByStudent, deleteRefundRecord, type RefundRecord } from '../../services/refundService';
+import { generateSnqRefundVoucher } from '../../utils/snqRefundVoucher';
+import { useAuth } from '../../contexts/AuthContext';
 import { getExamResultsByRegNumber } from '../../services/resultService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import { ResultDetailModal } from '../results/ResultDetailModal';
@@ -375,6 +378,7 @@ function FeeTab({
   overallFine,
   overallPaid,
   overallDue,
+  refundedByYear,
 }: {
   yearData: YearData[];
   loading: boolean;
@@ -383,6 +387,7 @@ function FeeTab({
   overallFine: number;
   overallPaid: number;
   overallDue: number;
+  refundedByYear: Map<string, number>;
 }) {
   const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
 
@@ -451,7 +456,9 @@ function FeeTab({
       {yearData.map((yd, ydIdx) => {
         const { academicYear, records, structure, override } = yd;
         const ev = effectiveValues(yd);
-        const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0);
+        // SNQ refunds apply to the SMP component: net them out so due is 0 after refund, not negative
+        const refunded = refundedByYear.get(academicYear) ?? 0;
+        const totalPaid = records.reduce((s, r) => s + calcRecordTotal(r), 0) - refunded;
         const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, records) : null;
         const fine = ev ? calcEffectiveFine(ev.smp.fine, records) : 0;
         const due = allotted !== null ? allotted - totalPaid : null;
@@ -460,7 +467,8 @@ function FeeTab({
         const svkBaseAllotted = ev?.svk ?? 0;
         const additionalAllotted = ev ? ev.additional.reduce((t, h) => t + h.amount, 0) : 0;
         const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
-        const smpPaid = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
+        const smpPaidRaw = records.reduce((s, r) => s + sumSMPRecord(r.smp), 0);
+        const smpPaid = smpPaidRaw - refunded;
         const svkBasePaid = records.reduce((s, r) => s + r.svk, 0);
         const additionalPaidTotal = records.reduce(
           (s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0),
@@ -469,6 +477,12 @@ function FeeTab({
         const smpDue = smpAllotted - smpPaid;
         const svkDue = svkBaseAllotted - svkBasePaid;
         const additionalDue = additionalAllotted - additionalPaidTotal;
+        // SNQ students get a tuition concession (lower allotted SMP) that must be refunded.
+        // If they've paid more than the SNQ allotted SMP and no (or only a partial) refund
+        // has been issued yet, flag the outstanding refund so it isn't missed.
+        const pendingRefund = records[0].admCat === 'SNQ' && allotted !== null
+          ? Math.max(0, smpPaidRaw - smpAllotted - refunded)
+          : 0;
 
         return (
           <div
@@ -490,6 +504,11 @@ function FeeTab({
                 {override && (
                   <span className="text-[10px] rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-amber-700 font-semibold shrink-0">
                     Custom Allotted
+                  </span>
+                )}
+                {refunded > 0 && (
+                  <span className="text-[10px] rounded-full bg-purple-100 border border-purple-200 px-2 py-0.5 text-purple-700 font-semibold shrink-0">
+                    Refunded ₹{refunded.toLocaleString()}
                   </span>
                 )}
               </div>
@@ -544,6 +563,13 @@ function FeeTab({
                 )}
               </div>
             </div>
+
+            {pendingRefund > 0 && (
+              <div className="px-4 py-2 bg-red-600 text-white text-xs font-bold flex items-center gap-2">
+                <span>⚠</span>
+                <span>SNQ Refund Pending: student has to be refunded ₹{pendingRefund.toLocaleString()} (voucher not yet generated)</span>
+              </div>
+            )}
 
             {/* Receipts table */}
             <div className="overflow-x-auto">
@@ -1020,6 +1046,217 @@ function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: bool
   );
 }
 
+// ─── Refund History tab ───────────────────────────────────────────────────────
+
+const REFUND_PAYMENT_LABELS: Record<string, string> = {
+  CHEQUE: 'Cheque',
+  ACCOUNT_PAYEE_CHEQUE: 'Account Payee Cheque',
+  NEFT: 'NEFT',
+  CASH: 'Cash',
+};
+
+function refundIsoToDDMMYYYY(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso;
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function RefundHistoryTab({ student, records, loading, error, onDeleted }: {
+  student: Student;
+  records: RefundRecord[];
+  loading: boolean;
+  error: string | null;
+  onDeleted: (id: string) => void;
+}) {
+  const { role } = useAuth();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  function handlePrint(r: RefundRecord) {
+    generateSnqRefundVoucher(student, {
+      totalPaid: r.totalPaid,
+      receiptBreakdown: r.receiptBreakdown,
+      refundAmount: r.refundAmount,
+      paymentType: r.paymentType,
+      referenceNumber: r.referenceNumber,
+      paymentDate: refundIsoToDDMMYYYY(r.paymentDate),
+      remarks: r.remarks,
+    });
+  }
+
+  async function handleDelete(r: RefundRecord) {
+    setDeletingId(r.id);
+    setDeleteError(null);
+    try {
+      await deleteRefundRecord(r.id);
+      // Remove the matching "Refunded ₹X on DD/MM/YYYY" note added when this refund was
+      // generated, so it doesn't linger on the fee records after the refund itself is gone.
+      const note = `Refunded ₹${r.refundAmount.toLocaleString()} on ${refundIsoToDDMMYYYY(r.paymentDate)}`;
+      removeFeeRecordRemark(student.id, r.academicYear, note).catch(() => { /* non-fatal */ });
+      onDeleted(r.id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete refund record');
+    } finally {
+      setDeletingId(null);
+      setPendingDeleteId(null);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="px-6 py-5 space-y-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-gray-100 overflow-hidden">
+            <div className="h-10 bg-gray-50 animate-pulse" />
+            <div className="px-4 py-3 grid grid-cols-3 gap-3">
+              {[1,2,3,4,5,6].map((j) => <div key={j} className="h-6 bg-gray-100 rounded animate-pulse" />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-2xl">
+          ⚠
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-red-600">Couldn't load refund history</p>
+          <p className="text-xs text-gray-400 mt-0.5">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-2xl">
+          ↩
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-500">No Refund Recorded</p>
+          <p className="text-xs text-gray-400 mt-0.5">SNQ fee refund vouchers will appear here once generated for this student.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const totalRefunded = records.reduce((s, r) => s + r.refundAmount, 0);
+
+  return (
+    <div className="px-5 py-4 space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-red-50 text-red-700 border-red-200">
+          {records.length} refund{records.length > 1 ? 's' : ''} · Total Refunded ₹{totalRefunded.toLocaleString()}
+        </span>
+      </div>
+
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+          <strong>Couldn't delete refund:</strong> {deleteError}
+        </div>
+      )}
+
+      {/* Record cards */}
+      <div className="space-y-3">
+        {records.map((r, idx) => (
+          <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-red-200 border-l-red-400">
+            {/* Card header */}
+            <div className="px-4 py-2.5 flex items-center justify-between bg-red-50">
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm font-bold text-red-800">
+                  ₹{r.refundAmount.toLocaleString()}
+                </span>
+                {idx === 0 && records.length > 1 && (
+                  <span className="text-[10px] text-gray-400 font-medium">· Latest</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">
+                  Issued {new Date(r.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handlePrint(r)}
+                  className="text-[10px] font-semibold px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors"
+                  title="Print refund voucher"
+                >
+                  🖨 Print Voucher
+                </button>
+                {role === 'admin' && (
+                  pendingDeleteId === r.id ? (
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(r)}
+                        disabled={deletingId === r.id}
+                        className="text-[10px] font-semibold px-2 py-1 rounded border border-red-300 bg-red-600 text-white hover:bg-red-700 cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === r.id ? 'Deleting…' : 'Confirm Delete'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteId(null)}
+                        disabled={deletingId === r.id}
+                        className="text-[10px] font-semibold px-2 py-1 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setPendingDeleteId(r.id); setDeleteError(null); }}
+                      className="text-[10px] font-semibold px-2 py-1 rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+                      title="Delete this refund record"
+                    >
+                      Delete
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Card body */}
+            <div className="px-4 py-3 bg-white grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Mode</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{REFUND_PAYMENT_LABELS[r.paymentType] ?? r.paymentType}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Reference No.</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.referenceNumber || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Payment Date</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">
+                  {r.paymentDate ? new Date(r.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SMP Paid (at issue)</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">₹{r.totalPaid.toLocaleString()}</dd>
+              </div>
+              {r.remarks && (
+                <div className="col-span-2 sm:col-span-4">
+                  <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Remarks</dt>
+                  <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.remarks}</dd>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Results tab ────────────────────────────────────────────────────────────────
 
 function resultBadgeClass(overallResult: string): string {
@@ -1118,7 +1355,7 @@ function ResultsTab({ records, loading }: { records: ExamResult[]; loading: bool
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results';
+type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results' | 'refund';
 
 const TAB_COLORS: Record<Tab, string> = {
   profile:   'border-blue-500 text-blue-600',
@@ -1127,6 +1364,7 @@ const TAB_COLORS: Record<Tab, string> = {
   tc:        'border-purple-500 text-purple-600',
   pc:        'border-rose-500 text-rose-600',
   results:   'border-sky-500 text-sky-600',
+  refund:    'border-red-500 text-red-600',
 };
 
 interface Props {
@@ -1161,6 +1399,12 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(false);
   const [resultsLoaded,  setResultsLoaded]  = useState(false);
+
+  // Refund history state — lazy-loaded on first visit to refund tab (SNQ students only)
+  const [refundRecords, setRefundRecords] = useState<RefundRecord[]>([]);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundLoaded,  setRefundLoaded]  = useState(false);
+  const [refundError,   setRefundError]   = useState<string | null>(null);
 
 
   // Lazy-load fee history when fee tab first activated
@@ -1252,6 +1496,27 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, resultsLoaded]);
 
+  // Load refund history eagerly — the Fee History tab also needs it to net
+  // SNQ refunds against paid amounts (so due shows 0 after refund, not negative).
+  useEffect(() => {
+    if (refundLoaded) return;
+    setRefundLoading(true);
+    setRefundError(null);
+    getRefundRecordsByStudent(student.id)
+      .then((records) => setRefundRecords(records))
+      .catch((err: unknown) => {
+        setRefundError(err instanceof Error ? err.message : 'Failed to load refund history');
+      })
+      .finally(() => { setRefundLoading(false); setRefundLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refundLoaded]);
+
+  // SNQ refund totals per academic year, netted into fee tab paid/due figures
+  const refundedByYear = new Map<string, number>();
+  for (const r of refundRecords) {
+    refundedByYear.set(r.academicYear, (refundedByYear.get(r.academicYear) ?? 0) + r.refundAmount);
+  }
+
   // Escape to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
@@ -1268,10 +1533,14 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
     const ev = effectiveValues(yd);
     return s + (ev ? calcEffectiveFine(ev.smp.fine, yd.records) : 0);
   }, 0);
+  const overallRefunded = yearData.reduce(
+    (s, { academicYear }) => s + (refundedByYear.get(academicYear) ?? 0),
+    0,
+  );
   const overallPaid = yearData.reduce(
     (s, { records }) => s + records.reduce((rs, r) => rs + calcRecordTotal(r), 0),
     0,
-  );
+  ) - overallRefunded;
   const overallDue = overallAllotted - overallPaid;
 
   // Header gradient: slate until fee loads, then green/red
@@ -1288,6 +1557,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
     { id: 'results',   label: 'Results' },
+    ...(student.admCat === 'SNQ' ? [{ id: 'refund' as Tab, label: 'Refund' }] : []),
   ];
   const tabs = defaultTab === 'profile'
     ? allTabs
@@ -1394,6 +1664,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
               overallFine={overallFine}
               overallPaid={overallPaid}
               overallDue={overallDue}
+              refundedByYear={refundedByYear}
             />
           )}
           {activeTab === 'tc' && (
@@ -1404,6 +1675,15 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           )}
           {activeTab === 'results' && (
             <ResultsTab records={examResults} loading={resultsLoading} />
+          )}
+          {activeTab === 'refund' && (
+            <RefundHistoryTab
+              student={student}
+              records={refundRecords}
+              loading={refundLoading}
+              error={refundError}
+              onDeleted={(id) => setRefundRecords((prev) => prev.filter((r) => r.id !== id))}
+            />
           )}
         </div>
 
