@@ -273,17 +273,17 @@ export function exportCategoryReport(students: Student[], academicYear: string, 
     bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
-      0:  { cellWidth: 22 },
-      1:  { cellWidth: 22 },
-      2:  { cellWidth: 15, halign: 'center' },
-      3:  { cellWidth: 15, halign: 'center' },
-      4:  { cellWidth: 15, halign: 'center' },
-      5:  { cellWidth: 15, halign: 'center' },
-      6:  { cellWidth: 15, halign: 'center' },
-      7:  { cellWidth: 15, halign: 'center' },
-      8:  { cellWidth: 15, halign: 'center' },
-      9:  { cellWidth: 15, halign: 'center' },
-      10: { cellWidth: 17, halign: 'center' },
+      0:  { cellWidth: 24 },
+      1:  { cellWidth: 24 },
+      2:  { cellWidth: 14.5, halign: 'center' },
+      3:  { cellWidth: 14.5, halign: 'center' },
+      4:  { cellWidth: 14.5, halign: 'center' },
+      5:  { cellWidth: 14.5, halign: 'center' },
+      6:  { cellWidth: 14.5, halign: 'center' },
+      7:  { cellWidth: 14.5, halign: 'center' },
+      8:  { cellWidth: 14.5, halign: 'center' },
+      9:  { cellWidth: 14.5, halign: 'center' },
+      10: { cellWidth: 18, halign: 'center' },
     },
     didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
@@ -329,11 +329,11 @@ export function exportGenderCourseYearReport(students: Student[], academicYear: 
     bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 30, halign: 'center' },
-      3: { cellWidth: 30, halign: 'center' },
-      4: { cellWidth: 30, halign: 'center' },
+      0: { cellWidth: 34 },
+      1: { cellWidth: 34 },
+      2: { cellWidth: 38, halign: 'center' },
+      3: { cellWidth: 38, halign: 'center' },
+      4: { cellWidth: 38, halign: 'center' },
     },
     didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
@@ -413,7 +413,7 @@ export function exportGenderCategoryReport(students: Student[], academicYear: st
       0: { cellWidth: 18 },
       1: { cellWidth: 14 },
       ...Object.fromEntries(
-        Array.from({ length: CATS.length * 2 + 2 }, (_, i) => [i + 2, { cellWidth: 12, halign: 'center' as const }])
+        Array.from({ length: CATS.length * 2 + 2 }, (_, i) => [i + 2, { cellWidth: 13.17, halign: 'center' as const }])
       ),
     },
     didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
@@ -459,11 +459,11 @@ export function exportDatewiseAdmissionsReport(
     bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
-      0: { cellWidth: 36 },
+      0: { cellWidth: 40 },
       ...Object.fromEntries(
-        COURSES.map((_, i) => [i + 1, { cellWidth: 22, halign: 'center' as const }])
+        COURSES.map((_, i) => [i + 1, { cellWidth: 24, halign: 'center' as const }])
       ),
-      [COURSES.length + 1]: { cellWidth: 24, halign: 'center' as const },
+      [COURSES.length + 1]: { cellWidth: 22, halign: 'center' as const },
     },
     didParseCell: themedRowStyler(theme, grandIdx),
   });
@@ -523,11 +523,11 @@ export function exportFirstYearSeatsReport(
     bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 30, halign: 'center' },
-      2: { cellWidth: 30, halign: 'center' },
-      3: { cellWidth: 30, halign: 'center' },
-      4: { cellWidth: 30, halign: 'center' },
+      0: { cellWidth: 38 },
+      1: { cellWidth: 36, halign: 'center' },
+      2: { cellWidth: 36, halign: 'center' },
+      3: { cellWidth: 36, halign: 'center' },
+      4: { cellWidth: 36, halign: 'center' },
     },
     didParseCell: themedRowStyler(theme, grandIdx),
   });

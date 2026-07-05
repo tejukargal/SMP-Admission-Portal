@@ -28,8 +28,6 @@ import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
-// Labels for the course-card flip cycle (4 adm types; total is always shown separately)
-const COURSE_BREAK_LABELS = ['Regular', 'Lateral', 'SNQ', 'Repeater'] as const;
 const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 const YEAR_INTAKE = 63 * COURSES.length; // 315 — total intake capacity per year across all courses
@@ -220,6 +218,7 @@ export function Dashboard() {
   const [intakeModal, setIntakeModal] = useState(false);
   const [catModal, setCatModal] = useState(false);
   const [admTypeModal, setAdmTypeModal] = useState(false);
+  const [admTypeDetailModal, setAdmTypeDetailModal] = useState<'LATERAL' | 'REPEATER' | 'SNQ' | null>(null);
   const [catGenderModal, setCatGenderModal] = useState(false);
   const [yearGenderModal, setYearGenderModal] = useState(false);
   const [dateWiseModal, setDateWiseModal] = useState(false);
@@ -228,7 +227,6 @@ export function Dashboard() {
   const [collectFeeStudent, setCollectFeeStudent] = useState<Student | null>(null);
 
   // ── Course card breakup flip (0=total, 1=REG, 2=LAT, 3=SNQ, 4=RPT) ──────
-  const [courseBreakIdx, setCourseBreakIdx] = useState(0);
   // ── Gender card breakup flip (cycles through COURSES: CE,ME,EC,CS,EE) ───
   const [genderBreakIdx, setGenderBreakIdx] = useState(0);
   // ── Bar chart mode flip (Total → Boys → Girls → Adm Type) ───────────────
@@ -742,22 +740,6 @@ const [barsReady, setBarsReady] = useState(false);
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
   }, [isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
-  // Cycle course-card breakup display; reset to total whenever the view resets
-  useEffect(() => {
-    if (!barsReady || isSearchMode) {
-      setCourseBreakIdx(0);
-      return;
-    }
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const delayId = setTimeout(() => {
-      intervalId = setInterval(() => setCourseBreakIdx((i) => (i + 1) % COURSE_BREAK_LABELS.length), 6000);
-    }, 1200);
-    return () => {
-      clearTimeout(delayId);
-      if (intervalId !== null) clearInterval(intervalId);
-    };
-  }, [barsReady, isSearchMode]);
-
   // Cycle gender-card breakup display through courses
   useEffect(() => {
     if (!barsReady || isSearchMode) {
@@ -941,13 +923,19 @@ const [barsReady, setBarsReady] = useState(false);
     EE: { cardBg: 'bg-violet-100', headerBg: 'bg-violet-200/80', track: 'bg-violet-900/10', text: 'text-violet-950', textMuted: 'text-violet-950/50' },
   };
 
-  // Hero-style theme for the dedicated Lateral / Repeater admission-type cards — modeled on
-  // the "Total Enrolled" tile (solid dark header strip + light body) so the pair reads as a
-  // distinct, higher-emphasis duo inside the otherwise compact "By Year of Study" row.
-  const admTypeCardTheme: Record<'LATERAL' | 'REPEATER', { bodyBg: string; headerBg: string; headerText: string; numColor: string; trackColor: string; barColor: string }> = {
+  // Hero-style theme for the dedicated Lateral / Repeater / SNQ admission-type cards — modeled on
+  // the "Total Enrolled" tile (solid dark header strip + light body) so the trio reads as a
+  // distinct, higher-emphasis set inside the otherwise compact "By Year of Study" / "By Course" rows.
+  const admTypeCardTheme: Record<'LATERAL' | 'REPEATER' | 'SNQ', { bodyBg: string; headerBg: string; headerText: string; numColor: string; trackColor: string; barColor: string }> = {
     LATERAL:  { bodyBg: '#D8BFD8', headerBg: '#563C5C', headerText: '#D8BFD8', numColor: '#563C5C', trackColor: '#C7A8C7', barColor: '#8C5F8C' },
     REPEATER: { bodyBg: '#F8F4EF', headerBg: '#40434E', headerText: '#F8F4EF', numColor: '#40434E', trackColor: '#ECE5D8', barColor: '#7B7F8C' },
+    SNQ:      { bodyBg: '#FBEEDC', headerBg: '#8A5A22', headerText: '#FBEEDC', numColor: '#8A5A22', trackColor: '#F0DDBB', barColor: '#B9812E' },
   };
+
+  // Shared adm-type key/label maps for the hero tiles + their detail modal (LATERAL/REPEATER match
+  // on admType; SNQ matches on admCat — see courseAdmTotals / stats.summaryTable classification).
+  const ADM_TYPE_ADM_KEY: Record<'LATERAL' | 'REPEATER' | 'SNQ', 'ltrl' | 'rptr' | 'snq'> = { LATERAL: 'ltrl', REPEATER: 'rptr', SNQ: 'snq' };
+  const ADM_TYPE_LABEL: Record<'LATERAL' | 'REPEATER' | 'SNQ', string> = { LATERAL: 'Lateral', REPEATER: 'Repeater', SNQ: 'SNQ' };
 
   const yearConfig: Record<Year, { label: string; bg: string; border: string; textColor: string; barFill: string }> = {
     '1ST YEAR': { label: '1st Year', bg: 'bg-lime-50',     border: 'border-lime-400',     textColor: 'text-lime-700',     barFill: 'bg-lime-400'     },
@@ -1739,18 +1727,9 @@ const [barsReady, setBarsReady] = useState(false);
             {/* By Course */}
             <div>
               <SectionLabel accent={{ bar: 'bg-emerald-500', text: 'text-emerald-700' }} onDoubleClick={() => exportSummaryReport(confirmedStudents, displayYear)}>By Course</SectionLabel>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-3 md:grid-cols-7 gap-3">
                 {COURSES.map((course) => {
-                  const c = courseConfig[course];
                   const courseTotal = stats.byCourse[course];
-                  const pct = stats.total > 0 ? Math.round((courseTotal / stats.total) * 100) : 0;
-                  const admTotals = courseAdmTotals[course];
-                  const displayValue =
-                    courseBreakIdx === 0 ? admTotals.regular
-                    : courseBreakIdx === 1 ? admTotals.ltrl
-                    : courseBreakIdx === 2 ? admTotals.snq
-                    : admTotals.rptr;
-                  const breakLabel = COURSE_BREAK_LABELS[courseBreakIdx];
                   const theme = courseCardTheme[course];
                   return (
                     <div
@@ -1759,53 +1738,108 @@ const [barsReady, setBarsReady] = useState(false);
                       className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]`}
                       style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
-                      {/* Course badge — rounded label circle, top-left corner + share % */}
+                      {/* Course badge — rounded label circle, top-left corner + total count */}
                       <div className="flex items-center justify-between px-3.5 pt-3">
                         <div
-                          className={`w-11 h-11 rounded-full flex items-center justify-center border border-black/10 ${theme.headerBg} cursor-pointer select-none shrink-0`}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center border border-black/10 ${theme.headerBg} cursor-pointer select-none shrink-0`}
                           onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`, COURSE_PDF_THEME[course]); }}
                           title="Double-click to export PDF"
                         >
-                          <span className={`text-base font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
+                          <span className={`text-sm font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
                         </div>
-                        <span className={`text-[10px] font-bold tabular-nums ${theme.textMuted}`}>{pct}%</span>
+                        <p className={`text-2xl font-black leading-none tabular-nums ${theme.text}`}><AnimNum value={courseTotal} /></p>
                       </div>
 
-                      {/* Body */}
-                      <div className="px-3.5 pt-2 pb-3 flex flex-col gap-1.5 relative z-10">
-                        {/* Total (left, permanent) + cycling breakup (right, animated) */}
-                        <div className="flex items-end justify-between">
-                          <p className={`text-3xl font-black leading-none tabular-nums ${theme.text}`}><AnimNum value={courseTotal} /></p>
-                          <div className="flex flex-col gap-0.5 items-center w-16 shrink-0 opacity-60">
-                            <SlotTicker label={breakLabel} value={displayValue} textColor={theme.text} />
-                          </div>
-                        </div>
-                        {/* Progress bar + year breakdown */}
-                        <div className="pt-1 space-y-1">
-                          <div className={`h-1.5 w-full ${theme.track} rounded-full overflow-hidden`}>
-                            <div
-                              className={`h-full w-full rounded-full ${c.barFill}`}
-                              style={{
-                                transformOrigin: 'left',
-                                transform: barsReady ? `scaleX(${pct / 100})` : 'scaleX(0)',
-                                transition: barsReady ? 'transform 800ms cubic-bezier(0.4,0,0.2,1)' : 'none',
-                              }}
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-y-1 items-center">
-                            {YEARS.map((yr, i) => (
-                              <span key={yr} className="flex items-center text-xs tabular-nums whitespace-nowrap">
-                                {i > 0 && <span className="w-px h-3 bg-black/10 mx-1.5 shrink-0" />}
-                                <span className={`font-semibold ${theme.textMuted}`}>{i + 1}Y</span>
-                                <span className={`font-bold ml-1 ${theme.text}`}>{stats.byCourseByYear[course][yr]}</span>
-                              </span>
-                            ))}
-                          </div>
+                      {/* Body — year-wise counts, plain rows like the Pending Seats cards (no rings) */}
+                      <div className="flex-1 px-3.5 pt-2 pb-2.5 flex flex-col relative z-10">
+                        <div className="mt-auto flex flex-col">
+                          {YEARS.map((yr, i) => (
+                            <div key={yr} className={`flex items-center justify-between gap-1 ${i > 0 ? 'pt-1.5 mt-1.5 border-t border-black/10' : ''}`}>
+                              <span className={`text-[10px] font-bold uppercase tracking-wide ${theme.textMuted}`}>{i + 1}Y</span>
+                              <span className={`text-lg font-black leading-none tabular-nums ${theme.text}`}>{stats.byCourseByYear[course][yr]}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
                   );
                 })}
+
+                {/* SNQ — hero-style tile (year & course-wise), modeled on the Lateral / Repeater tiles */}
+                {(() => {
+                  const key = 'SNQ' as const;
+                  const admKey = ADM_TYPE_ADM_KEY[key];
+                  const label = ADM_TYPE_LABEL[key];
+                  const theme = admTypeCardTheme[key];
+                  const total = COURSES.reduce((a, c) => a + courseAdmTotals[c][admKey], 0);
+                  const pct = stats.total > 0 ? Math.round((total / stats.total) * 100) : 0;
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => setAdmTypeDetailModal(key)}
+                      className="col-span-2 rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                      style={{ background: theme.bodyBg, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
+                    >
+                      {/* Solid header strip — mirrors the Total Enrolled tile */}
+                      <div
+                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 cursor-pointer select-none"
+                        style={{ background: theme.headerBg }}
+                        onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.admCat === 'SNQ'), displayYear, `${label} — Year & Course-wise Count`); }}
+                        title="Double-click to export PDF"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: theme.headerText }} />
+                          <p className="text-[13px] font-bold uppercase tracking-wider" style={{ color: theme.headerText }}>{label}</p>
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums whitespace-nowrap" style={{ color: theme.headerText, opacity: 0.7 }}>{pct}% of total</span>
+                      </div>
+
+                      {/* Body — total on the left, year × course table filling the rest */}
+                      <div className="flex-1 flex items-stretch px-3.5 py-3 gap-3">
+                        <div className="flex flex-col justify-center shrink-0">
+                          <p className="text-4xl font-black leading-none tabular-nums" style={{ color: theme.numColor }}><AnimNum value={total} /></p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide mt-1" style={{ color: theme.numColor, opacity: 0.7 }}>Total</p>
+                        </div>
+                        <div className="w-px bg-black/15 shrink-0" />
+                        <div className="flex-1 flex flex-col justify-end gap-1 min-w-0">
+                          {/* Course header row */}
+                          <div className="grid items-center gap-x-1" style={{ gridTemplateColumns: '24px repeat(5, 1fr)' }}>
+                            <span />
+                            {COURSES.map((course) => (
+                              <span key={course} className="text-[9px] font-bold uppercase tracking-wide text-center" style={{ color: theme.numColor, opacity: 0.55 }}>{course}</span>
+                            ))}
+                          </div>
+                          {/* Year rows */}
+                          {YEARS.map((yr, i) => (
+                            <div key={yr} className="grid items-center gap-x-1" style={{ gridTemplateColumns: '24px repeat(5, 1fr)' }}>
+                              <span className="text-[9px] font-semibold" style={{ color: theme.numColor, opacity: 0.55 }}>{i + 1}Y</span>
+                              {COURSES.map((course) => {
+                                const v = stats.summaryTable[yr]?.[course]?.[admKey] ?? 0;
+                                return (
+                                  <span key={course} className="text-[12px] font-bold tabular-nums text-center" style={{ color: theme.numColor }}>
+                                    {v === 0 ? '·' : v}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ))}
+                          {/* Total row */}
+                          <div className="grid items-center gap-x-1 pt-1 mt-0.5 border-t" style={{ gridTemplateColumns: '24px repeat(5, 1fr)', borderColor: theme.trackColor }}>
+                            <span className="text-[9px] font-bold" style={{ color: theme.numColor, opacity: 0.7 }}>Σ</span>
+                            {COURSES.map((course) => {
+                              const v = courseAdmTotals[course][admKey];
+                              return (
+                                <span key={course} className="text-[12px] font-black tabular-nums text-center" style={{ color: theme.numColor }}>
+                                  {v === 0 ? '·' : v}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1881,7 +1915,7 @@ const [barsReady, setBarsReady] = useState(false);
                   return (
                     <div
                       key={key}
-                      onClick={() => setAdmTypeModal(true)}
+                      onClick={() => setAdmTypeDetailModal(key)}
                       className="col-span-2 rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
                       style={{ background: theme.bodyBg, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
@@ -1918,21 +1952,27 @@ const [barsReady, setBarsReady] = useState(false);
                           {YEARS.map((yr, i) => (
                             <div key={yr} className="grid items-center gap-x-1" style={{ gridTemplateColumns: '24px repeat(5, 1fr)' }}>
                               <span className="text-[9px] font-semibold" style={{ color: theme.numColor, opacity: 0.55 }}>{i + 1}Y</span>
-                              {COURSES.map((course) => (
-                                <span key={course} className="text-[12px] font-bold tabular-nums text-center" style={{ color: theme.numColor }}>
-                                  {stats.summaryTable[yr]?.[course]?.[admKey] ?? 0}
-                                </span>
-                              ))}
+                              {COURSES.map((course) => {
+                                const v = stats.summaryTable[yr]?.[course]?.[admKey] ?? 0;
+                                return (
+                                  <span key={course} className="text-[12px] font-bold tabular-nums text-center" style={{ color: theme.numColor }}>
+                                    {v === 0 ? '·' : v}
+                                  </span>
+                                );
+                              })}
                             </div>
                           ))}
                           {/* Total row */}
                           <div className="grid items-center gap-x-1 pt-1 mt-0.5 border-t" style={{ gridTemplateColumns: '24px repeat(5, 1fr)', borderColor: theme.trackColor }}>
                             <span className="text-[9px] font-bold" style={{ color: theme.numColor, opacity: 0.7 }}>Σ</span>
-                            {COURSES.map((course) => (
-                              <span key={course} className="text-[12px] font-black tabular-nums text-center" style={{ color: theme.numColor }}>
-                                {courseAdmTotals[course][admKey]}
-                              </span>
-                            ))}
+                            {COURSES.map((course) => {
+                              const v = courseAdmTotals[course][admKey];
+                              return (
+                                <span key={course} className="text-[12px] font-black tabular-nums text-center" style={{ color: theme.numColor }}>
+                                  {v === 0 ? '·' : v}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -2981,6 +3021,123 @@ const [barsReady, setBarsReady] = useState(false);
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Lateral / Repeater detail modal — breakdown + student list for one adm type ── */}
+    {admTypeDetailModal && (() => {
+      const key = admTypeDetailModal;
+      const admKey = ADM_TYPE_ADM_KEY[key];
+      const label = ADM_TYPE_LABEL[key];
+      const theme = admTypeCardTheme[key];
+      const typeStudents = confirmedStudents
+        .filter((s) => (key === 'SNQ' ? s.admCat === 'SNQ' : s.admType === key))
+        .sort((a, b) => a.year.localeCompare(b.year) || a.course.localeCompare(b.course) || a.studentNameSSLC.localeCompare(b.studentNameSSLC));
+
+      const rows = YEARS.map((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const byCourse = COURSES.map((course) => stats.summaryTable[yr]?.[course]?.[admKey] ?? 0);
+        return { yrLabel, byCourse, total: byCourse.reduce((a, v) => a + v, 0) };
+      });
+      const grandByCourse = COURSES.map((course) => courseAdmTotals[course][admKey]);
+      const grandTotal = grandByCourse.reduce((a, v) => a + v, 0);
+
+      const tc = 'px-1 py-1.5 text-right tabular-nums text-[10px]';
+      const tl = 'px-1 py-1.5 text-left text-[10px]';
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdmTypeDetailModal(null)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden flex flex-col h-[480px]" style={{ borderColor: theme.barColor, background: theme.bodyBg, animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b shrink-0" style={{ borderColor: theme.trackColor }}>
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0" style={{ background: theme.barColor }} />
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.numColor }}>{label} — Year & Course-wise Count</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => exportSummaryReport(typeStudents, displayYear, `${label} — Year & Course-wise Count`)}
+                  className="text-[10px] font-semibold transition-colors cursor-pointer uppercase tracking-wide hover:opacity-70"
+                  style={{ color: theme.numColor }}
+                >
+                  Export PDF
+                </button>
+                <button onClick={() => setAdmTypeDetailModal(null)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 flex gap-2.5 p-2.5 bg-white">
+              {/* Breakdown table */}
+              <div className="shrink-0" style={{ width: '196px' }}>
+                <table className="w-full border-collapse table-fixed">
+                  <thead>
+                    <tr className="border-b-2" style={{ borderColor: theme.trackColor }}>
+                      <th className="px-1 py-1.5 font-bold text-left text-[9px] uppercase tracking-wide" style={{ color: theme.numColor }}>Yr</th>
+                      {COURSES.map((c) => (
+                        <th key={c} className="px-1 py-1.5 font-bold text-right text-[9px] uppercase tracking-wide" style={{ color: theme.numColor }}>{c}</th>
+                      ))}
+                      <th className="px-1 py-1.5 font-bold text-right text-[9px] uppercase tracking-wide" style={{ color: theme.numColor }}>Σ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className={tl + ' text-gray-600 font-semibold'}>{YEARS[i] === '1ST YEAR' ? '1Y' : YEARS[i] === '2ND YEAR' ? '2Y' : '3Y'}</td>
+                        {r.byCourse.map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v === 0 ? '·' : v}</td>)}
+                        <td className={tc + ' font-bold text-gray-800'}>{r.total === 0 ? '·' : r.total}</td>
+                      </tr>
+                    ))}
+                    <tr className="text-white font-bold" style={{ background: theme.headerBg }}>
+                      <td className={tl}>Σ</td>
+                      {grandByCourse.map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                      <td className={tc}>{grandTotal}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="w-px shrink-0" style={{ background: theme.trackColor }} />
+
+              {/* Student list */}
+              <div className="flex-1 min-w-0 flex flex-col">
+                <p className="px-1 pb-1 text-[9px] font-bold uppercase tracking-widest shrink-0" style={{ color: theme.numColor }}>
+                  Students ({typeStudents.length})
+                </p>
+                <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+                  <table className="w-full border-collapse table-fixed">
+                    <colgroup>
+                      <col style={{ width: '30px' }} />
+                      <col style={{ width: '34px' }} />
+                      <col />
+                      <col style={{ width: '40px' }} />
+                      <col style={{ width: '68px' }} />
+                    </colgroup>
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="border-b-2" style={{ borderColor: theme.trackColor }}>
+                        {['Yr', 'Crs', 'Name', 'Cat', 'Mobile'].map((h) => (
+                          <th key={h} className="px-1 py-1.5 font-bold whitespace-nowrap text-left text-[9px] uppercase tracking-wide" style={{ color: theme.numColor }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {typeStudents.length === 0 ? (
+                        <tr><td colSpan={5} className="px-1 py-6 text-center text-[10px] text-gray-400">No {label.toLowerCase()} students</td></tr>
+                      ) : typeStudents.map((s) => (
+                        <tr key={s.id} className="border-b border-gray-100">
+                          <td className="px-1 py-1.5 text-[10px] text-gray-500">{s.year === '1ST YEAR' ? '1Y' : s.year === '2ND YEAR' ? '2Y' : '3Y'}</td>
+                          <td className="px-1 py-1.5 text-[10px] font-semibold text-gray-700">{s.course}</td>
+                          <td className="px-1 py-1.5 text-[10px] text-gray-800 truncate" title={s.studentNameSSLC}>{s.studentNameSSLC}</td>
+                          <td className="px-1 py-1.5 text-[10px] text-gray-600">{s.category || '—'}</td>
+                          <td className="px-1 py-1.5 text-[10px] text-gray-600 truncate">{s.studentMobile || s.fatherMobile || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
