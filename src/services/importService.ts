@@ -60,7 +60,7 @@ function mapGender(raw: string): Gender {
 
 function mapAdmType(raw: string): AdmType {
   const v = raw.trim().toUpperCase() as AdmType;
-  const valid: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+  const valid: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
   return valid.includes(v) ? v : 'REGULAR';
 }
 

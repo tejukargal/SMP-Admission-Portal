@@ -34,7 +34,7 @@ const AIDED_COURSES: Course[]   = ['CE', 'ME', 'EC', 'CS'];
 const UNAIDED_COURSES: Course[] = ['EE'];
 const YEARS:   Year[]   = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
-const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
 const ADM_CATS:  AdmCat[]  = ['GM', 'SNQ', 'OTHERS'];
 
 const fs =

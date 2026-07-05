@@ -6,7 +6,7 @@ import { ACADEMIC_YEARS } from '../../types';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
-const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
 const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 
 interface ParsedRow {
@@ -257,7 +257,7 @@ export function FeeStructureImportModal({ onClose, onImported }: FeeStructureImp
                 </p>
                 <p className="text-[10px] text-gray-400 mt-1.5">
                   Values must match exactly: Course (CE/ME/EC/CS/EE), Year (1ST YEAR/2ND YEAR/3RD YEAR),
-                  Adm Type (REGULAR/REPEATER/LATERAL/EXTERNAL/SNQ), Adm Cat (GM/SNQ/OTHERS).
+                  Adm Type (REGULAR/REPEATER/LATERAL/EXTERNAL), Adm Cat (GM/SNQ/OTHERS).
                   Amounts are in ₹. Additional SVK heads can be added manually after import.
                 </p>
               </div>

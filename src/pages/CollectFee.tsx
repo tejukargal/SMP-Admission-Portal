@@ -485,7 +485,6 @@ export function CollectFee() {
                       { value: 'REPEATER', label: 'REPEATER' },
                       { value: 'LATERAL', label: 'LATERAL' },
                       { value: 'EXTERNAL', label: 'EXTERNAL' },
-                      { value: 'SNQ', label: 'SNQ' },
                     ]}
                   />
                   <FilterDropdown<AdmCat | ''>

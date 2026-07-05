@@ -945,8 +945,8 @@ const [barsReady, setBarsReady] = useState(false);
   // the "Total Enrolled" tile (solid dark header strip + light body) so the pair reads as a
   // distinct, higher-emphasis duo inside the otherwise compact "By Year of Study" row.
   const admTypeCardTheme: Record<'LATERAL' | 'REPEATER', { bodyBg: string; headerBg: string; headerText: string; numColor: string; trackColor: string; barColor: string }> = {
-    LATERAL:  { bodyBg: '#EEF2FF', headerBg: '#4338CA', headerText: '#EEF2FF', numColor: '#4338CA', trackColor: '#E0E7FF', barColor: '#818CF8' },
-    REPEATER: { bodyBg: '#FDF2F5', headerBg: '#9F1239', headerText: '#FDE9EE', numColor: '#9F1239', trackColor: '#FBD5DF', barColor: '#FB7185' },
+    LATERAL:  { bodyBg: '#D8BFD8', headerBg: '#563C5C', headerText: '#D8BFD8', numColor: '#563C5C', trackColor: '#C7A8C7', barColor: '#8C5F8C' },
+    REPEATER: { bodyBg: '#F8F4EF', headerBg: '#40434E', headerText: '#F8F4EF', numColor: '#40434E', trackColor: '#ECE5D8', barColor: '#7B7F8C' },
   };
 
   const yearConfig: Record<Year, { label: string; bg: string; border: string; textColor: string; barFill: string }> = {
@@ -1160,7 +1160,6 @@ const [barsReady, setBarsReady] = useState(false);
                     <option value="REPEATER">REPEATER</option>
                     <option value="LATERAL">LATERAL</option>
                     <option value="EXTERNAL">EXTERNAL</option>
-                    <option value="SNQ">SNQ</option>
                   </select>
                   <select className={`${fs} w-[80px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
                     <option value="">Adm Cat</option>

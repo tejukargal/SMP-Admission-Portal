@@ -43,7 +43,7 @@ export interface FeeImportResult {
 }
 
 const VALID_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
-const VALID_ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL', 'SNQ'];
+const VALID_ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
 const VALID_ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 
 function mapYear(raw: string): Year | null {

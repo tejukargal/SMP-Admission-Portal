@@ -525,7 +525,6 @@ export function ExamFee() {
             <option value="REPEATER">REPEATER</option>
             <option value="LATERAL">LATERAL</option>
             <option value="EXTERNAL">EXTERNAL</option>
-            <option value="SNQ">SNQ</option>
           </select>
           <select className={fs} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
             <option value="">All Adm Cats</option>
