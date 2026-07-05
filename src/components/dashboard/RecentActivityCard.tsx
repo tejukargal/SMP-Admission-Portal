@@ -257,7 +257,7 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
             {/* Slide — re-keyed on every cycleIdx change so page-enter fires in sync with bar chart */}
             <div
               key={cycleIdx}
-              className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar px-3"
               style={{ animation: 'page-enter 0.28s ease-out' }}
             >
               {/* Date header for this slide */}

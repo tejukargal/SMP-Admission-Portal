@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
+import type { CellHookData } from 'jspdf-autotable';
 import type { Student } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -12,16 +13,35 @@ const YR_LABEL: Record<string, string> = {
   '3RD YEAR': '3rd Yr',
 };
 
-const BLUE_HEAD:  [number, number, number] = [37,  99,  235]; // blue-600
-const BLUE_SUB:   [number, number, number] = [59, 130,  246]; // blue-500
-const BLUE_GRAND: [number, number, number] = [30,  64,  175]; // blue-800
-const WHITE:      [number, number, number] = [255, 255, 255];
-const NEAR_BLACK: [number, number, number] = [25,  25,   25];
-const GRID_LINE:  [number, number, number] = [210, 215,  220];
+// Pastel accent themes — one per modal/section accent colour in the dashboard,
+// so each exported PDF reads visually consistent with the modal it was triggered from
+// (light tint header/subtotal rows, a single solid accent row for the grand total).
+type RGB = [number, number, number];
+interface Theme { tint: RGB; line: RGB; solid: RGB }
+
+// "solid" uses each colour's 800-shade (darker than the 700-shade the on-screen modals use) —
+// on a black & white laser printer, light/mid tones grey out and lose contrast, so we bias dark.
+const THEMES = {
+  sky:     { tint: [240, 249, 255], line: [186, 230, 253], solid: [7,  89,  133] },
+  emerald: { tint: [236, 253, 245], line: [167, 243, 208], solid: [6,  95,  70]  },
+  rose:    { tint: [255, 241, 242], line: [254, 205, 211], solid: [159, 18,  57] },
+  teal:    { tint: [240, 253, 250], line: [153, 246, 228], solid: [17,  94,  89] },
+  violet:  { tint: [245, 243, 255], line: [221, 214, 254], solid: [91,  33,  182] },
+  amber:   { tint: [255, 251, 235], line: [253, 230, 138], solid: [146, 64,  14] },
+  green:   { tint: [240, 253, 244], line: [187, 247, 208], solid: [22,  101, 52] },
+  lime:    { tint: [247, 254, 231], line: [217, 249, 157], solid: [63,  98,  18] },
+  indigo:  { tint: [238, 242, 255], line: [199, 210, 254], solid: [55,  48,  163] },
+} as const satisfies Record<string, Theme>;
+
+export type ThemeName = keyof typeof THEMES;
+
+const WHITE:      RGB = [255, 255, 255];
+const NEAR_BLACK: RGB = [15,  15,   15];
+const ROW_TEXT:   RGB = [30,  30,   32]; // near-black — stays crisp on a B&W laser print
 
 const MARGIN = 14;
-const FONT   = 8;
-const PAD    = { top: 2.2, right: 3.5, bottom: 2.2, left: 3.5 };
+const FONT   = 9.5;
+const PAD    = { top: 2.6, right: 3.8, bottom: 2.6, left: 3.8 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,22 +53,28 @@ function dateStr(): string {
   return `${dd}-${mo}-${yr}`;
 }
 
-function buildDoc(academicYear: string, subtitle: string): jsPDF {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+function buildDoc(academicYear: string, subtitle: string, theme: Theme, orientation: 'portrait' | 'landscape' = 'portrait'): jsPDF {
+  const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
   const W   = doc.internal.pageSize.getWidth();
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setTextColor(...NEAR_BLACK);
   doc.text(`SMP Admn Stats ${academicYear}`, W / 2, 17, { align: 'center' });
 
-  doc.setFontSize(11);
+  doc.setFontSize(12.5);
+  doc.setTextColor(...theme.solid);
   doc.text(subtitle, W / 2, 25, { align: 'center' });
 
+  // Thin accent rule beneath the subtitle — mirrors each modal's coloured header border
+  doc.setDrawColor(...theme.line);
+  doc.setLineWidth(0.4);
+  doc.line(W / 2 - 20, 28, W / 2 + 20, 28);
+
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`Generated: ${dateStr()}`, W / 2, 32, { align: 'center' });
+  doc.setFontSize(8);
+  doc.setTextColor(90, 90, 90);
+  doc.text(`Generated: ${dateStr()}`, W / 2, 33, { align: 'center' });
   doc.setTextColor(...NEAR_BLACK);
 
   return doc;
@@ -62,37 +88,61 @@ function addFooters(doc: jsPDF, academicYear: string, reportName: string): void 
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.5);
-    doc.setTextColor(160, 160, 160);
+    doc.setFontSize(7);
+    doc.setTextColor(130, 130, 130);
     doc.text(`SMP Admn Stats ${academicYear} - ${reportName}`, MARGIN, H - 5);
     doc.text(`Page ${i} of ${totalPages}`, W - MARGIN, H - 5, { align: 'right' });
   }
 }
 
-const HEAD_STYLES = {
-  fillColor: BLUE_HEAD,
-  textColor: WHITE,
-  fontStyle: 'bold' as const,
-  fontSize: FONT,
-  cellPadding: PAD,
-  lineWidth: 0,
-};
+function headStyles(theme: Theme) {
+  return {
+    fillColor: theme.tint,
+    textColor: theme.solid,
+    fontStyle: 'bold' as const,
+    fontSize: FONT,
+    cellPadding: PAD,
+    lineWidth: 0.15,
+    lineColor: theme.line,
+  };
+}
 
-const BODY_STYLES = {
-  fontSize: FONT,
-  cellPadding: PAD,
-  fillColor: WHITE,
-  textColor: NEAR_BLACK,
-  lineColor: GRID_LINE,
-  lineWidth: 0.18,
-};
+function bodyStyles(theme: Theme) {
+  return {
+    fontSize: FONT,
+    cellPadding: PAD,
+    fillColor: WHITE,
+    textColor: ROW_TEXT,
+    lineColor: theme.line,
+    lineWidth: 0.15,
+  };
+}
+
+// Applies the light-tint subtotal / solid grand-total row styling used throughout —
+// mirrors each modal's subtle subtotal rows + single solid grand-total row.
+function themedRowStyler(theme: Theme, grandIdx: number, subtotalRows: number[] = []) {
+  return (data: CellHookData) => {
+    if (data.section !== 'body') return;
+    const i = data.row.index;
+    if (i === grandIdx) {
+      data.cell.styles.fillColor = theme.solid;
+      data.cell.styles.textColor = WHITE;
+      data.cell.styles.fontStyle = 'bold';
+    } else if (subtotalRows.includes(i)) {
+      data.cell.styles.fillColor = theme.tint;
+      data.cell.styles.textColor = theme.solid;
+      data.cell.styles.fontStyle = 'bold';
+    }
+  };
+}
 
 type Row = (string | number)[];
 
 // ── Summary Report — Year, Course & Admission Type ───────────────────────────
 
-export function exportSummaryReport(students: Student[], academicYear: string, subtitle?: string): void {
-  const doc  = buildDoc(academicYear, subtitle ?? 'Year, Course & Admission Type-wise Student Count');
+export function exportSummaryReport(students: Student[], academicYear: string, subtitle?: string, themeName: ThemeName = 'sky'): void {
+  const theme = THEMES[themeName];
+  const doc   = buildDoc(academicYear, subtitle ?? 'Year, Course & Admission Type-wise Student Count', theme);
   const body: Row[] = [];
   const subtotalRows: number[] = [];
 
@@ -124,18 +174,18 @@ export function exportSummaryReport(students: Student[], academicYear: string, s
   const grandIdx = body.length;
   body.push(['GRAND TOTAL', '', gRegular, gLtrl, gSnq, gRptr, gTotal]);
 
-  const S_HEAD_FONT = 9;
-  const S_DATA_FONT = 11;
-  const S_PAD       = { top: 2, right: 2.8, bottom: 2, left: 2.8 };
+  const S_HEAD_FONT = 10.5;
+  const S_DATA_FONT = 13;
+  const S_PAD       = { top: 2.2, right: 2.8, bottom: 2.2, left: 2.8 };
 
   // Portrait A4: usable = 210 − 2×14 = 182 mm
   autoTable(doc, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Year', 'Course', 'Regular', 'LTRL', 'SNQ', 'RPTR', 'Total']],
     body,
-    headStyles: { ...HEAD_STYLES, fontSize: S_HEAD_FONT, cellPadding: S_PAD },
-    bodyStyles: { ...BODY_STYLES, fontSize: S_DATA_FONT, cellPadding: S_PAD, overflow: 'hidden' },
+    headStyles: { ...headStyles(theme), fontSize: S_HEAD_FONT, cellPadding: S_PAD },
+    bodyStyles: { ...bodyStyles(theme), fontSize: S_DATA_FONT, cellPadding: S_PAD, overflow: 'hidden' },
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0: { cellWidth: 40 },
@@ -146,21 +196,7 @@ export function exportSummaryReport(students: Student[], academicYear: string, s
       5: { cellWidth: 22, halign: 'center' },
       6: { cellWidth: 24, halign: 'center' },
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const i = data.row.index;
-      if (i === grandIdx) {
-        data.cell.styles.fillColor = BLUE_GRAND;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fontSize  = S_HEAD_FONT;
-      } else if (subtotalRows.includes(i)) {
-        data.cell.styles.fillColor = BLUE_SUB;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fontSize  = S_HEAD_FONT;
-      }
-    },
+    didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
 
   addFooters(doc, academicYear, 'Summary Report');
@@ -194,8 +230,9 @@ function catRow(label1: string, label2: string, c: Record<CatKey, number>, total
   return [label1, label2, c.gm, c.c1, c.twoA, c.twoB, c.threeA, c.threeB, c.sc, c.st, total];
 }
 
-export function exportCategoryReport(students: Student[], academicYear: string, subtitle?: string): void {
-  const doc  = buildDoc(academicYear, subtitle ?? 'Year, Course & Cat wise Student Count');
+export function exportCategoryReport(students: Student[], academicYear: string, subtitle?: string, themeName: ThemeName = 'emerald'): void {
+  const theme = THEMES[themeName];
+  const doc   = buildDoc(academicYear, subtitle ?? 'Year, Course & Cat wise Student Count', theme);
   const body: Row[] = [];
   const subtotalRows: number[] = [];
 
@@ -228,12 +265,12 @@ export function exportCategoryReport(students: Student[], academicYear: string, 
 
   // Portrait A4: usable = 182 mm
   autoTable(doc, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Year', 'Course', 'GM', 'C1', '2A', '2B', '3A', '3B', 'SC', 'ST', 'Total']],
     body,
-    headStyles: HEAD_STYLES,
-    bodyStyles: BODY_STYLES,
+    headStyles: headStyles(theme),
+    bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0:  { cellWidth: 22 },
@@ -248,19 +285,7 @@ export function exportCategoryReport(students: Student[], academicYear: string, 
       9:  { cellWidth: 15, halign: 'center' },
       10: { cellWidth: 17, halign: 'center' },
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const i = data.row.index;
-      if (i === grandIdx) {
-        data.cell.styles.fillColor = BLUE_GRAND;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      } else if (subtotalRows.includes(i)) {
-        data.cell.styles.fillColor = BLUE_SUB;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      }
-    },
+    didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
 
   addFooters(doc, academicYear, 'Category Report');
@@ -269,8 +294,9 @@ export function exportCategoryReport(students: Student[], academicYear: string, 
 
 // ── Year & Course-wise Gender Report ─────────────────────────────────────────
 
-export function exportGenderCourseYearReport(students: Student[], academicYear: string, subtitle?: string): void {
-  const doc  = buildDoc(academicYear, subtitle ?? 'Year & Course-wise Gender Count');
+export function exportGenderCourseYearReport(students: Student[], academicYear: string, subtitle?: string, themeName: ThemeName = 'teal'): void {
+  const theme = THEMES[themeName];
+  const doc   = buildDoc(academicYear, subtitle ?? 'Year & Course-wise Gender Count', theme);
   const body: Row[] = [];
   const subtotalRows: number[] = [];
 
@@ -295,12 +321,12 @@ export function exportGenderCourseYearReport(students: Student[], academicYear: 
   body.push(['GRAND TOTAL', '', gB, gG, gT]);
 
   autoTable(doc, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Year', 'Course', 'Boys', 'Girls', 'Total']],
     body,
-    headStyles: HEAD_STYLES,
-    bodyStyles: BODY_STYLES,
+    headStyles: headStyles(theme),
+    bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0: { cellWidth: 28 },
@@ -309,19 +335,7 @@ export function exportGenderCourseYearReport(students: Student[], academicYear: 
       3: { cellWidth: 30, halign: 'center' },
       4: { cellWidth: 30, halign: 'center' },
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const i = data.row.index;
-      if (i === grandIdx) {
-        data.cell.styles.fillColor = BLUE_GRAND;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      } else if (subtotalRows.includes(i)) {
-        data.cell.styles.fillColor = BLUE_SUB;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      }
-    },
+    didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
 
   addFooters(doc, academicYear, 'Gender Course Year Report');
@@ -330,7 +344,8 @@ export function exportGenderCourseYearReport(students: Student[], academicYear: 
 
 // ── Category & Gender Report ──────────────────────────────────────────────────
 
-export function exportGenderCategoryReport(students: Student[], academicYear: string): void {
+export function exportGenderCategoryReport(students: Student[], academicYear: string, themeName: ThemeName = 'rose'): void {
+  const theme = THEMES[themeName];
   const CATS = ['GM', 'C1', '2A', '2B', '3A', '3B', 'SC', 'ST'] as const;
   type Cat = typeof CATS[number];
 
@@ -359,7 +374,6 @@ export function exportGenderCategoryReport(students: Student[], academicYear: st
       for (const s of ss) {
         const cat = catOf(s);
         if (s.gender === 'BOY') { cats[cat].b++; tB++; } else { cats[cat].g++; tG++; }
-        subCats[cat].b += 0; // accumulated below
       }
       for (const cat of CATS) { subCats[cat].b += cats[cat].b; subCats[cat].g += cats[cat].g; }
       sB += tB; sG += tG;
@@ -384,28 +398,16 @@ export function exportGenderCategoryReport(students: Student[], academicYear: st
   body.push(['GRAND TOTAL', '', ...CATS.flatMap((cat) => [grandCats[cat].b, grandCats[cat].g]), gB, gG]);
 
   // Landscape for wide table
-  const docL = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const WL = docL.internal.pageSize.getWidth();
-  docL.setFont('helvetica', 'bold');
-  docL.setFontSize(13);
-  docL.setTextColor(...NEAR_BLACK);
-  docL.text(`SMP Admn Stats ${academicYear}`, WL / 2, 17, { align: 'center' });
-  docL.setFontSize(10);
-  docL.text('Category & Gender-wise Student Count', WL / 2, 25, { align: 'center' });
-  docL.setFont('helvetica', 'normal');
-  docL.setFontSize(7.5);
-  docL.setTextColor(120, 120, 120);
-  docL.text(`Generated: ${dateStr()}`, WL / 2, 32, { align: 'center' });
-  docL.setTextColor(...NEAR_BLACK);
+  const docL = buildDoc(academicYear, 'Category & Gender-wise Student Count', theme, 'landscape');
 
   const catHeaders = CATS.flatMap((cat) => [`${cat} B`, `${cat} G`]);
   autoTable(docL, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Year', 'Course', ...catHeaders, 'Total B', 'Total G']],
     body,
-    headStyles: { ...HEAD_STYLES, fontSize: 7 },
-    bodyStyles: { ...BODY_STYLES, fontSize: 7 },
+    headStyles: { ...headStyles(theme), fontSize: 8 },
+    bodyStyles: { ...bodyStyles(theme), fontSize: 8.5 },
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0: { cellWidth: 18 },
@@ -414,19 +416,7 @@ export function exportGenderCategoryReport(students: Student[], academicYear: st
         Array.from({ length: CATS.length * 2 + 2 }, (_, i) => [i + 2, { cellWidth: 12, halign: 'center' as const }])
       ),
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const i = data.row.index;
-      if (i === grandIdx) {
-        data.cell.styles.fillColor = BLUE_GRAND;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      } else if (subtotalRows.includes(i)) {
-        data.cell.styles.fillColor = BLUE_SUB;
-        data.cell.styles.textColor = WHITE;
-        data.cell.styles.fontStyle = 'bold';
-      }
-    },
+    didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
   });
 
   addFooters(docL, academicYear, 'Category Gender Report');
@@ -438,8 +428,10 @@ export function exportGenderCategoryReport(students: Student[], academicYear: st
 export function exportDatewiseAdmissionsReport(
   dateTable: Array<{ date: string; byCourse: Record<string, number>; total: number }>,
   academicYear: string,
+  themeName: ThemeName = 'violet',
 ): void {
-  const doc = buildDoc(academicYear, 'Date-wise Admissions — Course Count');
+  const theme = THEMES[themeName];
+  const doc = buildDoc(academicYear, 'Date-wise Admissions — Course Count', theme);
 
   function fmtDate(iso: string): string {
     const [y, m, d] = iso.split('-');
@@ -459,12 +451,12 @@ export function exportDatewiseAdmissionsReport(
   body.push(['GRAND TOTAL', ...grandByCourse, grandTotal]);
 
   autoTable(doc, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Date', ...COURSES, 'Total']],
     body,
-    headStyles: HEAD_STYLES,
-    bodyStyles: BODY_STYLES,
+    headStyles: headStyles(theme),
+    bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0: { cellWidth: 36 },
@@ -473,12 +465,7 @@ export function exportDatewiseAdmissionsReport(
       ),
       [COURSES.length + 1]: { cellWidth: 24, halign: 'center' as const },
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body' || data.row.index !== grandIdx) return;
-      data.cell.styles.fillColor = BLUE_GRAND;
-      data.cell.styles.textColor = WHITE;
-      data.cell.styles.fontStyle = 'bold';
-    },
+    didParseCell: themedRowStyler(theme, grandIdx),
   });
 
   addFooters(doc, academicYear, 'Datewise Admissions');
@@ -490,8 +477,10 @@ export function exportDatewiseAdmissionsReport(
 export function exportFirstYearSeatsReport(
   seats: Record<string, { nonSnqConfirmed: number; snqConfirmed: number }>,
   academicYear: string,
+  themeName: ThemeName = 'amber',
 ): void {
-  const doc = buildDoc(academicYear, '1st Year — Pending Seats');
+  const theme = THEMES[themeName];
+  const doc = buildDoc(academicYear, '1st Year — Pending Seats', theme);
   const TOTAL_REGULAR = 60;
   const TOTAL_SNQ = 3;
 
@@ -526,12 +515,12 @@ export function exportFirstYearSeatsReport(
   ]);
 
   autoTable(doc, {
-    startY: 37,
+    startY: 38,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Course', 'Reg Filled', 'Reg Pending', 'SNQ Filled', 'SNQ Pending']],
     body,
-    headStyles: HEAD_STYLES,
-    bodyStyles: BODY_STYLES,
+    headStyles: headStyles(theme),
+    bodyStyles: bodyStyles(theme),
     alternateRowStyles: { fillColor: WHITE },
     columnStyles: {
       0: { cellWidth: 28 },
@@ -540,12 +529,7 @@ export function exportFirstYearSeatsReport(
       3: { cellWidth: 30, halign: 'center' },
       4: { cellWidth: 30, halign: 'center' },
     },
-    didParseCell: (data) => {
-      if (data.section !== 'body' || data.row.index !== grandIdx) return;
-      data.cell.styles.fillColor = BLUE_GRAND;
-      data.cell.styles.textColor = WHITE;
-      data.cell.styles.fontStyle = 'bold';
-    },
+    didParseCell: themedRowStyler(theme, grandIdx),
   });
 
   addFooters(doc, academicYear, '1st Year Seats');
