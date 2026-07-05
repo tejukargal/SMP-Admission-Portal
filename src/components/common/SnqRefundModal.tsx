@@ -63,6 +63,7 @@ export function SnqRefundModal({ student, onClose }: Props) {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paymentDateISO, setPaymentDateISO] = useState(todayISO);
   const [remarks, setRemarks] = useState('');
+  const [remarksTouched, setRemarksTouched] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -139,6 +140,18 @@ export function SnqRefundModal({ student, onClose }: Props) {
     [receiptBreakdown],
   );
 
+  // Totals across all components (for the remarks summary, unlike totalPaid/receiptBreakdown
+  // above which are SMP-only since only SMP is refundable for SNQ students).
+  const svkPaid = useMemo(
+    () => feeRecords.reduce((s, r) => s + r.svk, 0),
+    [feeRecords],
+  );
+  const additionalPaid = useMemo(
+    () => feeRecords.reduce((s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0), 0),
+    [feeRecords],
+  );
+  const grandTotalPaid = totalPaid + svkPaid + additionalPaid;
+
   const priorRefundsTotal = useMemo(
     () => priorRefunds.reduce((s, r) => s + r.refundAmount, 0),
     [priorRefunds],
@@ -164,6 +177,15 @@ export function SnqRefundModal({ student, onClose }: Props) {
       setRefundAmount(refundableExcess);
     }
   }, [loadingFee, loadingHistory, loadingStructure, amountTouched, refundableExcess]);
+
+  // Prefill remarks with a brief total-fee-paid summary once fee records load, unless the admin edited it
+  useEffect(() => {
+    if (!loadingFee && !remarksTouched) {
+      setRemarks(
+        `The student has paid a total of Rs. ${grandTotalPaid.toLocaleString()} including SMP Rs. ${totalPaid.toLocaleString()}, SVK Rs. ${svkPaid.toLocaleString()} & Additional Fee of Rs. ${additionalPaid.toLocaleString()}.`,
+      );
+    }
+  }, [loadingFee, remarksTouched, grandTotalPaid, totalPaid, svkPaid, additionalPaid]);
 
   const hasPriorRefund = priorRefunds.length > 0;
   const needsReference = paymentType !== 'CASH';
@@ -372,7 +394,7 @@ export function SnqRefundModal({ student, onClose }: Props) {
             <label className="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
             <textarea
               value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
+              onChange={(e) => { setRemarksTouched(true); setRemarks(e.target.value); }}
               rows={2}
               className={inp}
               placeholder="Optional"

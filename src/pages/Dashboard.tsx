@@ -1977,9 +1977,9 @@ const [barsReady, setBarsReady] = useState(false);
                     <div key={course} className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden`} style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
 
                       {/* Header section — retains the strip, course badge matches By Course dimensions */}
-                      <div className={`flex items-center px-3.5 py-2 border-b border-black/10 ${theme.headerBg}`}>
-                        <div className={`w-11 h-11 rounded-full flex items-center justify-center border border-black/10 ${theme.cardBg} shrink-0`}>
-                          <span className={`text-base font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
+                      <div className={`flex items-center px-3.5 py-1.5 border-b border-black/10 ${theme.headerBg}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border border-black/10 ${theme.cardBg} shrink-0`}>
+                          <span className={`text-sm font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
                         </div>
                       </div>
 
@@ -1989,13 +1989,13 @@ const [barsReady, setBarsReady] = useState(false);
                           const pct = row.total > 0 ? Math.min(100, Math.round((row.filled / row.total) * 100)) : 0;
                           return (
                             <div key={row.label} className={`flex items-center gap-2 ${i > 0 ? 'pt-1.5 mt-1.5 border-t border-black/10' : ''}`}>
-                              <div className="w-11 flex items-center justify-center shrink-0">
+                              <div className="w-9 flex items-center justify-center shrink-0">
                                 {row.badge ? (
-                                  <div className="w-9 h-9 rounded-full border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'rgba(0,0,0,0.15)' }}>
+                                  <div className="w-8 h-8 rounded-full border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'rgba(0,0,0,0.15)' }}>
                                     <span className="text-[7px] font-bold text-amber-600 leading-none">N/A</span>
                                   </div>
                                 ) : (
-                                  <SeatRing pct={pct} color={row.ring} ready={barsReady} size={36} stroke={4} />
+                                  <SeatRing pct={pct} color={row.ring} ready={barsReady} size={32} stroke={3.5} />
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">

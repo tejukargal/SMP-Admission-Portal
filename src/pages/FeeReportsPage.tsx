@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -1450,6 +1450,91 @@ function BankRemittanceTable({
   );
 }
 
+function RemittanceAbstractTable({
+  aided, unaided, label,
+}: {
+  aided: RemittanceSummary;
+  unaided: RemittanceSummary;
+  label?: string;
+}) {
+  type AbstractRow = { name: string; aided: number; unaided: number; mode: 'cash' | 'pay' };
+  const groups: AbstractRow[][] = [
+    [
+      { name: 'SMP Cash', aided: aided.smpCash, unaided: unaided.smpCash, mode: 'cash' },
+      { name: 'SMP Pay',  aided: aided.smpPay,  unaided: unaided.smpPay,  mode: 'pay'  },
+    ],
+    [
+      { name: 'SVK Cash', aided: aided.svkCash, unaided: unaided.svkCash, mode: 'cash' },
+      { name: 'SVK Pay',  aided: aided.svkPay,  unaided: unaided.svkPay,  mode: 'pay'  },
+    ],
+    [
+      { name: 'RC Cash', aided: aided.rcCash, unaided: unaided.rcCash, mode: 'cash' },
+      { name: 'RC Pay',  aided: aided.rcPay,  unaided: unaided.rcPay,  mode: 'pay'  },
+    ],
+    [
+      { name: 'Ins Cash', aided: aided.insCash, unaided: unaided.insCash, mode: 'cash' },
+      { name: 'Ins Pay',  aided: aided.insPay,  unaided: unaided.insPay,  mode: 'pay'  },
+    ],
+  ];
+
+  const rows = groups.flat();
+  const totAided   = rows.reduce((s, r) => s + r.aided,   0);
+  const totUnaided = rows.reduce((s, r) => s + r.unaided, 0);
+  const grandTotal = totAided + totUnaided;
+
+  const cell = 'px-4 py-2 text-sm';
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden max-w-md">
+      {label && (
+        <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead className="bg-gray-700 text-white">
+          <tr>
+            <th className="px-4 py-2 text-left font-semibold"></th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-blue-800/60">Aided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-indigo-800/60">Unaided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {groups.map((group, gi) => (
+            <Fragment key={group[0]!.name}>
+              {group.map((row) => {
+                const rowTotal = row.aided + row.unaided;
+                return (
+                  <tr key={row.name} className={gi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className={`${cell} font-semibold text-gray-700`}>{row.name}</td>
+                    <td className={`${cell} text-right border-l border-gray-100 ${row.aided   > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.aided   > 0 ? fmt(row.aided)   : '—'}</td>
+                    <td className={`${cell} text-right border-l border-gray-100 ${row.unaided > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.unaided > 0 ? fmt(row.unaided) : '—'}</td>
+                    <td className={`${cell} text-right font-bold border-l border-gray-100 text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+                  </tr>
+                );
+              })}
+              {gi < groups.length - 1 && (
+                <tr className="h-2">
+                  <td colSpan={4} className="p-0" />
+                </tr>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+          <tr>
+            <td className="px-4 py-2.5">Total</td>
+            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totAided   > 0 ? 'text-white' : 'text-white/30'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totUnaided > 0 ? 'text-white' : 'text-white/30'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandTotal)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 const SBI_ACCOUNT    = '64049891981';
 const CANARA_ACCOUNT = '19032200004180';
 
@@ -1944,6 +2029,11 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
         <p className="text-sm text-gray-400 py-8 text-center">No fee records found.</p>
       ) : viewMode === 'daily' ? (
         <>
+          <RemittanceAbstractTable
+            aided={dailySummary.aided}
+            unaided={dailySummary.unaided}
+            label={`Abstract — ${formatDayLabel(selectedDate)}`}
+          />
           <BankRemittanceTable
             aided={dailySummary.aided}
             unaided={dailySummary.unaided}
@@ -1953,6 +2043,11 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
         </>
       ) : periodSummary !== null ? (
         <>
+          <RemittanceAbstractTable
+            aided={periodSummary.aided}
+            unaided={periodSummary.unaided}
+            label={dateFrom || dateTo ? `Abstract — ${dateFrom || '…'} → ${dateTo || '…'}` : 'Abstract — All Records'}
+          />
           <BankRemittanceTable
             aided={periodSummary.aided}
             unaided={periodSummary.unaided}

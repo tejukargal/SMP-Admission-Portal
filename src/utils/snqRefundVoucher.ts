@@ -1,5 +1,4 @@
 import type { Student } from '../types';
-import { INSTITUTE_LOGO_B64 } from './instituteLogo';
 import type { RefundPaymentType, RefundReceiptLine } from '../services/refundService';
 
 const COURSE_NAMES: Record<string, string> = {
@@ -75,19 +74,24 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
     color: #000;
     background: #fff;
   }
+  @media screen {
+    html { background: #94a3b8; min-height: 100%; padding: 24px 0; }
+    body { max-width: 720px; margin: 0 auto; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.22); border-radius: 4px; padding: 20px; }
+  }
   .page { min-height: calc(297mm - 16mm); display: flex; flex-direction: column; }
 
-  /* ── Header ── */
-  .header { position: relative; padding: 10pt 14pt 10pt; border-bottom: 4pt double #000; }
-  .header-text { text-align: center; }
-  .college-name { font-size: 20pt; font-weight: bold; letter-spacing: 0.8pt; margin-bottom: 3pt; }
-  .college-tagline { font-size: 8.5pt; margin-bottom: 4pt; }
-  .college-instcode { font-size: 12pt; font-weight: bold; margin-bottom: 3pt; }
-  .college-address { font-size: 10pt; margin-bottom: 2pt; }
-  .college-contact { font-size: 10pt; }
-  .seal-header { position: absolute; right: 12pt; top: 26pt; width: 62pt; height: 62pt; object-fit: contain; }
+  /* ── Letter box (matches ANS letter minimal style) ── */
+  .letter-box { border: 1.5pt solid #000; padding: 12pt 18pt 20pt; flex: 1; display: flex; flex-direction: column; }
 
-  .body { flex: 1; padding-top: 16pt; display: flex; flex-direction: column; }
+  /* ── Header ── */
+  .header { text-align: center; border-bottom: 1pt solid #000; padding-bottom: 8pt; margin-bottom: 8pt; }
+  .college-name { font-size: 18pt; font-weight: bold; letter-spacing: 0.5pt; }
+  .college-tagline { font-size: 8.5pt; margin: 3pt 0 2pt; }
+  .college-instcode { font-size: 10pt; font-weight: bold; margin: 2pt 0; }
+  .college-address { font-size: 10pt; font-weight: bold; margin: 2pt 0; }
+  .college-contact { font-size: 10pt; font-weight: bold; }
+
+  .body { flex: 1; padding-top: 10pt; display: flex; flex-direction: column; }
   .date-line { text-align: right; font-size: 11pt; margin-bottom: 10pt; }
   .title {
     text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline;
@@ -119,7 +123,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
   .sign-row { display: flex; justify-content: space-between; margin-top: 46pt; padding: 0 4pt; }
   .sign-block { text-align: center; width: 30%; }
   .sign-line { border-top: 1pt solid #000; margin-bottom: 4pt; padding-top: 3pt; font-size: 10pt; font-weight: bold; }
-  .seal-watermark { width: 60pt; height: 60pt; margin: 0 auto 4pt; opacity: 0.55; }
+  .seal-watermark { width: 60pt; height: 60pt; margin: 8pt auto 0; opacity: 0.55; }
 
   .footer-note { margin-top: auto; padding-top: 20pt; font-size: 8.5pt; text-align: center; color: #333; }
 
@@ -128,17 +132,15 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
 </head>
 <body>
 <div class="page">
+<div class="letter-box">
 
   <!-- Header -->
   <div class="header">
-    <div class="header-text">
-      <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
-      <div class="college-tagline">(Approved by A.I.C.T.E., New&#8209;Delhi, and running with Grant&#8209;in&#8209;aid of State Govt. of Karnataka)</div>
-      <div class="college-instcode">[Inst. Code: 308]</div>
-      <div class="college-address">Ikkeri Road, Sagar &#8211; 577 401, Shimoga Dist., Karnataka.</div>
-      <div class="college-contact">Phone: 9449685992</div>
-    </div>
-    <img class="seal-header" src="${INSTITUTE_LOGO_B64}" alt="Institute Crest" />
+    <div class="college-name">SANJAY MEMORIAL POLYTECHNIC</div>
+    <div class="college-tagline">(Approved by A.I.C.T.E., New&#8209;Delhi, and running with Grant&#8209;in&#8209;aid of State Govt. of Karnataka)</div>
+    <div class="college-instcode">[Inst. Code: 308]</div>
+    <div class="college-address">Ikkeri Road, Sagar &#8211; 577 401, Shimoga Dist., Karnataka.</div>
+    <div class="college-contact">Phone: 9449685992</div>
   </div>
 
   <!-- Body -->
@@ -182,21 +184,24 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
     </div>
     <div class="refund-amount-line">Refund Amount &#8202;:&#8202; ₹ ${fmtRupees(data.refundAmount)}</div>
 
-    <p class="ack-para">I/We, the undersigned, acknowledge having received the above refund amount of
-      <strong>₹ ${fmtRupees(data.refundAmount)}</strong> towards fees paid for SNQ admission of
-      <strong>${name}</strong>, in full and final settlement, and confirm having no further claim in this regard.</p>
+    <p class="ack-para">I, <strong>${name}</strong>, acknowledge that I have received the above refund amount of
+      <strong>₹ ${fmtRupees(data.refundAmount)}</strong> for being allotted admission under the SNQ category,
+      in full and final settlement, and confirm having no further claim in this regard.
+      I further undertake that I shall study all three (3) years of the diploma course in this institution,
+      that there shall be no transfer to any other institution during this period, and that I have read,
+      understood and agreed to the SNQ admission terms and conditions.</p>
 
     <div class="sign-row">
       <div class="sign-block">
         <div class="sign-line">Student Signature</div>
+        <svg class="seal-watermark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="47" fill="none" stroke="#000" stroke-width="2.5"/>
+        </svg>
       </div>
       <div class="sign-block">
         <div class="sign-line">Parent / Guardian Signature</div>
       </div>
       <div class="sign-block">
-        <svg class="seal-watermark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="47" fill="none" stroke="#000" stroke-width="2.5"/>
-        </svg>
         <div class="sign-line">Principal</div>
       </div>
     </div>
@@ -204,6 +209,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
     <div class="footer-note">This voucher is a manual record of fee refund issued for SNQ admission category students and is to be retained for audit and accounts verification.</div>
   </div>
 
+</div>
 </div>
 <script>
   window.onload = function () {
