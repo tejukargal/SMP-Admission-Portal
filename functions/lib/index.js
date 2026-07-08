@@ -23,12 +23,42 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendBulkSMS = void 0;
+exports.generateAdmissionSummary = exports.sendBulkSMS = exports.syncMyAdminClaim = exports.syncAdminClaim = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
+const firestore_1 = require("firebase-functions/v2/firestore");
 const https = __importStar(require("https"));
 admin.initializeApp();
 const db = admin.firestore();
+// ── Sync Firestore role/active onto the Auth custom claim `admin` ──────────
+// Storage Security Rules can't read Firestore documents, so admin-only Storage
+// writes (e.g. remittance challan uploads) are gated on this claim instead.
+exports.syncAdminClaim = (0, firestore_1.onDocumentWritten)('users/{uid}', async (event) => {
+    var _a;
+    const { uid } = event.params;
+    const after = ((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists) ? event.data.after.data() : null;
+    const isAdmin = !!after && after.role === 'admin' && after.active !== false;
+    try {
+        await admin.auth().setCustomUserClaims(uid, { admin: isAdmin });
+    }
+    catch (err) {
+        console.error(`syncAdminClaim: failed to set claims for ${uid}`, err);
+    }
+});
+// Self-service: lets the signed-in caller re-sync their own admin claim from
+// their own Firestore users/{uid} doc, without needing another doc write to
+// fire syncAdminClaim (useful right after the very first deploy, or if a
+// user's token is stale). Only ever touches the caller's own uid.
+exports.syncMyAdminClaim = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Must be signed in');
+    const uid = request.auth.uid;
+    const snap = await db.collection('users').doc(uid).get();
+    const data = snap.exists ? snap.data() : null;
+    const isAdmin = !!data && data.role === 'admin' && data.active !== false;
+    await admin.auth().setCustomUserClaims(uid, { admin: isAdmin });
+    return { admin: isAdmin };
+});
 const MOBILE_RE = /^[6-9]\d{9}$/;
 function interpolate(template, r) {
     return template
@@ -141,8 +171,6 @@ exports.sendBulkSMS = (0, https_1.onCall)({ region: 'asia-south1', timeoutSecond
     });
     return { successCount, failCount, total: successCount + failCount };
 });
-// AI insights removed
-/*
 function callClaude(apiKey, p) {
     return new Promise((resolve, reject) => {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2;
@@ -425,5 +453,4 @@ exports.generateAdmissionSummary = (0, https_1.onCall)({ region: 'asia-south1', 
         throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
     }
 });
-*/
 //# sourceMappingURL=index.js.map

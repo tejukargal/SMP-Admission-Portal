@@ -1,9 +1,38 @@
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as https from 'https';
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// ── Sync Firestore role/active onto the Auth custom claim `admin` ──────────
+// Storage Security Rules can't read Firestore documents, so admin-only Storage
+// writes (e.g. remittance challan uploads) are gated on this claim instead.
+export const syncAdminClaim = onDocumentWritten('users/{uid}', async (event) => {
+  const { uid } = event.params;
+  const after = event.data?.after.exists ? event.data.after.data() : null;
+  const isAdmin = !!after && after.role === 'admin' && after.active !== false;
+  try {
+    await admin.auth().setCustomUserClaims(uid, { admin: isAdmin });
+  } catch (err) {
+    console.error(`syncAdminClaim: failed to set claims for ${uid}`, err);
+  }
+});
+
+// Self-service: lets the signed-in caller re-sync their own admin claim from
+// their own Firestore users/{uid} doc, without needing another doc write to
+// fire syncAdminClaim (useful right after the very first deploy, or if a
+// user's token is stale). Only ever touches the caller's own uid.
+export const syncMyAdminClaim = onCall({ region: 'asia-south1' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
+  const uid = request.auth.uid;
+  const snap = await db.collection('users').doc(uid).get();
+  const data = snap.exists ? snap.data() : null;
+  const isAdmin = !!data && data.role === 'admin' && data.active !== false;
+  await admin.auth().setCustomUserClaims(uid, { admin: isAdmin });
+  return { admin: isAdmin };
+});
 
 interface SMSRecipient {
   studentId: string;

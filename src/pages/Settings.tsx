@@ -8,7 +8,8 @@ import { clearPcHistory, type PCRecord } from '../services/pcService';
 import { deleteFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
-import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear } from '../services/userService';
+import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear, syncMyAdminClaim } from '../services/userService';
+import { auth } from '../config/firebase';
 import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
 import { RESET_PASSKEY } from '../config/constants';
 import { Select } from '../components/common/Select';
@@ -151,6 +152,8 @@ export function Settings() {
   const [creatingStaff, setCreatingStaff] = useState(false);
   const [staffCreateMsg, setStaffCreateMsg] = useState('');
   const [staffCreateError, setStaffCreateError] = useState('');
+  const [syncingClaim, setSyncingClaim] = useState(false);
+  const [syncClaimMsg,  setSyncClaimMsg]  = useState('');
 
   const currentValue = selectedYear || settings?.currentAcademicYear || '';
 
@@ -409,6 +412,20 @@ export function Settings() {
       setStaffCreateError(msg.includes('email-already-in-use') ? 'This email is already in use.' : msg);
     } finally {
       setCreatingStaff(false);
+    }
+  }
+
+  async function handleSyncMyAccess() {
+    setSyncingClaim(true);
+    setSyncClaimMsg('');
+    try {
+      const isAdmin = await syncMyAdminClaim();
+      await auth.currentUser?.getIdToken(true);
+      setSyncClaimMsg(isAdmin ? 'Access refreshed — admin permissions are active.' : 'Synced, but this account is not marked as admin in Firestore.');
+    } catch (err) {
+      setSyncClaimMsg(err instanceof Error ? err.message : 'Failed to refresh access.');
+    } finally {
+      setSyncingClaim(false);
     }
   }
 
@@ -1075,6 +1092,21 @@ export function Settings() {
         {activeTab === 'staff' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <div className="max-w-lg space-y-5">
+
+              {/* Refresh my access (custom claim sync) */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+                <h3 className="text-base font-medium text-gray-800 mb-1">My Access</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Refreshes the admin permission used for Storage uploads (e.g. remittance challan copies) from your current role.
+                  Use this once, or any time uploads unexpectedly fail with a permission error.
+                </p>
+                <Button onClick={() => { void handleSyncMyAccess(); }} loading={syncingClaim} variant="secondary">
+                  Refresh My Permissions
+                </Button>
+                {syncClaimMsg && (
+                  <p className="text-sm text-gray-600 bg-gray-50 rounded-md px-3 py-2 mt-3">{syncClaimMsg}</p>
+                )}
+              </div>
 
               {/* Create staff account */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>

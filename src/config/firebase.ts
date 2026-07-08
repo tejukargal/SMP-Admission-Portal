@@ -5,6 +5,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,3 +28,5 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(),
   }),
 });
+
+export const storage = getStorage(app);

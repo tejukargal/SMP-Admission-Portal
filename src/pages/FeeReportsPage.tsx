@@ -21,9 +21,9 @@ import {
   exportCourseYearExcel, exportConsolidatedExcel,
   exportDatewiseHeadwiseExcel,
 } from '../utils/feeReportExcel';
-import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts } from '../types';
+import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts, GovHeadRefs, FeeRemittance } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import { addFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
+import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
 import { useFeeRemittances } from '../hooks/useFeeRemittances';
 
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
@@ -52,6 +52,7 @@ const GOV_HEADS: { key: keyof GovHeadAmounts; label: string }[] = [
 ];
 
 const EMPTY_GOV_HEADS: GovHeadAmounts = { tuition: 0, dvp: 0, adm: 0, lab: 0, rr: 0, magazine: 0, idCard: 0, fine: 0 };
+const EMPTY_GOV_HEAD_REFS: GovHeadRefs = { tuition: '', dvp: '', adm: '', lab: '', rr: '', magazine: '', idCard: '', fine: '' };
 
 function ordinal(n: number) {
   return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
@@ -74,6 +75,35 @@ const TABS: { id: TabId; label: string }[] = [
 
 function fmt(n: number): string {
   return `\u20B9${n.toLocaleString('en-IN')}`;
+}
+
+// Force-download a cross-origin file (Storage download URLs don't honor the `download` attribute cross-origin).
+async function downloadFile(url: string, filename: string): Promise<void> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objUrl);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
+
+// Pure-ASCII Indian number formatter for jsPDF cells (avoids WinAnsi garbling from toLocaleString).
+function numPdf(n: number): string {
+  const sign = n < 0 ? '-' : '';
+  const s = Math.abs(Math.round(n)).toString();
+  if (s.length <= 3) return sign + s;
+  const last3 = s.slice(-3);
+  const rest  = s.slice(0, -3);
+  const grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return sign + grouped + ',' + last3;
 }
 
 // ── Chip ──────────────────────────────────────────────────────────────────────
@@ -1915,6 +1945,85 @@ function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummar
   doc.save(`Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
 }
 
+function exportRemittanceTrackerPdf(
+  label: string,
+  academicYear: string,
+  summaryTable: { head: string[]; body: (string | number)[][]; foot?: (string | number)[] },
+  logTable: { head: string[]; body: (string | number)[][] },
+): void {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const MARGIN = 14;
+
+  const dateStr = (() => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2,'0')}-${d.toLocaleString('en-US',{month:'short'})}-${String(d.getFullYear()).slice(2)}`;
+  })();
+
+  const HEAD: [number,number,number] = [55, 65, 81];
+  const WHITE: [number,number,number] = [255,255,255];
+  const NEAR_BLACK: [number,number,number] = [25,25,25];
+  const GRID: [number,number,number] = [210,215,220];
+
+  const headStyles = { fillColor: HEAD, textColor: WHITE, fontStyle: 'bold' as const, fontSize: 8, cellPadding: { top:2, right:3, bottom:2, left:3 }, lineWidth: 0 };
+  const bodyStyles = { fontSize: 8, cellPadding: { top:2, right:3, bottom:2, left:3 }, fillColor: WHITE, textColor: NEAR_BLACK, lineColor: GRID, lineWidth: 0.18, overflow: 'linebreak' as const };
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...NEAR_BLACK);
+  doc.text(`Remittance Tracker — ${academicYear}`, W / 2, 12, { align: 'center' });
+  doc.setFontSize(9); doc.text(label, W / 2, 18, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120,120,120);
+  doc.text(`Generated: ${dateStr}`, W / 2, 23, { align: 'center' });
+  doc.setTextColor(...NEAR_BLACK);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+  doc.text('Summary', MARGIN, 28);
+
+  const body1 = summaryTable.foot ? [...summaryTable.body, summaryTable.foot] : summaryTable.body;
+
+  autoTable(doc, {
+    startY: 31, margin: { left: MARGIN, right: MARGIN },
+    head: [summaryTable.head],
+    body: body1,
+    headStyles,
+    bodyStyles,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: { 0: { cellWidth: 44, halign: 'left' } },
+    didParseCell(data) {
+      if (data.column.index > 0) data.cell.styles.halign = 'right';
+      if (summaryTable.foot && data.section === 'body' && data.row.index === body1.length - 1) {
+        data.cell.styles.fillColor = HEAD;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  const afterSummary = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NEAR_BLACK);
+  doc.text('Payment Log', MARGIN, afterSummary);
+
+  autoTable(doc, {
+    startY: afterSummary + 3, margin: { left: MARGIN, right: MARGIN },
+    head: [logTable.head],
+    body: logTable.body,
+    headStyles,
+    bodyStyles,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: { [logTable.head.length - 1]: { halign: 'right', fontStyle: 'bold' } },
+  });
+
+  const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    const H = doc.internal.pageSize.getHeight();
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,160,160);
+    doc.text(`Remittance Tracker ${academicYear}`, MARGIN, H - 5);
+    doc.text(`Page ${p} of ${pages}`, W - MARGIN, H - 5, { align: 'right' });
+  }
+
+  doc.save(`Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
+}
+
 function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; showAllYears: boolean }) {
   const availableDates = useMemo(
     () => [...new Set(feeRecords.map((r) => r.date.slice(0, 10)))].sort(),
@@ -2268,11 +2377,13 @@ function RemittanceModal({
   payee,
   academicYear,
   existingPhases,
+  editing,
   onClose,
 }: {
   payee: RemittancePayee;
   academicYear: AcademicYear;
   existingPhases: string[];
+  editing?: FeeRemittance | null;
   onClose: () => void;
 }) {
   const nextNum = existingPhases.reduce((max, ph) => {
@@ -2280,20 +2391,58 @@ function RemittanceModal({
     return !isNaN(n) && n > max ? n : max;
   }, 0) + 1;
 
-  const [phase,       setPhase]       = useState(`${ordinal(nextNum)} Phase`);
-  const [date,        setDate]        = useState(new Date().toISOString().split('T')[0]);
-  const [paymentMode, setPaymentMode] = useState<RemittanceMode>(payee === 'GOV' ? 'Online' : 'NEFT');
-  const [reference,   setReference]   = useState('');
-  const [remarks,     setRemarks]     = useState('');
-  const [govHeads,    setGovHeads]    = useState<GovHeadAmounts>({ ...EMPTY_GOV_HEADS });
-  const [amount,      setAmount]      = useState<number | ''>('');
+  const [phase,       setPhase]       = useState(editing ? editing.phase : `${ordinal(nextNum)} Phase`);
+  const [date,        setDate]        = useState(editing ? editing.date : new Date().toISOString().split('T')[0]);
+  const [paymentMode, setPaymentMode] = useState<RemittanceMode>(editing ? editing.paymentMode : (payee === 'GOV' ? 'Online' : 'NEFT'));
+  const [reference,   setReference]   = useState(editing ? editing.reference : '');
+  const [remarks,     setRemarks]     = useState(editing ? editing.remarks : '');
+  const [govHeads,    setGovHeads]    = useState<GovHeadAmounts>(editing?.govHeads ? { ...editing.govHeads } : { ...EMPTY_GOV_HEADS });
+  const [govHeadRefs, setGovHeadRefs] = useState<GovHeadRefs>(editing?.govHeadRefs ? { ...editing.govHeadRefs } : { ...EMPTY_GOV_HEAD_REFS });
+  const [amount,      setAmount]      = useState<number | ''>(editing ? editing.amount : '');
+  const [challanFile, setChallanFile] = useState<File | null>(null);
+  const [removeChallan, setRemoveChallan] = useState(false);
+  const [headChallanFiles,   setHeadChallanFiles]   = useState<Partial<Record<keyof GovHeadAmounts, File>>>({});
+  const [headChallanRemoved, setHeadChallanRemoved] = useState<Partial<Record<keyof GovHeadAmounts, boolean>>>({});
   const [saving,      setSaving]      = useState(false);
   const [err,         setErr]         = useState('');
 
   const govTotal = GOV_HEADS.reduce((s, { key }) => s + (govHeads[key] || 0), 0);
 
+  function validateFile(file: File): string | null {
+    if (file.size > 5 * 1024 * 1024) return 'File must be under 5 MB';
+    if (!/\.(pdf|jpe?g|png)$/i.test(file.name)) return 'Only PDF, JPG or PNG files are allowed';
+    return null;
+  }
+
+  function handleFileChange(file: File | null) {
+    if (!file) { setChallanFile(null); return; }
+    const invalid = validateFile(file);
+    if (invalid) { setErr(invalid); return; }
+    setErr('');
+    setRemoveChallan(false);
+    setChallanFile(file);
+  }
+
+  function handleHeadFileChange(key: keyof GovHeadAmounts, file: File | null) {
+    if (!file) return;
+    const invalid = validateFile(file);
+    if (invalid) { setErr(invalid); return; }
+    setErr('');
+    setHeadChallanRemoved((prev) => ({ ...prev, [key]: false }));
+    setHeadChallanFiles((prev) => ({ ...prev, [key]: file }));
+  }
+
+  function handleRemoveHeadChallan(key: keyof GovHeadAmounts) {
+    setHeadChallanFiles((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    setHeadChallanRemoved((prev) => ({ ...prev, [key]: true }));
+  }
+
   function updateHead(key: keyof GovHeadAmounts, val: string) {
     setGovHeads((prev) => ({ ...prev, [key]: parseFloat(val) || 0 }));
+  }
+
+  function updateHeadRef(key: keyof GovHeadRefs, val: string) {
+    setGovHeadRefs((prev) => ({ ...prev, [key]: val }));
   }
 
   async function handleSave() {
@@ -2301,20 +2450,35 @@ function RemittanceModal({
     if (!date)         { setErr('Date is required');  return; }
     const finalAmount = payee === 'GOV' ? govTotal : (typeof amount === 'number' ? amount : 0);
     if (finalAmount <= 0) { setErr('Enter a valid amount'); return; }
+    const finalReference = payee === 'GOV'
+      ? [...new Set(Object.values(govHeadRefs).map((v) => v.trim()).filter(Boolean))].join(', ')
+      : reference.trim();
     setSaving(true);
     setErr('');
     try {
-      await addFeeRemittance({
+      const payload = {
         academicYear,
         payee,
         phase: phase.trim(),
         date,
         paymentMode,
-        reference: reference.trim(),
+        reference: finalReference,
         amount: finalAmount,
-        ...(payee === 'GOV' ? { govHeads } : {}),
+        ...(payee === 'GOV' ? { govHeads, govHeadRefs } : {}),
         remarks: remarks.trim(),
-      });
+      };
+      if (editing) {
+        await updateFeeRemittance(editing.id, payload, {
+          challanFile: challanFile ?? undefined,
+          removeChallan,
+          previousChallanPath: editing.challanPath,
+          headChallans: headChallanFiles,
+          removeHeadChallans: headChallanRemoved,
+          previousHeadChallans: editing.govHeadChallans,
+        });
+      } else {
+        await addFeeRemittance(payload, { challanFile: challanFile ?? undefined, headChallans: headChallanFiles });
+      }
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to save');
@@ -2322,19 +2486,20 @@ function RemittanceModal({
     }
   }
 
-  const payeeLabel = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
-  const refLabel   = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
+  const payeeLabel   = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
+  const refLabel     = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
+  const challanLabel = payee === 'GOV' ? 'K2 Challan Copy' : 'Payment Proof Copy';
   const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400';
   const amtInp  = inp + ' text-right tabular-nums [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${payee === 'GOV' ? 'max-w-md' : 'max-w-sm'} flex flex-col overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50">
           <div>
-            <p className="text-sm font-bold text-gray-800">Record Remittance</p>
+            <p className="text-sm font-bold text-gray-800">{editing ? 'Edit Remittance' : 'Record Remittance'}</p>
             <p className="text-xs text-gray-400 mt-0.5">{payeeLabel}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -2353,7 +2518,7 @@ function RemittanceModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className={payee === 'GOV' ? '' : 'grid grid-cols-2 gap-2'}>
             <div>
               <label className="text-xs font-semibold text-gray-500 block mb-0.5">Payment Mode</label>
               <select className={inp} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as RemittanceMode)}>
@@ -2362,28 +2527,62 @@ function RemittanceModal({
                 <option value="Cheque">Cheque</option>
               </select>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 block mb-0.5">{refLabel}</label>
-              <input className={inp} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ref / Challan No." />
-            </div>
+            {payee !== 'GOV' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-0.5">{refLabel}</label>
+                <input className={inp} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ref / Challan No." />
+              </div>
+            )}
           </div>
 
           {payee === 'GOV' ? (
             <>
-              <div className="border-t border-gray-100 pt-3 space-y-1.5">
-                <p className="text-xs font-bold uppercase text-gray-400 mb-2">Amount per Fee Head (₹)</p>
-                {GOV_HEADS.map(({ key, label }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 w-20 shrink-0">{label}</span>
-                    <input
-                      type="number" min="0" step="1"
-                      className={amtInp}
-                      value={govHeads[key] || ''}
-                      onChange={(e) => updateHead(key, e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                ))}
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <p className="text-xs font-bold uppercase text-gray-400 mb-1">Amount, K2 Challan Ref &amp; Soft Copy per Fee Head</p>
+                {GOV_HEADS.map(({ key, label }) => {
+                  const existingChallan = editing?.govHeadChallans?.[key];
+                  const showExisting = existingChallan && !headChallanRemoved[key] && !headChallanFiles[key];
+                  return (
+                    <div key={key} className="border border-gray-100 rounded-lg p-1.5 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-gray-600 w-16 shrink-0">{label}</span>
+                        <input
+                          type="number" min="0" step="1"
+                          className={amtInp + ' flex-1 min-w-0'}
+                          value={govHeads[key] || ''}
+                          onChange={(e) => updateHead(key, e.target.value)}
+                          placeholder="0"
+                        />
+                        <input
+                          type="text"
+                          className={inp + ' flex-1 min-w-0'}
+                          value={govHeadRefs[key]}
+                          onChange={(e) => updateHeadRef(key, e.target.value)}
+                          placeholder="Challan Ref"
+                        />
+                      </div>
+                      <div className="pl-[4.75rem]">
+                        {showExisting ? (
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <a href={existingChallan.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
+                            <button type="button" className="text-gray-500 hover:text-gray-700" onClick={() => downloadFile(existingChallan.url, `${label}_${phase}.pdf`)}>Download</button>
+                            <button type="button" className="ml-auto text-gray-400 hover:text-red-500" onClick={() => handleRemoveHeadChallan(key)}>Remove</button>
+                          </div>
+                        ) : (
+                          <>
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              className="w-full text-[11px] text-gray-500 file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:bg-gray-100 file:text-[11px] file:font-semibold file:text-gray-700 hover:file:bg-gray-200"
+                              onChange={(e) => handleHeadFileChange(key, e.target.files?.[0] ?? null)}
+                            />
+                            {headChallanRemoved[key] && <p className="text-[10px] text-amber-600 mt-0.5">Current file will be removed on save.</p>}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                 <span className="text-sm font-bold text-blue-700">Total</span>
@@ -2403,6 +2602,29 @@ function RemittanceModal({
             </div>
           )}
 
+          {payee !== 'GOV' && (
+          <div>
+            <label className="text-xs font-semibold text-gray-500 block mb-0.5">{challanLabel} (optional)</label>
+            {editing?.challanUrl && !removeChallan && !challanFile ? (
+              <div className="flex items-center gap-2 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+                <a href={editing.challanUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
+                <button type="button" className="text-gray-500 hover:text-gray-700" onClick={() => downloadFile(editing.challanUrl!, `${payeeLabel}_${phase}.pdf`)}>Download</button>
+                <button type="button" className="ml-auto text-gray-400 hover:text-red-500 shrink-0" onClick={() => setRemoveChallan(true)}>Remove</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-xs file:font-semibold file:text-gray-700 hover:file:bg-gray-200"
+                  onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                />
+                {removeChallan && <p className="text-[10px] text-amber-600 mt-1">Current file will be removed on save.</p>}
+              </>
+            )}
+          </div>
+          )}
+
           <div>
             <label className="text-xs font-semibold text-gray-500 block mb-0.5">Remarks</label>
             <input className={inp} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
@@ -2419,7 +2641,7 @@ function RemittanceModal({
             disabled={saving}
             className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors"
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? (challanFile ? 'Uploading…' : 'Saving…') : 'Save'}
           </button>
         </div>
       </div>
@@ -2561,10 +2783,24 @@ function FeeDistributionTab({
 
   const [trackerTab,       setTrackerTab]       = useState<RemittancePayee | 'CONSOLIDATED'>('GOV');
   const [showModal,        setShowModal]        = useState(false);
+  const [editingRemittance, setEditingRemittance] = useState<FeeRemittance | null>(null);
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null);
 
+  function getAttachments(r: FeeRemittance): { label: string; url: string }[] {
+    const list: { label: string; url: string }[] = [];
+    if (r.govHeadChallans) {
+      for (const { key, label } of GOV_HEADS) {
+        const c = r.govHeadChallans[key];
+        if (c) list.push({ label, url: c.url });
+      }
+    }
+    if (r.challanUrl) list.push({ label: r.govHeadChallans ? 'Payment Copy' : 'Attachment', url: r.challanUrl });
+    return list;
+  }
+
   async function handleDelete(id: string) {
-    try { await deleteFeeRemittance(id); } catch { /* snapshot listener auto-updates on success */ }
+    const r = remittances.find((r) => r.id === id);
+    try { await deleteFeeRemittance(id, r?.challanPath, r?.govHeadChallans); } catch { /* snapshot listener auto-updates on success */ }
     setDeleteConfirming(null);
   }
 
@@ -2967,7 +3203,7 @@ function FeeDistributionTab({
             return (
               <button
                 key={tab}
-                onClick={() => { setTrackerTab(tab); setDeleteConfirming(null); }}
+                onClick={() => { setTrackerTab(tab); setDeleteConfirming(null); setEditingRemittance(null); }}
                 className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
                   active
                     ? 'border-blue-500 text-blue-700 bg-blue-50/30'
@@ -3068,31 +3304,78 @@ function FeeDistributionTab({
                     <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
                     {govRemittances.map((r) => (
                       <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
-                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0">{r.date}</span>
-                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
                         {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
                         {deleteConfirming === r.id ? (
                           <div className="flex items-center gap-1 shrink-0">
                             <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
                             <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
                           </div>
                         ) : (
-                          <button className="text-gray-300 hover:text-red-400 transition-colors shrink-0 text-base leading-none" onClick={() => setDeleteConfirming(r.id)} title="Delete">×</button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded px-2 py-0.5 transition-colors"
+                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="text-[11px] font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 bg-red-50 hover:bg-red-100 rounded px-2 py-0.5 transition-colors"
+                              onClick={() => setDeleteConfirming(r.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
-                >
-                  <span className="text-sm leading-none">+</span> Record Govt Payment
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    <span className="text-sm leading-none">+</span> Record Govt Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      'Government (K2)',
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...govPhases, 'Balance'],
+                        body: GOV_HEADS.map(({ key, label }) => {
+                          const payableH = govPayableByHead[key];
+                          const paidH    = govPaidByHead[key];
+                          const balH     = payableH - paidH;
+                          return [label, numPdf(payableH), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.[key] ?? 0)), balH === 0 ? 'Settled' : numPdf(balH)];
+                        }),
+                        foot: ['Total', numPdf(grandTotals.gov), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.total ?? 0)), balance === 0 ? 'Settled' : numPdf(balance)],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    PDF
+                  </button>
+                </div>
               </>
             );
           })()}
@@ -3105,6 +3388,8 @@ function FeeDistributionTab({
             const payable    = isSVK ? grandTotals.svk : grandTotals.smp;
             const balance    = payable - paid;
             const label      = isSVK ? 'SVK' : 'SMP';
+            const phases     = [...new Set(rem.map((r) => r.phase))].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+            const phaseTotals = new Map(phases.map((ph) => [ph, rem.filter((r) => r.phase === ph).reduce((s, r) => s + r.amount, 0)]));
             return (
               <>
                 <div className="grid grid-cols-3 gap-3">
@@ -3126,36 +3411,115 @@ function FeeDistributionTab({
                   ))}
                 </div>
 
+                {/* Head / Total Payable / Phase / Balance table */}
+                <div className="overflow-auto rounded-lg border border-gray-200">
+                  <table className="w-full text-xs">
+                    <thead className="bg-yellow-50 border-b border-yellow-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
+                        {phases.map((ph) => (
+                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
+                        ))}
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white">
+                        <td className="px-3 py-1.5 font-medium text-gray-700">{isSVK ? 'SVK Management' : 'SMP'}</td>
+                        <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
+                        {phases.map((ph) => {
+                          const amt = phaseTotals.get(ph) ?? 0;
+                          return (
+                            <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
+                              {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={`px-3 py-1.5 text-right font-semibold ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {balance === 0 ? '✓' : fmt(balance)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
                 {rem.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
                     {rem.map((r) => (
                       <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
-                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0">{r.date}</span>
-                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
                         {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
                         {deleteConfirming === r.id ? (
                           <div className="flex items-center gap-1 shrink-0">
                             <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
                             <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
                           </div>
                         ) : (
-                          <button className="text-gray-300 hover:text-red-400 transition-colors shrink-0 text-base leading-none" onClick={() => setDeleteConfirming(r.id)} title="Delete">×</button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded px-2 py-0.5 transition-colors"
+                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="text-[11px] font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 bg-red-50 hover:bg-red-100 rounded px-2 py-0.5 transition-colors"
+                              onClick={() => setDeleteConfirming(r.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
-                >
-                  <span className="text-sm leading-none">+</span> Record {label} Payment
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    <span className="text-sm leading-none">+</span> Record {label} Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      isSVK ? 'SVK Management' : 'SMP',
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...phases, 'Balance'],
+                        body: [[
+                          isSVK ? 'SVK Management' : 'SMP',
+                          numPdf(payable),
+                          ...phases.map((ph) => numPdf(phaseTotals.get(ph) ?? 0)),
+                          balance === 0 ? 'Settled' : numPdf(balance),
+                        ]],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    PDF
+                  </button>
+                </div>
               </>
             );
           })()}
@@ -3199,6 +3563,30 @@ function FeeDistributionTab({
                       <p className={`text-base font-bold ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</p>
                     </div>
                   ))}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      'Consolidated',
+                      academicYear,
+                      {
+                        head: ['Payee', 'Payable', 'Remitted', 'Balance'],
+                        body: rows.map((row) => {
+                          const bal = row.payable - row.paid;
+                          return [row.label, numPdf(row.payable), numPdf(row.paid), bal === 0 ? 'Settled' : numPdf(bal)];
+                        }),
+                        foot: ['Grand Total', numPdf(totalPayable), numPdf(totalPaid), totalBalance === 0 ? 'Settled' : numPdf(totalBalance)],
+                      },
+                      {
+                        head: ['Payee', 'Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: allRemittances.map((r) => [r.payeeLabel, r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    PDF
+                  </button>
                 </div>
 
                 {/* Payee summary table */}
@@ -3251,12 +3639,21 @@ function FeeDistributionTab({
                           r.payeeLabel === 'SVK'  ? 'bg-violet-100 text-violet-700' :
                                                     'bg-green-100 text-green-700'
                         }`}>{r.payeeLabel}</span>
-                        <span className="font-semibold text-gray-700 shrink-0 w-16">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0">{r.date}</span>
-                        <span className="text-gray-400 shrink-0">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs">Ref: {r.reference}</span>}
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
                         {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0">{fmt(r.amount)}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -3280,7 +3677,8 @@ function FeeDistributionTab({
             trackerTab === 'SVK' ? svkRemittances.map((r) => r.phase) :
                                    smpRemittances.map((r) => r.phase)
           }
-          onClose={() => setShowModal(false)}
+          editing={editingRemittance}
+          onClose={() => { setShowModal(false); setEditingRemittance(null); }}
         />
       )}
     </div>

@@ -333,6 +333,18 @@ export interface GovHeadAmounts {
   fine:     number;
 }
 
+/** Per-fee-head K2 challan references for a Government (K2) remittance */
+export interface GovHeadRefs {
+  tuition:  string;
+  dvp:      string;
+  adm:      string;
+  lab:      string;
+  rr:       string;
+  magazine: string;
+  idCard:   string;
+  fine:     string;
+}
+
 export interface FeeRemittance {
   id:          string;
   academicYear: AcademicYear;
@@ -340,12 +352,22 @@ export interface FeeRemittance {
   phase:       string;          // e.g. "1st Phase", "2nd Phase"
   date:        string;          // YYYY-MM-DD
   paymentMode: RemittanceMode;
-  reference:   string;          // challan / cheque / NEFT ref
+  reference:   string;          // challan / cheque / NEFT ref (for GOV: summary of head refs)
   amount:      number;          // total (sum of govHeads for GOV payee)
   govHeads?:   GovHeadAmounts; // present only when payee === 'GOV'
+  govHeadRefs?: GovHeadRefs;   // present only when payee === 'GOV' — per-head K2 challan ref
+  challanUrl?:  string;        // download URL of the uploaded soft copy — used for SVK/SMP (single payment-level proof)
+  challanPath?: string;        // Firebase Storage path, needed to delete/replace the file
+  govHeadChallans?: Partial<Record<keyof GovHeadAmounts, GovHeadChallan>>; // present only when payee === 'GOV' — per-head soft copy
   remarks:     string;
   createdAt:   string;
   updatedAt:   string;
+}
+
+/** A single uploaded soft-copy file (download URL + storage path for delete/replace) */
+export interface GovHeadChallan {
+  url:  string;
+  path: string;
 }
 
 // ─── Exam Results (parsed from Result Ledger PDFs) ─────────────────────────────

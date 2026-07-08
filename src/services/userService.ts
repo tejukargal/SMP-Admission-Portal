@@ -15,8 +15,18 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-import { firebaseConfig, db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { firebaseConfig, db, app } from '../config/firebase';
 import type { StaffUser, UserRole, AcademicYear } from '../types';
+
+const functions = getFunctions(app, 'asia-south1');
+
+/** Re-syncs the signed-in user's `admin` Auth custom claim from their own Firestore role/active fields. */
+export async function syncMyAdminClaim(): Promise<boolean> {
+  const fn = httpsCallable<Record<string, never>, { admin: boolean }>(functions, 'syncMyAdminClaim');
+  const result = await fn({});
+  return result.data.admin;
+}
 
 export async function getUserRole(
   uid: string
