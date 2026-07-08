@@ -6,6 +6,7 @@ import { getTcRecordsByStudent, type TCRecord } from '../../services/tcService';
 import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
 import { getRefundRecordsByStudent, deleteRefundRecord, type RefundRecord } from '../../services/refundService';
 import { generateSnqRefundVoucher } from '../../utils/snqRefundVoucher';
+import { generateSeatCancellationRefundVoucher } from '../../utils/seatCancellationRefundVoucher';
 import { useAuth } from '../../contexts/AuthContext';
 import { getExamResultsByRegNumber } from '../../services/resultService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
@@ -1074,6 +1075,18 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted }: {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function handlePrint(r: RefundRecord) {
+    if (r.refundCategory === 'SEAT_CANCELLATION') {
+      generateSeatCancellationRefundVoucher(student, {
+        totalPaid: r.totalPaid,
+        headBreakdown: r.headBreakdown ?? [],
+        refundAmount: r.refundAmount,
+        paymentType: r.paymentType,
+        referenceNumber: r.referenceNumber,
+        paymentDate: refundIsoToDDMMYYYY(r.paymentDate),
+        remarks: r.remarks,
+      });
+      return;
+    }
     generateSnqRefundVoucher(student, {
       totalPaid: r.totalPaid,
       receiptBreakdown: r.receiptBreakdown,
@@ -1140,7 +1153,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted }: {
         </div>
         <div className="text-center">
           <p className="text-sm font-semibold text-gray-500">No Refund Recorded</p>
-          <p className="text-xs text-gray-400 mt-0.5">SNQ fee refund vouchers will appear here once generated for this student.</p>
+          <p className="text-xs text-gray-400 mt-0.5">SNQ or seat cancellation fee refund vouchers will appear here once generated for this student.</p>
         </div>
       </div>
     );
@@ -1172,6 +1185,9 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted }: {
               <div className="flex items-center gap-2.5">
                 <span className="text-sm font-bold text-red-800">
                   ₹{r.refundAmount.toLocaleString()}
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/70 border border-red-200 text-red-700">
+                  {r.refundCategory === 'SEAT_CANCELLATION' ? 'Seat Cancellation' : 'SNQ'}
                 </span>
                 {idx === 0 && records.length > 1 && (
                   <span className="text-[10px] text-gray-400 font-medium">· Latest</span>
@@ -1240,7 +1256,9 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted }: {
                 </dd>
               </div>
               <div>
-                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">SMP Paid (at issue)</dt>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">
+                  {r.refundCategory === 'SEAT_CANCELLATION' ? 'Total Paid (at issue)' : 'SMP Paid (at issue)'}
+                </dt>
                 <dd className="text-xs font-medium text-gray-800 mt-0.5">₹{r.totalPaid.toLocaleString()}</dd>
               </div>
               {r.remarks && (
@@ -1557,7 +1575,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
     { id: 'results',   label: 'Results' },
-    ...(student.admCat === 'SNQ' ? [{ id: 'refund' as Tab, label: 'Refund' }] : []),
+    ...(student.admCat === 'SNQ' || student.admissionStatus === 'CANCELLED' || refundRecords.length > 0
+      ? [{ id: 'refund' as Tab, label: 'Refund' }]
+      : []),
   ];
   const tabs = defaultTab === 'profile'
     ? allTabs

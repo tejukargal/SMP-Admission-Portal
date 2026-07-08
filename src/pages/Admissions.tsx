@@ -4,6 +4,8 @@ import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useMeritListSnapshots } from '../hooks/useMeritListSnapshots';
 import { updateStudentStatus, updateStudentAllottedCategory } from '../services/studentService';
+import { getAllFeeRecordsByStudent } from '../services/feeRecordService';
+import { SMP_FEE_HEADS } from '../types';
 import { saveMeritListSnapshot, saveLateralMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/common/Button';
@@ -11,6 +13,8 @@ import { PageSpinner } from '../components/common/PageSpinner';
 import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
+import { SeatCancellationRefundModal } from '../components/common/SeatCancellationRefundModal';
+import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { EnrollmentBreakdownModal } from '../components/student/EnrollmentBreakdownModal';
 import { exportMeritListPdf, exportMeritListExcel, sortByMerit, sslcPct, fmtDOB, fmtGender, sortByLateralMerit, exportLateralMeritListPdf, exportLateralMeritListExcel } from '../utils/meritListExport';
 import type { Student, AcademicYear, Course, MeritListSnapshot } from '../types';
@@ -112,6 +116,36 @@ export function Admissions() {
     if (debouncedSearch.trim()) list = list.filter((s) => matchesSearch(s, debouncedSearch.trim()));
     return sortStudents(list);
   }, [allStudents, debouncedSearch, quotaFilter, courseFilter]);
+
+  // ── Cancelled students who already have fee payments recorded (confirmed → later cancelled) ──
+  // Drives both the row highlight and the "Fee Refund" context-menu gate on the Cancelled tab.
+  const [cancelledFeePaid, setCancelledFeePaid] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (activeTab !== 'cancelled' || cancelledStudents.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        cancelledStudents.map(async (s) => {
+          try {
+            const records = await getAllFeeRecordsByStudent(s.id);
+            const total = records.reduce((sum, r) => {
+              const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + r.smp[key], 0);
+              const additionalTotal = r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+              return sum + smpTotal + r.svk + additionalTotal;
+            }, 0);
+            return [s.id, total] as const;
+          } catch {
+            return [s.id, 0] as const;
+          }
+        }),
+      );
+      if (!cancelled) setCancelledFeePaid(new Map(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, cancelledStudents]);
 
   // Merit list = pending non-lateral students sorted by SSLC % desc (search + quota/course apply)
   const meritStudents = useMemo(() => {
@@ -331,6 +365,8 @@ export function Admissions() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
   const [admLetterModal, setAdmLetterModal] = useState<{ student: Student; lang: 'en' | 'kn' } | null>(null);
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
+  const [feeRefundStudent, setFeeRefundStudent] = useState<Student | null>(null);
+  const [refundHistoryStudent, setRefundHistoryStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -1321,14 +1357,24 @@ export function Admissions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {displayStudents.map((student, idx) => (
+              {displayStudents.map((student, idx) => {
+                const hasFeePaid = activeTab === 'cancelled' && (cancelledFeePaid.get(student.id) ?? 0) > 0;
+                return (
                 <tr
                   key={student.id}
-                  className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                  className={`transition-colors cursor-context-menu ${hasFeePaid ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
+                  title={hasFeePaid ? 'Fee was paid before this seat was cancelled — refund available via right-click menu' : undefined}
                 >
                   <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                    {student.studentNameSSLC}
+                    {hasFeePaid && (
+                      <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-200 text-amber-800 align-middle">
+                        Fee Paid
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.year}</td>
@@ -1384,7 +1430,8 @@ export function Admissions() {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
@@ -1459,6 +1506,29 @@ export function Admissions() {
               <span>Seat Allotment Letter</span>
               <span className="ml-auto text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">ಕನ್ನಡ</span>
             </button>
+            {isAdmin && contextMenu.student.admissionStatus === 'CANCELLED' && (cancelledFeePaid.get(contextMenu.student.id) ?? 0) > 0 && (
+              <>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <button
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-red-50/70 hover:text-red-800 flex items-center gap-2.5 transition-colors duration-100"
+                  onClick={() => { setFeeRefundStudent(contextMenu.student); setContextMenu(null); }}
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                  </span>
+                  Fee Refund
+                </button>
+                <button
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                  onClick={() => { setRefundHistoryStudent(contextMenu.student); setContextMenu(null); }}
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+                  </span>
+                  Refund History
+                </button>
+              </>
+            )}
           </div>
         </div>
       </>
@@ -1476,6 +1546,21 @@ export function Admissions() {
       <ManageDocumentsModal
         student={docsModalStudent}
         onClose={() => setDocsModalStudent(null)}
+      />
+    )}
+
+    {feeRefundStudent && (
+      <SeatCancellationRefundModal
+        student={feeRefundStudent}
+        onClose={() => setFeeRefundStudent(null)}
+      />
+    )}
+
+    {refundHistoryStudent && (
+      <StudentDetailModal
+        student={refundHistoryStudent}
+        defaultTab="refund"
+        onClose={() => setRefundHistoryStudent(null)}
       />
     )}
 

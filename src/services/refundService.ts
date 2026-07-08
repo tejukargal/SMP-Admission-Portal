@@ -3,10 +3,16 @@ import { db } from '../config/firebase';
 import type { Course, Year, AcademicYear } from '../types';
 
 export type RefundPaymentType = 'CHEQUE' | 'ACCOUNT_PAYEE_CHEQUE' | 'NEFT' | 'CASH';
+export type RefundCategory = 'SNQ' | 'SEAT_CANCELLATION';
 
 export interface RefundReceiptLine {
   date: string;
   receiptNumber: string;
+  amount: number;
+}
+
+export interface RefundHeadLine {
+  label: string;
   amount: number;
 }
 
@@ -20,7 +26,7 @@ export interface RefundRecord {
   year: Year;
   academicYear: AcademicYear;
   totalPaid: number;                      // sum of all fee records at time of issuance
-  receiptBreakdown: RefundReceiptLine[];   // snapshot for the printed voucher / audit trail
+  receiptBreakdown: RefundReceiptLine[];   // SNQ: SMP-only per-receipt snapshot for the printed voucher / audit trail
   refundAmount: number;                   // editable, defaults to totalPaid
   paymentType: RefundPaymentType;
   referenceNumber: string;                // cheque/NEFT ref; blank allowed for CASH
@@ -28,6 +34,8 @@ export interface RefundRecord {
   remarks: string;
   issuedBy: string;                       // admin's email
   issuedAt: string;                       // ISO timestamp of voucher generation
+  refundCategory?: RefundCategory;        // absent = 'SNQ' (backward compat with existing records)
+  headBreakdown?: RefundHeadLine[];       // SEAT_CANCELLATION: SMP/SVK/Additional subtotal snapshot
 }
 
 const COL = 'refunds';
