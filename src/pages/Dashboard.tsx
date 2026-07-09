@@ -738,7 +738,7 @@ const [barsReady, setBarsReady] = useState(false);
     let r1: number, r2: number;
     r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setBarsReady(true)); });
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
-  }, [isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
+  }, [loading, isSearchMode, academicYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
   // Cycle gender-card breakup display through courses
   useEffect(() => {

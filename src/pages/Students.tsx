@@ -662,7 +662,11 @@ export function Students() {
                 {recentlyEnrolled.map((student, idx) => (
                   <tr
                     key={student.id}
-                    className="hover:bg-emerald-100/70 transition-colors cursor-context-menu"
+                    className={`transition-colors cursor-context-menu ${
+                      contextMenu?.student.id === student.id
+                        ? 'bg-emerald-200/80'
+                        : 'hover:bg-emerald-200/60'
+                    }`}
                     onContextMenu={(e) => handleContextMenu(e, student)}
                   >
                     <td className="px-3 py-1.5 text-emerald-400 whitespace-nowrap">{idx + 1}</td>
@@ -718,7 +722,11 @@ export function Students() {
               {visibleStudents.map((student, idx) => (
                 <tr
                   key={`${student.id}-${debouncedSearch}`}
-                  className="hover:bg-emerald-100/70 transition-colors cursor-context-menu"
+                  className={`transition-colors cursor-context-menu ${
+                    contextMenu?.student.id === student.id
+                      ? 'bg-emerald-200/80'
+                      : 'hover:bg-emerald-200/60'
+                  }`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
                   style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
                 >
