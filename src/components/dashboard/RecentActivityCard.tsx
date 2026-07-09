@@ -64,9 +64,16 @@ function ColHd({ children }: { children: ReactNode }) {
 const MATCHA     = '#9EA76B';
 const MILKY      = '#EFE8CA';
 const DARK_OLIVE = '#4B5320';
-const CARD_BG    = MILKY;
-const CARD_BORDER = 'rgba(0,0,0,0.1)';
 const CARD_DIV    = 'rgba(75,83,32,0.15)';
+
+// Claymorphism gradient + shadows — matches the puffy 3D card language used across the Dashboard
+// (see Dashboard.tsx's clayCardShadow / clayHeaderShadow / courseClayTheme for the shared recipe).
+const CLAY_BODY_FROM = '#FCFBF3';
+const CLAY_BODY_TO   = '#E9E4C4';
+const CLAY_HEADER_FROM = '#B2D488';
+const CLAY_HEADER_TO   = '#7FA95A';
+const CLAY_CARD_SHADOW   = '0 10px 20px -6px rgba(30,20,10,0.18), 0 2px 5px -1px rgba(30,20,10,0.10), inset 0 2px 2px 0 rgba(255,255,255,0.85), inset 0 -8px 14px -6px rgba(30,20,10,0.10)';
+const CLAY_HEADER_SHADOW = 'inset 0 1.5px 2px 0 rgba(255,255,255,0.30), inset 0 -4px 8px -3px rgba(0,0,0,0.28)';
 
 interface Props {
   students: Student[];
@@ -180,8 +187,8 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
   if (isEmpty) {
     return (
       <div
-        className="rounded-2xl h-full flex flex-col border p-4"
-        style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+        className="rounded-[22px] h-full flex flex-col p-4"
+        style={{ background: `linear-gradient(160deg, ${CLAY_BODY_FROM} 0%, ${CLAY_BODY_TO} 100%)`, boxShadow: CLAY_CARD_SHADOW }}
       >
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-3.5 rounded-full shrink-0 animate-pulse" style={{ background: MATCHA }} />
@@ -205,15 +212,17 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
 
   return (
     <div
-      className="rounded-2xl h-full flex flex-col border overflow-hidden"
+      className="rounded-[22px] h-full flex flex-col overflow-hidden"
       style={{
-        backgroundColor: CARD_BG,
-        borderColor: CARD_BORDER,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        background: `linear-gradient(160deg, ${CLAY_BODY_FROM} 0%, ${CLAY_BODY_TO} 100%)`,
+        boxShadow: CLAY_CARD_SHADOW,
       }}
     >
-      {/* ── Header — solid matcha strip, separated by a dark hairline ────────── */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-black/10 shrink-0" style={{ background: MATCHA }}>
+      {/* ── Header — raised matcha gradient strip, glossy top highlight ───────── */}
+      <div
+        className="flex items-center justify-between px-3.5 py-2.5 shrink-0"
+        style={{ background: `linear-gradient(160deg, ${CLAY_HEADER_FROM} 0%, ${CLAY_HEADER_TO} 100%)`, boxShadow: CLAY_HEADER_SHADOW }}
+      >
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ background: MILKY }} />
           <div>

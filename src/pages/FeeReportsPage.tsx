@@ -3307,8 +3307,6 @@ function FeeDistributionTab({
                         <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
                         <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
                         <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
-                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
                         {(() => {
                           const count = getAttachments(r).length;
                           if (count === 0) return null;
@@ -3452,8 +3450,6 @@ function FeeDistributionTab({
                         <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
                         <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
                         <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
-                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
                         {(() => {
                           const count = getAttachments(r).length;
                           if (count === 0) return null;
@@ -3642,8 +3638,6 @@ function FeeDistributionTab({
                         <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
                         <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
                         <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {r.reference && <span className="text-gray-400 text-xs whitespace-nowrap">Ref: {r.reference}</span>}
-                        {r.remarks   && <span className="text-gray-400 text-xs italic">{r.remarks}</span>}
                         {(() => {
                           const count = getAttachments(r).length;
                           if (count === 0) return null;
