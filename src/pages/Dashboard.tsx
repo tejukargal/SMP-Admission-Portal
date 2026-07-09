@@ -1006,8 +1006,8 @@ const [barsReady, setBarsReady] = useState(false);
         className="-mx-4 -mt-4 px-4 pt-4 pb-2 flex flex-col gap-2 relative z-10"
         style={{
           background: 'linear-gradient(160deg, #fbfffd 0%, #eaf9f1 55%, #def4e7 100%)',
-          boxShadow: '0 12px 22px -12px rgba(10,90,60,0.22), 0 2px 6px -2px rgba(10,90,60,0.10), inset 0 2px 2px 0 rgba(255,255,255,0.7)',
-          borderRadius: '0 0 24px 24px',
+          boxShadow: 'inset 0 2px 2px 0 rgba(255,255,255,0.7)',
+          borderBottom: '1px solid rgba(0,0,0,0.10)',
         }}
       >
 
@@ -1046,7 +1046,7 @@ const [barsReady, setBarsReady] = useState(false);
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
       <div
-        className="sticky -top-4 z-20 -mx-4 px-4 pt-1.5 pb-2"
+        className="sticky -top-4 z-20 -mx-4 -mt-1.5 px-4 pt-1.5 pb-2"
         style={{
           background: 'linear-gradient(160deg, #fafffd 0%, #e2f6ee 100%)',
           boxShadow: '0 8px 16px -10px rgba(6,110,90,0.18), 0 1px 3px -1px rgba(6,110,90,0.08), inset 0 1.5px 2px 0 rgba(255,255,255,0.7)',
@@ -1182,7 +1182,7 @@ const [barsReady, setBarsReady] = useState(false);
               title="View Pending Admissions"
             >
               <span className="w-1 h-3.5 rounded-full shrink-0 bg-amber-400 group-hover:bg-amber-600 transition-colors" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending Admissions</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending</span>
               <span className="text-xs font-black tabular-nums text-amber-700">
                 <AnimNum value={admissionPendingStats.totalRegular + admissionPendingStats.totalLateral} />
               </span>
@@ -2081,7 +2081,9 @@ const [barsReady, setBarsReady] = useState(false);
             </div>
 
             {/* Course Strength + Adm Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <SectionLabel accent={{ bar: 'bg-indigo-500', text: 'text-indigo-700' }}>Insights & Recent Activity</SectionLabel>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — cycling modes, mint/ivory palette */}
               {(() => {
@@ -2272,6 +2274,7 @@ const [barsReady, setBarsReady] = useState(false);
                     cycleIdx={barChartMode}
                   />
                 </div>
+              </div>
               </div>
             </div>
 
