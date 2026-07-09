@@ -1048,8 +1048,11 @@ const [barsReady, setBarsReady] = useState(false);
       <div
         className="sticky -top-4 z-20 -mx-4 -mt-1.5 px-4 pt-1.5 pb-2"
         style={{
-          background: 'linear-gradient(160deg, #fafffd 0%, #e2f6ee 100%)',
-          boxShadow: '0 8px 16px -10px rgba(6,110,90,0.18), 0 1px 3px -1px rgba(6,110,90,0.08), inset 0 1.5px 2px 0 rgba(255,255,255,0.7)',
+          background: 'linear-gradient(160deg, rgba(255,255,255,0.55) 0%, rgba(226,246,238,0.45) 100%)',
+          backdropFilter: 'blur(14px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(180%)',
+          borderBottom: '1px solid rgba(255,255,255,0.6)',
+          boxShadow: '0 8px 16px -10px rgba(6,110,90,0.18), 0 1px 3px -1px rgba(6,110,90,0.08), inset 0 1.5px 2px 0 rgba(255,255,255,0.5)',
           borderRadius: '0 0 20px 20px',
         }}
       >
