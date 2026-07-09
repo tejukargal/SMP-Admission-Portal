@@ -43,7 +43,7 @@ const COURSE_RING_HEX: Record<Course, string> = {
 };
 
 const fs =
-  'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+  'rounded-full px-2 py-1 text-[12px] font-medium bg-gradient-to-b from-white to-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 cursor-pointer text-gray-700 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] transition-shadow';
 
 function statusBadgeClass(status: string): string {
   if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
@@ -1002,7 +1002,14 @@ const [barsReady, setBarsReady] = useState(false);
     <div className="flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Top panel: header → year chips → pending admissions (uniform bg) ── */}
-      <div className="-mx-4 -mt-4 px-4 pt-4 pb-0.5 flex flex-col gap-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)' }}>
+      <div
+        className="-mx-4 -mt-4 px-4 pt-4 pb-2 flex flex-col gap-2 relative z-10"
+        style={{
+          background: 'linear-gradient(160deg, #fbfffd 0%, #eaf9f1 55%, #def4e7 100%)',
+          boxShadow: '0 12px 22px -12px rgba(10,90,60,0.22), 0 2px 6px -2px rgba(10,90,60,0.10), inset 0 2px 2px 0 rgba(255,255,255,0.7)',
+          borderRadius: '0 0 24px 24px',
+        }}
+      >
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
@@ -1020,7 +1027,7 @@ const [barsReady, setBarsReady] = useState(false);
           <button
             onClick={() => void navigate('/enroll')}
             className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-            style={{ boxShadow: '0 2px 8px 0 rgba(16,185,129,0.35)' }}
+            style={{ boxShadow: '0 4px 10px -2px rgba(16,185,129,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.4), inset 0 -3px 5px -2px rgba(6,95,70,0.35)' }}
             title="Enroll Student"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -1038,14 +1045,13 @@ const [barsReady, setBarsReady] = useState(false);
       {/* ── Pending Admissions strip ───────────────────────────────────── */}
       {admissionPendingStats && (
         <div
-          className="flex-shrink-0 rounded-lg border flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors group"
+          className="flex-shrink-0 rounded-2xl flex items-center gap-2.5 px-3.5 py-2 cursor-pointer transition-all duration-200 group hover:-translate-y-0.5"
           style={{
-            background: 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)',
-            borderColor: '#6ee7b7',
-            boxShadow: '0 2px 8px 0 rgba(16,185,129,0.10), 0 1px 3px -1px rgba(16,185,129,0.08)',
+            background: 'linear-gradient(160deg, #f6fffb 0%, #d7f3e3 100%)',
+            boxShadow: '0 6px 14px -6px rgba(10,90,60,0.22), 0 1px 3px -1px rgba(10,90,60,0.14), inset 0 1.5px 2px 0 rgba(255,255,255,0.85), inset 0 -4px 8px -4px rgba(10,90,60,0.14)',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #ecfdf5 0%, #d1fae5 60%, #ecfdf5 100%)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)'; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg, #f0fef8 0%, #c3ecd7 100%)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg, #f6fffb 0%, #d7f3e3 100%)'; }}
           onClick={() => void navigate('/admissions')}
         >
           {/* Leaf accent dot */}
@@ -1119,12 +1125,19 @@ const [barsReady, setBarsReady] = useState(false);
       </div>{/* end top panel */}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="sticky -top-4 z-20 -mx-4 px-4 pt-1 pb-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', borderBottom: '1px solid rgba(16,185,129,0.10)', boxShadow: '0 4px 10px -2px rgba(16,185,129,0.09)' }}>
+      <div
+        className="sticky -top-4 z-20 -mx-4 px-4 pt-1.5 pb-2"
+        style={{
+          background: 'linear-gradient(160deg, #fafffd 0%, #e2f6ee 100%)',
+          boxShadow: '0 8px 16px -10px rgba(6,110,90,0.18), 0 1px 3px -1px rgba(6,110,90,0.08), inset 0 1.5px 2px 0 rgba(255,255,255,0.7)',
+          borderRadius: '0 0 20px 20px',
+        }}
+      >
         {/* Single row: search + inline filters + actions */}
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-52">
             {/* Search icon */}
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-teal-600 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -1132,13 +1145,23 @@ const [barsReady, setBarsReady] = useState(false);
               placeholder="Search"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value.toUpperCase())}
-              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full py-2.5 text-base font-medium focus:outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
+              style={{
+                background: 'linear-gradient(160deg, #ffffff 0%, #cff3ea 100%)',
+                boxShadow: '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18)',
+              }}
+              onFocus={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18), 0 0 0 1px rgba(47,169,140,0.6)'; }}
+              onBlur={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18)'; }}
             />
             {inputValue && (
               <button
                 type="button"
                 onClick={() => setInputValue('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-white transition-all duration-150 shrink-0 cursor-pointer hover:brightness-110"
+                style={{
+                  background: 'linear-gradient(160deg, #5FCFB4 0%, #2FA98C 100%)',
+                  boxShadow: '0 2px 5px -1px rgba(6,110,90,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.6), inset 0 -2px 3px -1px rgba(6,80,65,0.35)',
+                }}
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -1236,10 +1259,10 @@ const [barsReady, setBarsReady] = useState(false);
             <button
               type="button"
               onClick={() => setShowChips((v) => { const next = !v; localStorage.setItem('smp_chips_visible', String(next)); return next; })}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
                 showChips
-                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
-                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+                  ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
+                  : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
               }`}
               title="Toggle year chips"
             >
@@ -1254,10 +1277,10 @@ const [barsReady, setBarsReady] = useState(false);
             <button
               type="button"
               onClick={() => setShowStatsPills((v) => { const next = !v; localStorage.setItem('smp_statspills_visible', String(next)); return next; })}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
                 showStatsPills
-                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
-                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+                  ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
+                  : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
               }`}
               title="Toggle stats tables"
             >
@@ -1272,10 +1295,10 @@ const [barsReady, setBarsReady] = useState(false);
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
               showFilters || hasNonSearchFilters
-                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
-                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+                ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
+                : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
             }`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1311,17 +1334,17 @@ const [barsReady, setBarsReady] = useState(false);
                 </div>
 
                 {/* Arrow controls */}
-                <div className="flex items-center shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => scrollChips('left')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-500 hover:text-emerald-700 transition-all cursor-pointer text-lg leading-none select-none bg-gradient-to-b from-white to-emerald-50 shadow-[0_2px_4px_-1px_rgba(6,95,70,0.16),inset_0_1px_1px_0_rgba(255,255,255,0.9)]"
                     aria-label="Scroll left"
                   >‹</button>
                   <button
                     type="button"
                     onClick={() => scrollChips('right')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-500 hover:text-emerald-700 transition-all cursor-pointer text-lg leading-none select-none bg-gradient-to-b from-white to-emerald-50 shadow-[0_2px_4px_-1px_rgba(6,95,70,0.16),inset_0_1px_1px_0_rgba(255,255,255,0.9)]"
                     aria-label="Scroll right"
                   >›</button>
                 </div>
@@ -1340,9 +1363,13 @@ const [barsReady, setBarsReady] = useState(false);
                         type="button"
                         disabled={isSearchMode}
                         onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                        className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-opacity ${
+                        className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-full px-2.5 py-1 transition-all ${
                           isSearchMode ? 'cursor-default' : 'cursor-pointer'
-                        } ${isDimmed ? 'opacity-30' : ''}`}
+                        } ${isDimmed ? 'opacity-30' : ''} ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-emerald-100 to-emerald-50 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.18),inset_0_-1px_1px_0_rgba(255,255,255,0.6)]'
+                            : 'bg-gradient-to-b from-white to-emerald-50/60 shadow-[0_1px_3px_-1px_rgba(6,95,70,0.14),inset_0_1px_1px_0_rgba(255,255,255,0.9)]'
+                        }`}
                       >
                         <span className={`w-1 h-3.5 rounded-full shrink-0 transition-colors ${isDimmed ? 'bg-gray-300' : isSelected ? p.selDot : p.dot}`} />
                         <span className={`text-[13px] font-semibold uppercase tracking-wider transition-colors ${isDimmed ? 'text-gray-400' : isSelected ? p.selText : p.text}`}>{year}</span>
@@ -1371,16 +1398,16 @@ const [barsReady, setBarsReady] = useState(false);
             <div className="overflow-hidden">
               <div className="flex items-center gap-2 pt-1.5 pb-0.5 px-px flex-wrap">
                 {([
-                  { label: 'Category-wise',  border: 'border-emerald-300', bg: 'bg-emerald-50', text: 'text-emerald-700', fn: () => setCatModal(true)      },
-                  { label: 'Adm Type-wise',  border: 'border-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
-                  { label: 'Cat & Gender',   border: 'border-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
-                  { label: 'Year & Gender',  border: 'border-teal-300',    bg: 'bg-teal-50',    text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
-                  { label: 'Date-wise Adm',  border: 'border-violet-300',  bg: 'bg-violet-50',  text: 'text-violet-700',  fn: () => setDateWiseModal(true) },
-                ] as const).map(({ label, border, bg, text, fn }) => (
+                  { label: 'Category-wise',  from: 'from-emerald-50', to: 'to-white', text: 'text-emerald-700', fn: () => setCatModal(true)      },
+                  { label: 'Adm Type-wise',  from: 'from-sky-50',     to: 'to-white', text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
+                  { label: 'Cat & Gender',   from: 'from-rose-50',    to: 'to-white', text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
+                  { label: 'Year & Gender',  from: 'from-teal-50',    to: 'to-white', text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
+                  { label: 'Date-wise Adm',  from: 'from-violet-50',  to: 'to-white', text: 'text-violet-700',  fn: () => setDateWiseModal(true) },
+                ] as const).map(({ label, from, to, text, fn }) => (
                   <button
                     key={label}
                     onClick={fn}
-                    className={`group flex items-center gap-1.5 rounded-full border ${border} ${bg} px-3 py-1 cursor-pointer hover:bg-white/80 transition-colors`}
+                    className={`group flex items-center gap-1.5 rounded-full bg-gradient-to-b ${from} ${to} px-3 py-1.5 cursor-pointer transition-all hover:-translate-y-0.5 shadow-[0_3px_6px_-2px_rgba(0,0,0,0.14),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(0,0,0,0.06)]`}
                   >
                     <span className={`text-[11px] font-semibold uppercase tracking-wider ${text}`}>{label}</span>
                     <svg className={`w-2.5 h-2.5 ${text} opacity-40 group-hover:opacity-80 transition-opacity`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -1542,9 +1569,9 @@ const [barsReady, setBarsReady] = useState(false);
         /* ── Metric cards ───────────────────────────────────────────── */
         <div
           className="-mx-4 px-4 pt-3.5 pb-4"
-          style={{ background: 'linear-gradient(180deg, #f0fdf6 0%, #eefbf1 6%, #d9f3de 18%, #d9f3de 100%)', boxShadow: 'inset 0 6px 10px -8px rgba(10,80,40,0.14)' }}
+          style={{ background: '#ffffff', boxShadow: 'inset 0 6px 10px -8px rgba(10,80,40,0.08)' }}
         >
-          <div className="space-y-3 min-w-0 mt-1">
+          <div className="space-y-2.5 min-w-0 mt-1">
 
             {/* Overview row — hero tiles (Total / Course chart) span wider than the secondary Boys/Girls tiles */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
@@ -2302,7 +2329,7 @@ const [barsReady, setBarsReady] = useState(false);
 
               {/* Recent activity card — absolute fill so bar chart card sets the row height */}
               <div className="relative">
-                <div className="absolute inset-0 overflow-hidden rounded-2xl">
+                <div className="absolute inset-0">
                   <RecentActivityCard
                     students={allStudents}
                     feeRecords={feeRecords}
