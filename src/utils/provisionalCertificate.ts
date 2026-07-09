@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
+import { computeFromYear } from './courseCompletionCertificate';
 
 export const PC_COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -35,6 +36,9 @@ function buildPC(student: Student, data: PCFormData): string {
   const regNumber   = esc(data.regNumber);
   const resultClass = esc(data.resultClass.toUpperCase());
   const dateOfIssue = esc(data.dateOfIssue);
+  const isLateral   = student.admType === 'LATERAL';
+  const fromYear    = esc(computeFromYear(student.academicYear, student.admType));
+  const toYear      = esc(student.academicYear);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -196,8 +200,13 @@ function buildPC(student: Student, data: PCFormData): string {
 
     <p class="para">This is to certify that ${prefix} <strong>${name}</strong> S/o <strong>${fatherName}</strong>
       bearing Register No. <strong>${regNumber}</strong>, a student of this institution,
-      has successfully completed the three-year Diploma in ${courseFull},
-      having cleared all subjects in all six semesters, and has passed the final
+      ${isLateral
+        ? `has successfully completed the Diploma in ${courseFull} (2nd Year to
+      3rd Year, Lateral Entry) during the Academic Years <strong>${fromYear}</strong>
+      to <strong>${toYear}</strong>, having cleared all subjects from the 3rd to
+      6th semester, and has passed the final`
+        : `has successfully completed the three-year Diploma in ${courseFull},
+      having cleared all subjects in all six semesters, and has passed the final`}
       sixth semester examination conducted by the Board of Technical Examinations,
       Bangalore, held during <strong>${examPeriod}</strong>, securing
       <strong>${resultClass}</strong>.</p>

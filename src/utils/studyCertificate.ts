@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
+import { computeFromYear } from './courseCompletionCertificate';
 
 export type CertificateType = 'STUDYING' | 'COMPLETED' | 'CANCELLED';
 
@@ -64,9 +65,13 @@ export function getDefaultBodyText(student: Student, certType: CertificateType, 
 
   const isCompleted = certType === 'COMPLETED';
   const isLeft      = certType === 'CANCELLED';
+  const isLateral   = student.admType === 'LATERAL';
+  const fromYear    = computeFromYear(ay, student.admType);
 
   let para1: string;
-  if (isCompleted) {
+  if (isCompleted && isLateral) {
+    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution, having been admitted through Lateral Entry directly to the 2nd Year. ${pronoun} has successfully completed the Diploma in ${courseFull} (2nd Year to 3rd Year) during the Academic Years ${fromYear} to ${ay}.`;
+  } else if (isCompleted) {
     para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution. ${pronoun} has successfully completed the Three-Year Diploma in ${courseFull} during the Academic Year ${ay}.`;
   } else if (isLeft) {
     para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution. ${pronoun} had studied up to the ${yearFigure} Year of Diploma in ${courseFull} during the Academic Year ${ay}.`;
@@ -114,6 +119,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
 
   const isCompleted = certType === 'COMPLETED';
   const isLeft      = certType === 'CANCELLED';
+  const isLateral   = student.admType === 'LATERAL';
+  const fromYear    = esc(computeFromYear(student.academicYear, student.admType));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -293,7 +300,22 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
 
     ${opts.customBody !== undefined
       ? opts.customBody.split(/\n\n+/).filter(p => p.trim()).map(p => `<p class="cert-para">${esc(p.trim())}</p>`).join('\n    ')
-      : isCompleted ? `
+      : isCompleted && isLateral ? `
+    <p class="cert-para">
+      This is to certify that <span class="hl">${salutation} ${studentName}</span>,
+      ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
+      was a <em>bonafide</em> student of this institution, having been admitted
+      through <span class="hl">Lateral Entry</span> directly to the 2nd Year.
+      ${pronoun} has successfully completed the <span class="hl">Diploma</span>
+      in <span class="hl">${esc(courseFull)}</span> (2nd Year to 3rd Year)
+      during the Academic Years <span class="hl">${fromYear}</span> to
+      <span class="hl">${academicYear}</span>.
+    </p>
+    <p class="cert-para">
+      During ${hisHer} stay in this institution ${hisHer} character and conduct
+      were satisfactory.
+    </p>
+    ${casteClause}` : isCompleted ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
