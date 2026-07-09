@@ -1057,7 +1057,7 @@ const [barsReady, setBarsReady] = useState(false);
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-52">
             {/* Search icon */}
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-teal-600 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: '#018081' }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -1067,11 +1067,11 @@ const [barsReady, setBarsReady] = useState(false);
               onChange={(e) => setInputValue(e.target.value.toUpperCase())}
               className={`w-full rounded-full py-2.5 text-base font-medium focus:outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
               style={{
-                background: 'linear-gradient(160deg, #ffffff 0%, #cff3ea 100%)',
-                boxShadow: '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18)',
+                background: 'linear-gradient(160deg, #f2fffc 0%, #cff3ea 100%)',
+                boxShadow: '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18)',
               }}
-              onFocus={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18), 0 0 0 1px rgba(47,169,140,0.6)'; }}
-              onBlur={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(6,110,90,0.26), 0 1px 3px -1px rgba(6,110,90,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(6,110,90,0.18)'; }}
+              onFocus={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18), 0 0 0 1px rgba(2,166,166,0.6)'; }}
+              onBlur={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18)'; }}
             />
             {inputValue && (
               <button
@@ -1079,8 +1079,8 @@ const [barsReady, setBarsReady] = useState(false);
                 onClick={() => setInputValue('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-white transition-all duration-150 shrink-0 cursor-pointer hover:brightness-110"
                 style={{
-                  background: 'linear-gradient(160deg, #5FCFB4 0%, #2FA98C 100%)',
-                  boxShadow: '0 2px 5px -1px rgba(6,110,90,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.6), inset 0 -2px 3px -1px rgba(6,80,65,0.35)',
+                  background: 'linear-gradient(160deg, #02a6a6 0%, #016060 100%)',
+                  boxShadow: '0 2px 5px -1px rgba(1,96,96,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.6), inset 0 -2px 3px -1px rgba(1,60,60,0.35)',
                 }}
                 aria-label="Clear search"
               >
