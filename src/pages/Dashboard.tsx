@@ -1042,86 +1042,6 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
       </div>
 
-      {/* ── Pending Admissions strip ───────────────────────────────────── */}
-      {admissionPendingStats && (
-        <div
-          className="flex-shrink-0 rounded-2xl flex items-center gap-2.5 px-3.5 py-2 cursor-pointer transition-all duration-200 group hover:-translate-y-0.5"
-          style={{
-            background: 'linear-gradient(160deg, #f6fffb 0%, #d7f3e3 100%)',
-            boxShadow: '0 6px 14px -6px rgba(10,90,60,0.22), 0 1px 3px -1px rgba(10,90,60,0.14), inset 0 1.5px 2px 0 rgba(255,255,255,0.85), inset 0 -4px 8px -4px rgba(10,90,60,0.14)',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg, #f0fef8 0%, #c3ecd7 100%)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg, #f6fffb 0%, #d7f3e3 100%)'; }}
-          onClick={() => void navigate('/admissions')}
-        >
-          {/* Leaf accent dot */}
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" style={{ boxShadow: '0 0 0 2px #a7f3d0' }} />
-
-          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/80 shrink-0 whitespace-nowrap">
-            Pending Admissions
-          </span>
-          <span className="text-[10px] text-emerald-300 font-medium shrink-0">·</span>
-          <span className="text-[10px] font-semibold text-emerald-500/70 shrink-0 whitespace-nowrap">
-            {admissionPendingStats.academicYear}
-          </span>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
-
-          {/* Regular pending */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Reg</span>
-            <span className="text-sm font-black tabular-nums text-emerald-800">
-              <AnimNum value={admissionPendingStats.totalRegular} />
-            </span>
-          </div>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
-
-          {/* Lateral pending */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-teal-500 uppercase tracking-wide">Lat</span>
-            <span className="text-sm font-black tabular-nums text-teal-700">
-              <AnimNum value={admissionPendingStats.totalLateral} />
-            </span>
-          </div>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-          {/* Per-course pill chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {COURSES.map((course) => {
-              const c = courseConfig[course];
-              const reg = admissionPendingStats.byCourseRegular[course];
-              const lat = admissionPendingStats.byCourseLatear[course];
-              const isEmpty = reg === 0 && lat === 0;
-              return (
-                <div
-                  key={course}
-                  className={`flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 border ${c.border} bg-white/70 ${isEmpty ? 'opacity-25' : ''}`}
-                >
-                  <span className={`text-[10px] font-bold uppercase ${c.textColor}`}>{course}</span>
-                  <span className={`text-[10px] font-black tabular-nums ${c.textColor}`}>
-                    <AnimNum value={reg} />
-                  </span>
-                  {lat > 0 && (
-                    <>
-                      <span className="w-px h-2.5 bg-current opacity-20 shrink-0" />
-                      <span className="text-[10px] font-black tabular-nums text-teal-600">
-                        <AnimNum value={lat} />
-                      </span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <span className="ml-auto text-[10px] text-emerald-400 group-hover:text-emerald-700 font-semibold shrink-0 transition-colors whitespace-nowrap">
-            View →
-          </span>
-        </div>
-      )}
-
       </div>{/* end top panel */}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
@@ -1251,6 +1171,21 @@ const [barsReady, setBarsReady] = useState(false);
             >
               <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
+            </button>
+          )}
+
+          {/* Pending Admissions label */}
+          {admissionPendingStats && (
+            <button
+              onClick={() => void navigate('/admissions')}
+              className="flex items-center gap-1.5 group cursor-pointer shrink-0"
+              title="View Pending Admissions"
+            >
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-amber-400 group-hover:bg-amber-600 transition-colors" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending Admissions</span>
+              <span className="text-xs font-black tabular-nums text-amber-700">
+                <AnimNum value={admissionPendingStats.totalRegular + admissionPendingStats.totalLateral} />
+              </span>
             </button>
           )}
 
