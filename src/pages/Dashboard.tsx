@@ -2017,7 +2017,9 @@ const [barsReady, setBarsReady] = useState(false);
             </div>
 
             {/* Course Strength + Adm Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <SectionLabel accent={{ bar: 'bg-indigo-500', text: 'text-indigo-700' }}>Insights & Recent Activity</SectionLabel>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — cycling modes, mint/ivory palette */}
               {(() => {
@@ -2205,6 +2207,7 @@ const [barsReady, setBarsReady] = useState(false);
                     cycleIdx={barChartMode}
                   />
                 </div>
+              </div>
               </div>
             </div>
 

@@ -13,10 +13,12 @@ import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
 import { exportPcIssuedPdf, type PcRow } from '../utils/pcIssuedPdf';
 import type { TCRecord } from '../services/tcService';
 import { clearTcHistory, academicYearFromDate } from '../services/tcService';
+import { buildTCHTML, type TCFormData } from '../utils/transferCertificate';
 import { CERT_CLEAR_PASSKEY } from '../config/constants';
 import type { PCRecord } from '../services/pcService';
 import { clearPcHistory } from '../services/pcService';
 import { PageSpinner } from '../components/common/PageSpinner';
+import { FilterDropdown } from '../components/common/FilterDropdown';
 import { ColumnPickerDropdown } from '../components/common/ColumnPickerDropdown';
 import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue } from '../utils/studentColumns';
 import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } from '../utils/sortStudents';
@@ -41,7 +43,7 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'custom',             label: 'Custom Report'           },
 ];
 
-const fs = 'rounded-lg border border-emerald-100 px-2 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+const fs = 'rounded-full border border-emerald-100 px-3 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   left: 'text-left', center: 'text-center', right: 'text-right',
@@ -329,6 +331,9 @@ export function StudentReports() {
   const [tcClearPasskey,        setTcClearPasskey]        = useState('');
   const [tcClearPasskeyError,   setTcClearPasskeyError]   = useState('');
 
+  // TC preview modal (right-click on a TC row)
+  const [tcPreviewRow, setTcPreviewRow] = useState<TcRow | null>(null);
+
   // PC clear modal (double-click on a PC row)
   const [pcClearModal,          setPcClearModal]          = useState<PcRow | null>(null);
   const [pcClearModalClearing,  setPcClearModalClearing]  = useState(false);
@@ -433,6 +438,28 @@ export function StudentReports() {
       : rows;
     return result.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
   }, [reportType, allStudentsForTC, tcYearFilter, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+
+  // ── TC preview HTML — reconstructed from the issued record for a read-only view ──
+  // Dues/concession/character aren't persisted in TCRecord, so the preview falls back
+  // to the same defaults used when a TC is first issued.
+  const tcPreviewHtml = useMemo(() => {
+    if (!tcPreviewRow) return '';
+    const student = allStudentsForTC.find((s) => s.id === tcPreviewRow.studentId);
+    if (!student) return '';
+    const data: TCFormData = {
+      tcNumber:        tcPreviewRow.tcNumber,
+      dateOfAdmission: tcPreviewRow.dateOfAdmission,
+      dateOfLeaving:   tcPreviewRow.dateOfLeaving,
+      semester:        tcPreviewRow.semester,
+      lastExam:        tcPreviewRow.lastExam,
+      result:          tcPreviewRow.result,
+      duesPaid:        true,
+      concession:      false,
+      character:       'SATISFACTORY',
+      isDuplicate:     tcPreviewRow.isDuplicate,
+    };
+    return buildTCHTML(student, data);
+  }, [tcPreviewRow, allStudentsForTC]);
 
   // ── TC stats (unfiltered counts for header chips) ─────────────────────────────
   const tcStats = useMemo(() => {
@@ -1118,18 +1145,18 @@ export function StudentReports() {
 
       {/* ── Filters panel ──────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 bg-white/70 rounded-2xl border border-emerald-100 overflow-hidden"
-        style={{ backdropFilter: 'blur(8px)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+        className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden"
+        style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
       >
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
 
           {/* Report type selector */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap select-none">Report</span>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as ReportType)}
-              className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer"
+              className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer"
             >
               {REPORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -1137,17 +1164,17 @@ export function StudentReports() {
             </select>
           </div>
 
-          <span className="text-gray-200 text-sm select-none">|</span>
+          <span className="text-gray-200 text-sm select-none shrink-0">|</span>
 
           {/* TC Year filter — only for TC Issued List */}
           {reportType === 'tc-issued' && (
             <>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">TC Year</span>
                 <select
                   value={tcYearFilter}
                   onChange={(e) => setTcYearFilter(e.target.value)}
-                  className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
+                  className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
                 >
                   <option value="ALL">All Academic Years</option>
                   {[...ACADEMIC_YEARS].reverse().map((yr) => (
@@ -1155,19 +1182,19 @@ export function StudentReports() {
                   ))}
                 </select>
               </div>
-              <span className="text-gray-200 text-sm select-none">|</span>
+              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             </>
           )}
 
           {/* PC Year filter — only for PC Issued List */}
           {reportType === 'pc-issued' && (
             <>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">PC Year</span>
                 <select
                   value={pcYearFilter}
                   onChange={(e) => setPcYearFilter(e.target.value)}
-                  className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs font-semibold text-violet-800 focus:outline-none focus:ring-1 focus:ring-violet-400 focus:border-violet-400 cursor-pointer"
+                  className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 focus:outline-none focus:ring-1 focus:ring-violet-400 focus:border-violet-400 cursor-pointer"
                 >
                   <option value="ALL">All Academic Years</option>
                   {[...ACADEMIC_YEARS].reverse().map((yr) => (
@@ -1175,88 +1202,123 @@ export function StudentReports() {
                   ))}
                 </select>
               </div>
-              <span className="text-gray-200 text-sm select-none">|</span>
+              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             </>
           )}
 
-          {/* Search */}
-          <input
-            type="text"
-            placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : 'Search name / reg / mobile…'}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-48 rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 placeholder:text-gray-400"
-          />
+          {/* Search — rounded-full with icon + amber clear, matching Students page */}
+          <div className="relative shrink-0 w-56">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : 'Search name / reg / mobile…'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full rounded-full border border-emerald-300 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                aria-label="Clear search"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
 
-          {/* Standard dropdowns */}
-          <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-            <option value="">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <select className={fs} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-            <option value="">All Years</option>
-            <option value="1ST YEAR">1ST YEAR</option>
-            <option value="2ND YEAR">2ND YEAR</option>
-            <option value="3RD YEAR">3RD YEAR</option>
-          </select>
-
-          <select className={fs} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-            <option value="">All Genders</option>
-            <option value="BOY">BOY</option>
-            <option value="GIRL">GIRL</option>
-          </select>
-
-          <select className={fs} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
-            <option value="">All Categories</option>
-            <option value="GM">GM</option>
-            <option value="SC">SC</option>
-            <option value="ST">ST</option>
-            <option value="C1">C1</option>
-            <option value="2A">2A</option>
-            <option value="2B">2B</option>
-            <option value="3A">3A</option>
-            <option value="3B">3B</option>
-          </select>
-
-          <select className={fs} value={categoryGroupFilter} onChange={(e) => setCategoryGroupFilter(e.target.value as CategoryGroup | '')}>
-            <option value="">All Category Groups</option>
-            <option value="GM">{CATEGORY_GROUP_LABELS.GM}</option>
-            <option value="OBC">{CATEGORY_GROUP_LABELS.OBC}</option>
-            <option value="SC_ST">{CATEGORY_GROUP_LABELS.SC_ST}</option>
-          </select>
-
-          <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-            <option value="">All Adm Types</option>
-            <option value="REGULAR">REGULAR</option>
-            <option value="REPEATER">REPEATER</option>
-            <option value="LATERAL">LATERAL</option>
-            <option value="EXTERNAL">EXTERNAL</option>
-          </select>
-
-          <select className={fs} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-            <option value="">All Adm Cats</option>
-            <option value="GM">GM</option>
-            <option value="SNQ">SNQ</option>
-            <option value="OTHERS">OTHERS</option>
-          </select>
+          {/* Standard dropdowns — FilterDropdown, matching Students page */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
+            <FilterDropdown<Course | ''>
+              value={courseFilter}
+              onChange={(v) => setCourseFilter(v as Course | '')}
+              placeholder="Course"
+              options={COURSES.map((c) => ({ value: c, label: c }))}
+            />
+            <FilterDropdown<Year | ''>
+              value={yearFilter}
+              onChange={(v) => setYearFilter(v as Year | '')}
+              placeholder="Study Yr"
+              options={YEARS.map((yr) => ({ value: yr, label: yr }))}
+            />
+            <FilterDropdown<Gender | ''>
+              value={genderFilter}
+              onChange={(v) => setGenderFilter(v as Gender | '')}
+              placeholder="Gender"
+              options={[
+                { value: 'BOY', label: 'BOY' },
+                { value: 'GIRL', label: 'GIRL' },
+              ]}
+            />
+            <FilterDropdown<Category | ''>
+              value={categoryFilter}
+              onChange={(v) => setCategoryFilter(v as Category | '')}
+              placeholder="Cat"
+              options={[
+                { value: 'GM', label: 'GM' },
+                { value: 'SC', label: 'SC' },
+                { value: 'ST', label: 'ST' },
+                { value: 'C1', label: 'C1' },
+                { value: '2A', label: '2A' },
+                { value: '2B', label: '2B' },
+                { value: '3A', label: '3A' },
+                { value: '3B', label: '3B' },
+              ]}
+            />
+            <FilterDropdown<CategoryGroup | ''>
+              value={categoryGroupFilter}
+              onChange={(v) => setCategoryGroupFilter(v as CategoryGroup | '')}
+              placeholder="Cat Group"
+              options={[
+                { value: 'GM', label: CATEGORY_GROUP_LABELS.GM },
+                { value: 'OBC', label: CATEGORY_GROUP_LABELS.OBC },
+                { value: 'SC_ST', label: CATEGORY_GROUP_LABELS.SC_ST },
+              ]}
+            />
+            <FilterDropdown<AdmType | ''>
+              value={admTypeFilter}
+              onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+              placeholder="Adm Type"
+              options={[
+                { value: 'REGULAR', label: 'REGULAR' },
+                { value: 'REPEATER', label: 'REPEATER' },
+                { value: 'LATERAL', label: 'LATERAL' },
+                { value: 'EXTERNAL', label: 'EXTERNAL' },
+              ]}
+            />
+            <FilterDropdown<AdmCat | ''>
+              value={admCatFilter}
+              onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+              placeholder="Adm Cat"
+              options={[
+                { value: 'GM', label: 'GM' },
+                { value: 'SNQ', label: 'SNQ' },
+                { value: 'OTHERS', label: 'OTHERS' },
+              ]}
+            />
+          </div>
 
           {/* Date range — only relevant for SNQ Allotment (fee paid date) */}
           {reportType === 'snq-allotment' && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Fee Paid Date</span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
+                className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
               />
               <span className="text-gray-300 text-xs">→</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="rounded-lg border border-emerald-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
+                className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
               />
             </div>
           )}
@@ -1269,7 +1331,7 @@ export function StudentReports() {
                 selected={customColumns}
                 onChange={setCustomColumns}
               />
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Sort by</span>
                 {sortLevels.map((level, idx) => {
                   const prevChosen = idx === 0 || !!sortLevels[idx - 1].field;
@@ -1306,12 +1368,15 @@ export function StudentReports() {
 
           {/* Action buttons */}
           {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="rounded-lg border border-amber-300 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold"
-            >
-              Clear
-            </button>
+            <>
+              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <button
+                onClick={clearFilters}
+                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </>
           )}
 
           {activeCount > 0 && (reportType !== 'custom' || orderedCustomColumns.length > 0) && (
@@ -1319,29 +1384,17 @@ export function StudentReports() {
               <button
                 onClick={handleExportPdf}
                 disabled={savingPdf}
-                className="rounded-lg border border-yellow-300 px-2 py-1.5 text-xs text-yellow-800 bg-yellow-50 hover:bg-yellow-100 hover:border-yellow-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 font-medium"
+                className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="12" y1="18" x2="12" y2="12"/>
-                  <polyline points="9 15 12 18 15 15"/>
-                </svg>
-                {savingPdf ? 'Generating…' : 'Export PDF'}
+                {savingPdf ? 'Generating…' : 'Save PDF'}
               </button>
 
               {isAdmin && (
                 <button
                   onClick={handleExportExcel}
                   disabled={savingExcel}
-                  className="rounded-lg border border-emerald-200 px-2 py-1.5 text-xs text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="12" y1="18" x2="12" y2="12"/>
-                    <polyline points="9 15 12 18 15 15"/>
-                  </svg>
                   {savingExcel ? 'Exporting…' : 'Export Excel'}
                 </button>
               )}
@@ -1349,7 +1402,7 @@ export function StudentReports() {
           )}
 
           {reportType === 'custom' && orderedCustomColumns.length === 0 && (
-            <span className="text-[11px] text-amber-600 font-medium">Select at least one column to preview/export.</span>
+            <span className="text-[11px] text-amber-600 font-medium shrink-0">Select at least one column to preview/export.</span>
           )}
         </div>
       </div>
@@ -1389,7 +1442,8 @@ export function StudentReports() {
                   <tr
                     key={`${r.studentId}-${r.tcId}`}
                     onDoubleClick={() => { setTcClearModal(r); setTcClearModalMsg(''); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
-                    title="Double-click to clear TC history"
+                    onContextMenu={(e) => { e.preventDefault(); setTcPreviewRow(r); }}
+                    title="Double-click to clear TC history · Right-click to preview"
                     className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-blue-50/40 cursor-pointer`}
                   >
                     <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
@@ -1430,7 +1484,7 @@ export function StudentReports() {
                   <span className="text-green-600 font-medium">{tcClearModalMsg}</span>
                 )}
                 {tcRows.length > 0 && (
-                  <span className="text-gray-300 select-none">Double-click a row to clear TC history</span>
+                  <span className="text-gray-300 select-none">Right-click to preview · Double-click to clear TC history</span>
                 )}
               </div>
             </div>
@@ -1990,6 +2044,89 @@ export function StudentReports() {
                 className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 font-semibold cursor-pointer"
               >
                 {tcClearModalClearing ? 'Clearing…' : 'Yes, Clear History'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TC Preview Modal (right-click on a TC row) ────────────────────── */}
+      {tcPreviewRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ animation: 'backdrop-enter 0.18s ease-out' }}
+        >
+          <div className="absolute inset-0 bg-black/50" onClick={() => setTcPreviewRow(null)} />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center justify-between shrink-0">
+              <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <polyline points="6 9 6 2 18 2 18 9"/>
+                      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                      <rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                  </span>
+                  TC Preview — {tcPreviewRow.tcNumber}
+                </h2>
+                <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40 truncate max-w-xs">
+                  {tcPreviewRow.studentName}
+                </span>
+                {tcPreviewRow.isDuplicate && (
+                  <span className="inline-flex items-center rounded-full text-[10px] font-semibold px-2 py-0.5 bg-amber-500/30 text-amber-100 border border-amber-400/30 shrink-0">
+                    Duplicate Copy
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setTcPreviewRow(null)}
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Info banner */}
+            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center gap-2 shrink-0">
+              <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span className="text-xs text-blue-700">
+                Read-only preview reconstructed from the issued record. This does not print or save.
+              </span>
+            </div>
+
+            {/* Preview iframe */}
+            <div className="flex-1 overflow-auto min-h-0 bg-slate-300">
+              {tcPreviewHtml ? (
+                <iframe
+                  srcDoc={tcPreviewHtml}
+                  title="Transfer Certificate Preview"
+                  className="w-full border-0 block"
+                  style={{ height: '1100px' }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-40 text-sm text-gray-500">
+                  Unable to load student record for this TC.
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0 flex items-center justify-end">
+              <button
+                onClick={() => setTcPreviewRow(null)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>
