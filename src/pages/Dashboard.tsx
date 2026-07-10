@@ -43,7 +43,7 @@ const COURSE_RING_HEX: Record<Course, string> = {
 };
 
 const fs =
-  'rounded-full px-2 py-1 text-[12px] font-medium bg-gradient-to-b from-white to-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 cursor-pointer text-gray-700 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] transition-shadow';
+  'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function statusBadgeClass(status: string): string {
   if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
@@ -923,30 +923,6 @@ const [barsReady, setBarsReady] = useState(false);
     EE: { cardBg: 'bg-violet-100', headerBg: 'bg-violet-200/80', track: 'bg-violet-900/10', text: 'text-violet-950', textMuted: 'text-violet-950/50' },
   };
 
-  // Claymorphism variant of the theme above — puffy, inflated "3D" look for the "By Course" tiles
-  // (soft pastel gradient body + raised glossy badge), inspired by claymorphic dashboard UI refs.
-  // Each entry pairs a light→mid gradient for the card body with a deeper gradient for the badge pill.
-  const courseClayTheme: Record<Course, { bodyFrom: string; bodyTo: string; badgeFrom: string; badgeTo: string }> = {
-    CE: { bodyFrom: '#FFF8E8', bodyTo: '#FDECC2', badgeFrom: '#FFE49B', badgeTo: '#F7C665' },
-    ME: { bodyFrom: '#F1FCF3', bodyTo: '#D9F3DE', badgeFrom: '#B9EAC4', badgeTo: '#82D695' },
-    EC: { bodyFrom: '#F0FAFF', bodyTo: '#D6EFFC', badgeFrom: '#A9DDF7', badgeTo: '#6EC1EE' },
-    CS: { bodyFrom: '#EFFDFA', bodyTo: '#CFF3EA', badgeFrom: '#A0E7D5', badgeTo: '#5FCFB4' },
-    EE: { bodyFrom: '#FAF6FF', bodyTo: '#EBDCFB', badgeFrom: '#D4B6F2', badgeTo: '#B583E6' },
-  };
-  const clayCardShadow = '0 10px 20px -6px rgba(30,20,10,0.18), 0 2px 5px -1px rgba(30,20,10,0.10), inset 0 2px 2px 0 rgba(255,255,255,0.85), inset 0 -8px 14px -6px rgba(30,20,10,0.10)';
-  const clayBadgeShadow = '0 3px 6px -1px rgba(30,20,10,0.28), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.75), inset 0 -3px 5px -2px rgba(30,20,10,0.22)';
-  // Embossed header-strip shadow — glossy top highlight + inset bottom shade, for the solid-color
-  // header bars (Total Enrolled) so they read as a raised bar fused into the clay card, not a flat block.
-  const clayHeaderShadow = 'inset 0 1.5px 2px 0 rgba(255,255,255,0.30), inset 0 -4px 8px -3px rgba(0,0,0,0.28)';
-  // Overview-row clay palettes (Total Enrolled / Intake bar chart / Boys / Girls) — same puffy
-  // gradient + shadow language as courseClayTheme, tuned to each card's existing accent hue.
-  const heroClayTheme = {
-    total:  { bodyFrom: '#F2FFFC', bodyTo: '#CFF3EA', headerFrom: '#02A6A6', headerTo: '#016060' },
-    intake: { bodyFrom: '#FCFBF4', bodyTo: '#E7ECD2' },
-    boys:   { bodyFrom: '#F6FCFF', bodyTo: '#CFEAF7' },
-    girls:  { bodyFrom: '#FFFCFF', bodyTo: '#F1DEFF' },
-  };
-
   // Hero-style theme for the dedicated Lateral / Repeater / SNQ admission-type cards — modeled on
   // the "Total Enrolled" tile (solid dark header strip + light body) so the trio reads as a
   // distinct, higher-emphasis set inside the otherwise compact "By Year of Study" / "By Course" rows.
@@ -955,24 +931,6 @@ const [barsReady, setBarsReady] = useState(false);
     REPEATER: { bodyBg: '#F8F4EF', headerBg: '#40434E', headerText: '#F8F4EF', numColor: '#40434E', trackColor: '#ECE5D8', barColor: '#7B7F8C' },
     SNQ:      { bodyBg: '#FBEEDC', headerBg: '#8A5A22', headerText: '#FBEEDC', numColor: '#8A5A22', trackColor: '#F0DDBB', barColor: '#B9812E' },
   };
-
-  // Clay gradient counterparts for the Lateral/Repeater/SNQ hero tiles — light→mid body gradient
-  // (derived from bodyBg) + a deeper header gradient (derived from headerBg) for the raised strip.
-  const admTypeClayTheme: Record<'LATERAL' | 'REPEATER' | 'SNQ', { bodyFrom: string; bodyTo: string; headerFrom: string; headerTo: string }> = {
-    LATERAL:  { bodyFrom: '#F3E9F5', bodyTo: '#DCBFE0', headerFrom: '#6D4C76', headerTo: '#432E49' },
-    REPEATER: { bodyFrom: '#FDFCFA', bodyTo: '#E7E0D0', headerFrom: '#55596A', headerTo: '#33353F' },
-    SNQ:      { bodyFrom: '#FFF6E7', bodyTo: '#F1D6A4', headerFrom: '#A3702E', headerTo: '#6E4A1B' },
-  };
-
-  // Clay gradients for the "By Year of Study" cards — derived from yearCardTheme's flat pastel bg.
-  const yearClayTheme: Record<Year, { bodyFrom: string; bodyTo: string }> = {
-    '1ST YEAR': { bodyFrom: '#FFF8FA', bodyTo: '#F8D5E1' },
-    '2ND YEAR': { bodyFrom: '#FCFAFF', bodyTo: '#E4D3FA' },
-    '3RD YEAR': { bodyFrom: '#FFFBF4', bodyTo: '#FCE0BA' },
-  };
-
-  // Clay gradient for the mint "Course Strength" bar-chart card (body + embossed header strip).
-  const chartClayTheme = { bodyFrom: '#FBFFF6', bodyTo: '#D9F0C4', headerFrom: '#AEEBC9', headerTo: '#78CC9E' };
 
   // Shared adm-type key/label maps for the hero tiles + their detail modal (LATERAL/REPEATER match
   // on admType; SNQ matches on admCat — see courseAdmTotals / stats.summaryTable classification).
@@ -1002,14 +960,7 @@ const [barsReady, setBarsReady] = useState(false);
     <div className="flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
       {/* ── Top panel: header → year chips → pending admissions (uniform bg) ── */}
-      <div
-        className="-mx-4 -mt-4 px-4 pt-4 pb-2 flex flex-col gap-2 relative z-10"
-        style={{
-          background: 'linear-gradient(160deg, #fbfffd 0%, #eaf9f1 55%, #def4e7 100%)',
-          boxShadow: 'inset 0 2px 2px 0 rgba(255,255,255,0.7)',
-          borderBottom: '1px solid rgba(0,0,0,0.10)',
-        }}
-      >
+      <div className="-mx-4 -mt-4 px-4 pt-4 pb-0.5 flex flex-col gap-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
@@ -1027,7 +978,7 @@ const [barsReady, setBarsReady] = useState(false);
           <button
             onClick={() => void navigate('/enroll')}
             className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-            style={{ boxShadow: '0 4px 10px -2px rgba(16,185,129,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.4), inset 0 -3px 5px -2px rgba(6,95,70,0.35)' }}
+            style={{ boxShadow: '0 2px 8px 0 rgba(16,185,129,0.35)' }}
             title="Enroll Student"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -1042,25 +993,96 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
       </div>
 
+      {/* ── Pending Admissions strip ───────────────────────────────────── */}
+      {admissionPendingStats && (
+        <div
+          className="flex-shrink-0 rounded-lg border flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors group"
+          style={{
+            background: 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)',
+            borderColor: '#6ee7b7',
+            boxShadow: '0 2px 8px 0 rgba(16,185,129,0.10), 0 1px 3px -1px rgba(16,185,129,0.08)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #ecfdf5 0%, #d1fae5 60%, #ecfdf5 100%)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)'; }}
+          onClick={() => void navigate('/admissions')}
+        >
+          {/* Leaf accent dot */}
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" style={{ boxShadow: '0 0 0 2px #a7f3d0' }} />
+
+          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/80 shrink-0 whitespace-nowrap">
+            Pending Admissions
+          </span>
+          <span className="text-[10px] text-emerald-300 font-medium shrink-0">·</span>
+          <span className="text-[10px] font-semibold text-emerald-500/70 shrink-0 whitespace-nowrap">
+            {admissionPendingStats.academicYear}
+          </span>
+
+          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
+
+          {/* Regular pending */}
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Reg</span>
+            <span className="text-sm font-black tabular-nums text-emerald-800">
+              <AnimNum value={admissionPendingStats.totalRegular} />
+            </span>
+          </div>
+
+          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
+
+          {/* Lateral pending */}
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[9px] font-semibold text-teal-500 uppercase tracking-wide">Lat</span>
+            <span className="text-sm font-black tabular-nums text-teal-700">
+              <AnimNum value={admissionPendingStats.totalLateral} />
+            </span>
+          </div>
+
+          <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+
+          {/* Per-course pill chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {COURSES.map((course) => {
+              const c = courseConfig[course];
+              const reg = admissionPendingStats.byCourseRegular[course];
+              const lat = admissionPendingStats.byCourseLatear[course];
+              const isEmpty = reg === 0 && lat === 0;
+              return (
+                <div
+                  key={course}
+                  className={`flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 border ${c.border} bg-white/70 ${isEmpty ? 'opacity-25' : ''}`}
+                >
+                  <span className={`text-[10px] font-bold uppercase ${c.textColor}`}>{course}</span>
+                  <span className={`text-[10px] font-black tabular-nums ${c.textColor}`}>
+                    <AnimNum value={reg} />
+                  </span>
+                  {lat > 0 && (
+                    <>
+                      <span className="w-px h-2.5 bg-current opacity-20 shrink-0" />
+                      <span className="text-[10px] font-black tabular-nums text-teal-600">
+                        <AnimNum value={lat} />
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <span className="ml-auto text-[10px] text-emerald-400 group-hover:text-emerald-700 font-semibold shrink-0 transition-colors whitespace-nowrap">
+            View →
+          </span>
+        </div>
+      )}
+
       </div>{/* end top panel */}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div
-        className="sticky -top-4 z-20 -mx-4 -mt-1.5 px-4 pt-1.5 pb-2"
-        style={{
-          background: 'linear-gradient(160deg, rgba(255,255,255,0.55) 0%, rgba(226,246,238,0.45) 100%)',
-          backdropFilter: 'blur(14px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(14px) saturate(180%)',
-          borderBottom: '1px solid rgba(255,255,255,0.6)',
-          boxShadow: '0 8px 16px -10px rgba(6,110,90,0.18), 0 1px 3px -1px rgba(6,110,90,0.08), inset 0 1.5px 2px 0 rgba(255,255,255,0.5)',
-          borderRadius: '0 0 20px 20px',
-        }}
-      >
+      <div className="sticky -top-4 z-20 -mx-4 px-4 pt-1 pb-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', borderBottom: '1px solid rgba(16,185,129,0.10)', boxShadow: '0 4px 10px -2px rgba(16,185,129,0.09)' }}>
         {/* Single row: search + inline filters + actions */}
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-52">
             {/* Search icon */}
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: '#018081' }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -1068,23 +1090,13 @@ const [barsReady, setBarsReady] = useState(false);
               placeholder="Search"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value.toUpperCase())}
-              className={`w-full rounded-full py-2.5 text-base font-medium focus:outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
-              style={{
-                background: 'linear-gradient(160deg, #f2fffc 0%, #cff3ea 100%)',
-                boxShadow: '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18)',
-              }}
-              onFocus={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18), 0 0 0 1px rgba(2,166,166,0.6)'; }}
-              onBlur={(e) => { e.currentTarget.style.boxShadow = '0 5px 12px -3px rgba(1,128,129,0.26), 0 1px 3px -1px rgba(1,128,129,0.16), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95), inset 0 -3px 5px -2px rgba(1,128,129,0.18)'; }}
+              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${inputValue ? 'pr-8' : 'pr-3'}`}
             />
             {inputValue && (
               <button
                 type="button"
                 onClick={() => setInputValue('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-white transition-all duration-150 shrink-0 cursor-pointer hover:brightness-110"
-                style={{
-                  background: 'linear-gradient(160deg, #02a6a6 0%, #016060 100%)',
-                  boxShadow: '0 2px 5px -1px rgba(1,96,96,0.45), inset 0 1.5px 1.5px 0 rgba(255,255,255,0.6), inset 0 -2px 3px -1px rgba(1,60,60,0.35)',
-                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -1177,30 +1189,15 @@ const [barsReady, setBarsReady] = useState(false);
             </button>
           )}
 
-          {/* Pending Admissions label */}
-          {admissionPendingStats && (
-            <button
-              onClick={() => void navigate('/admissions')}
-              className="flex items-center gap-1.5 group cursor-pointer shrink-0"
-              title="View Pending Admissions"
-            >
-              <span className="w-1 h-3.5 rounded-full shrink-0 bg-amber-400 group-hover:bg-amber-600 transition-colors" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending</span>
-              <span className="text-xs font-black tabular-nums text-amber-700">
-                <AnimNum value={admissionPendingStats.totalRegular + admissionPendingStats.totalLateral} />
-              </span>
-            </button>
-          )}
-
           {/* Chips toggle */}
           {allStudents.length > 0 && (
             <button
               type="button"
               onClick={() => setShowChips((v) => { const next = !v; localStorage.setItem('smp_chips_visible', String(next)); return next; })}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
                 showChips
-                  ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
-                  : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
               }`}
               title="Toggle year chips"
             >
@@ -1215,10 +1212,10 @@ const [barsReady, setBarsReady] = useState(false);
             <button
               type="button"
               onClick={() => setShowStatsPills((v) => { const next = !v; localStorage.setItem('smp_statspills_visible', String(next)); return next; })}
-              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+              className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
                 showStatsPills
-                  ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
-                  : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                  : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
               }`}
               title="Toggle stats tables"
             >
@@ -1233,10 +1230,10 @@ const [barsReady, setBarsReady] = useState(false);
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
-                ? 'bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.35),inset_0_-1px_1px_0_rgba(255,255,255,0.4)]'
-                : 'bg-gradient-to-b from-white to-emerald-50 text-emerald-400 shadow-[0_2px_5px_-1px_rgba(6,95,70,0.18),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(6,95,70,0.10)] hover:text-emerald-600'
+                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
+                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
             }`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1272,17 +1269,17 @@ const [barsReady, setBarsReady] = useState(false);
                 </div>
 
                 {/* Arrow controls */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center shrink-0">
                   <button
                     type="button"
                     onClick={() => scrollChips('left')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-500 hover:text-emerald-700 transition-all cursor-pointer text-lg leading-none select-none bg-gradient-to-b from-white to-emerald-50 shadow-[0_2px_4px_-1px_rgba(6,95,70,0.16),inset_0_1px_1px_0_rgba(255,255,255,0.9)]"
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
                     aria-label="Scroll left"
                   >‹</button>
                   <button
                     type="button"
                     onClick={() => scrollChips('right')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-500 hover:text-emerald-700 transition-all cursor-pointer text-lg leading-none select-none bg-gradient-to-b from-white to-emerald-50 shadow-[0_2px_4px_-1px_rgba(6,95,70,0.16),inset_0_1px_1px_0_rgba(255,255,255,0.9)]"
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer text-lg leading-none select-none"
                     aria-label="Scroll right"
                   >›</button>
                 </div>
@@ -1301,13 +1298,9 @@ const [barsReady, setBarsReady] = useState(false);
                         type="button"
                         disabled={isSearchMode}
                         onClick={() => setAcademicYearFilter(isSelected ? '' : year as AcademicYear)}
-                        className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 rounded-full px-2.5 py-1 transition-all ${
+                        className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-opacity ${
                           isSearchMode ? 'cursor-default' : 'cursor-pointer'
-                        } ${isDimmed ? 'opacity-30' : ''} ${
-                          isSelected
-                            ? 'bg-gradient-to-b from-emerald-100 to-emerald-50 shadow-[inset_0_2px_4px_0_rgba(6,95,70,0.18),inset_0_-1px_1px_0_rgba(255,255,255,0.6)]'
-                            : 'bg-gradient-to-b from-white to-emerald-50/60 shadow-[0_1px_3px_-1px_rgba(6,95,70,0.14),inset_0_1px_1px_0_rgba(255,255,255,0.9)]'
-                        }`}
+                        } ${isDimmed ? 'opacity-30' : ''}`}
                       >
                         <span className={`w-1 h-3.5 rounded-full shrink-0 transition-colors ${isDimmed ? 'bg-gray-300' : isSelected ? p.selDot : p.dot}`} />
                         <span className={`text-[13px] font-semibold uppercase tracking-wider transition-colors ${isDimmed ? 'text-gray-400' : isSelected ? p.selText : p.text}`}>{year}</span>
@@ -1336,16 +1329,16 @@ const [barsReady, setBarsReady] = useState(false);
             <div className="overflow-hidden">
               <div className="flex items-center gap-2 pt-1.5 pb-0.5 px-px flex-wrap">
                 {([
-                  { label: 'Category-wise',  from: 'from-emerald-50', to: 'to-white', text: 'text-emerald-700', fn: () => setCatModal(true)      },
-                  { label: 'Adm Type-wise',  from: 'from-sky-50',     to: 'to-white', text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
-                  { label: 'Cat & Gender',   from: 'from-rose-50',    to: 'to-white', text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
-                  { label: 'Year & Gender',  from: 'from-teal-50',    to: 'to-white', text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
-                  { label: 'Date-wise Adm',  from: 'from-violet-50',  to: 'to-white', text: 'text-violet-700',  fn: () => setDateWiseModal(true) },
-                ] as const).map(({ label, from, to, text, fn }) => (
+                  { label: 'Category-wise',  border: 'border-emerald-300', bg: 'bg-emerald-50', text: 'text-emerald-700', fn: () => setCatModal(true)      },
+                  { label: 'Adm Type-wise',  border: 'border-sky-300',     bg: 'bg-sky-50',     text: 'text-sky-700',     fn: () => setAdmTypeModal(true)  },
+                  { label: 'Cat & Gender',   border: 'border-rose-300',    bg: 'bg-rose-50',    text: 'text-rose-600',    fn: () => setCatGenderModal(true) },
+                  { label: 'Year & Gender',  border: 'border-teal-300',    bg: 'bg-teal-50',    text: 'text-teal-700',    fn: () => setYearGenderModal(true)},
+                  { label: 'Date-wise Adm',  border: 'border-violet-300',  bg: 'bg-violet-50',  text: 'text-violet-700',  fn: () => setDateWiseModal(true) },
+                ] as const).map(({ label, border, bg, text, fn }) => (
                   <button
                     key={label}
                     onClick={fn}
-                    className={`group flex items-center gap-1.5 rounded-full bg-gradient-to-b ${from} ${to} px-3 py-1.5 cursor-pointer transition-all hover:-translate-y-0.5 shadow-[0_3px_6px_-2px_rgba(0,0,0,0.14),inset_0_1px_1px_0_rgba(255,255,255,0.9),inset_0_-2px_3px_-1px_rgba(0,0,0,0.06)]`}
+                    className={`group flex items-center gap-1.5 rounded-full border ${border} ${bg} px-3 py-1 cursor-pointer hover:bg-white/80 transition-colors`}
                   >
                     <span className={`text-[11px] font-semibold uppercase tracking-wider ${text}`}>{label}</span>
                     <svg className={`w-2.5 h-2.5 ${text} opacity-40 group-hover:opacity-80 transition-opacity`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -1505,24 +1498,21 @@ const [barsReady, setBarsReady] = useState(false);
       ) : (
 
         /* ── Metric cards ───────────────────────────────────────────── */
-        <div
-          className="-mx-4 px-4 pt-3.5 pb-4"
-          style={{ background: '#ffffff', boxShadow: 'inset 0 6px 10px -8px rgba(10,80,40,0.08)' }}
-        >
-          <div className="space-y-2.5 min-w-0 mt-1">
+        <div className="pb-4 -mx-2 px-2">
+          <div className="space-y-3 min-w-0 mt-1">
 
             {/* Overview row — hero tiles (Total / Course chart) span wider than the secondary Boys/Girls tiles */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               {/* Total card */}
               <div
                 onClick={() => setTotalModal(true)}
-                className="col-span-2 rounded-[22px] flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                style={{ background: `linear-gradient(160deg, ${heroClayTheme.total.bodyFrom} 0%, ${heroClayTheme.total.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                className="col-span-2 rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                style={{ background: '#E1F9F4', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
               >
-                {/* Elegant header — raised teal gradient bar, glossy top highlight */}
+                {/* Elegant header — solid teal, separated by a hairline */}
                 <div
-                  className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer select-none"
-                  style={{ background: `linear-gradient(160deg, ${heroClayTheme.total.headerFrom} 0%, ${heroClayTheme.total.headerTo} 100%)`, boxShadow: clayHeaderShadow }}
+                  className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 cursor-pointer select-none"
+                  style={{ background: '#018081' }}
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
                   title="Double-click to export PDF"
                 >
@@ -1571,8 +1561,8 @@ const [barsReady, setBarsReady] = useState(false);
                 return (
                   <div
                     onClick={() => setIntakeModal(true)}
-                    className="col-span-2 rounded-[22px] px-3.5 pt-3.5 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                    style={{ background: `linear-gradient(160deg, ${heroClayTheme.intake.bodyFrom} 0%, ${heroClayTheme.intake.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                    className="col-span-2 rounded-2xl border px-3.5 pt-3.5 pb-2 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#F5F3EC', borderColor: '#DCE3CB', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     {/* Label (left) + year breakdown (right) */}
                     <div className="flex items-center justify-between mb-1.5 shrink-0">
@@ -1656,8 +1646,8 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('BOY')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'BOY'), displayYear, 'Boys — Year & Course Breakdown', 'sky'); }}
-                    className="rounded-[22px] p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                    style={{ background: `linear-gradient(160deg, ${heroClayTheme.boys.bodyFrom} 0%, ${heroClayTheme.boys.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                    className="rounded-2xl border p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#F1FAFE', borderColor: '#BEE3F2', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0" style={{ background: '#0096C7' }} />
@@ -1699,8 +1689,8 @@ const [barsReady, setBarsReady] = useState(false);
                   <div
                     onClick={() => setGenderModal('GIRL')}
                     onDoubleClick={(e) => { e.stopPropagation(); exportGenderCourseYearReport(confirmedStudents.filter((s) => s.gender === 'GIRL'), displayYear, 'Girls — Year & Course Breakdown', 'rose'); }}
-                    className="rounded-[22px] p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                    style={{ background: `linear-gradient(160deg, ${heroClayTheme.girls.bodyFrom} 0%, ${heroClayTheme.girls.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                    className="rounded-2xl border p-3.5 flex flex-col gap-1 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                    style={{ background: '#FFFDF7', borderColor: '#EFDCFF', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-1 h-3.5 rounded-full shrink-0" style={{ background: '#E3B5FF' }} />
@@ -1741,19 +1731,17 @@ const [barsReady, setBarsReady] = useState(false);
                 {COURSES.map((course) => {
                   const courseTotal = stats.byCourse[course];
                   const theme = courseCardTheme[course];
-                  const clay = courseClayTheme[course];
                   return (
                     <div
                       key={course}
                       onClick={() => setCourseModalCourse(course)}
-                      className="rounded-[22px] flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                      style={{ background: `linear-gradient(160deg, ${clay.bodyFrom} 0%, ${clay.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                      className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]`}
+                      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
-                      {/* Course badge — raised glossy pill, top-left corner + total count */}
-                      <div className="flex items-center justify-between px-3.5 pt-3.5">
+                      {/* Course badge — rounded label circle, top-left corner + total count */}
+                      <div className="flex items-center justify-between px-3.5 pt-3">
                         <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer select-none shrink-0"
-                          style={{ background: `linear-gradient(160deg, ${clay.badgeFrom} 0%, ${clay.badgeTo} 100%)`, boxShadow: clayBadgeShadow }}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center border border-black/10 ${theme.headerBg} cursor-pointer select-none shrink-0`}
                           onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.course === course), displayYear, `${course} — Admission Type-wise Count`, COURSE_PDF_THEME[course]); }}
                           title="Double-click to export PDF"
                         >
@@ -1763,7 +1751,7 @@ const [barsReady, setBarsReady] = useState(false);
                       </div>
 
                       {/* Body — year-wise counts, plain rows like the Pending Seats cards (no rings) */}
-                      <div className="flex-1 px-3.5 pt-2 pb-3 flex flex-col relative z-10">
+                      <div className="flex-1 px-3.5 pt-2 pb-2.5 flex flex-col relative z-10">
                         <div className="mt-auto flex flex-col">
                           {YEARS.map((yr, i) => (
                             <div key={yr} className={`flex items-center justify-between gap-1 ${i > 0 ? 'pt-1.5 mt-1.5 border-t border-black/10' : ''}`}>
@@ -1783,20 +1771,19 @@ const [barsReady, setBarsReady] = useState(false);
                   const admKey = ADM_TYPE_ADM_KEY[key];
                   const label = ADM_TYPE_LABEL[key];
                   const theme = admTypeCardTheme[key];
-                  const clay = admTypeClayTheme[key];
                   const total = COURSES.reduce((a, c) => a + courseAdmTotals[c][admKey], 0);
                   const pct = stats.total > 0 ? Math.round((total / stats.total) * 100) : 0;
                   return (
                     <div
                       key={key}
                       onClick={() => setAdmTypeDetailModal(key)}
-                      className="col-span-2 rounded-[22px] flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                      style={{ background: `linear-gradient(160deg, ${clay.bodyFrom} 0%, ${clay.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                      className="col-span-2 rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                      style={{ background: theme.bodyBg, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
-                      {/* Raised header strip — mirrors the Total Enrolled tile */}
+                      {/* Solid header strip — mirrors the Total Enrolled tile */}
                       <div
-                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer select-none"
-                        style={{ background: `linear-gradient(160deg, ${clay.headerFrom} 0%, ${clay.headerTo} 100%)`, boxShadow: clayHeaderShadow }}
+                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 cursor-pointer select-none"
+                        style={{ background: theme.headerBg }}
                         onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.admCat === 'SNQ'), displayYear, `${label} — Year & Course-wise Count`); }}
                         title="Double-click to export PDF"
                       >
@@ -1862,7 +1849,6 @@ const [barsReady, setBarsReady] = useState(false);
               <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
                 {YEARS.map((year) => {
                   const theme = yearCardTheme[year];
-                  const clay = yearClayTheme[year];
                   const yearTotal = stats.byYear[year];
                   const yearPct = Math.round((yearTotal / YEAR_INTAKE) * 100);
                   const yrShort = year === '1ST YEAR' ? '1st Yr' : year === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
@@ -1872,8 +1858,8 @@ const [barsReady, setBarsReady] = useState(false);
                       key={year}
                       onClick={() => setYearModalYear(year)}
                       onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.year === year), displayYear, `${yrShort} — Admission Type-wise Count`, YEAR_PDF_THEME[year]); }}
-                      className="rounded-[22px] p-3.5 flex flex-col gap-2.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                      style={{ background: `linear-gradient(160deg, ${clay.bodyFrom} 0%, ${clay.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                      className="rounded-2xl border p-3.5 flex flex-col gap-2.5 relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                      style={{ background: theme.bg, borderColor: theme.border, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
                       title="Double-click to export PDF"
                     >
                       {/* Label */}
@@ -1924,20 +1910,19 @@ const [barsReady, setBarsReady] = useState(false);
                   { key: 'REPEATER' as const, admKey: 'rptr' as const, label: 'Repeater' },
                 ]).map(({ key, admKey, label }) => {
                   const theme = admTypeCardTheme[key];
-                  const clay = admTypeClayTheme[key];
                   const total = stats.byAdmType[key] ?? 0;
                   const pct = stats.total > 0 ? Math.round((total / stats.total) * 100) : 0;
                   return (
                     <div
                       key={key}
                       onClick={() => setAdmTypeDetailModal(key)}
-                      className="col-span-2 rounded-[22px] flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02]"
-                      style={{ background: `linear-gradient(160deg, ${clay.bodyFrom} 0%, ${clay.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                      className="col-span-2 rounded-2xl border border-black/10 flex flex-col relative overflow-hidden cursor-pointer transition-transform duration-200 ease-out hover:scale-[1.02]"
+                      style={{ background: theme.bodyBg, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                     >
-                      {/* Raised header strip — mirrors the Total Enrolled tile */}
+                      {/* Solid header strip — mirrors the Total Enrolled tile */}
                       <div
-                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer select-none"
-                        style={{ background: `linear-gradient(160deg, ${clay.headerFrom} 0%, ${clay.headerTo} 100%)`, boxShadow: clayHeaderShadow }}
+                        className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-black/10 cursor-pointer select-none"
+                        style={{ background: theme.headerBg }}
                         onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents.filter((s) => s.admType === key), displayYear, `${label} — Year & Course-wise Count`); }}
                         title="Double-click to export PDF"
                       >
@@ -2003,7 +1988,6 @@ const [barsReady, setBarsReady] = useState(false);
               <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                 {COURSES.map((course) => {
                   const theme = courseCardTheme[course];
-                  const clay = courseClayTheme[course];
                   const { nonSnqConfirmed, snqConfirmed } = stats.firstYearSeats[course];
                   const snqAllotted = snqConfirmed > 0;
 
@@ -2029,18 +2013,11 @@ const [barsReady, setBarsReady] = useState(false);
                   ];
 
                   return (
-                    <div
-                      key={course}
-                      className="rounded-[22px] flex flex-col relative overflow-hidden transition-transform duration-200 ease-out hover:-translate-y-0.5"
-                      style={{ background: `linear-gradient(160deg, ${clay.bodyFrom} 0%, ${clay.bodyTo} 100%)`, boxShadow: clayCardShadow }}
-                    >
+                    <div key={course} className={`rounded-2xl border border-black/10 ${theme.cardBg} flex flex-col relative overflow-hidden`} style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
 
-                      {/* Header section — raised glossy pill, course badge matches By Course dimensions */}
-                      <div className="flex items-center px-3.5 py-2">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                          style={{ background: `linear-gradient(160deg, ${clay.badgeFrom} 0%, ${clay.badgeTo} 100%)`, boxShadow: clayBadgeShadow }}
-                        >
+                      {/* Header section — retains the strip, course badge matches By Course dimensions */}
+                      <div className={`flex items-center px-3.5 py-1.5 border-b border-black/10 ${theme.headerBg}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border border-black/10 ${theme.cardBg} shrink-0`}>
                           <span className={`text-sm font-black uppercase tracking-wide ${theme.text}`}>{course}</span>
                         </div>
                       </div>
@@ -2084,9 +2061,7 @@ const [barsReady, setBarsReady] = useState(false);
             </div>
 
             {/* Course Strength + Adm Type */}
-            <div>
-              <SectionLabel accent={{ bar: 'bg-indigo-500', text: 'text-indigo-700' }}>Insights & Recent Activity</SectionLabel>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — cycling modes, mint/ivory palette */}
               {(() => {
@@ -2140,14 +2115,11 @@ const [barsReady, setBarsReady] = useState(false);
 
                 return (
                 <div
-                  className="rounded-[22px] flex flex-col overflow-hidden"
-                  style={{ background: `linear-gradient(160deg, ${chartClayTheme.bodyFrom} 0%, ${chartClayTheme.bodyTo} 100%)`, boxShadow: clayCardShadow }}
+                  className="rounded-2xl flex flex-col border border-black/10 overflow-hidden"
+                  style={{ background: '#F5FBEA', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
                 >
-                  {/* Header — raised mint gradient strip, glossy top highlight */}
-                  <div
-                    className="flex items-start justify-between gap-2 px-3.5 py-2.5"
-                    style={{ background: `linear-gradient(160deg, ${chartClayTheme.headerFrom} 0%, ${chartClayTheme.headerTo} 100%)`, boxShadow: clayHeaderShadow }}
-                  >
+                  {/* Header — solid mint strip, separated by a dark hairline */}
+                  <div className="flex items-start justify-between gap-2 px-3.5 py-2.5 border-b border-black/10" style={{ background: '#98E2C3' }}>
                     <div key={barChartMode} style={{ animation: 'page-enter 0.28s ease-out' }}>
                       <p className="text-sm font-bold leading-tight" style={{ color: DARK_GREEN }}>{mode.title}</p>
                       <p className="text-[10px] mt-0.5" style={{ color: DARK_GREEN, opacity: 0.65 }}>{mode.subtitle}</p>
@@ -2269,7 +2241,7 @@ const [barsReady, setBarsReady] = useState(false);
 
               {/* Recent activity card — absolute fill so bar chart card sets the row height */}
               <div className="relative">
-                <div className="absolute inset-0">
+                <div className="absolute inset-0 overflow-hidden rounded-2xl">
                   <RecentActivityCard
                     students={allStudents}
                     feeRecords={feeRecords}
@@ -2277,7 +2249,6 @@ const [barsReady, setBarsReady] = useState(false);
                     cycleIdx={barChartMode}
                   />
                 </div>
-              </div>
               </div>
             </div>
 
