@@ -7,6 +7,7 @@ import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getFeeOverridesByYear } from '../services/feeOverrideService';
 import { Button } from '../components/common/Button';
+import { FilterDropdown } from '../components/common/FilterDropdown';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
@@ -41,9 +42,6 @@ const YEAR_PDF_THEME: Record<Year, ThemeName> = { '1ST YEAR': 'lime', '2ND YEAR'
 const COURSE_RING_HEX: Record<Course, string> = {
   CE: '#fbbf24', ME: '#4ade80', EC: '#38bdf8', CS: '#2dd4bf', EE: '#a78bfa',
 };
-
-const fs =
-  'rounded-full border border-emerald-200 px-2 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
 
 function statusBadgeClass(status: string): string {
   if (status === 'CONFIRMED') return 'bg-emerald-100 text-emerald-700';
@@ -959,8 +957,8 @@ const [barsReady, setBarsReady] = useState(false);
     <>
     <div className="flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
 
-      {/* ── Top panel: header → year chips → pending admissions (uniform bg) ── */}
-      <div className="-mx-4 -mt-4 px-4 pt-4 pb-0.5 flex flex-col gap-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)' }}>
+      {/* ── Top panel: header → year chips (uniform bg, merges into search toolbar below) ── */}
+      <div className="-mx-4 -mt-4 px-4 pt-4 pb-2 flex flex-col gap-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', borderBottom: '1px solid rgba(16,185,129,0.10)' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4">
@@ -993,91 +991,10 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
       </div>
 
-      {/* ── Pending Admissions strip ───────────────────────────────────── */}
-      {admissionPendingStats && (
-        <div
-          className="flex-shrink-0 rounded-lg border flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors group"
-          style={{
-            background: 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)',
-            borderColor: '#6ee7b7',
-            boxShadow: '0 2px 8px 0 rgba(16,185,129,0.10), 0 1px 3px -1px rgba(16,185,129,0.08)',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #ecfdf5 0%, #d1fae5 60%, #ecfdf5 100%)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(90deg, #f0fdf4 0%, #f0fdf8 60%, #ecfdf5 100%)'; }}
-          onClick={() => void navigate('/admissions')}
-        >
-          {/* Leaf accent dot */}
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" style={{ boxShadow: '0 0 0 2px #a7f3d0' }} />
-
-          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/80 shrink-0 whitespace-nowrap">
-            Pending Admissions
-          </span>
-          <span className="text-[10px] text-emerald-300 font-medium shrink-0">·</span>
-          <span className="text-[10px] font-semibold text-emerald-500/70 shrink-0 whitespace-nowrap">
-            {admissionPendingStats.academicYear}
-          </span>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
-
-          {/* Regular pending */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-emerald-500 uppercase tracking-wide">Reg</span>
-            <span className="text-sm font-black tabular-nums text-emerald-800">
-              <AnimNum value={admissionPendingStats.totalRegular} />
-            </span>
-          </div>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">|</span>
-
-          {/* Lateral pending */}
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] font-semibold text-teal-500 uppercase tracking-wide">Lat</span>
-            <span className="text-sm font-black tabular-nums text-teal-700">
-              <AnimNum value={admissionPendingStats.totalLateral} />
-            </span>
-          </div>
-
-          <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-          {/* Per-course pill chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {COURSES.map((course) => {
-              const c = courseConfig[course];
-              const reg = admissionPendingStats.byCourseRegular[course];
-              const lat = admissionPendingStats.byCourseLatear[course];
-              const isEmpty = reg === 0 && lat === 0;
-              return (
-                <div
-                  key={course}
-                  className={`flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 border ${c.border} bg-white/70 ${isEmpty ? 'opacity-25' : ''}`}
-                >
-                  <span className={`text-[10px] font-bold uppercase ${c.textColor}`}>{course}</span>
-                  <span className={`text-[10px] font-black tabular-nums ${c.textColor}`}>
-                    <AnimNum value={reg} />
-                  </span>
-                  {lat > 0 && (
-                    <>
-                      <span className="w-px h-2.5 bg-current opacity-20 shrink-0" />
-                      <span className="text-[10px] font-black tabular-nums text-teal-600">
-                        <AnimNum value={lat} />
-                      </span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <span className="ml-auto text-[10px] text-emerald-400 group-hover:text-emerald-700 font-semibold shrink-0 transition-colors whitespace-nowrap">
-            View →
-          </span>
-        </div>
-      )}
-
       </div>{/* end top panel */}
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="sticky -top-4 z-20 -mx-4 px-4 pt-1 pb-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', borderBottom: '1px solid rgba(16,185,129,0.10)', boxShadow: '0 4px 10px -2px rgba(16,185,129,0.09)' }}>
+      <div className="sticky -top-4 z-20 -mx-4 -mt-1.5 px-4 pt-1.5 pb-1.5" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 4px 10px -2px rgba(16,185,129,0.09)' }}>
         {/* Single row: search + inline filters + actions */}
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-52">
@@ -1117,50 +1034,74 @@ const [barsReady, setBarsReady] = useState(false);
               }}
             >
               <div className="overflow-hidden">
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-px py-1">
-                  <select className={`${fs} w-[78px] shrink-0`} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-                    <option value="">Course</option>
-                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <select className={`${fs} w-[88px] shrink-0`} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-                    <option value="">Study Yr</option>
-                    {YEARS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-                  </select>
-                  <select className={`${fs} w-[80px] shrink-0`} value={genderFilter} onChange={(e) => setGenderFilter(e.target.value as Gender | '')}>
-                    <option value="">Gender</option>
-                    <option value="BOY">BOY</option>
-                    <option value="GIRL">GIRL</option>
-                  </select>
-                  <select className={`${fs} w-[70px] shrink-0`} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as Category | '')}>
-                    <option value="">Cat</option>
-                    <option value="GM">GM</option>
-                    <option value="SC">SC</option>
-                    <option value="ST">ST</option>
-                    <option value="C1">C1</option>
-                    <option value="2A">2A</option>
-                    <option value="2B">2B</option>
-                    <option value="3A">3A</option>
-                    <option value="3B">3B</option>
-                  </select>
-                  <select className={`${fs} w-[92px] shrink-0`} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-                    <option value="">Adm Type</option>
-                    <option value="REGULAR">REGULAR</option>
-                    <option value="REPEATER">REPEATER</option>
-                    <option value="LATERAL">LATERAL</option>
-                    <option value="EXTERNAL">EXTERNAL</option>
-                  </select>
-                  <select className={`${fs} w-[80px] shrink-0`} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-                    <option value="">Adm Cat</option>
-                    <option value="GM">GM</option>
-                    <option value="SNQ">SNQ</option>
-                    <option value="OTHERS">OTHERS</option>
-                  </select>
-                  <select className={`${fs} w-[94px] shrink-0`} value={admStatusFilter} onChange={(e) => setAdmStatusFilter(e.target.value)}>
-                    <option value="">Status</option>
-                    <option value="CONFIRMED">CONFIRMED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                    <option value="PENDING">PENDING</option>
-                  </select>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
+                  <FilterDropdown<Course | ''>
+                    value={courseFilter}
+                    onChange={(v) => setCourseFilter(v as Course | '')}
+                    placeholder="Course"
+                    options={COURSES.map((c) => ({ value: c, label: c }))}
+                  />
+                  <FilterDropdown<Year | ''>
+                    value={yearFilter}
+                    onChange={(v) => setYearFilter(v as Year | '')}
+                    placeholder="Study Yr"
+                    options={YEARS.map((yr) => ({ value: yr, label: yr }))}
+                  />
+                  <FilterDropdown<Gender | ''>
+                    value={genderFilter}
+                    onChange={(v) => setGenderFilter(v as Gender | '')}
+                    placeholder="Gender"
+                    options={[
+                      { value: 'BOY', label: 'BOY' },
+                      { value: 'GIRL', label: 'GIRL' },
+                    ]}
+                  />
+                  <FilterDropdown<Category | ''>
+                    value={categoryFilter}
+                    onChange={(v) => setCategoryFilter(v as Category | '')}
+                    placeholder="Cat"
+                    options={[
+                      { value: 'GM', label: 'GM' },
+                      { value: 'SC', label: 'SC' },
+                      { value: 'ST', label: 'ST' },
+                      { value: 'C1', label: 'C1' },
+                      { value: '2A', label: '2A' },
+                      { value: '2B', label: '2B' },
+                      { value: '3A', label: '3A' },
+                      { value: '3B', label: '3B' },
+                    ]}
+                  />
+                  <FilterDropdown<AdmType | ''>
+                    value={admTypeFilter}
+                    onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                    placeholder="Adm Type"
+                    options={[
+                      { value: 'REGULAR', label: 'REGULAR' },
+                      { value: 'REPEATER', label: 'REPEATER' },
+                      { value: 'LATERAL', label: 'LATERAL' },
+                      { value: 'EXTERNAL', label: 'EXTERNAL' },
+                    ]}
+                  />
+                  <FilterDropdown<AdmCat | ''>
+                    value={admCatFilter}
+                    onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                    placeholder="Adm Cat"
+                    options={[
+                      { value: 'GM', label: 'GM' },
+                      { value: 'SNQ', label: 'SNQ' },
+                      { value: 'OTHERS', label: 'OTHERS' },
+                    ]}
+                  />
+                  <FilterDropdown<'' | 'CONFIRMED' | 'CANCELLED' | 'PENDING'>
+                    value={admStatusFilter as '' | 'CONFIRMED' | 'CANCELLED' | 'PENDING'}
+                    onChange={(v) => setAdmStatusFilter(v)}
+                    placeholder="Status"
+                    options={[
+                      { value: 'CONFIRMED', label: 'CONFIRMED' },
+                      { value: 'CANCELLED', label: 'CANCELLED' },
+                      { value: 'PENDING', label: 'PENDING' },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
@@ -1186,6 +1127,21 @@ const [barsReady, setBarsReady] = useState(false);
             >
               <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
+            </button>
+          )}
+
+          {/* Pending Admissions label */}
+          {admissionPendingStats && (
+            <button
+              onClick={() => void navigate('/admissions')}
+              className="flex items-center gap-1.5 group cursor-pointer shrink-0"
+              title="View Pending Admissions"
+            >
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-amber-400 group-hover:bg-amber-600 transition-colors" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending</span>
+              <span className="text-xs font-black tabular-nums text-amber-700">
+                <AnimNum value={admissionPendingStats.totalRegular + admissionPendingStats.totalLateral} />
+              </span>
             </button>
           )}
 
