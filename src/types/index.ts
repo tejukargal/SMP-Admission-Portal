@@ -391,6 +391,80 @@ export interface ExamResultSemesterSummary {
   attempts: number | null;
 }
 
+// ─── Student Portal — Notices & Messages ───────────────────────────────────────
+
+export type NoticeCategory = 'fee' | 'document' | 'general';
+export type NoticeScope = 'all' | 'academicYear' | 'course' | 'regNumber' | 'selected';
+
+/** Admin-authored announcement, optionally targeted to a subset of students. */
+export interface Notice {
+  id: string;
+  title: string;
+  body: string;
+  category: NoticeCategory;
+  scope: NoticeScope;
+  scopeValue?: string;          // AcademicYear / Course / regNumber string — present for legacy scopes only
+  targetRegNumbers?: string[];  // exact recipient list, present when scope === 'selected'
+  audienceLabel?: string;       // human-readable summary of the audience, e.g. "CE · 2ND YEAR · Has Dues (24 students)"
+  createdAt: string;
+  createdBy: string;        // admin uid
+  updatedAt?: string;       // set when the notice is edited after being sent
+  archivedAt?: string;      // set when admin unpublishes the notice — hidden from all students, kept for admin review; cleared again on publish
+}
+
+/** Per-student "which notices have I seen" state (drives the unread badge; students cannot dismiss notices themselves) — one doc per student, keyed by regNumber. */
+export interface StudentNoticeState {
+  regNumber: string;
+  seenNoticeIds: string[];
+  updatedAt: string;
+}
+
+/** One doc per student (keyed by their portal Auth uid), updated by the studentLogin Cloud Function on login and self-updated on logout. */
+export interface StudentLoginActivity {
+  id: string;             // doc id === student's portal Auth uid
+  regNumber: string;
+  studentName: string;
+  course: string;
+  year: string;
+  lastLoginAt: string;
+  loginCount: number;
+  online: boolean;
+  lastLogoutAt?: string;
+}
+
+export type StudentNotificationType =
+  | 'fee-paid' | 'fee-dues-updated' | 'profile-updated' | 'status-changed' | 'allotted-category';
+
+/** Auto-generated "your record changed" notification, shown once at portal login. */
+export interface StudentNotification {
+  id: string;
+  studentId: string;     // the specific Student doc id at time of change
+  regNumber: string;     // stable identity across academic years — query key
+  type: StudentNotificationType;
+  title: string;
+  message: string;
+  createdAt: string;
+  createdBy: string;     // admin/staff uid
+  seen: boolean;
+  seenAt?: string;
+}
+
+export type StudentMessageCategory = 'name-correction' | 'profile-update' | 'other';
+export type StudentMessageStatus = 'open' | 'resolved';
+
+/** A free-text message/query submitted by a student to admin. */
+export interface StudentMessage {
+  id: string;
+  regNumber: string;
+  studentName: string;
+  category: StudentMessageCategory;
+  message: string;
+  status: StudentMessageStatus;
+  adminReply?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A single student's parsed result, from a course-wise Result Ledger PDF. */
 export interface ExamResult {
   id: string;                      // `${regNumber}__${examSession slug}`

@@ -1,28 +1,39 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { useStudentAuth } from '../contexts/StudentAuthContext';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
+import type { StudentLoginMode } from '../services/studentAuthService';
 
-export function Login() {
-  const { login } = useAuth();
+const DOB_RE = /^\d{2}\/\d{2}\/\d{4}$/;
+
+export function StudentLogin() {
+  const { login } = useStudentAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<StudentLoginMode>('reg');
+  const [identifier, setIdentifier] = useState('');
+  const [dob, setDob] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!DOB_RE.test(dob)) {
+      setError('Enter Date of Birth as DD/MM/YYYY.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      void navigate('/students');
+      await login(identifier.trim(), mode, dob);
+      void navigate('/portal');
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Login failed. Please check your credentials.'
-      );
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'functions/resource-exhausted') {
+        setError('Too many attempts. Please try again in 15 minutes.');
+      } else {
+        setError('No matching record found. Please check your details.');
+      }
     } finally {
       setLoading(false);
     }
@@ -38,10 +49,10 @@ export function Login() {
       <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle, #bae6fd, transparent 70%)', transform: 'translate(30%, 30%)' }} />
 
       <Link
-        to="/student-login"
+        to="/login"
         className="absolute top-4 right-4 sm:top-6 sm:right-6 text-xs sm:text-sm font-semibold text-emerald-700 bg-white/70 hover:bg-white border border-emerald-200 rounded-full px-3 py-1.5 shadow-sm transition-colors"
       >
-        Student Login →
+        Staff / Admin Login →
       </Link>
 
       <div className="relative bg-white/80 rounded-3xl shadow-xl w-full max-w-sm p-8 border border-emerald-100" style={{ backdropFilter: 'blur(16px)' }}>
@@ -54,27 +65,44 @@ export function Login() {
             </svg>
           </div>
           <h1 className="text-2xl font-black text-gray-900 uppercase" style={{ letterSpacing: '0.18em' }}>SMP Admissions</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
+          <p className="text-sm text-gray-500 mt-1">Student Login</p>
+        </div>
+
+        {/* Reg No / Mobile toggle */}
+        <div className="flex rounded-full border border-emerald-200 bg-emerald-50/60 p-1 mb-4">
+          {(['reg', 'mobile'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setIdentifier(''); setError(''); }}
+              className={`flex-1 rounded-full py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                mode === m ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-700 hover:bg-emerald-100'
+              }`}
+            >
+              {m === 'reg' ? 'Register Number' : 'Mobile Number'}
+            </button>
+          ))}
         </div>
 
         <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
           <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@example.com"
+            label={mode === 'reg' ? 'Register Number' : 'Mobile Number'}
+            type="text"
+            value={identifier}
+            onChange={(e) => setIdentifier(mode === 'reg' ? e.target.value.toUpperCase() : e.target.value)}
+            placeholder={mode === 'reg' ? 'e.g. 123456' : 'e.g. 9876543210'}
             required
-            autoComplete="email"
+            autoComplete="off"
           />
           <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            label="Date of Birth"
+            type="text"
+            inputMode="numeric"
+            value={dob}
+            onChange={(e) => setDob(e.target.value.replace(/[^\d/]/g, '').slice(0, 10))}
+            placeholder="DD/MM/YYYY"
+            maxLength={10}
             required
-            autoComplete="current-password"
           />
 
           {error && (
@@ -90,7 +118,7 @@ export function Login() {
             loading={loading}
             className="w-full mt-2"
           >
-            Sign In
+            View My Details
           </Button>
         </form>
       </div>

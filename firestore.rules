@@ -37,6 +37,29 @@ service cloud.firestore {
       return isAdmin() || isActiveStaff();
     }
 
+    // Student self-service session — a custom-token Firebase Auth identity
+    // (minted by the studentLogin Cloud Function) carrying a `student` claim
+    // plus either `regNumber` (normal case) or `studentDocId` (pending-admission
+    // fallback, before a reg number has been allotted). See functions/src/index.ts.
+    function isStudentClaim() {
+      return request.auth != null && request.auth.token.student == true;
+    }
+
+    function isOwnStudentDoc(studentId, data) {
+      return isStudentClaim() && (
+        (request.auth.token.regNumber is string && data.regNumber == request.auth.token.regNumber) ||
+        (request.auth.token.studentDocId is string && studentId == request.auth.token.studentDocId)
+      );
+    }
+
+    // For collections keyed by studentId (not regNumber directly) — cross-check
+    // the referenced student doc's regNumber against the caller's claim.
+    function isOwnStudentRef(studentId) {
+      return isStudentClaim()
+        && exists(/databases/$(database)/documents/students/$(studentId))
+        && get(/databases/$(database)/documents/students/$(studentId)).data.regNumber == request.auth.token.regNumber;
+    }
+
     // ── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
       // Users read their own doc; admins read all (for staff list)
@@ -53,13 +76,13 @@ service cloud.firestore {
 
     // ── Settings ──────────────────────────────────────────────────────────
     match /settings/{settingId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
     // ── Students ──────────────────────────────────────────────────────────
     match /students/{studentId} {
-      allow read:   if request.auth != null;
+      allow read:   if isActiveUser() || isOwnStudentDoc(studentId, resource.data);
       // Both admin and active staff can enroll (create/update) students
       allow create: if isActiveUser()
         && request.resource.data.keys().hasAll([
@@ -73,7 +96,7 @@ service cloud.firestore {
 
     // ── Fee Structure ─────────────────────────────────────────────────────
     match /feeStructure/{structureId} {
-      allow read: if request.auth != null;
+      allow read: if isActiveUser() || isStudentClaim();
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
              'academicYear', 'course', 'smp', 'svk'
@@ -83,7 +106,8 @@ service cloud.firestore {
 
     // ── Fee Records ───────────────────────────────────────────────────────
     match /feeRecords/{recordId} {
-      allow read: if request.auth != null;
+      allow read: if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
              'studentId', 'academicYear', 'smp', 'svk', 'date'
@@ -93,20 +117,20 @@ service cloud.firestore {
 
     // ── Fine Schedules ────────────────────────────────────────────────────
     match /fineSchedules/{yearId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
     // ── Student Documents ─────────────────────────────────────────────────
     match /studentDocuments/{studentId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       // Both admin and staff can track document status
       allow write: if isActiveUser();
     }
 
     // ── Exam Fee Records ──────────────────────────────────────────────────
     match /examFeeRecords/{recordId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
@@ -114,7 +138,7 @@ service cloud.firestore {
     // Merit/reg number counters — written during enrollment transactions.
     // Both admin and staff can enroll, so both need write access here.
     match /counters/{counterId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isActiveUser();
     }
 
@@ -123,13 +147,13 @@ service cloud.firestore {
     // receipt number issued. Written inside Firestore transactions to guarantee
     // uniqueness under concurrent fee collection by multiple staff users.
     match /receiptCounters/{academicYear} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isActiveUser();
     }
 
     // ── Inquiries ─────────────────────────────────────────────────────────
     match /inquiries/{inquiryId} {
-      allow read: if request.auth != null;
+      allow read: if isActiveUser();
       allow create: if isActiveUser()
         && request.resource.data.keys().hasAll(['studentName', 'academicYear', 'status'])
         && request.resource.data.keys().hasAny(['mobile', 'parentMobile']);
@@ -140,7 +164,10 @@ service cloud.firestore {
 
     // ── Fee Overrides ─────────────────────────────────────────────────────
     match /feeOverrides/{overrideId} {
-      allow read: if request.auth != null;
+      // resource is null when the override doc doesn't exist (the common case —
+      // most students have no override); only enforce ownership when data exists.
+      allow read: if isActiveUser()
+        || (isStudentClaim() && (resource == null || isOwnStudentRef(resource.data.studentId)));
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasAll([
              'studentId', 'academicYear', 'smp', 'svk'
@@ -150,7 +177,8 @@ service cloud.firestore {
 
     // ── SNQ Fee Refunds ───────────────────────────────────────────────────
     match /refunds/{refundId} {
-      allow read: if request.auth != null;
+      allow read: if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
       allow create: if isAdmin()
         && request.resource.data.keys().hasAll([
              'studentId', 'academicYear', 'refundAmount', 'paymentType', 'paymentDate'
@@ -174,13 +202,13 @@ service cloud.firestore {
     // ── App Config (CCC counter, etc.) ────────────────────────────────────
     // Active users need read+write so certificate number transactions work.
     match /config/{docId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isActiveUser();
     }
 
     // ── Merit List Snapshots ──────────────────────────────────────────────
     match /meritListSnapshots/{snapshotId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
@@ -188,22 +216,76 @@ service cloud.firestore {
     // Writes come from Cloud Functions (Admin SDK bypasses rules);
     // rule below prevents direct browser writes from non-admins.
     match /smsLogs/{logId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
     // ── Fee Remittances ───────────────────────────────────────────────────────
     match /feeRemittances/{docId} {
-      allow read:  if request.auth != null;
+      allow read:  if isActiveUser();
       allow write: if isAdmin();
     }
 
     // ── Exam Results (parsed from Result Ledger PDFs) ─────────────────────
-    // Both admin and staff can view; only admin can import/edit/delete.
+    // Both admin and staff can view; students can view their own (read-only,
+    // matched via regNumber — part of the student portal's academic profile).
     match /examResults/{resultId} {
-      allow read: if request.auth != null;
+      allow read: if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasAll(['regNumber', 'studentName', 'examSession']);
+      allow delete: if isAdmin();
+    }
+
+    // ── Login Attempts (studentLogin throttling) ──────────────────────────
+    // Written only by the studentLogin Cloud Function via the Admin SDK,
+    // which bypasses rules entirely — this rule blocks any direct client access.
+    match /loginAttempts/{key} {
+      allow read, write: if false;
+    }
+
+    // ── Student Portal Login Activity ("active users") ─────────────────────
+    // Docs are created only by the studentLogin Cloud Function via the Admin SDK
+    // (bypasses rules). The signed-in student may flip their own online/offline
+    // status on logout — nothing else about the doc — everything else is admin/staff read-only.
+    match /studentLoginActivity/{uid} {
+      allow read:   if isActiveUser();
+      allow update: if isStudentClaim() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['online', 'lastLogoutAt']);
+      allow create, delete: if false;
+    }
+
+    // ── Notices (admin → student announcements) ───────────────────────────
+    match /notices/{noticeId} {
+      allow read:  if isActiveUser() || isStudentClaim();
+      allow write: if isAdmin();
+    }
+
+    // ── Student Messages (student → admin queries) ────────────────────────
+    match /studentMessages/{msgId} {
+      allow read:   if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
+      allow create: if isStudentClaim()
+        && request.resource.data.regNumber == request.auth.token.regNumber
+        && request.resource.data.keys().hasAll(['regNumber', 'studentName', 'category', 'message', 'status']);
+      allow update: if isActiveUser();
+      allow delete: if isAdmin();
+    }
+
+    // ── Student Notice Clear-State (student self-service dismiss) ─────────
+    match /studentNoticeState/{regNumber} {
+      allow read, write: if isActiveUser()
+        || (isStudentClaim() && regNumber == request.auth.token.regNumber);
+    }
+
+    // ── Student Notifications (admin/staff → student, record-change alerts) ─
+    match /studentNotifications/{id} {
+      allow read:   if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
+      allow create: if isActiveUser()
+        && request.resource.data.keys().hasAll(['studentId', 'regNumber', 'type', 'title', 'message', 'createdAt', 'seen']);
+      allow update: if isActiveUser()
+        || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
       allow delete: if isAdmin();
     }
   }

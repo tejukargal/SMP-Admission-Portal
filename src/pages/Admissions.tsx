@@ -7,6 +7,7 @@ import { updateStudentStatus, updateStudentAllottedCategory } from '../services/
 import { getAllFeeRecordsByStudent } from '../services/feeRecordService';
 import { SMP_FEE_HEADS } from '../types';
 import { saveMeritListSnapshot, saveLateralMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
+import { createStudentNotification } from '../services/studentNotificationService';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/common/Button';
 import { PageSpinner } from '../components/common/PageSpinner';
@@ -40,7 +41,7 @@ function sortStudents(list: Student[]): Student[] {
 
 export function Admissions() {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
@@ -434,6 +435,16 @@ export function Admissions() {
         CANCELLED: `${student.studentNameSSLC} moved to Cancelled.`,
         PENDING: `${student.studentNameSSLC} restored to Pending.`,
       };
+      if (user && student.regNumber) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: student.regNumber,
+          type: 'status-changed',
+          title: 'Admission Status Updated',
+          message: `Your admission status was changed to ${newStatus}.`,
+          createdBy: user.uid,
+        });
+      }
       setToastError(false);
       setToastMsg(msgs[newStatus] ?? 'Updated.');
     } catch {
@@ -458,6 +469,16 @@ export function Admissions() {
     setSavingAllottedCat(true);
     try {
       await updateStudentAllottedCategory(allottedCatStudent.id, allottedCategory);
+      if (user && allottedCatStudent.regNumber) {
+        void createStudentNotification({
+          studentId: allottedCatStudent.id,
+          regNumber: allottedCatStudent.regNumber,
+          type: 'allotted-category',
+          title: 'Allotted Category Set',
+          message: `Your allotted category was set to ${allottedCategory}.`,
+          createdBy: user.uid,
+        });
+      }
       setAllottedCatStudent(null);
       setToastError(false);
       setToastMsg(`Allotted category saved for ${allottedCatStudent.studentNameSSLC}.`);

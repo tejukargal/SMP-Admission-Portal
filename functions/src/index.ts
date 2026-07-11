@@ -34,6 +34,147 @@ export const syncMyAdminClaim = onCall({ region: 'asia-south1' }, async (request
   return { admin: isAdmin };
 });
 
+// ── Student self-service login ──────────────────────────────────────────────
+// Verifies (Register Number | Mobile Number) + Date of Birth against the
+// students collection using the Admin SDK (bypasses Firestore rules), then
+// mints a custom-token Firebase Auth identity carrying a `student` claim so
+// the client can sign in on a *separate* secondary Firebase app instance
+// (never touching the admin/staff `auth`/AuthContext — see
+// src/config/studentFirebase.ts and src/contexts/StudentAuthContext.tsx).
+//
+// Rate limiting: a `loginAttempts/{key}` doc (client-unwritable, see
+// firestore.rules) tracks failed attempts per identifier and locks out after
+// 8 failures within a 15-minute window. Error messages are intentionally
+// generic (never reveal which factor was wrong) to avoid regNumber/mobile
+// enumeration.
+
+const MAX_LOGIN_ATTEMPTS = 8;
+const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+
+function sanitizeDocId(s: string): string {
+  return s.replace(/[/\s]/g, '_').slice(0, 200);
+}
+
+async function checkAndRecordAttempt(key: string): Promise<{ blocked: boolean }> {
+  const ref = db.collection('loginAttempts').doc(sanitizeDocId(key));
+  const snap = await ref.get();
+  const now = Date.now();
+  const data = snap.exists ? (snap.data() as { count: number; firstAttemptAt: number }) : null;
+
+  if (data && now - data.firstAttemptAt < LOGIN_LOCKOUT_WINDOW_MS) {
+    if (data.count >= MAX_LOGIN_ATTEMPTS) {
+      return { blocked: true };
+    }
+    await ref.set({ count: data.count + 1, firstAttemptAt: data.firstAttemptAt });
+  } else {
+    await ref.set({ count: 1, firstAttemptAt: now });
+  }
+  return { blocked: false };
+}
+
+async function clearAttempts(key: string): Promise<void> {
+  await db.collection('loginAttempts').doc(sanitizeDocId(key)).delete().catch(() => {});
+}
+
+// The client sends DOB as "YYYY-MM-DD" (native <input type="date"> value), but
+// students are stored with dateOfBirth as "DD/MM/YYYY" (see EnrollStudent.tsx —
+// a free-text field with slash formatting, not a date input). Convert before
+// comparing so logins actually match.
+function isoToDDMMYYYY(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!match) return iso.trim();
+  const [, y, m, d] = match;
+  return `${d}/${m}/${y}`;
+}
+
+export const studentLogin = onCall(
+  { region: 'asia-south1' },
+  async (request) => {
+    const { identifier, mode, dob } = request.data as {
+      identifier?: string;
+      mode?: 'reg' | 'mobile';
+      dob?: string;
+    };
+
+    if (!identifier?.trim() || !dob?.trim() || (mode !== 'reg' && mode !== 'mobile')) {
+      throw new HttpsError('invalid-argument', 'Register/Mobile number and Date of Birth are required.');
+    }
+
+    const cleanIdentifier = identifier.trim().toUpperCase();
+    const attemptKey = `${mode}:${cleanIdentifier}`;
+
+    const { blocked } = await checkAndRecordAttempt(attemptKey);
+    if (blocked) {
+      throw new HttpsError('resource-exhausted', 'Too many attempts. Please try again in 15 minutes.');
+    }
+
+    // 1. Find candidate student docs
+    let docs: FirebaseFirestore.QueryDocumentSnapshot[];
+    if (mode === 'reg') {
+      const snap = await db.collection('students').where('regNumber', '==', cleanIdentifier).get();
+      docs = snap.docs;
+    } else {
+      const [byStudent, byFather] = await Promise.all([
+        db.collection('students').where('studentMobile', '==', identifier.trim()).get(),
+        db.collection('students').where('fatherMobile', '==', identifier.trim()).get(),
+      ]);
+      const map = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      for (const d of [...byStudent.docs, ...byFather.docs]) map.set(d.id, d);
+      docs = [...map.values()];
+    }
+
+    // 2. Filter by exact DOB match (stored as DD/MM/YYYY)
+    const dobDDMMYYYY = isoToDDMMYYYY(dob);
+    const matches = docs.filter((d) => (d.data() as { dateOfBirth?: string }).dateOfBirth === dobDDMMYYYY);
+
+    if (matches.length === 0) {
+      throw new HttpsError('not-found', 'No matching record found. Please check your details.');
+    }
+
+    // 3. Determine the claim identity — prefer regNumber (stable across all of a
+    //    student's enrollment-year docs); fall back to a single-doc claim for
+    //    pre-confirmation records that don't have one yet.
+    const withRegNumber = matches.find((d) => !!(d.data() as { regNumber?: string }).regNumber?.trim());
+
+    let uid: string;
+    let claims: Record<string, unknown>;
+    if (withRegNumber) {
+      const regNumber = (withRegNumber.data() as { regNumber: string }).regNumber.trim();
+      uid = `student_${sanitizeDocId(regNumber)}`;
+      claims = { student: true, regNumber };
+    } else {
+      const doc = matches[0];
+      uid = `student_doc_${doc.id}`;
+      claims = { student: true, studentDocId: doc.id };
+    }
+
+    await clearAttempts(attemptKey);
+    const token = await admin.auth().createCustomToken(uid, claims);
+
+    // Record portal login activity (Admin SDK bypasses rules — students can't
+    // write this themselves) so the admin side can show "active users".
+    const activityDoc = withRegNumber ?? matches[0];
+    const activityData = activityDoc.data() as {
+      regNumber?: string; studentNameSSLC?: string; course?: string; year?: string;
+    };
+    const now = new Date().toISOString();
+    await db.collection('studentLoginActivity').doc(uid).set(
+      {
+        regNumber: activityData.regNumber ?? '',
+        studentName: activityData.studentNameSSLC ?? '',
+        course: activityData.course ?? '',
+        year: activityData.year ?? '',
+        lastLoginAt: now,
+        loginCount: admin.firestore.FieldValue.increment(1),
+        online: true,
+      },
+      { merge: true },
+    );
+
+    return { token };
+  },
+);
+
 interface SMSRecipient {
   studentId: string;
   name: string;

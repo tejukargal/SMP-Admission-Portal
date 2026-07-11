@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { getFeeStructure } from '../../services/feeStructureService';
 import {
   getFeeRecordsByStudent,
@@ -8,6 +9,7 @@ import {
 } from '../../services/feeRecordService';
 import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
 import { getFineSchedule } from '../../services/fineScheduleService';
+import { createStudentNotification } from '../../services/studentNotificationService';
 import { Button } from '../common/Button';
 import type {
   Student,
@@ -65,6 +67,7 @@ const ni =
   'w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors';
 
 export function FeeCollectionModal({ student, academicYear, receiptCounterYear, onClose, onSaved }: Props) {
+  const { user } = useAuth();
   const counterYear = receiptCounterYear ?? academicYear;
   const [structure, setStructure] = useState<FeeStructure | null>(null);
   /** All prior payment records for this student in this year */
@@ -257,6 +260,17 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
       setLoadedOverride(saved);
       setEditingAllotted(false);
 
+      if (user) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: student.regNumber,
+          type: 'fee-dues-updated',
+          title: 'Fee Allotment Updated',
+          message: `Your fee allotment for ${academicYear} has been updated by the office. Check the Fee History tab for the latest breakup.`,
+          createdBy: user.uid,
+        });
+      }
+
       // Re-prefill Now Paying with remaining balance from the newly saved override
       const fineExempt =
         (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
@@ -396,6 +410,17 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         svk:        usedSvkReceipt,
         additional: usedAddReceipt,
       });
+
+      if (user && grandNow > 0) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: student.regNumber,
+          type: 'fee-paid',
+          title: 'Fee Payment Received',
+          message: `A payment of ₹${grandNow.toLocaleString()} was recorded for ${academicYear} on ${date}. Remaining balance: ₹${Math.max(0, balance).toLocaleString()}.`,
+          createdBy: user.uid,
+        });
+      }
 
       onSaved();
       onClose();

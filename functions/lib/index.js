@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateAdmissionSummary = exports.sendBulkSMS = exports.syncMyAdminClaim = exports.syncAdminClaim = void 0;
+exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -58,6 +58,122 @@ exports.syncMyAdminClaim = (0, https_1.onCall)({ region: 'asia-south1' }, async 
     const isAdmin = !!data && data.role === 'admin' && data.active !== false;
     await admin.auth().setCustomUserClaims(uid, { admin: isAdmin });
     return { admin: isAdmin };
+});
+// ── Student self-service login ──────────────────────────────────────────────
+// Verifies (Register Number | Mobile Number) + Date of Birth against the
+// students collection using the Admin SDK (bypasses Firestore rules), then
+// mints a custom-token Firebase Auth identity carrying a `student` claim so
+// the client can sign in on a *separate* secondary Firebase app instance
+// (never touching the admin/staff `auth`/AuthContext — see
+// src/config/studentFirebase.ts and src/contexts/StudentAuthContext.tsx).
+//
+// Rate limiting: a `loginAttempts/{key}` doc (client-unwritable, see
+// firestore.rules) tracks failed attempts per identifier and locks out after
+// 8 failures within a 15-minute window. Error messages are intentionally
+// generic (never reveal which factor was wrong) to avoid regNumber/mobile
+// enumeration.
+const MAX_LOGIN_ATTEMPTS = 8;
+const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+function sanitizeDocId(s) {
+    return s.replace(/[/\s]/g, '_').slice(0, 200);
+}
+async function checkAndRecordAttempt(key) {
+    const ref = db.collection('loginAttempts').doc(sanitizeDocId(key));
+    const snap = await ref.get();
+    const now = Date.now();
+    const data = snap.exists ? snap.data() : null;
+    if (data && now - data.firstAttemptAt < LOGIN_LOCKOUT_WINDOW_MS) {
+        if (data.count >= MAX_LOGIN_ATTEMPTS) {
+            return { blocked: true };
+        }
+        await ref.set({ count: data.count + 1, firstAttemptAt: data.firstAttemptAt });
+    }
+    else {
+        await ref.set({ count: 1, firstAttemptAt: now });
+    }
+    return { blocked: false };
+}
+async function clearAttempts(key) {
+    await db.collection('loginAttempts').doc(sanitizeDocId(key)).delete().catch(() => { });
+}
+// The client sends DOB as "YYYY-MM-DD" (native <input type="date"> value), but
+// students are stored with dateOfBirth as "DD/MM/YYYY" (see EnrollStudent.tsx —
+// a free-text field with slash formatting, not a date input). Convert before
+// comparing so logins actually match.
+function isoToDDMMYYYY(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+    if (!match)
+        return iso.trim();
+    const [, y, m, d] = match;
+    return `${d}/${m}/${y}`;
+}
+exports.studentLogin = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+    var _a, _b, _c, _d;
+    const { identifier, mode, dob } = request.data;
+    if (!(identifier === null || identifier === void 0 ? void 0 : identifier.trim()) || !(dob === null || dob === void 0 ? void 0 : dob.trim()) || (mode !== 'reg' && mode !== 'mobile')) {
+        throw new https_1.HttpsError('invalid-argument', 'Register/Mobile number and Date of Birth are required.');
+    }
+    const cleanIdentifier = identifier.trim().toUpperCase();
+    const attemptKey = `${mode}:${cleanIdentifier}`;
+    const { blocked } = await checkAndRecordAttempt(attemptKey);
+    if (blocked) {
+        throw new https_1.HttpsError('resource-exhausted', 'Too many attempts. Please try again in 15 minutes.');
+    }
+    // 1. Find candidate student docs
+    let docs;
+    if (mode === 'reg') {
+        const snap = await db.collection('students').where('regNumber', '==', cleanIdentifier).get();
+        docs = snap.docs;
+    }
+    else {
+        const [byStudent, byFather] = await Promise.all([
+            db.collection('students').where('studentMobile', '==', identifier.trim()).get(),
+            db.collection('students').where('fatherMobile', '==', identifier.trim()).get(),
+        ]);
+        const map = new Map();
+        for (const d of [...byStudent.docs, ...byFather.docs])
+            map.set(d.id, d);
+        docs = [...map.values()];
+    }
+    // 2. Filter by exact DOB match (stored as DD/MM/YYYY)
+    const dobDDMMYYYY = isoToDDMMYYYY(dob);
+    const matches = docs.filter((d) => d.data().dateOfBirth === dobDDMMYYYY);
+    if (matches.length === 0) {
+        throw new https_1.HttpsError('not-found', 'No matching record found. Please check your details.');
+    }
+    // 3. Determine the claim identity — prefer regNumber (stable across all of a
+    //    student's enrollment-year docs); fall back to a single-doc claim for
+    //    pre-confirmation records that don't have one yet.
+    const withRegNumber = matches.find((d) => { var _a; return !!((_a = d.data().regNumber) === null || _a === void 0 ? void 0 : _a.trim()); });
+    let uid;
+    let claims;
+    if (withRegNumber) {
+        const regNumber = withRegNumber.data().regNumber.trim();
+        uid = `student_${sanitizeDocId(regNumber)}`;
+        claims = { student: true, regNumber };
+    }
+    else {
+        const doc = matches[0];
+        uid = `student_doc_${doc.id}`;
+        claims = { student: true, studentDocId: doc.id };
+    }
+    await clearAttempts(attemptKey);
+    const token = await admin.auth().createCustomToken(uid, claims);
+    // Record portal login activity (Admin SDK bypasses rules — students can't
+    // write this themselves) so the admin side can show "active users".
+    const activityDoc = withRegNumber !== null && withRegNumber !== void 0 ? withRegNumber : matches[0];
+    const activityData = activityDoc.data();
+    const now = new Date().toISOString();
+    await db.collection('studentLoginActivity').doc(uid).set({
+        regNumber: (_a = activityData.regNumber) !== null && _a !== void 0 ? _a : '',
+        studentName: (_b = activityData.studentNameSSLC) !== null && _b !== void 0 ? _b : '',
+        course: (_c = activityData.course) !== null && _c !== void 0 ? _c : '',
+        year: (_d = activityData.year) !== null && _d !== void 0 ? _d : '',
+        lastLoginAt: now,
+        loginCount: admin.firestore.FieldValue.increment(1),
+        online: true,
+    }, { merge: true });
+    return { token };
 });
 const MOBILE_RE = /^[6-9]\d{9}$/;
 function interpolate(template, r) {

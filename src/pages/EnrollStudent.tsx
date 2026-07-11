@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
 import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber, updateStudentAllottedCategory } from '../services/studentService';
 import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/feeRecordService';
+import { createStudentNotification } from '../services/studentNotificationService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
@@ -436,7 +437,7 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
 }
 
 export function EnrollStudent() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('edit');
@@ -461,6 +462,7 @@ export function EnrollStudent() {
   const [editOriginalYear, setEditOriginalYear] = useState<{ year: string; academicYear: string } | null>(null);
   const [editOriginalAdmCat, setEditOriginalAdmCat] = useState<AdmCat | null>(null);
   const [editOriginalCourse, setEditOriginalCourse] = useState<string | null>(null);
+  const [editOriginalProfile, setEditOriginalProfile] = useState<{ studentNameSSLC: string; fatherName: string; motherName: string } | null>(null);
   const [enrollmentHistory, setEnrollmentHistory] = useState<Student[]>([]);
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
@@ -837,6 +839,11 @@ export function EnrollStudent() {
       setEditOriginalYear({ year: formData.year, academicYear: formData.academicYear });
       setEditOriginalAdmCat(formData.admCat ?? null);
       setEditOriginalCourse(formData.course ?? null);
+      setEditOriginalProfile({
+        studentNameSSLC: formData.studentNameSSLC,
+        fatherName: formData.fatherName,
+        motherName: formData.motherName,
+      });
       getAllStudents().then((all) => {
         const history = all
           .filter((s) => {
@@ -1051,6 +1058,28 @@ export function EnrollStudent() {
             form.admCat,
           );
         }
+
+        // Notify the student of what changed, in a single summary notification
+        if (user) {
+          const changed: string[] = [];
+          if (editOriginalProfile?.studentNameSSLC && editOriginalProfile.studentNameSSLC !== form.studentNameSSLC) changed.push('Name');
+          if (editOriginalProfile?.fatherName && editOriginalProfile.fatherName !== form.fatherName) changed.push("Father's Name");
+          if (editOriginalProfile?.motherName && editOriginalProfile.motherName !== form.motherName) changed.push("Mother's Name");
+          if (editOriginalCourse !== null && form.course !== editOriginalCourse) changed.push('Course');
+          if (editOriginalYear && form.year !== editOriginalYear.year) changed.push('Study Year');
+          if (editOriginalAdmCat && form.admCat !== editOriginalAdmCat) changed.push('Admission Category');
+          if (changed.length > 0) {
+            void createStudentNotification({
+              studentId: editId,
+              regNumber: form.regNumber,
+              type: 'profile-updated',
+              title: 'Your Profile Was Updated',
+              message: `The office updated the following on your record: ${changed.join(', ')}.`,
+              createdBy: user.uid,
+            });
+          }
+        }
+
         navigate(backTo, { state: { updatedName: form.studentNameSSLC }, replace: true });
       } else {
         const { id: newStudentId, meritNumber, regNumber, applicationNumber } = await addStudent(form);

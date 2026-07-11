@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { updateStudentAllottedCategory } from '../services/studentService';
+import { createStudentNotification } from '../services/studentNotificationService';
 import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { useFilters } from '../contexts/FiltersContext';
@@ -50,7 +51,7 @@ function LoadingGate() {
 export function Students() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
@@ -326,6 +327,16 @@ export function Students() {
     setSavingAllottedCat(true);
     try {
       await updateStudentAllottedCategory(allottedCatStudent.id, allottedCategory);
+      if (user && allottedCatStudent.regNumber) {
+        void createStudentNotification({
+          studentId: allottedCatStudent.id,
+          regNumber: allottedCatStudent.regNumber,
+          type: 'allotted-category',
+          title: 'Allotted Category Set',
+          message: `Your allotted category was set to ${allottedCategory}.`,
+          createdBy: user.uid,
+        });
+      }
       refetch();
       setAllottedCatStudent(null);
       setToastMsg(`Allotted category saved for ${allottedCatStudent.studentNameSSLC}.`);

@@ -12,49 +12,14 @@ import { getExamResultsByRegNumber } from '../../services/resultService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import { ResultDetailModal } from '../results/ResultDetailModal';
 import type {
-  Student, FeeRecord, FeeStructure, AcademicYear,
-  StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat, DocRecord, ExamResult,
+  Student, FeeRecord, AcademicYear,
+  AdmType, AdmCat, DocRecord, ExamResult,
 } from '../../types';
-import { SMP_FEE_HEADS, REQUIRED_DOCS } from '../../types';
-
-// ─── Fee history helpers (mirrors FeeHistoryModal) ───────────────────────────
-
-function sumSMPRecord(smp: FeeRecord['smp']): number {
-  return SMP_FEE_HEADS.reduce((s, { key }) => s + smp[key], 0);
-}
-function calcRecordTotal(r: FeeRecord): number {
-  return sumSMPRecord(r.smp) + r.svk + r.additionalPaid.reduce((s, h) => s + h.amount, 0);
-}
-function calcEffectiveFine(smpFineAllotted: number, records: FeeRecord[]): number {
-  const finePaid = records.reduce((sum, r) => sum + r.smp.fine, 0);
-  return Math.max(smpFineAllotted, finePaid);
-}
-function calcAllotted(
-  smpValues: SMPHeads,
-  svk: number,
-  additionalHeads: FeeAdditionalHead[],
-  records: FeeRecord[],
-): number {
-  const effectiveFine = calcEffectiveFine(smpValues.fine, records);
-  const smpTotal = SMP_FEE_HEADS.reduce(
-    (t, { key }) => t + (key === 'fine' ? effectiveFine : smpValues[key]),
-    0,
-  );
-  return smpTotal + svk + additionalHeads.reduce((t, h) => t + h.amount, 0);
-}
-
-interface YearData {
-  academicYear: AcademicYear;
-  records: FeeRecord[];
-  structure: FeeStructure | null;
-  override: StudentFeeOverride | null;
-}
-
-function effectiveValues(yd: YearData): { smp: SMPHeads; svk: number; additional: FeeAdditionalHead[] } | null {
-  if (yd.override) return { smp: yd.override.smp, svk: yd.override.svk, additional: yd.override.additionalHeads };
-  if (yd.structure) return { smp: yd.structure.smp, svk: yd.structure.svk, additional: yd.structure.additionalHeads };
-  return null;
-}
+import { REQUIRED_DOCS, SMP_FEE_HEADS } from '../../types';
+import {
+  sumSMPRecord, calcRecordTotal, calcEffectiveFine, calcAllotted, effectiveValues,
+  type YearData,
+} from '../../utils/feeCalc';
 
 const FEE_PALETTE = {
   noDues:  { headerBg: 'bg-emerald-100', headerBorder: 'border-emerald-200', cardBorder: 'border-emerald-300', badgeBg: 'bg-emerald-700', divider: 'border-emerald-300', duesBg: 'bg-emerald-50' },

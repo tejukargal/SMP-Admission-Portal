@@ -99,6 +99,13 @@ function IconMessaging() {
     </svg>
   );
 }
+function IconStudentMessages() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+  );
+}
 function IconSettings() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -130,6 +137,7 @@ const ADMIN_ITEMS = [
   { to: '/fee-register',   label: 'Fee Register',   Icon: IconRegister     },
   { to: '/fee-reports',    label: 'Fee Reports',    Icon: IconReports      },
   { to: '/messaging',      label: 'Messaging',      Icon: IconMessaging    },
+  { to: '/student-messages', label: 'Student Messages', Icon: IconStudentMessages },
   { to: '/settings',       label: 'Settings',       Icon: IconSettings     },
 ];
 const STAFF_ONLY = [
