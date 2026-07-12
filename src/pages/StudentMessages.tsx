@@ -170,11 +170,6 @@ export function StudentMessages() {
     return rows;
   }, [allRows, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, feeStatusFilter, pickerSearch]);
 
-  // Default: everything currently matching filters+search is selected.
-  useEffect(() => {
-    setSelected(new Set(filteredRows.map((r) => r.student.id)));
-  }, [courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, feeStatusFilter, pickerSearch, academicYear]);
-
   function toggleRow(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -200,7 +195,7 @@ export function StudentMessages() {
   function clearAudienceFilters() {
     setCourseFilter(''); setYearFilter(''); setGenderFilter('');
     setCategoryFilter(''); setAdmTypeFilter(''); setAdmCatFilter('');
-    setFeeStatusFilter(''); setPickerSearch('');
+    setFeeStatusFilter(''); setPickerSearch(''); setSelected(new Set());
   }
 
   function buildAudienceLabel(count: number): string {
@@ -224,6 +219,7 @@ export function StudentMessages() {
   const [category, setCategory] = useState<NoticeCategory>('general');
   const [posting, setPosting] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [showComposeModal, setShowComposeModal] = useState(false);
 
   // Edit an already-sent notice (title/body/category only — audience stays fixed)
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
@@ -320,6 +316,7 @@ export function StudentMessages() {
         createdBy: user.uid,
       });
       setTitle(''); setBody('');
+      setShowComposeModal(false);
     } finally {
       setPosting(false);
     }
@@ -451,18 +448,17 @@ export function StudentMessages() {
       </div>
 
       {tab === 'compose' ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="space-y-3">
-            {/* Audience filters */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-gray-900">1 · Choose Audience</h3>
-                <button onClick={clearAudienceFilters} className="text-[11px] text-amber-600 hover:text-amber-800 font-semibold cursor-pointer">Clear filters</button>
-              </div>
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Audience filters */}
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-2 shrink-0">
+              <h3 className="text-sm font-bold text-gray-900">Choose Audience</h3>
+              <button onClick={clearAudienceFilters} className="text-[11px] text-amber-600 hover:text-amber-800 font-semibold cursor-pointer">Clear filters</button>
+            </div>
 
               {/* Toolbar — mirrors Students page filter bar */}
               <div
-                className="rounded-2xl border border-emerald-100 overflow-hidden mb-2.5"
+                className="shrink-0 rounded-2xl border border-emerald-100 overflow-hidden mb-2.5"
                 style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
               >
                 <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
@@ -514,43 +510,24 @@ export function StudentMessages() {
               {studentsLoading ? (
                 <div className="text-xs text-gray-400 py-6 text-center">Loading students…</div>
               ) : (
-                <>
-                  <StudentPickerTable rows={filteredRows} selected={selected} onToggle={toggleRow} onToggleAll={toggleAll} />
-                  <p className="mt-2 text-xs text-gray-600">
-                    <span className="font-semibold text-emerald-700">{selectedRows.length}</span> of {filteredRows.length} matched student{filteredRows.length !== 1 ? 's' : ''} selected
-                    {allStudents.length > 0 && filteredRows.length !== allStudents.length && (
-                      <span className="text-gray-400"> ({allStudents.length} total in {academicYear})</span>
-                    )}
-                  </p>
-                </>
+                <StudentPickerTable rows={filteredRows} selected={selected} onToggle={toggleRow} onToggleAll={toggleAll} />
               )}
-            </div>
 
-            {/* Composer */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 max-w-2xl">
-              <h3 className="text-sm font-bold text-gray-900 mb-3">2 · Compose & Send</h3>
-              <div className="space-y-3">
-                <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" />
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
-                  <textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    rows={4}
-                    className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 resize-none"
-                  />
-                </div>
-                <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
+              {/* Footer — selection summary + Compose & Send trigger, bottom-right */}
+              <div className="shrink-0 flex items-center justify-between gap-3 mt-2 pt-2">
+                <p className="text-xs text-gray-600">
+                  <span className="font-semibold text-emerald-700">{selectedRows.length}</span> of {filteredRows.length} matched student{filteredRows.length !== 1 ? 's' : ''} selected
+                  {allStudents.length > 0 && filteredRows.length !== allStudents.length && (
+                    <span className="text-gray-400"> ({allStudents.length} total in {academicYear})</span>
+                  )}
+                </p>
                 <Button
-                  onClick={() => setConfirmSend(true)}
-                  loading={posting}
-                  disabled={!title.trim() || !body.trim() || selectedRows.length === 0}
-                  className="w-full"
+                  onClick={() => setShowComposeModal(true)}
+                  disabled={selectedRows.length === 0}
                 >
-                  Send to {selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}
+                  Compose & Send{selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}
                 </Button>
               </div>
-            </div>
           </div>
         </div>
       ) : tab === 'sent' ? (
@@ -683,6 +660,40 @@ export function StudentMessages() {
         </div>
       )}
 
+      {/* Compose & Send — opened from the audience table's bottom-right button */}
+      {showComposeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowComposeModal(false)} aria-hidden="true" />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900">Compose & Send</h3>
+            <p className="text-[11px] text-gray-400">
+              Recipients: <span className="font-semibold text-emerald-700">{selectedRows.length}</span> student{selectedRows.length !== 1 ? 's' : ''} selected
+            </p>
+            <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" />
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={4}
+                className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 resize-none"
+              />
+            </div>
+            <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setShowComposeModal(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+              <Button
+                size="sm"
+                onClick={() => setConfirmSend(true)}
+                disabled={!title.trim() || !body.trim() || selectedRows.length === 0}
+              >
+                Send to {selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit a sent notice */}
       {editingNotice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -731,8 +742,10 @@ export function StudentMessages() {
               <p className="mt-1 whitespace-pre-wrap">{body.slice(0, 200)}{body.length > 200 ? '…' : ''}</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setConfirmSend(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
-              <button onClick={() => void handlePostNotice()} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer">Yes, Send</button>
+              <button onClick={() => setConfirmSend(false)} disabled={posting} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>
+              <button onClick={() => void handlePostNotice()} disabled={posting} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer disabled:opacity-50">
+                {posting ? 'Sending…' : 'Yes, Send'}
+              </button>
             </div>
           </div>
         </div>

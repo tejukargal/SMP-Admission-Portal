@@ -41,13 +41,20 @@ export function StudentPickerTable({ rows, selected, onToggle, onToggleAll }: St
   const someChecked = rows.some((r) => selected.has(r.student.id)) && !allChecked;
 
   if (rows.length === 0) {
-    return <div className="text-sm text-gray-400 text-center py-10">No students match the current filters.</div>;
+    return (
+      <div
+        className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400 rounded-2xl border border-emerald-100 bg-white/80"
+        style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+      >
+        No students match the current filters.
+      </div>
+    );
   }
 
   return (
     <div
-      className="overflow-auto rounded-2xl border border-emerald-100 bg-white/80"
-      style={{ maxHeight: '15rem', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+      className="flex-1 min-h-0 overflow-auto rounded-2xl border border-emerald-100 bg-white/80"
+      style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
     >
       <table className="min-w-full divide-y divide-emerald-50 text-xs">
         <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
