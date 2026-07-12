@@ -11,6 +11,9 @@ import type {
   Notice, StudentMessage, StudentMessageCategory, AcademicYear, Course,
   StudentNoticeState, StudentNotification,
 } from '../types';
+import type { TCRecord } from './tcService';
+import type { PCRecord } from './pcService';
+import type { RefundRecord } from './refundService';
 
 export async function fetchStudentRecordsByRegNumber(regNumber: string): Promise<Student[]> {
   const q = query(collection(studentDb, 'students'), where('regNumber', '==', regNumber));
@@ -40,6 +43,40 @@ export async function fetchMyFeeStructure(
 export async function fetchMyFeeOverride(studentId: string, academicYear: AcademicYear): Promise<StudentFeeOverride | null> {
   const snap = await getDoc(doc(studentDb, 'feeOverrides', `${studentId}__${academicYear}`));
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as StudentFeeOverride) : null;
+}
+
+/** TC/PC history live as arrays on each year's student doc — read via the
+ *  student-portal Firestore instance (`studentDb`) so the request carries the
+ *  student's own auth token, not the admin app's. Collects across every
+ *  enrollment-year doc sharing this reg number. */
+export async function fetchMyTcRecords(regNumber: string): Promise<TCRecord[]> {
+  const q = query(collection(studentDb, 'students'), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  const all: TCRecord[] = [];
+  for (const d of snap.docs) {
+    const data = d.data() as { tcHistory?: TCRecord[] };
+    all.push(...(data.tcHistory ?? []));
+  }
+  return all.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+export async function fetchMyPcRecords(regNumber: string): Promise<PCRecord[]> {
+  const q = query(collection(studentDb, 'students'), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  const all: PCRecord[] = [];
+  for (const d of snap.docs) {
+    const data = d.data() as { pcHistory?: PCRecord[] };
+    all.push(...(data.pcHistory ?? []));
+  }
+  return all.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+export async function fetchMyRefundRecords(regNumber: string): Promise<RefundRecord[]> {
+  const q = query(collection(studentDb, 'refunds'), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as RefundRecord))
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }
 
 export async function fetchMyExamResults(regNumber: string): Promise<ExamResult[]> {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 import type { Student } from '../types';
 
 interface UseAllStudentsResult {
@@ -26,20 +26,42 @@ export function useAllStudents(): UseAllStudentsResult {
     if (_studentCache === null) setLoading(true);
     setError(null);
 
-    const unsubscribe = onSnapshot(
-      collection(db, 'students'),
-      (snap) => {
-        _studentCache = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
-        setStudents(_studentCache);
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      }
-    );
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    let retriedAfterTokenRefresh = false;
 
-    return unsubscribe;
+    function attach() {
+      unsubscribe = onSnapshot(
+        collection(db, 'students'),
+        (snap) => {
+          _studentCache = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Student));
+          setStudents(_studentCache);
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          // A long-lived listener can occasionally be torn down with a spurious
+          // permission-denied error right as the ID token silently rotates in the
+          // background — the already-open stream doesn't always pick up the
+          // refreshed token in time (mirrors the retry AuthContext already does
+          // for the same class of transient failure on login). Force a token
+          // refresh and reattach once before surfacing the error to the user.
+          if (!retriedAfterTokenRefresh && err.code === 'permission-denied' && auth.currentUser) {
+            retriedAfterTokenRefresh = true;
+            auth.currentUser.getIdToken(true)
+              .then(() => { if (!cancelled) attach(); })
+              .catch(() => { if (!cancelled) { setError(err.message); setLoading(false); } });
+            return;
+          }
+          setError(err.message);
+          setLoading(false);
+        }
+      );
+    }
+
+    attach();
+
+    return () => { cancelled = true; unsubscribe?.(); };
   }, [tick]);
 
   function refetch() {

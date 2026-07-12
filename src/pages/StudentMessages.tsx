@@ -152,7 +152,7 @@ export function StudentMessages() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filteredRows = useMemo(() => {
-    let rows = allRows;
+    let rows = allRows.filter((r) => r.student.admissionStatus === 'CONFIRMED');
     if (courseFilter)     rows = rows.filter((r) => r.student.course === courseFilter);
     if (yearFilter)       rows = rows.filter((r) => r.student.year === yearFilter);
     if (genderFilter)     rows = rows.filter((r) => r.student.gender === genderFilter);
@@ -429,36 +429,65 @@ export function StudentMessages() {
 
       {tab === 'compose' ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="space-y-3 max-w-3xl">
+          <div className="space-y-3">
             {/* Audience filters */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-gray-900">1 · Choose Audience</h3>
                 <button onClick={clearAudienceFilters} className="text-[11px] text-amber-600 hover:text-amber-800 font-semibold cursor-pointer">Clear filters</button>
               </div>
-              <div className="flex flex-wrap gap-1.5 mb-2.5">
-                <FilterDropdown<Course | ''> value={courseFilter} onChange={setCourseFilter} placeholder="Course"
-                  options={COURSES.map((c) => ({ value: c, label: c }))} />
-                <FilterDropdown<Year | ''> value={yearFilter} onChange={setYearFilter} placeholder="Year"
-                  options={YEARS.map((y) => ({ value: y, label: y }))} />
-                <FilterDropdown<Gender | ''> value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
-                  options={[{ value: 'BOY', label: 'BOY' }, { value: 'GIRL', label: 'GIRL' }]} />
-                <FilterDropdown<Category | ''> value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
-                  options={['GM', 'SC', 'ST', 'C1', '2A', '2B', '3A', '3B'].map((c) => ({ value: c as Category, label: c }))} />
-                <FilterDropdown<AdmType | ''> value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
-                  options={['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'].map((v) => ({ value: v as AdmType, label: v }))} />
-                <FilterDropdown<AdmCat | ''> value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
-                  options={['GM', 'SNQ', 'OTHERS'].map((v) => ({ value: v as AdmCat, label: v }))} />
-                <FilterDropdown<FeeStatusValue | ''> value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
-                  options={FEE_STATUS_OPTIONS} />
+
+              {/* Toolbar — mirrors Students page filter bar */}
+              <div
+                className="rounded-2xl border border-emerald-100 overflow-hidden mb-2.5"
+                style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
+              >
+                <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+                  {/* Search — rounded-full with icon + amber clear */}
+                  <div className="relative shrink-0 w-52">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search name / reg / mobile…"
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      className={`w-full rounded-full border border-emerald-300 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${pickerSearch ? 'pr-8' : 'pr-3'}`}
+                    />
+                    {pickerSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPickerSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                        aria-label="Clear search"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                          <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <FilterDropdown<Course | ''> value={courseFilter} onChange={setCourseFilter} placeholder="Course"
+                      options={COURSES.map((c) => ({ value: c, label: c }))} />
+                    <FilterDropdown<Year | ''> value={yearFilter} onChange={setYearFilter} placeholder="Year"
+                      options={YEARS.map((y) => ({ value: y, label: y }))} />
+                    <FilterDropdown<Gender | ''> value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
+                      options={[{ value: 'BOY', label: 'BOY' }, { value: 'GIRL', label: 'GIRL' }]} />
+                    <FilterDropdown<Category | ''> value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
+                      options={['GM', 'SC', 'ST', 'C1', '2A', '2B', '3A', '3B'].map((c) => ({ value: c as Category, label: c }))} />
+                    <FilterDropdown<AdmType | ''> value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
+                      options={['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'].map((v) => ({ value: v as AdmType, label: v }))} />
+                    <FilterDropdown<AdmCat | ''> value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
+                      options={['GM', 'SNQ', 'OTHERS'].map((v) => ({ value: v as AdmCat, label: v }))} />
+                    <FilterDropdown<FeeStatusValue | ''> value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
+                      options={FEE_STATUS_OPTIONS} />
+                  </div>
+                </div>
               </div>
-              <input
-                type="text"
-                placeholder="Search & select within results — name / reg no / mobile…"
-                value={pickerSearch}
-                onChange={(e) => setPickerSearch(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 mb-2"
-              />
+
               {studentsLoading ? (
                 <div className="text-xs text-gray-400 py-6 text-center">Loading students…</div>
               ) : (
@@ -475,7 +504,7 @@ export function StudentMessages() {
             </div>
 
             {/* Composer */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 max-w-2xl">
               <h3 className="text-sm font-bold text-gray-900 mb-3">2 · Compose & Send</h3>
               <div className="space-y-3">
                 <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" />

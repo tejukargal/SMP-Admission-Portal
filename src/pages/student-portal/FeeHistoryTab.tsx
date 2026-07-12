@@ -67,11 +67,11 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
   return (
     <div className="space-y-3">
       {totalDue > 0 && (
-        <div className="rounded-2xl bg-red-600 text-white px-4 py-3 flex items-center gap-2.5 shadow-sm">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+        <div className="rounded-lg bg-red-600 text-white px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-          <p className="text-xs font-bold leading-tight">
+          <p className="text-[11px] font-bold leading-tight">
             You have a pending due of ₹{totalDue.toLocaleString()}. Please pay the due fee immediately at the office.
           </p>
         </div>
