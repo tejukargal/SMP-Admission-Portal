@@ -99,7 +99,17 @@ export function StudentLogin() {
             type="text"
             inputMode="numeric"
             value={dob}
-            onChange={(e) => setDob(e.target.value.replace(/[^\d/]/g, '').slice(0, 10))}
+            onChange={(e) => {
+              // Mobile numeric keypads have no '/' key, so auto-insert the
+              // separators as digits are typed instead of requiring one.
+              const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+              const formatted = digits.length > 4
+                ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+                : digits.length > 2
+                ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+                : digits;
+              setDob(formatted);
+            }}
             placeholder="DD/MM/YYYY"
             maxLength={10}
             required
