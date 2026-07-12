@@ -65,7 +65,7 @@ export function StudentLogin() {
             </svg>
           </div>
           <h1 className="text-2xl font-black text-gray-900 uppercase" style={{ letterSpacing: '0.18em' }}>SMP Admissions</h1>
-          <p className="text-sm text-gray-500 mt-1">Student Login</p>
+          <p className="text-xl sm:text-2xl font-extrabold text-emerald-600 mt-2 tracking-tight">Students Portal</p>
         </div>
 
         {/* Reg No / Mobile toggle */}
@@ -93,6 +93,7 @@ export function StudentLogin() {
             placeholder={mode === 'reg' ? 'e.g. 123456' : 'e.g. 9876543210'}
             required
             autoComplete="off"
+            style={{ borderRadius: '1rem', paddingTop: '0.7rem', paddingBottom: '0.7rem' }}
           />
           <Input
             label="Date of Birth"
@@ -113,6 +114,7 @@ export function StudentLogin() {
             placeholder="DD/MM/YYYY"
             maxLength={10}
             required
+            style={{ borderRadius: '1rem', paddingTop: '0.7rem', paddingBottom: '0.7rem' }}
           />
 
           {error && (
