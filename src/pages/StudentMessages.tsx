@@ -5,7 +5,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { subscribeToNotices, createNotice, updateNotice, deleteNotice, publishNotice, unpublishNotice } from '../services/noticeService';
+import { subscribeToNotices, createNotice, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive } from '../services/noticeService';
 import {
   getAllStudentMessages,
   resolveStudentMessage,
@@ -262,6 +262,29 @@ export function StudentMessages() {
       setTogglingId(null);
     }
   }
+
+  // Active/Inactive toggle — marking a notice "finished" keeps it visible to students
+  // (unlike Publish/Unpublish, which hides it) but labels it Inactive and sorts it
+  // below Active notices, both here and in the student portal's Notices tab.
+  const [togglingActiveId, setTogglingActiveId] = useState<string | null>(null);
+  async function handleToggleActive(n: Notice) {
+    setTogglingActiveId(n.id);
+    try {
+      if (n.inactiveAt) await markNoticeActive(n.id);
+      else await markNoticeInactive(n.id);
+    } finally {
+      setTogglingActiveId(null);
+    }
+  }
+
+  // Sent list — Active notices first (newest first within each group), Inactive below.
+  const sortedNotices = useMemo(
+    () => [...notices].sort((a, b) => {
+      if (!!a.inactiveAt !== !!b.inactiveAt) return a.inactiveAt ? 1 : -1;
+      return b.createdAt.localeCompare(a.createdAt);
+    }),
+    [notices],
+  );
 
   // ── Active Users (live) ─────────────────────────────────────────────────────
   const [loginActivity, setLoginActivity] = useState<StudentLoginActivity[]>([]);
@@ -534,12 +557,12 @@ export function StudentMessages() {
         <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 max-w-3xl">
           {noticesLoading ? (
             <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
-          ) : notices.length === 0 ? (
+          ) : sortedNotices.length === 0 ? (
             <div className="text-sm text-gray-400 text-center py-10">No notices posted yet.</div>
-          ) : notices.map((n) => (
-            <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${n.archivedAt ? 'border-gray-100 opacity-60' : 'border-gray-100'}`}>
+          ) : sortedNotices.map((n) => (
+            <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${n.archivedAt || n.inactiveAt ? 'border-gray-100 opacity-60' : 'border-gray-100'}`}>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5 flex-wrap">
                   {CATEGORY_OPTIONS.find((o) => o.value === n.category)?.label} ·{' '}
                   {n.scope === 'selected'
                     ? (n.audienceLabel ?? `${n.targetRegNumbers?.length ?? 0} students`)
@@ -547,9 +570,19 @@ export function StudentMessages() {
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
                     {n.archivedAt ? 'Unpublished' : 'Published'}
                   </span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.inactiveAt ? 'bg-gray-200 text-gray-500' : 'bg-sky-100 text-sky-700'}`}>
+                    {n.inactiveAt ? 'Inactive' : 'Active'}
+                  </span>
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => startEditNotice(n)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
+                  <button
+                    onClick={() => void handleToggleActive(n)}
+                    disabled={togglingActiveId === n.id}
+                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${n.inactiveAt ? 'text-sky-600 hover:text-sky-800' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    {n.inactiveAt ? 'Mark as Active' : 'Mark as In-Active'}
+                  </button>
                   <button
                     onClick={() => void handleTogglePublish(n)}
                     disabled={togglingId === n.id}

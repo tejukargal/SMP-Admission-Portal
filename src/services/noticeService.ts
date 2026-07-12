@@ -44,3 +44,13 @@ export async function unpublishNotice(id: string): Promise<void> {
 export async function publishNotice(id: string): Promise<void> {
   await updateDoc(doc(db, COL, id), { archivedAt: deleteField() });
 }
+
+/** Mark a notice "finished" — stays visible to students but labeled Inactive and sorted below Active notices. */
+export async function markNoticeInactive(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { inactiveAt: new Date().toISOString() });
+}
+
+/** Reactivate a previously-inactive notice. */
+export async function markNoticeActive(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { inactiveAt: deleteField() });
+}

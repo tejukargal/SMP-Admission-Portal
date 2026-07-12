@@ -19,15 +19,24 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
   if (loading) return <div className="text-sm text-gray-400 text-center py-10">Loading notices…</div>;
   if (notices.length === 0) return <div className="text-sm text-gray-400 text-center py-10">No notices right now.</div>;
 
-  const sorted = notices.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Active notices first (newest first within each group), Inactive ("finished") below.
+  const sorted = notices.slice().sort((a, b) => {
+    if (!!a.inactiveAt !== !!b.inactiveAt) return a.inactiveAt ? 1 : -1;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
 
   return (
     <div className="space-y-2.5">
       {sorted.map((n) => (
-        <div key={n.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div key={n.id} className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-4 ${n.inactiveAt ? 'opacity-60' : ''}`}>
           <div className="flex items-center justify-between gap-2 mb-1.5">
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${CATEGORY_STYLE[n.category]}`}>
-              {CATEGORY_LABEL[n.category]}
+            <span className="flex items-center gap-1.5 flex-wrap">
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${CATEGORY_STYLE[n.category]}`}>
+                {CATEGORY_LABEL[n.category]}
+              </span>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${n.inactiveAt ? 'bg-gray-100 text-gray-500' : 'bg-sky-50 text-sky-700 border border-sky-100'}`}>
+                {n.inactiveAt ? 'Inactive' : 'Active'}
+              </span>
             </span>
             <span className="text-[10px] text-gray-400">
               {new Date(n.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
