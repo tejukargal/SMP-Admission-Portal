@@ -63,8 +63,8 @@ export function CertificatesTab({ regNumber }: { regNumber: string }) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-              subTab === t.key ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              subTab === t.key ? 'bg-violet-600 text-white shadow-sm shadow-violet-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
             {t.label}
@@ -85,7 +85,7 @@ export function CertificatesTab({ regNumber }: { regNumber: string }) {
 function EmptyState({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-14 px-6">
-      <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-2xl">
+      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-100 flex items-center justify-center text-2xl">
         {icon}
       </div>
       <div className="text-center">
@@ -105,14 +105,14 @@ function TcList({ records }: { records: TCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-purple-200 border-l-purple-400'}`}>
-            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-purple-50'}`}>
+          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-violet-200 border-l-violet-500'}`}>
+            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-violet-50'}`}>
               <div className="flex items-center gap-2.5">
-                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-purple-800'}`}>TC #{r.tcNumber}</span>
+                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-violet-800'}`}>TC #{r.tcNumber}</span>
                 {idx === 0 && records.length > 1 && <span className="text-[10px] text-gray-400 font-medium">· Latest</span>}
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-violet-100 text-violet-700 border-violet-300'}`}>
                   {isDup ? 'Duplicate Copy' : 'Original'}
                 </span>
                 <span className="text-[10px] text-gray-400">Issued {fmtDate(r.issuedAt)}</span>
@@ -152,7 +152,7 @@ function PcList({ records }: { records: PCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-emerald-200 border-l-emerald-400'}`}>
+          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-emerald-200 border-l-emerald-500'}`}>
             <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-emerald-50'}`}>
               <div className="flex items-center gap-2.5">
                 <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-emerald-800'}`}>{r.examPeriod}</span>
@@ -194,16 +194,16 @@ function RefundList({ records }: { records: RefundRecord[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-red-50 text-red-700 border-red-200">
+        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
           {records.length} refund{records.length > 1 ? 's' : ''} · Total Refunded ₹{totalRefunded.toLocaleString()}
         </span>
       </div>
       {records.map((r, idx) => (
-        <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-red-200 border-l-red-400">
-          <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 bg-red-50">
+        <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-rose-200 border-l-rose-500">
+          <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 bg-rose-50">
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-bold text-red-800">₹{r.refundAmount.toLocaleString()}</span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/70 border border-red-200 text-red-700">
+              <span className="text-sm font-bold text-rose-800">₹{r.refundAmount.toLocaleString()}</span>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/70 border border-rose-200 text-rose-700">
                 {r.refundCategory === 'SEAT_CANCELLATION' ? 'Seat Cancellation' : 'SNQ'}
               </span>
               {idx === 0 && records.length > 1 && <span className="text-[10px] text-gray-400 font-medium">· Latest</span>}

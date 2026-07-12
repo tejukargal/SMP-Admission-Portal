@@ -40,12 +40,29 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
+// Per-tab accent classes. Tailwind 4 scans source text, so these must stay literal strings.
+const ACCENT: Record<TabKey, { nav: string; pill: string }> = {
+  profile: { nav: 'bg-indigo-100 text-indigo-600', pill: 'bg-indigo-50 text-indigo-700' },
+  fees: { nav: 'bg-emerald-100 text-emerald-600', pill: 'bg-emerald-50 text-emerald-700' },
+  certificates: { nav: 'bg-violet-100 text-violet-600', pill: 'bg-violet-50 text-violet-700' },
+  notices: { nav: 'bg-amber-100 text-amber-700', pill: 'bg-amber-50 text-amber-700' },
+  contact: { nav: 'bg-sky-100 text-sky-600', pill: 'bg-sky-50 text-sky-700' },
+};
+
+const NAV_TEXT: Record<TabKey, string> = {
+  profile: 'text-indigo-600',
+  fees: 'text-emerald-600',
+  certificates: 'text-violet-600',
+  notices: 'text-amber-700',
+  contact: 'text-sky-600',
+};
+
 function HeaderPill({ label, value }: { label: string; value: string }) {
   if (!value) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-1.5 py-0.5">
-      <span className="text-[8px] font-semibold uppercase tracking-wide text-emerald-500/80">{label}</span>
-      <span className="text-[11px] font-black text-emerald-800 leading-none">{value}</span>
+    <span className="inline-flex items-center gap-1 rounded-full bg-white/15 border border-white/20 backdrop-blur-sm px-1.5 py-0.5">
+      <span className="text-[8px] font-semibold uppercase tracking-wide text-indigo-100/90">{label}</span>
+      <span className="text-[11px] font-black text-white leading-none">{value}</span>
     </span>
   );
 }
@@ -128,7 +145,7 @@ export function StudentPortal() {
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
         <div>
           <p className="text-sm text-gray-500 mb-3">We couldn't load your record. Please sign in again.</p>
-          <button onClick={() => void logout()} className="text-sm font-semibold text-emerald-700 underline">
+          <button onClick={() => void logout()} className="text-sm font-semibold text-indigo-700 underline">
             Back to Student Login
           </button>
         </div>
@@ -140,15 +157,16 @@ export function StudentPortal() {
   const firstName = student.studentNameSSLC.split(' ')[0];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="max-w-3xl mx-auto px-4 pt-2.5 pb-1.5">
+      <div className="sticky top-0 z-20">
+        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white">
+        <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
           {/* Row 1: college name + greeting on the left, refresh/logout on the right — always same row */}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-widest text-emerald-600/90 leading-none">SMP Admissions</p>
-              <h1 className="text-sm font-black text-gray-900 leading-tight mt-1 truncate">{getGreeting()}, {firstName}</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-200 leading-none">SMP Admissions</p>
+              <h1 className="text-base font-black text-white leading-tight mt-1 truncate">{getGreeting()}, {firstName}</h1>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -156,7 +174,7 @@ export function StudentPortal() {
                 disabled={refreshing}
                 title="Refresh"
                 aria-label="Refresh"
-                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-white/25 text-white/90 hover:bg-white/10 transition-colors disabled:opacity-50"
               >
                 <svg
                   width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
@@ -168,7 +186,7 @@ export function StudentPortal() {
               </button>
               <button
                 onClick={() => void logout()}
-                className="shrink-0 rounded-full border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                className="shrink-0 rounded-full border border-white/25 px-2.5 py-1 text-[11px] font-semibold text-white/90 hover:bg-white/10 transition-colors"
               >
                 Log Out
               </button>
@@ -184,30 +202,33 @@ export function StudentPortal() {
             <HeaderPill label="Adm Cat" value={student.admCat} />
           </div>
         </div>
+        </div>
 
         {/* Top tab row — desktop/tablet */}
-        <div className="hidden md:flex max-w-3xl mx-auto px-4 gap-1 border-t border-gray-50">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-                activeTab === t.key
-                  ? 'border-emerald-500 text-emerald-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              {t.icon} {t.label}
-              {t.key === 'notices' && unreadNoticeCount > 0 && (
-                <span className="rounded-full bg-red-500 text-white text-[10px] leading-none px-1.5 py-0.5">{unreadNoticeCount}</span>
-              )}
-            </button>
-          ))}
+        <div className="hidden md:block bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
+          <div className="flex max-w-3xl mx-auto px-4 gap-1 py-2">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm transition-colors cursor-pointer ${
+                  activeTab === t.key
+                    ? `${ACCENT[t.key].pill} font-bold`
+                    : 'font-semibold text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {t.icon} {t.label}
+                {t.key === 'notices' && unreadNoticeCount > 0 && (
+                  <span className="rounded-full bg-red-500 text-white text-[10px] leading-none px-1.5 py-0.5">{unreadNoticeCount}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-4" key={refreshKey}>
+      <div className="max-w-3xl mx-auto px-4 py-4 animate-[content-enter_0.25s_ease-out]" key={refreshKey}>
         {activeTab === 'profile' && <ProfileTab student={student} />}
         {activeTab === 'fees' && <FeeHistoryTab regNumber={regNumber} allRecords={allRecords} />}
         {activeTab === 'certificates' && <CertificatesTab regNumber={regNumber} />}
@@ -221,11 +242,13 @@ export function StudentPortal() {
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition-colors cursor-pointer ${
-              activeTab === t.key ? 'text-emerald-600' : 'text-gray-400'
+            className={`relative flex-1 flex flex-col items-center gap-0.5 py-1.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+              activeTab === t.key ? NAV_TEXT[t.key] : 'text-gray-400'
             }`}
           >
-            {t.icon}
+            <span className={`px-4 py-1 rounded-full transition-colors ${activeTab === t.key ? `${ACCENT[t.key].nav} animate-[nav-pop_0.2s_ease-out]` : ''}`}>
+              {t.icon}
+            </span>
             {t.label}
             {t.key === 'notices' && unreadNoticeCount > 0 && (
               <span className="absolute top-1 right-1/4 rounded-full bg-red-500 text-white text-[9px] leading-none px-1 py-0.5">{unreadNoticeCount}</span>

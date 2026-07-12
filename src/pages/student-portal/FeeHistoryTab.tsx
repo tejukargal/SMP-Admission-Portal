@@ -46,7 +46,12 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
   }, [regNumber, allRecords]);
 
   if (loading) {
-    return <div className="text-sm text-gray-400 text-center py-10">Loading fee history…</div>;
+    return (
+      <div className="space-y-3">
+        <div className="skeleton h-32 rounded-2xl" />
+        <div className="skeleton h-32 rounded-2xl" />
+      </div>
+    );
   }
   if (error) {
     return <div className="text-sm text-red-500 text-center py-10">{error}</div>;
@@ -67,7 +72,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
   return (
     <div className="space-y-3">
       {totalDue > 0 && (
-        <div className="rounded-lg bg-red-600 text-white px-3 py-1.5 flex items-center gap-1.5 shadow-sm">
+        <div className="rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white px-3.5 py-2.5 flex items-center gap-2 shadow-sm">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
@@ -88,9 +93,9 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
 
         return (
           <div key={academicYear} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b ${noDues ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+            <div className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b ${noDues ? 'bg-emerald-50/70 border-emerald-100' : 'bg-rose-50/70 border-rose-100'}`}>
               <div className="flex items-center gap-2">
-                <span className={`rounded-full text-white text-[10px] font-bold px-2.5 py-0.5 ${noDues ? 'bg-emerald-600' : 'bg-red-600'}`}>
+                <span className={`rounded-full text-white text-[10px] font-bold px-2.5 py-0.5 shadow-sm bg-gradient-to-r ${noDues ? 'from-emerald-500 to-teal-500' : 'from-red-500 to-rose-500'}`}>
                   {academicYear}
                 </span>
                 <span className="text-xs text-gray-500">
@@ -113,18 +118,18 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
               )}
             </div>
 
-            <div className="px-4 py-3 grid grid-cols-3 gap-3 text-center">
-              <div>
+            <div className="px-4 py-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-gray-50/80 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Allotted</p>
-                <p className="text-sm font-bold text-gray-800">{allotted !== null ? `₹${allotted.toLocaleString()}` : '—'}</p>
+                <p className="text-base font-black text-gray-800">{allotted !== null ? `₹${allotted.toLocaleString()}` : '—'}</p>
               </div>
-              <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400">Paid</p>
-                <p className="text-sm font-bold text-emerald-700">₹{totalPaid.toLocaleString()}</p>
+              <div className="rounded-xl bg-emerald-50 py-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-500">Paid</p>
+                <p className="text-base font-black text-emerald-700">₹{totalPaid.toLocaleString()}</p>
               </div>
-              <div>
-                <p className={`text-[9px] font-semibold uppercase tracking-wider ${noDues ? 'text-emerald-400' : 'text-red-400'}`}>Due</p>
-                <p className={`text-sm font-bold ${noDues ? 'text-emerald-700' : 'text-red-700'}`}>
+              <div className={`rounded-xl py-2 ${noDues ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <p className={`text-[9px] font-semibold uppercase tracking-wider ${noDues ? 'text-emerald-500' : 'text-red-500'}`}>Due</p>
+                <p className={`text-base font-black ${noDues ? 'text-emerald-700' : 'text-red-700'}`}>
                   {due !== null ? `₹${Math.max(0, due).toLocaleString()}` : '—'}
                 </p>
               </div>
@@ -132,9 +137,15 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
 
             {/* Receipts */}
             <div className="border-t border-gray-100 px-4 py-2 overflow-x-auto">
+              <div className="flex items-center gap-1.5 mt-1 mb-0.5">
+                <span className="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Receipts</span>
+              </div>
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-gray-400">
+                  <tr className="text-[10px] uppercase tracking-wider text-gray-400">
                     <th className="text-left font-semibold py-1 whitespace-nowrap">Date</th>
                     <th className="text-left font-semibold py-1 whitespace-nowrap">Receipt</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">SMP</th>
