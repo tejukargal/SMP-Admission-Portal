@@ -13,12 +13,12 @@ interface CsvPreviewProps {
  *  each row rendered as a small card of "Header: value" lines. */
 export function CsvPreview({ url, accentText = 'text-gray-700', accentBorder = 'border-l-gray-400' }: CsvPreviewProps) {
   const [rows, setRows] = useState<string[][] | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch(url)
-      .then((r) => { if (!r.ok) throw new Error('fetch failed'); return r.text(); })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
       .then((text) => {
         if (cancelled) return;
         const parsed = text.split(/\r?\n/)
@@ -26,16 +26,20 @@ export function CsvPreview({ url, accentText = 'text-gray-700', accentBorder = '
           .map((line) => line.split(/,|\t/).map((cell) => cell.trim().replace(/^"|"$/g, '')));
         setRows(parsed);
       })
-      .catch(() => { if (!cancelled) setError(true); });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error('[CsvPreview] failed to load', url, err);
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      });
     return () => { cancelled = true; };
   }, [url]);
 
-  if (error) return null;
+  if (error) return <p className="text-xs text-gray-400 text-center py-8">Preview unavailable ({error}) — use the download button above.</p>;
   if (!rows) return <p className="text-xs text-gray-400 text-center py-8">Loading preview…</p>;
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return <p className="text-xs text-gray-400 text-center py-8">Empty file.</p>;
 
   const [headers, ...dataRows] = rows;
-  if (dataRows.length === 0) return null;
+  if (dataRows.length === 0) return <p className="text-xs text-gray-400 text-center py-8">No data rows to preview.</p>;
 
   return (
     <AutoScrollViewer>

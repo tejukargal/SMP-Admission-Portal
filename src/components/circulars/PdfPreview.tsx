@@ -18,6 +18,7 @@ export function PdfPreview({ url }: PdfPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [truncated, setTruncated] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -47,8 +48,12 @@ export function PdfPreview({ url }: PdfPreviewProps) {
           container.appendChild(canvas);
         }
         if (!cancelled) setStatus('ready');
-      } catch {
-        if (!cancelled) setStatus('error');
+      } catch (err) {
+        console.error('[PdfPreview] failed to render', url, err);
+        if (!cancelled) {
+          setErrorMessage(err instanceof Error ? err.message : 'Failed to load');
+          setStatus('error');
+        }
       }
     }
 
@@ -59,7 +64,9 @@ export function PdfPreview({ url }: PdfPreviewProps) {
     };
   }, [url]);
 
-  if (status === 'error') return null;
+  if (status === 'error') {
+    return <p className="text-xs text-gray-400 text-center py-8">Preview unavailable ({errorMessage}) — use the download button above.</p>;
+  }
 
   return (
     <div>
