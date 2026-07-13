@@ -2,7 +2,7 @@
 // RichTextEditor). Ported from the SMP Connect app with extra hardening:
 // script/iframe/object/embed tags, on* handlers and javascript: URLs are
 // stripped before the HTML ever reaches dangerouslySetInnerHTML.
-import type { StoredAttachment } from '../types';
+import type { StoredAttachment, Circular } from '../types';
 
 /** Classifies an attachment for preview purposes — image/pdf/csv, or null if unsupported. */
 export function attachmentKind(att: StoredAttachment): 'image' | 'pdf' | 'csv' | null {
@@ -11,6 +11,14 @@ export function attachmentKind(att: StoredAttachment): 'image' | 'pdf' | 'csv' |
   if (att.type.startsWith('image/') || /\.(jpe?g|png)$/.test(name)) return 'image';
   if (att.type === 'text/csv' || name.endsWith('.csv')) return 'csv';
   return null;
+}
+
+/** Version key used for the student unread badge — stored in place of a plain
+ *  circular id. When admin edits a circular, updatedAt changes, so this key
+ *  changes too, and the circular automatically reappears as unread/"New" for
+ *  every student without needing to touch their individual seen-state docs. */
+export function circularSeenKey(c: Pick<Circular, 'id' | 'updatedAt' | 'createdAt'>): string {
+  return `${c.id}:${c.updatedAt ?? c.createdAt}`;
 }
 
 /** Removes dangerous tags/attributes from an HTML string. */

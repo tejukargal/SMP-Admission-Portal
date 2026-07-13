@@ -7,9 +7,11 @@ import { CertificatesTab } from './CertificatesTab';
 import { NoticesTab } from './NoticesTab';
 import { CircularsTab } from './CircularsTab';
 import { noticeAppliesToMe } from './noticeUtils';
-import { ContactTab } from './ContactTab';
+// Contact tab temporarily disabled — see TABS array and content render below. Re-enable by uncommenting this import and those spots.
+// import { ContactTab } from './ContactTab';
 import { NotificationModal } from './NotificationModal';
 import { getGreeting } from '../../utils/greeting';
+import { circularSeenKey } from '../../utils/htmlContent';
 import {
   subscribeToNotices, fetchNoticeSeenState, markNoticesSeen,
   subscribeToCirculars, fetchCircularSeenState, markCircularsSeen,
@@ -40,10 +42,12 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     key: 'notices', label: 'Notices',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
   },
-  {
-    key: 'contact', label: 'Contact',
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
-  },
+  // Contact tab temporarily disabled — uncomment to re-enable (see also the
+  // content render branch and commented import above).
+  // {
+  //   key: 'contact', label: 'Contact',
+  //   icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  // },
 ];
 
 // Per-tab accent classes. Tailwind 4 scans source text, so these must stay literal strings.
@@ -129,9 +133,11 @@ export function StudentPortal() {
   }, [regNumber, refreshKey]);
 
   // Viewing the Circulars tab marks everything currently loaded as seen — clears the unread badge.
+  // Seen state is keyed by id+updatedAt (see circularSeenKey), so editing a
+  // circular later makes it reappear as unread/"New" automatically.
   useEffect(() => {
     if (activeTab !== 'circulars' || !regNumber || circulars.length === 0) return;
-    const unseen = circulars.filter((c) => !circularSeenIds.has(c.id)).map((c) => c.id);
+    const unseen = circulars.filter((c) => !circularSeenIds.has(circularSeenKey(c))).map((c) => circularSeenKey(c));
     if (unseen.length === 0) return;
     setCircularSeenIds((prev) => new Set([...prev, ...unseen]));
     void markCircularsSeen(regNumber, unseen, [...circularSeenIds]);
@@ -194,7 +200,7 @@ export function StudentPortal() {
   }
 
   const unreadNoticeCount = notices.filter((n) => !seenIds.has(n.id)).length;
-  const unreadCircularCount = circulars.filter((c) => !circularSeenIds.has(c.id)).length;
+  const unreadCircularCount = circulars.filter((c) => !circularSeenIds.has(circularSeenKey(c))).length;
   const firstName = student.studentNameSSLC.split(' ')[0];
 
   return (
@@ -278,7 +284,8 @@ export function StudentPortal() {
         {activeTab === 'certificates' && <CertificatesTab regNumber={regNumber} />}
         {activeTab === 'circulars' && <CircularsTab circulars={circulars} loading={circularsLoading} seenIds={circularSeenIds} />}
         {activeTab === 'notices' && <NoticesTab notices={notices} loading={noticesLoading} />}
-        {activeTab === 'contact' && <ContactTab student={student} />}
+        {/* Contact tab temporarily disabled — uncomment to re-enable (see also TABS array and import above). */}
+        {/* {activeTab === 'contact' && <ContactTab student={student} />} */}
       </div>
 
       {/* Bottom tab bar — mobile */}

@@ -3,11 +3,12 @@ import type { Circular, Department } from '../../types';
 import { CircularCard } from '../../components/circulars/CircularCard';
 import { CircularModal } from '../../components/circulars/CircularModal';
 import { DepartmentFilterChips } from '../../components/circulars/DepartmentFilterChips';
+import { circularSeenKey } from '../../utils/htmlContent';
 
 interface CircularsTabProps {
   circulars: Circular[];      // already filtered of archivedAt by StudentPortal
   loading: boolean;
-  seenIds: Set<string>;
+  seenIds: Set<string>;       // keyed by circularSeenKey(c), i.e. id+updatedAt — not plain ids
 }
 
 /** Student-facing Circulars tab — SMP Connect design: department filter chips
@@ -65,7 +66,7 @@ export function CircularsTab({ circulars, loading, seenIds }: CircularsTabProps)
               key={c.id}
               circular={c}
               index={i}
-              unread={!seenIds.has(c.id)}
+              unread={!seenIds.has(circularSeenKey(c))}
               onClick={() => setSelected(c)}
             />
           ))}
