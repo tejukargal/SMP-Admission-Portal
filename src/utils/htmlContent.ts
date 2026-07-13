@@ -2,6 +2,16 @@
 // RichTextEditor). Ported from the SMP Connect app with extra hardening:
 // script/iframe/object/embed tags, on* handlers and javascript: URLs are
 // stripped before the HTML ever reaches dangerouslySetInnerHTML.
+import type { StoredAttachment } from '../types';
+
+/** Classifies an attachment for preview purposes — image/pdf/csv, or null if unsupported. */
+export function attachmentKind(att: StoredAttachment): 'image' | 'pdf' | 'csv' | null {
+  const name = att.name.toLowerCase();
+  if (att.type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (att.type.startsWith('image/') || /\.(jpe?g|png)$/.test(name)) return 'image';
+  if (att.type === 'text/csv' || name.endsWith('.csv')) return 'csv';
+  return null;
+}
 
 /** Removes dangerous tags/attributes from an HTML string. */
 export function sanitizeHtmlContent(html: string): string {

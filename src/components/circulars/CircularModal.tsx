@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Circular } from '../../types';
 import { departmentMeta } from '../../utils/departments';
-import { renderHtmlContent, formatBytes, formatCircularDate } from '../../utils/htmlContent';
+import { renderHtmlContent, formatBytes, formatCircularDate, attachmentKind } from '../../utils/htmlContent';
 import { AttachmentPreview } from './AttachmentPreview';
 
 interface CircularModalProps {
@@ -85,29 +85,45 @@ export function CircularModal({ circular, onClose }: CircularModalProps) {
                 Attachments ({circular.attachments.length})
               </p>
               <div className="space-y-3">
-                {circular.attachments.map((att) => (
-                  <div key={att.storagePath} className="space-y-1.5">
-                    <a
-                      href={att.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download={att.name}
-                      className={`flex items-center gap-3 p-3 bg-white border-2 ${meta.pill.split(' ').filter((c) => c.startsWith('border-')).join(' ')} rounded-xl hover:shadow-md transition-shadow group`}
-                    >
-                      <svg className={`w-8 h-8 ${meta.text} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                      </svg>
-                      <span className="flex-1 min-w-0">
-                        <span className={`block font-semibold text-sm ${meta.text} truncate`}>{att.name}</span>
-                        <span className="block text-xs text-gray-500">{att.type || 'file'} · {formatBytes(att.size)}</span>
-                      </span>
-                      <svg className={`w-4.5 h-4.5 ${meta.text} opacity-70 group-hover:opacity-100 shrink-0`} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                    </a>
-                    <AttachmentPreview attachment={att} accentText={meta.text} accentBorder={meta.borderL} />
-                  </div>
-                ))}
+                {circular.attachments.map((att) => {
+                  const isCsv = attachmentKind(att) === 'csv';
+                  const rowBorderClasses = meta.pill.split(' ').filter((c) => c.startsWith('border-')).join(' ');
+                  return (
+                    <div key={att.storagePath} className="space-y-1.5">
+                      {isCsv ? (
+                        <div className={`flex items-center gap-3 p-3 bg-white border-2 ${rowBorderClasses} rounded-xl`}>
+                          <svg className={`w-8 h-8 ${meta.text} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                          </svg>
+                          <span className="flex-1 min-w-0">
+                            <span className={`block font-semibold text-sm ${meta.text} truncate`}>{att.name}</span>
+                            <span className="block text-xs text-gray-500">{att.type || 'file'} · {formatBytes(att.size)} · Preview only</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={att.name}
+                          className={`flex items-center gap-3 p-3 bg-white border-2 ${rowBorderClasses} rounded-xl hover:shadow-md transition-shadow group`}
+                        >
+                          <svg className={`w-8 h-8 ${meta.text} shrink-0`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                          </svg>
+                          <span className="flex-1 min-w-0">
+                            <span className={`block font-semibold text-sm ${meta.text} truncate`}>{att.name}</span>
+                            <span className="block text-xs text-gray-500">{att.type || 'file'} · {formatBytes(att.size)}</span>
+                          </span>
+                          <svg className={`w-4.5 h-4.5 ${meta.text} opacity-70 group-hover:opacity-100 shrink-0`} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                          </svg>
+                        </a>
+                      )}
+                      <AttachmentPreview attachment={att} accentText={meta.text} accentBorder={meta.borderL} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
