@@ -5,7 +5,8 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { subscribeToNotices, createNotice, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive } from '../services/noticeService';
+import { subscribeToNotices, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive } from '../services/noticeService';
+import { createNoticeWithAttachments } from '../services/noticeAttachmentService';
 import {
   getAllStudentMessages,
   resolveStudentMessage,
@@ -21,6 +22,8 @@ import { FilterDropdown } from '../components/common/FilterDropdown';
 import { StudentPickerTable } from '../components/messages/StudentPickerTable';
 import type { PickerRow, FeeStatusValue } from '../components/messages/StudentPickerTable';
 import { ActiveUsersModal } from '../components/messages/ActiveUsersModal';
+import { AdminCircularsTab } from '../components/circulars/AdminCircularsTab';
+import { AttachmentDropzone } from '../components/circulars/AttachmentDropzone';
 import { SMP_FEE_HEADS } from '../types';
 import type {
   Notice, NoticeCategory, StudentMessage, StudentLoginActivity,
@@ -64,7 +67,7 @@ export function StudentMessages() {
   const { user } = useAuth();
   const { settings } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
-  const [tab, setTab] = useState<'compose' | 'sent' | 'inbox'>('compose');
+  const [tab, setTab] = useState<'compose' | 'sent' | 'inbox' | 'circulars'>('compose');
 
   // ── Notices tab: recipient data ─────────────────────────────────────────────
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
@@ -220,6 +223,7 @@ export function StudentMessages() {
   const [posting, setPosting] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
   const [showComposeModal, setShowComposeModal] = useState(false);
+  const [attachFiles, setAttachFiles] = useState<File[]>([]);
 
   // Edit an already-sent notice (title/body/category only — audience stays fixed)
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
@@ -306,7 +310,7 @@ export function StudentMessages() {
     setPosting(true);
     try {
       const targetRegNumbers = selectedRows.map((r) => r.student.regNumber).filter(Boolean);
-      await createNotice({
+      await createNoticeWithAttachments({
         title: title.trim(),
         body: body.trim(),
         category,
@@ -314,8 +318,8 @@ export function StudentMessages() {
         targetRegNumbers,
         audienceLabel: buildAudienceLabel(selectedRows.length),
         createdBy: user.uid,
-      });
-      setTitle(''); setBody('');
+      }, attachFiles);
+      setTitle(''); setBody(''); setAttachFiles([]);
       setShowComposeModal(false);
     } finally {
       setPosting(false);
@@ -444,6 +448,12 @@ export function StudentMessages() {
           >
             Inbox {openCount > 0 && <span className="rounded-full bg-red-500 text-white text-[10px] px-1.5">{openCount}</span>}
           </button>
+          <button
+            onClick={() => setTab('circulars')}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            Circulars
+          </button>
         </div>
       </div>
 
@@ -530,6 +540,8 @@ export function StudentMessages() {
               </div>
           </div>
         </div>
+      ) : tab === 'circulars' ? (
+        user ? <AdminCircularsTab user={user} /> : null
       ) : tab === 'sent' ? (
         <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 max-w-3xl">
           {noticesLoading ? (
@@ -576,6 +588,14 @@ export function StudentMessages() {
               </p>
               <h4 className="text-sm font-bold text-gray-900 mt-1">{n.title}</h4>
               <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{n.body}</p>
+              {(n.attachments?.length ?? 0) > 0 && (
+                <p className="flex items-center gap-1 text-[11px] text-gray-400 mt-1.5">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                  {n.attachments!.length} attachment{n.attachments!.length !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -664,7 +684,7 @@ export function StudentMessages() {
       {showComposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowComposeModal(false)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5 space-y-3">
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-900">Compose & Send</h3>
             <p className="text-[11px] text-gray-400">
               Recipients: <span className="font-semibold text-emerald-700">{selectedRows.length}</span> student{selectedRows.length !== 1 ? 's' : ''} selected
@@ -680,6 +700,16 @@ export function StudentMessages() {
               />
             </div>
             <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Attachments <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+              <div className="mt-1">
+                <AttachmentDropzone
+                  files={attachFiles}
+                  onAdd={(files) => setAttachFiles((prev) => [...prev, ...files])}
+                  onRemove={(i) => setAttachFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </div>
+            </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setShowComposeModal(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
               <Button
@@ -740,6 +770,9 @@ export function StudentMessages() {
             <div className="bg-gray-50 rounded border border-gray-200 px-3 py-2 text-xs text-gray-700">
               <p className="font-semibold">{title}</p>
               <p className="mt-1 whitespace-pre-wrap">{body.slice(0, 200)}{body.length > 200 ? '…' : ''}</p>
+              {attachFiles.length > 0 && (
+                <p className="mt-1 text-gray-500">📎 {attachFiles.length} attachment{attachFiles.length !== 1 ? 's' : ''}</p>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setConfirmSend(false)} disabled={posting} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>

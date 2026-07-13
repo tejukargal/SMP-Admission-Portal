@@ -9,7 +9,7 @@ import { studentDb } from '../config/studentFirebase';
 import type {
   Student, FeeRecord, FeeStructure, StudentFeeOverride, ExamResult,
   Notice, StudentMessage, StudentMessageCategory, AcademicYear, Course,
-  StudentNoticeState, StudentNotification,
+  StudentNoticeState, StudentNotification, Circular, StudentCircularState,
 } from '../types';
 import type { TCRecord } from './tcService';
 import type { PCRecord } from './pcService';
@@ -146,6 +146,29 @@ export async function markNotificationsSeen(ids: string[]): Promise<void> {
     batch.update(doc(studentDb, 'studentNotifications', id), { seen: true, seenAt: now });
   }
   await batch.commit();
+}
+
+/** Live-subscribes to the circulars list, newest first. Circulars are visible to
+ *  ALL students — department is a display label/filter, not access control.
+ *  Caller filters out archivedAt (unpublished) docs. */
+export function subscribeToCirculars(onChange: (circulars: Circular[]) => void): () => void {
+  const q = query(collection(studentDb, 'circulars'), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Circular)));
+  });
+}
+
+export async function fetchCircularSeenState(regNumber: string): Promise<StudentCircularState | null> {
+  const snap = await getDoc(doc(studentDb, 'studentCircularState', regNumber));
+  return snap.exists() ? (snap.data() as StudentCircularState) : null;
+}
+
+/** Marks the given circular ids as seen for this student — drives the unread badge only. */
+export async function markCircularsSeen(regNumber: string, circularIds: string[], currentSeenIds: string[]): Promise<void> {
+  const seenCircularIds = [...new Set([...currentSeenIds, ...circularIds])];
+  await setDoc(doc(studentDb, 'studentCircularState', regNumber), {
+    regNumber, seenCircularIds, updatedAt: new Date().toISOString(),
+  });
 }
 
 /** Flips this student's own login-activity doc to offline — called right before signOut. */

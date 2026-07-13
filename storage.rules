@@ -17,5 +17,25 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
     }
+
+    // ── Circular attachments (PDF/JPEG/PNG/CSV, 5MB) ───────────────────────
+    // Students never read via the SDK — they use tokenized download URLs
+    // stored in the Firestore circular docs.
+    match /circulars/{circularId}/{fileName} {
+      allow read: if request.auth != null;
+      allow create, update: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png|text/csv');
+      allow delete: if isAdmin();
+    }
+
+    // ── Notice attachments (same limits as circulars) ──────────────────────
+    match /noticeAttachments/{noticeId}/{fileName} {
+      allow read: if request.auth != null;
+      allow create, update: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png|text/csv');
+      allow delete: if isAdmin();
+    }
   }
 }

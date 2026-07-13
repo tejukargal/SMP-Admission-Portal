@@ -5,17 +5,19 @@ import { ProfileTab } from './ProfileTab';
 import { FeeHistoryTab } from './FeeHistoryTab';
 import { CertificatesTab } from './CertificatesTab';
 import { NoticesTab } from './NoticesTab';
+import { CircularsTab } from './CircularsTab';
 import { noticeAppliesToMe } from './noticeUtils';
 import { ContactTab } from './ContactTab';
 import { NotificationModal } from './NotificationModal';
 import { getGreeting } from '../../utils/greeting';
 import {
   subscribeToNotices, fetchNoticeSeenState, markNoticesSeen,
+  subscribeToCirculars, fetchCircularSeenState, markCircularsSeen,
   fetchMyNotifications, markNotificationsSeen,
 } from '../../services/studentPortalService';
-import type { Notice, StudentNotification } from '../../types';
+import type { Circular, Notice, StudentNotification } from '../../types';
 
-type TabKey = 'profile' | 'fees' | 'certificates' | 'notices' | 'contact';
+type TabKey = 'profile' | 'fees' | 'certificates' | 'circulars' | 'notices' | 'contact';
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -29,6 +31,10 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
     key: 'certificates', label: 'Certificates',
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5"/></svg>,
+  },
+  {
+    key: 'circulars', label: 'Circulars',
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   },
   {
     key: 'notices', label: 'Notices',
@@ -45,6 +51,7 @@ const ACCENT: Record<TabKey, { nav: string; pill: string }> = {
   profile: { nav: 'bg-indigo-100 text-indigo-600', pill: 'bg-indigo-50 text-indigo-700' },
   fees: { nav: 'bg-emerald-100 text-emerald-600', pill: 'bg-emerald-50 text-emerald-700' },
   certificates: { nav: 'bg-violet-100 text-violet-600', pill: 'bg-violet-50 text-violet-700' },
+  circulars: { nav: 'bg-teal-100 text-teal-600', pill: 'bg-teal-50 text-teal-700' },
   notices: { nav: 'bg-amber-100 text-amber-700', pill: 'bg-amber-50 text-amber-700' },
   contact: { nav: 'bg-sky-100 text-sky-600', pill: 'bg-sky-50 text-sky-700' },
 };
@@ -53,6 +60,7 @@ const NAV_TEXT: Record<TabKey, string> = {
   profile: 'text-indigo-600',
   fees: 'text-emerald-600',
   certificates: 'text-violet-600',
+  circulars: 'text-teal-600',
   notices: 'text-amber-700',
   contact: 'text-sky-600',
 };
@@ -74,6 +82,10 @@ export function StudentPortal() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [noticesLoading, setNoticesLoading] = useState(true);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+
+  const [circulars, setCirculars] = useState<Circular[]>([]);
+  const [circularsLoading, setCircularsLoading] = useState(true);
+  const [circularSeenIds, setCircularSeenIds] = useState<Set<string>>(new Set());
 
   const [unseenNotifications, setUnseenNotifications] = useState<StudentNotification[]>([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -97,6 +109,34 @@ export function StudentPortal() {
       setSeenIds(new Set(state?.seenNoticeIds ?? []));
     });
   }, [regNumber, refreshKey]);
+
+  // Live circular subscription — circulars are visible to all students;
+  // unpublished (archivedAt) circulars are filtered out here.
+  useEffect(() => {
+    if (!student) return;
+    const unsubscribe = subscribeToCirculars((all) => {
+      setCirculars(all.filter((c) => !c.archivedAt));
+      setCircularsLoading(false);
+    });
+    return unsubscribe;
+  }, [student]);
+
+  useEffect(() => {
+    if (!regNumber) return;
+    fetchCircularSeenState(regNumber).then((state) => {
+      setCircularSeenIds(new Set(state?.seenCircularIds ?? []));
+    });
+  }, [regNumber, refreshKey]);
+
+  // Viewing the Circulars tab marks everything currently loaded as seen — clears the unread badge.
+  useEffect(() => {
+    if (activeTab !== 'circulars' || !regNumber || circulars.length === 0) return;
+    const unseen = circulars.filter((c) => !circularSeenIds.has(c.id)).map((c) => c.id);
+    if (unseen.length === 0) return;
+    setCircularSeenIds((prev) => new Set([...prev, ...unseen]));
+    void markCircularsSeen(regNumber, unseen, [...circularSeenIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, circulars, regNumber]);
 
   function loadNotifications() {
     if (!regNumber) return;
@@ -154,6 +194,7 @@ export function StudentPortal() {
   }
 
   const unreadNoticeCount = notices.filter((n) => !seenIds.has(n.id)).length;
+  const unreadCircularCount = circulars.filter((c) => !circularSeenIds.has(c.id)).length;
   const firstName = student.studentNameSSLC.split(' ')[0];
 
   return (
@@ -221,6 +262,9 @@ export function StudentPortal() {
                 {t.key === 'notices' && unreadNoticeCount > 0 && (
                   <span className="rounded-full bg-red-500 text-white text-[10px] leading-none px-1.5 py-0.5">{unreadNoticeCount}</span>
                 )}
+                {t.key === 'circulars' && unreadCircularCount > 0 && (
+                  <span className="rounded-full bg-red-500 text-white text-[10px] leading-none px-1.5 py-0.5">{unreadCircularCount}</span>
+                )}
               </button>
             ))}
           </div>
@@ -232,6 +276,7 @@ export function StudentPortal() {
         {activeTab === 'profile' && <ProfileTab student={student} />}
         {activeTab === 'fees' && <FeeHistoryTab regNumber={regNumber} allRecords={allRecords} />}
         {activeTab === 'certificates' && <CertificatesTab regNumber={regNumber} />}
+        {activeTab === 'circulars' && <CircularsTab circulars={circulars} loading={circularsLoading} seenIds={circularSeenIds} />}
         {activeTab === 'notices' && <NoticesTab notices={notices} loading={noticesLoading} />}
         {activeTab === 'contact' && <ContactTab student={student} />}
       </div>
@@ -252,6 +297,9 @@ export function StudentPortal() {
             {t.label}
             {t.key === 'notices' && unreadNoticeCount > 0 && (
               <span className="absolute top-1 right-1/4 rounded-full bg-red-500 text-white text-[9px] leading-none px-1 py-0.5">{unreadNoticeCount}</span>
+            )}
+            {t.key === 'circulars' && unreadCircularCount > 0 && (
+              <span className="absolute top-1 right-1/4 rounded-full bg-red-500 text-white text-[9px] leading-none px-1 py-0.5">{unreadCircularCount}</span>
             )}
           </button>
         ))}

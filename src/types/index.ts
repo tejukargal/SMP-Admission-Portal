@@ -411,12 +411,51 @@ export interface Notice {
   updatedAt?: string;       // set when the notice is edited after being sent
   archivedAt?: string;      // set when admin unpublishes the notice — hidden from all students, kept for admin review; cleared again on publish
   inactiveAt?: string;      // set when admin marks a notice "finished" — stays visible to students (unlike archivedAt) but labeled Inactive and sorted below Active notices; cleared again on reactivate
+  attachments?: StoredAttachment[]; // optional Firebase Storage files — absent on legacy notices
 }
 
 /** Per-student "which notices have I seen" state (drives the unread badge; students cannot dismiss notices themselves) — one doc per student, keyed by regNumber. */
 export interface StudentNoticeState {
   regNumber: string;
   seenNoticeIds: string[];
+  updatedAt: string;
+}
+
+// ─── Student Portal — Circulars ────────────────────────────────────────────────
+
+export type Department =
+  | 'CE' | 'ME' | 'CS' | 'EC' | 'EE' | 'All' | 'Office' | 'Results'
+  | 'Fee Dues' | 'Exams' | 'Scholarships' | 'Internship' | 'Annual Day'
+  | 'Functions' | 'Admission Ticket' | 'Admissions' | 'Red Cross' | 'NSS';
+
+/** File stored in Firebase Storage; `url` is a tokenized download URL usable without auth. */
+export interface StoredAttachment {
+  name: string;         // original filename
+  type: string;         // MIME type
+  size: number;         // bytes
+  url: string;          // getDownloadURL() result
+  storagePath: string;  // e.g. circulars/{circularId}/{ts}_{name} — for admin delete
+}
+
+/** College-wide circular — visible to ALL students; department is a label/filter, not access control. */
+export interface Circular {
+  id: string;
+  title: string;
+  date: string;          // YYYY-MM-DD display date chosen by admin
+  subject: string;
+  department: Department;
+  body: string;          // HTML from the rich text editor, sanitized on render
+  attachments: StoredAttachment[];
+  createdAt: string;
+  createdBy: string;     // admin uid
+  updatedAt?: string;
+  archivedAt?: string;   // unpublished — hidden from students, kept for admin
+}
+
+/** Per-student seen-circular ids (unread badge) — one doc per student, keyed by regNumber. */
+export interface StudentCircularState {
+  regNumber: string;
+  seenCircularIds: string[];
   updatedAt: string;
 }
 

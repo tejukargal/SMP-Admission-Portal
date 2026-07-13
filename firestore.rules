@@ -261,6 +261,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Circulars (admin → ALL students; department is a label, not access control) ─
+    match /circulars/{circularId} {
+      allow read:  if isActiveUser() || isStudentClaim();
+      allow write: if isAdmin();
+    }
+
+    // ── Student Circular Seen-State (unread badge) ────────────────────────
+    match /studentCircularState/{regNumber} {
+      allow read, write: if isActiveUser()
+        || (isStudentClaim() && regNumber == request.auth.token.regNumber);
+    }
+
     // ── Student Messages (student → admin queries) ────────────────────────
     match /studentMessages/{msgId} {
       allow read:   if isActiveUser()
