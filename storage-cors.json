@@ -1,0 +1,19 @@
+[
+  {
+    "origin": [
+      "https://smp-admissions.web.app",
+      "https://smp-admissions.firebaseapp.com",
+      "http://localhost:5173"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Content-Disposition",
+      "Accept-Ranges",
+      "ETag"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

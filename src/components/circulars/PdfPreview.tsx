@@ -71,8 +71,10 @@ export function PdfPreview({ url }: PdfPreviewProps) {
   return (
     <div>
       <AutoScrollViewer>
-        <div ref={containerRef} className="p-2">
+        <div className="p-2">
           {status === 'loading' && <p className="text-xs text-gray-400 text-center py-8">Loading preview…</p>}
+          {/* Purely imperative — React never renders children into this div; canvases are appended directly in the effect above. */}
+          <div ref={containerRef} />
         </div>
       </AutoScrollViewer>
       {truncated && (
