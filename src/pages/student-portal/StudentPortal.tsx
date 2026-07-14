@@ -97,6 +97,36 @@ export function StudentPortal() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [shareToast, setShareToast] = useState('');
+  useEffect(() => {
+    if (!shareToast) return;
+    const t = setTimeout(() => setShareToast(''), 2500);
+    return () => clearTimeout(t);
+  }, [shareToast]);
+
+  async function handleShareApp() {
+    const url = `${window.location.origin}/student-login`;
+    const shareData = {
+      title: 'SMP Admissions Student Portal',
+      text: 'Check your circulars, fee history, notices & certificates on the SMP Admissions Student Portal!',
+      url,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast('Portal link copied to clipboard!');
+    } catch {
+      setShareToast('Could not copy the link — please copy it from the address bar.');
+    }
+  }
+
   // Live notice subscription — notices posted while the student is logged in appear immediately.
   useEffect(() => {
     if (!student) return;
@@ -287,6 +317,30 @@ export function StudentPortal() {
         {/* Contact tab temporarily disabled — uncomment to re-enable (see also TABS array and import above). */}
         {/* {activeTab === 'contact' && <ContactTab student={student} />} */}
       </div>
+
+      {/* Share app link footer */}
+      <div className="max-w-3xl mx-auto px-4 pb-4">
+        <button
+          type="button"
+          onClick={() => void handleShareApp()}
+          className="w-full sm:w-auto sm:mx-auto flex items-center justify-center gap-2 rounded-full border-2 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 text-sm font-semibold transition-colors cursor-pointer group"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          Share this app link to friends
+        </button>
+      </div>
+
+      {shareToast && (
+        <div className="fixed bottom-16 md:bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-medium px-3.5 py-2 rounded-full shadow-md whitespace-nowrap"
+          style={{ animation: 'toast-in 0.2s ease-out' }}
+        >
+          <span className="text-indigo-500 leading-none">✓</span>
+          {shareToast}
+        </div>
+      )}
 
       {/* Bottom tab bar — mobile */}
       <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 flex z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

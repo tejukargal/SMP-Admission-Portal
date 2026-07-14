@@ -63,6 +63,9 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
         <button type="button" title="Align right" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('justifyRight')} className="w-7 h-7 rounded text-gray-600 hover:bg-gray-200 cursor-pointer flex items-center justify-center">
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>
         </button>
+        <button type="button" title="Justify" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('justifyFull')} className="w-7 h-7 rounded text-gray-600 hover:bg-gray-200 cursor-pointer flex items-center justify-center">
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
       </div>
       <div
         ref={editorRef}
