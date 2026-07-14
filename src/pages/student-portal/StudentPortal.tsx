@@ -69,11 +69,10 @@ const NAV_TEXT: Record<TabKey, string> = {
   contact: 'text-sky-600',
 };
 
-function HeaderPill({ label, value }: { label: string; value: string }) {
+function HeaderPill({ value }: { value: string }) {
   if (!value) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-white/70 border border-indigo-200/60 backdrop-blur-sm px-1.5 py-0.5">
-      <span className="text-[8px] font-semibold uppercase tracking-wide text-indigo-400">{label}</span>
+    <span className="shrink-0 inline-flex items-center rounded-full bg-white/70 border border-indigo-200/60 backdrop-blur-sm px-2 py-0.5">
       <span className="text-[11px] font-black text-indigo-900 leading-none">{value}</span>
     </span>
   );
@@ -270,13 +269,13 @@ export function StudentPortal() {
             </div>
           </div>
 
-          {/* Row 2: compact detail pills — fits within two lines on any width */}
-          <div className="flex flex-wrap items-center gap-1 mt-1.5">
-            <HeaderPill label="Reg No" value={student.regNumber} />
-            <HeaderPill label="Course" value={student.course} />
-            <HeaderPill label="Year" value={student.year} />
-            <HeaderPill label="Adm Type" value={student.admType} />
-            <HeaderPill label="Adm Cat" value={student.admCat} />
+          {/* Row 2: compact detail pills — label-free values, single row on any width */}
+          <div className="flex flex-nowrap items-center gap-1 mt-1.5 overflow-x-auto no-scrollbar">
+            <HeaderPill value={student.regNumber} />
+            <HeaderPill value={student.course} />
+            <HeaderPill value={student.year} />
+            <HeaderPill value={student.admType} />
+            <HeaderPill value={student.admCat} />
           </div>
         </div>
         </div>
