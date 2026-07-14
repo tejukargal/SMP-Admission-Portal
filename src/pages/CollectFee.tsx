@@ -6,6 +6,8 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
+import { getRefundRecordsByAcademicYear } from '../services/refundService';
+import type { RefundRecord } from '../services/refundService';
 import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
@@ -119,6 +121,24 @@ export function CollectFee() {
     getFeeStructuresByAcademicYear(academicYear).then(setFeeStructures).catch(() => {});
   }, [academicYear]);
 
+  const [refundRecords, setRefundRecords] = useState<RefundRecord[]>([]);
+
+  useEffect(() => {
+    if (!academicYear) { setRefundRecords([]); return; }
+    getRefundRecordsByAcademicYear(academicYear).then(setRefundRecords).catch(() => {});
+  }, [academicYear]);
+
+  // Map: studentId → total refunded (e.g. SNQ tuition concession refunds) — refunds are
+  // recorded separately from feeRecords, so paid totals must be netted by this before
+  // comparing against the allotted structure, matching FeeHistoryModal's logic.
+  const refundedByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of refundRecords) {
+      map.set(r.studentId, (map.get(r.studentId) ?? 0) + r.refundAmount);
+    }
+    return map;
+  }, [refundRecords]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
     return () => clearTimeout(t);
@@ -166,8 +186,11 @@ export function CollectFee() {
       const svkTotal = r.svk + r.additionalPaid.reduce((t, h) => t + h.amount, 0);
       totals.set(r.studentId, (totals.get(r.studentId) ?? 0) + smpTotal + svkTotal);
     }
+    for (const [studentId, refunded] of refundedByStudent) {
+      totals.set(studentId, (totals.get(studentId) ?? 0) - refunded);
+    }
     return { paidStudents: paid, totalPaidByStudent: totals };
-  }, [feeRecords]);
+  }, [feeRecords, refundedByStudent]);
 
   const filteredStudents = useMemo(() => {
     let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
