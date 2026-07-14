@@ -20,7 +20,7 @@ export function CircularCard({ circular, onClick, index, unread }: CircularCardP
     <div
       onClick={onClick}
       style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(index, 12) * 0.05}s` }}
-      className={`${meta.cardBg} border border-gray-100 border-l-4 ${meta.borderL} rounded-xl shadow-md hover:shadow-xl transition-shadow cursor-pointer overflow-hidden group`}
+      className={`${meta.cardBg} border border-gray-100 border-l-4 ${meta.borderLSoft} rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer overflow-hidden group`}
     >
       <div className="p-4">
         <div className="flex items-center justify-between gap-2 mb-2.5">

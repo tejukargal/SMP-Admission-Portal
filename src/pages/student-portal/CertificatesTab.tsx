@@ -63,12 +63,12 @@ export function CertificatesTab({ regNumber }: { regNumber: string }) {
           <button
             key={t.key}
             onClick={() => setSubTab(t.key)}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-              subTab === t.key ? 'bg-violet-600 text-white shadow-sm shadow-violet-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer border ${
+              subTab === t.key ? 'bg-violet-100 text-violet-700 border-violet-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
             {t.label}
-            <span className={`rounded-full text-[10px] px-1.5 leading-4 ${subTab === t.key ? 'bg-white/25' : 'bg-gray-100 text-gray-500'}`}>
+            <span className={`rounded-full text-[10px] px-1.5 leading-4 ${subTab === t.key ? 'bg-white/60' : 'bg-gray-100 text-gray-500'}`}>
               {t.count}
             </span>
           </button>
@@ -105,7 +105,7 @@ function TcList({ records }: { records: TCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-violet-200 border-l-violet-500'}`}>
+          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-violet-200 border-l-violet-300'}`}>
             <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-violet-50'}`}>
               <div className="flex items-center gap-2.5">
                 <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-violet-800'}`}>TC #{r.tcNumber}</span>
@@ -152,7 +152,7 @@ function PcList({ records }: { records: PCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-400' : 'border-emerald-200 border-l-emerald-500'}`}>
+          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-emerald-200 border-l-emerald-300'}`}>
             <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-emerald-50'}`}>
               <div className="flex items-center gap-2.5">
                 <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-emerald-800'}`}>{r.examPeriod}</span>
@@ -199,7 +199,7 @@ function RefundList({ records }: { records: RefundRecord[] }) {
         </span>
       </div>
       {records.map((r, idx) => (
-        <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-rose-200 border-l-rose-500">
+        <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-rose-200 border-l-rose-300">
           <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 bg-rose-50">
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-bold text-rose-800">₹{r.refundAmount.toLocaleString()}</span>

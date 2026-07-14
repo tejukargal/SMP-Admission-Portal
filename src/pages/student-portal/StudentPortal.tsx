@@ -72,9 +72,9 @@ const NAV_TEXT: Record<TabKey, string> = {
 function HeaderPill({ label, value }: { label: string; value: string }) {
   if (!value) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-white/15 border border-white/20 backdrop-blur-sm px-1.5 py-0.5">
-      <span className="text-[8px] font-semibold uppercase tracking-wide text-indigo-100/90">{label}</span>
-      <span className="text-[11px] font-black text-white leading-none">{value}</span>
+    <span className="inline-flex items-center gap-1 rounded-full bg-white/70 border border-indigo-200/60 backdrop-blur-sm px-1.5 py-0.5">
+      <span className="text-[8px] font-semibold uppercase tracking-wide text-indigo-400">{label}</span>
+      <span className="text-[11px] font-black text-indigo-900 leading-none">{value}</span>
     </span>
   );
 }
@@ -207,13 +207,13 @@ export function StudentPortal() {
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
       {/* Header */}
       <div className="sticky top-0 z-20">
-        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white">
+        <div className="bg-gradient-to-br from-indigo-100 via-violet-100 to-purple-100 border-b border-violet-200/60">
         <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
           {/* Row 1: college name + greeting on the left, refresh/logout on the right — always same row */}
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-200 leading-none">SMP Admissions</p>
-              <h1 className="text-base font-black text-white leading-tight mt-1 truncate">{getGreeting()}, {firstName}</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500 leading-none">SMP Admissions</p>
+              <h1 className="text-base font-black text-gray-800 leading-tight mt-1 truncate">{getGreeting()}, {firstName}</h1>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -221,7 +221,7 @@ export function StudentPortal() {
                 disabled={refreshing}
                 title="Refresh"
                 aria-label="Refresh"
-                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-white/25 text-white/90 hover:bg-white/10 transition-colors disabled:opacity-50"
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full border border-violet-300/60 bg-white/60 text-violet-600 hover:bg-white transition-colors disabled:opacity-50"
               >
                 <svg
                   width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
@@ -233,7 +233,7 @@ export function StudentPortal() {
               </button>
               <button
                 onClick={() => void logout()}
-                className="shrink-0 rounded-full border border-white/25 px-2.5 py-1 text-[11px] font-semibold text-white/90 hover:bg-white/10 transition-colors"
+                className="shrink-0 rounded-full border border-violet-300/60 bg-white/60 px-2.5 py-1 text-[11px] font-semibold text-violet-600 hover:bg-white transition-colors"
               >
                 Log Out
               </button>

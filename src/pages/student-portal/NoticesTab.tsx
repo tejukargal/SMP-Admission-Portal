@@ -13,9 +13,9 @@ const CATEGORY_LABEL: Record<Notice['category'], string> = {
 };
 
 const CATEGORY_BORDER: Record<Notice['category'], string> = {
-  fee: 'border-l-red-400',
-  document: 'border-l-amber-400',
-  general: 'border-l-sky-400',
+  fee: 'border-l-red-300',
+  document: 'border-l-amber-300',
+  general: 'border-l-sky-300',
 };
 
 const CATEGORY_CARD_BG: Record<Notice['category'], string> = {
@@ -25,9 +25,9 @@ const CATEGORY_CARD_BG: Record<Notice['category'], string> = {
 };
 
 const CATEGORY_CHIP_ACTIVE: Record<Notice['category'], string> = {
-  fee: 'bg-red-500 text-white border-red-500',
-  document: 'bg-amber-500 text-white border-amber-500',
-  general: 'bg-sky-500 text-white border-sky-500',
+  fee: 'bg-red-100 text-red-700 border-red-300',
+  document: 'bg-amber-100 text-amber-700 border-amber-300',
+  general: 'bg-sky-100 text-sky-700 border-sky-300',
 };
 
 const CATEGORY_ORDER: NoticeCategory[] = ['fee', 'document', 'general'];
@@ -122,7 +122,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
             className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors cursor-pointer ${activeCategory === c ? CATEGORY_CHIP_ACTIVE[c] : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             {CATEGORY_LABEL[c]}
-            <span className={`rounded-full px-1.5 py-px text-[9px] font-bold ${activeCategory === c ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'}`}>{counts[c] ?? 0}</span>
+            <span className={`rounded-full px-1.5 py-px text-[9px] font-bold ${activeCategory === c ? 'bg-white/60' : 'bg-gray-100 text-gray-500'}`}>{counts[c] ?? 0}</span>
           </button>
         ))}
       </div>
