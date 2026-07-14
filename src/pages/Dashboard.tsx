@@ -1023,6 +1023,18 @@ const [barsReady, setBarsReady] = useState(false);
             )}
           </div>
 
+          {hasActiveFilters && (
+            <>
+              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <button
+                onClick={clearFilters}
+                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+              >
+                Clear
+              </button>
+            </>
+          )}
+
           {/* Inline collapsible filter selects — expand between search and right actions */}
           <div className="flex-1 min-w-0">
             <div
@@ -1106,18 +1118,6 @@ const [barsReady, setBarsReady] = useState(false);
               </div>
             </div>
           </div>
-
-          {hasActiveFilters && (
-            <>
-              <span className="w-px h-5 bg-emerald-200 shrink-0" />
-              <button
-                onClick={clearFilters}
-                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
-              >
-                Clear
-              </button>
-            </>
-          )}
 
           {!isSearchMode && academicYearFilter && (
             <button
