@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
-import type { Student } from '../types';
+import type { Student, Year } from '../types';
 
 const YEAR_ABBR: Record<string, string> = {
   '1ST YEAR': '1st', '2ND YEAR': '2nd', '3RD YEAR': '3rd',
@@ -9,6 +9,14 @@ const ADM_TYPE_ABBR: Record<string, string> = {
   REGULAR: 'REG', REPEATER: 'RPTR', LATERAL: 'LTRL', EXTERNAL: 'EXTL', SNQ: 'SNQ',
 };
 
+export type NotAdmittedStatus = 'ADMITTED' | 'NOT_ADMITTED';
+
+export interface NotAdmittedRow {
+  student: Student;
+  status: NotAdmittedStatus;
+  currentYear: Year | null;
+}
+
 export interface NotAdmittedPdfFilters {
   currentAcademicYear: string | null;
   previousAcademicYear: string | null;
@@ -16,6 +24,7 @@ export interface NotAdmittedPdfFilters {
   categoryFilter: string;
   admTypeFilter: string;
   admCatFilter: string;
+  statusFilter: '' | NotAdmittedStatus;
   searchTerm: string;
 }
 
@@ -23,26 +32,31 @@ const FONT_SIZE = 8.5;
 const CELL_PAD  = { top: 2.8, right: 3, bottom: 2.8, left: 3 };
 const PAD_H     = CELL_PAD.left + CELL_PAD.right; // 6mm horizontal padding per cell
 
+const ADMITTED_FILL:     [number, number, number] = [220, 252, 231]; // emerald-100
+const NOT_ADMITTED_FILL: [number, number, number] = [254, 226, 226]; // red-100
+
 // ── Column definitions — mirrors the autofit approach used by studentsPdf.ts ───
 interface ColDef {
   header: string;
   halign: 'left' | 'center' | 'right';
-  get: (s: Student, i: number) => string | number;
+  get: (r: NotAdmittedRow, i: number) => string | number;
 }
 
 const COLUMNS: ColDef[] = [
-  { header: 'Sl',        halign: 'center', get: (_s, i) => i + 1 },
-  { header: 'Student Name', halign: 'left', get: (s) => s.studentNameSSLC },
-  { header: 'Reg No',    halign: 'left',   get: (s) => s.regNumber || '—' },
-  { header: 'Yr',        halign: 'center', get: (s) => YEAR_ABBR[s.year] ?? s.year },
-  { header: 'Crs',       halign: 'center', get: (s) => s.course },
-  { header: 'Cat',       halign: 'center', get: (s) => s.category || '—' },
-  { header: 'Type',      halign: 'center', get: (s) => (s.admType && ADM_TYPE_ABBR[s.admType]) || s.admType || '—' },
-  { header: 'AdmCat',    halign: 'center', get: (s) => s.admCat || '—' },
-  { header: 'Mobile No', halign: 'left',   get: (s) => s.studentMobile || s.fatherMobile || '—' },
+  { header: 'Sl',        halign: 'center', get: (_r, i) => i + 1 },
+  { header: 'Student Name', halign: 'left', get: (r) => r.student.studentNameSSLC },
+  { header: 'Reg No',    halign: 'left',   get: (r) => r.student.regNumber || '—' },
+  { header: 'PrevYr',    halign: 'center', get: (r) => YEAR_ABBR[r.student.year] ?? r.student.year },
+  { header: 'CurYr',     halign: 'center', get: (r) => (r.currentYear ? (YEAR_ABBR[r.currentYear] ?? r.currentYear) : '—') },
+  { header: 'Crs',       halign: 'center', get: (r) => r.student.course },
+  { header: 'Cat',       halign: 'center', get: (r) => r.student.category || '—' },
+  { header: 'Type',      halign: 'center', get: (r) => (r.student.admType && ADM_TYPE_ABBR[r.student.admType]) || r.student.admType || '—' },
+  { header: 'AdmCat',    halign: 'center', get: (r) => r.student.admCat || '—' },
+  { header: 'Mobile No', halign: 'left',   get: (r) => r.student.studentMobile || r.student.fatherMobile || '—' },
+  { header: 'Status',    halign: 'center', get: (r) => (r.status === 'ADMITTED' ? 'Admitted' : 'Not Admitted') },
 ];
 
-export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPdfFilters): void {
+export function exportNotAdmittedPdf(rows: NotAdmittedRow[], filters: NotAdmittedPdfFilters): void {
   const margin  = 10;
   const usableW = 210 - margin * 2; // 190mm — always portrait
 
@@ -60,8 +74,8 @@ export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPd
     measureDoc.setFont('helvetica', 'bold');
     let w = measureDoc.getTextWidth(col.header);
     measureDoc.setFont('helvetica', 'normal');
-    for (let i = 0; i < students.length; i++) {
-      const cw = measureDoc.getTextWidth(String(col.get(students[i], i)));
+    for (let i = 0; i < rows.length; i++) {
+      const cw = measureDoc.getTextWidth(String(col.get(rows[i], i)));
       if (cw > w) w = cw;
     }
     const colW = w + PAD_H + 2;
@@ -91,8 +105,9 @@ export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPd
   if (filters.categoryFilter) chips.push(filters.categoryFilter);
   if (filters.admTypeFilter)  chips.push(filters.admTypeFilter);
   if (filters.admCatFilter)   chips.push(filters.admCatFilter);
+  if (filters.statusFilter)   chips.push(filters.statusFilter === 'ADMITTED' ? 'Admitted' : 'Not Admitted');
   if (filters.searchTerm)     chips.push(`"${filters.searchTerm}"`);
-  chips.push(`${students.length} student${students.length !== 1 ? 's' : ''}`);
+  chips.push(`${rows.length} student${rows.length !== 1 ? 's' : ''}`);
 
   const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -107,7 +122,7 @@ export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPd
   doc.setLineWidth(0.2);
   doc.line(margin, 22, pageW - margin, 22);
 
-  const rows    = students.map((s, i) => COLUMNS.map((c) => c.get(s, i)));
+  const body    = rows.map((r, i) => COLUMNS.map((c) => c.get(r, i)));
   const headers = [COLUMNS.map((c) => c.header)];
 
   const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
@@ -119,7 +134,7 @@ export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPd
     startY: 25,
     margin: { left: margin, right: margin, top: margin, bottom: 12 },
     head: headers,
-    body: rows,
+    body,
     tableWidth,
     styles: {
       fontSize: FONT_SIZE,
@@ -136,10 +151,14 @@ export function exportNotAdmittedPdf(students: Student[], filters: NotAdmittedPd
       fontStyle: 'bold',
       fontSize: FONT_SIZE,
     },
-    alternateRowStyles: {
-      fillColor: [254, 242, 242],
-    },
     columnStyles,
+    // Tint each row by admitted/not-admitted status instead of plain alternating stripes.
+    didParseCell: (data) => {
+      if (data.section !== 'body') return;
+      const row = rows[data.row.index];
+      if (!row) return;
+      data.cell.styles.fillColor = row.status === 'ADMITTED' ? ADMITTED_FILL : NOT_ADMITTED_FILL;
+    },
     didDrawPage: (data) => {
       const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
         .internal.getNumberOfPages();
