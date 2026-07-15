@@ -505,14 +505,14 @@ export function generateAdditionalReceipt(record: FeeRecord): void {
   .fee-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .fee-row { flex: 1; display: flex; align-items: stretch; min-height: 0; }
   .total-row { flex: 0 0 auto; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; min-height: 16pt; }
-  .fc-part { flex: 1; display: flex; align-items: center; border-right: 0.8pt solid #000; padding: 0 4pt; font-size: 8.5pt; overflow: hidden; }
-  .fc-amt { width: 54pt; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; border-right: 0.8pt solid #000; padding: 0 6pt; font-size: 9.5pt; }
+  .fc-part { flex: 1; display: flex; align-items: center; border-right: 0.8pt solid #000; padding: 0 4pt; font-size: 12.5pt; overflow: hidden; }
+  .fc-amt { width: 54pt; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; border-right: 0.8pt solid #000; padding: 0 6pt; font-size: 12.5pt; }
   .fc-rem { width: 60pt; flex-shrink: 0; display: flex; align-items: center; padding: 0 6pt; font-size: 8.5pt; }
-  .rn { flex-shrink: 0; min-width: 14pt; font-size: 8.5pt; }
-  .item-name { flex: 1; font-size: 8.5pt; }
-  .dots { flex-shrink: 0; color: #444; font-size: 8.5pt; margin-left: 2pt; }
-  .total-lbl { justify-content: flex-end !important; font-weight: bold; font-size: 9pt; }
-  .total-val { font-weight: bold; font-size: 9pt; }
+  .rn { flex-shrink: 0; min-width: 14pt; font-size: 12.5pt; }
+  .item-name { flex: 1; font-size: 12.5pt; }
+  .dots { flex-shrink: 0; color: #444; font-size: 12.5pt; margin-left: 2pt; }
+  .total-lbl { justify-content: flex-end !important; font-weight: bold; font-size: 12.5pt; }
+  .total-val { font-weight: bold; font-size: 12.5pt; }
 
   .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; }
   .words-line2 { margin-top: 2pt; }
