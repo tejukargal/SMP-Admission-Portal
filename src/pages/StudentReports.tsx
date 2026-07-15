@@ -23,6 +23,7 @@ import { ColumnPickerDropdown } from '../components/common/ColumnPickerDropdown'
 import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue } from '../utils/studentColumns';
 import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } from '../utils/sortStudents';
 import { exportCustomStudentReportPdf } from '../utils/customStudentReportPdf';
+import { exportNotAdmittedPdf } from '../utils/notAdmittedPdf';
 import { ACADEMIC_YEARS, CATEGORY_GROUPS, CATEGORY_GROUP_LABELS } from '../types';
 import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear, CategoryGroup } from '../types';
 
@@ -31,7 +32,7 @@ const PAGE_SIZE = 100;
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list' | 'custom';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list' | 'not-admitted' | 'custom';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
@@ -40,6 +41,7 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'pc-issued',          label: 'PC Issued List'          },
   { value: 'allotted-category',  label: 'Allotted Category List'  },
   { value: 'student-list',       label: 'Student List'            },
+  { value: 'not-admitted',       label: 'Not Admitted List'       },
   { value: 'custom',             label: 'Custom Report'           },
 ];
 
@@ -266,8 +268,12 @@ export function StudentReports() {
   const isAdmin                                = role === 'admin';
   const { settings, loading: settingsLoading } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
+  const previousAcademicYear = (academicYear
+    ? (ACADEMIC_YEARS[ACADEMIC_YEARS.indexOf(academicYear) - 1] ?? null)
+    : null) as AcademicYear | null;
 
   const { students: allStudents, loading, error } = useStudents(academicYear);
+  const { students: prevYearStudents, loading: prevYearLoading } = useStudents(previousAcademicYear);
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
   const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
 
@@ -346,9 +352,31 @@ export function StudentReports() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  // ── Not Admitted List: previous-year 1st/2nd year CONFIRMED students with no
+  // matching CONFIRMED record (any year) in the current academic year ──────────
+  const notAdmittedBase = useMemo(() => {
+    if (!previousAcademicYear) return [];
+    const keyOf = (s: Student) =>
+      s.regNumber?.trim()
+        ? s.regNumber.trim().toUpperCase()
+        : `${s.studentNameSSLC.trim().toUpperCase()}|${s.dateOfBirth}`;
+
+    const admittedKeys = new Set(
+      allStudents.filter((s) => s.admissionStatus === 'CONFIRMED').map(keyOf)
+    );
+
+    return prevYearStudents.filter((s) =>
+      s.admissionStatus === 'CONFIRMED' &&
+      (s.year === '1ST YEAR' || s.year === '2ND YEAR') &&
+      !admittedKeys.has(keyOf(s))
+    );
+  }, [allStudents, prevYearStudents, previousAcademicYear]);
+
   // ── Filtered data (SNQ Allotment & WhatsApp Numbers) ─────────────────────────
   const filteredStudents = useMemo(() => {
-    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    let result = reportType === 'not-admitted'
+      ? notAdmittedBase
+      : allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)   result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)     result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)   result = result.filter((s) => s.gender === genderFilter);
@@ -376,7 +404,7 @@ export function StudentReports() {
       );
     }
     return reportType === 'custom' ? sortByLevels(result, sortLevels) : sortStudents(result);
-  }, [allStudents, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch, reportType, sortLevels]);
+  }, [allStudents, notAdmittedBase, firstPaymentDate, courseFilter, yearFilter, genderFilter, categoryFilter, categoryGroupFilter, admTypeFilter, admCatFilter, dateFrom, dateTo, debouncedSearch, reportType, sortLevels]);
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredStudents, reportType]);
 
@@ -646,6 +674,16 @@ export function StudentReports() {
             admCatFilter,
             searchTerm: debouncedSearch,
           });
+        } else if (reportType === 'not-admitted') {
+          exportNotAdmittedPdf(filteredStudents, {
+            currentAcademicYear: academicYear,
+            previousAcademicYear,
+            courseFilter,
+            categoryFilter,
+            admTypeFilter,
+            admCatFilter,
+            searchTerm: debouncedSearch,
+          });
         } else if (reportType === 'custom') {
           exportCustomStudentReportPdf(filteredStudents, orderedCustomColumns, {
             academicYear,
@@ -768,6 +806,28 @@ export function StudentReports() {
           if (academicYear)   parts.push(academicYear.replace(/[^0-9-]/g, ''));
           if (courseFilter)   parts.push(courseFilter);
           if (yearFilter)     parts.push(yearFilter.replace(/\s+/g, ''));
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'not-admitted') {
+          const headers = ['Sl No', 'Student Name', 'Reg No', 'Previous Year', 'Course', 'Cat', 'Adm Type', 'Adm Cat', 'Mobile No'];
+          const rows = filteredStudents.map((s, i) => [
+            i + 1,
+            s.studentNameSSLC,
+            s.regNumber || '',
+            s.year,
+            s.course,
+            s.category || '',
+            s.admType || '',
+            s.admCat || '',
+            s.studentMobile || s.fatherMobile || '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [{ wch: 6 }, { wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 14 }];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Not Admitted');
+          const parts = ['not_admitted'];
+          if (previousAcademicYear) parts.push(previousAcademicYear.replace(/[^0-9-]/g, ''));
+          if (academicYear)         parts.push(academicYear.replace(/[^0-9-]/g, ''));
+          if (courseFilter)         parts.push(courseFilter);
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'student-list') {
           const headers = [
@@ -955,7 +1015,7 @@ export function StudentReports() {
     }
   }
 
-  const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading);
+  const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading) || (reportType === 'not-admitted' && prevYearLoading);
   if (isLoading) return <PageSpinner />;
 
   const activeCount = reportType === 'tc-issued' ? tcRows.length
@@ -969,16 +1029,21 @@ export function StudentReports() {
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
         <div className="shrink-0">
           <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Reports</h2>
-          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && (
+          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && (
             <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
           )}
           {(reportType === 'tc-issued' || reportType === 'pc-issued') && (
             <p className="text-[10px] text-gray-400 leading-tight">All Academic Years</p>
           )}
+          {reportType === 'not-admitted' && (
+            <p className="text-[10px] text-gray-400 leading-tight">
+              {previousAcademicYear && academicYear ? `${previousAcademicYear} → ${academicYear}` : 'No previous academic year'}
+            </p>
+          )}
         </div>
 
         {/* Stats chips — SNQ Allotment & WhatsApp Numbers */}
-        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && !isLoading && stats.total > 0 && (
+        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && !isLoading && stats.total > 0 && (
           <>
             <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
@@ -1783,6 +1848,70 @@ export function StudentReports() {
             )}
           </div>
         </div>
+      ) : reportType === 'not-admitted' ? (
+        !previousAcademicYear ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            No previous academic year exists to compare against.
+          </div>
+        ) : (
+          /* ── Not Admitted List table ───────────────────────────────────── */
+          <div
+            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-red-100 overflow-auto flex flex-col"
+            style={{ boxShadow: '0 1px 4px 0 rgba(185,28,28,0.06)' }}
+          >
+            <table className="min-w-full divide-y divide-red-50 text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'linear-gradient(90deg, #fef2f2, #fee2e2)' }}>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-red-200">#</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-red-200">Student Name</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Reg No</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Previous Year</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-red-200">Course</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-12 border-b border-red-200">Cat</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-red-200">Adm Type</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-red-200">Adm Cat</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-red-200">Mobile No</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-red-50/60">
+                {visibleStudents.map((s, idx) => (
+                  <tr
+                    key={s.id}
+                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-red-50/50`}
+                  >
+                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.regNumber || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
+                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap">{s.category || '—'}</td>
+                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admType || '—'}</td>
+                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admCat || '—'}</td>
+                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || s.fatherMobile || <span className="text-gray-300">—</span>}</td>
+                  </tr>
+                ))}
+                {hasMore && (
+                  <tr>
+                    <td colSpan={9} className="px-3 py-2 text-center border-t border-red-100/50">
+                      <button
+                        className="text-xs text-red-600 hover:text-red-800 hover:underline font-medium"
+                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                      >
+                        Load more ({filteredStudents.length - visibleCount} remaining)
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <div className="px-3 py-2 border-t border-red-50 text-xs text-gray-500 mt-auto">
+              Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+              {hasActiveFilters && notAdmittedBase.length > 0 && filteredStudents.length < notAdmittedBase.length && (
+                <span className="text-gray-400"> (filtered from {notAdmittedBase.length} total)</span>
+              )}
+            </div>
+          </div>
+        )
       ) : reportType === 'custom' ? (
         orderedCustomColumns.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
