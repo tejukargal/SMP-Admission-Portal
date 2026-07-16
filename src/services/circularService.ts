@@ -85,3 +85,13 @@ export async function unpublishCircular(id: string): Promise<void> {
 export async function publishCircular(id: string): Promise<void> {
   await updateDoc(doc(db, COL, id), { archivedAt: deleteField() });
 }
+
+/** Pin — shows this circular first in the student portal's Circulars tab, ahead of date sorting. */
+export async function pinCircular(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { pinned: true });
+}
+
+/** Unpin — returns the circular to normal date-based sorting. */
+export async function unpinCircular(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { pinned: deleteField() });
+}

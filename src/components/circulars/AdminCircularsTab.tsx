@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import type { Circular, StoredAttachment } from '../../types';
 import {
   subscribeToCirculars, createCircular, updateCircular, deleteCircular,
-  publishCircular, unpublishCircular,
+  publishCircular, unpublishCircular, pinCircular, unpinCircular,
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
 import { stripHtml, formatCircularDate } from '../../utils/htmlContent';
@@ -27,6 +27,7 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
   const [confirmDelete, setConfirmDelete] = useState<Circular | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [pinningId, setPinningId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToCirculars((all) => {
@@ -55,6 +56,16 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
       else await unpublishCircular(c.id);
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleTogglePin(c: Circular) {
+    setPinningId(c.id);
+    try {
+      if (c.pinned) await unpinCircular(c.id);
+      else await pinCircular(c.id);
+    } finally {
+      setPinningId(null);
     }
   }
 
@@ -88,17 +99,23 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
           <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
         ) : circulars.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-10">No circulars posted yet. Click "New Circular" to publish the first one.</div>
-        ) : circulars.map((c) => {
+        ) : [...circulars].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((c) => {
           const meta = departmentMeta(c.department);
           const preview3 = stripHtml(c.body);
           return (
-            <div key={c.id} className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-4 border-l-4 ${meta.borderL} ${c.archivedAt ? 'opacity-60' : ''}`}>
+            <div key={c.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'opacity-60' : ''}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 flex-wrap min-w-0">
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.pill}`}>{c.department}</span>
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
                     {c.archivedAt ? 'Unpublished' : 'Published'}
                   </span>
+                  {c.pinned && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+                      Pinned
+                    </span>
+                  )}
                   {(c.attachments?.length ?? 0) > 0 && (
                     <span className="flex items-center gap-1 text-[10px] text-gray-400">
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -111,6 +128,13 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setPreview(c)} className="text-xs text-gray-500 hover:text-gray-700 font-semibold cursor-pointer">Preview</button>
                   <button onClick={() => setEditing(c)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
+                  <button
+                    onClick={() => void handleTogglePin(c)}
+                    disabled={pinningId === c.id}
+                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${c.pinned ? 'text-amber-600 hover:text-amber-800' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    {c.pinned ? 'Unpin' : 'Pin to Top'}
+                  </button>
                   <button
                     onClick={() => void handleTogglePublish(c)}
                     disabled={togglingId === c.id}

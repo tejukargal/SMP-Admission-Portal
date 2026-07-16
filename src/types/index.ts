@@ -450,6 +450,7 @@ export interface Circular {
   createdBy: string;     // admin uid
   updatedAt?: string;
   archivedAt?: string;   // unpublished — hidden from students, kept for admin
+  pinned?: boolean;      // shown first in the student portal's Circulars tab, ahead of date sorting
 }
 
 /** Per-student seen-circular ids (unread badge) — one doc per student, keyed by regNumber. */

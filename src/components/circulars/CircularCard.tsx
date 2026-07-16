@@ -29,6 +29,12 @@ export function CircularCard({ circular, onClick, index, unread }: CircularCardP
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {circular.department}
             </span>
+            {circular.pinned && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+                Pinned
+              </span>
+            )}
             {unread && (
               <span className="inline-flex items-center rounded-full bg-red-500 text-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">New</span>
             )}

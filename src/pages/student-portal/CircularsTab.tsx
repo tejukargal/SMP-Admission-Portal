@@ -31,8 +31,9 @@ export function CircularsTab({ circulars, loading, seenIds, onShareApp }: Circul
     const filtered = activeDept === 'All'
       ? circulars
       : circulars.filter((c) => c.department === activeDept || c.department === 'All');
-    // Newest circular date first; ties broken by creation time.
+    // Pinned circulars first, then newest circular date; ties broken by creation time.
     return [...filtered].sort((a, b) =>
+      (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
       b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   }, [circulars, activeDept]);
 
