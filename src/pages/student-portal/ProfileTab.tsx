@@ -9,14 +9,17 @@ function Field({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function Section({ title, accent, icon, children }: { title: string; accent: { band: string; chip: string; text: string }; icon: React.ReactNode; children: React.ReactNode }) {
+function Section({ title, icon, index, children }: { title: string; icon: React.ReactNode; index: number; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${accent.band}`}>
-        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-sm ${accent.chip}`}>
+    <div
+      style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(index, 12) * 0.05}s` }}
+      className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    >
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-gray-50 border-gray-200">
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center shadow-sm bg-gray-900 text-white">
           {icon}
         </span>
-        <h4 className={`text-xs font-bold uppercase tracking-wider ${accent.text}`}>{title}</h4>
+        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900">{title}</h4>
       </div>
       <div className="p-4">
         {children}
@@ -24,14 +27,6 @@ function Section({ title, accent, icon, children }: { title: string; accent: { b
     </div>
   );
 }
-
-// Literal per-section pastel tokens — Tailwind 4 scans source text, so these must stay literal strings.
-const SECTION_ACCENT = {
-  academic: { band: 'bg-indigo-50 border-indigo-100', chip: 'bg-indigo-100 text-indigo-600', text: 'text-indigo-800' },
-  personal: { band: 'bg-sky-50 border-sky-100', chip: 'bg-sky-100 text-sky-600', text: 'text-sky-800' },
-  contact: { band: 'bg-violet-50 border-violet-100', chip: 'bg-violet-100 text-violet-600', text: 'text-violet-800' },
-  marks: { band: 'bg-amber-50 border-amber-100', chip: 'bg-amber-100 text-amber-600', text: 'text-amber-800' },
-} as const;
 
 const SECTION_ICONS = {
   academic: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>,
@@ -51,7 +46,7 @@ export function ProfileTab({ student: s }: { student: Student }) {
 
   return (
     <div className="space-y-3">
-      <Section title="Academic Details" accent={SECTION_ACCENT.academic} icon={SECTION_ICONS.academic}>
+      <Section title="Academic Details" icon={SECTION_ICONS.academic} index={0}>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3.5">
           <Field label="Course" value={s.course} />
           <Field label="Study Year" value={s.year} />
@@ -71,7 +66,7 @@ export function ProfileTab({ student: s }: { student: Student }) {
         </dl>
       </Section>
 
-      <Section title="Personal Information" accent={SECTION_ACCENT.personal} icon={SECTION_ICONS.personal}>
+      <Section title="Personal Information" icon={SECTION_ICONS.personal} index={1}>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3.5">
           <Field label="Name (SSLC)" value={s.studentNameSSLC} />
           <Field label="Name (Aadhaar)" value={s.studentNameAadhar} />
@@ -83,7 +78,7 @@ export function ProfileTab({ student: s }: { student: Student }) {
         </dl>
       </Section>
 
-      <Section title="Contact Details" accent={SECTION_ACCENT.contact} icon={SECTION_ICONS.contact}>
+      <Section title="Contact Details" icon={SECTION_ICONS.contact} index={2}>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3.5">
           <Field label="Father's Name" value={s.fatherName} />
           <Field label="Mother's Name" value={s.motherName} />
@@ -95,7 +90,7 @@ export function ProfileTab({ student: s }: { student: Student }) {
         </dl>
       </Section>
 
-      <Section title="Marks Details" accent={SECTION_ACCENT.marks} icon={SECTION_ICONS.marks}>
+      <Section title="Marks Details" icon={SECTION_ICONS.marks} index={3}>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3.5">
           <Field label="10th Board" value={s.tenthBoard} />
           <Field label="SSLC" value={`${s.sslcObtainedTotal || '—'} / ${s.sslcMaxTotal || '—'}${sslcPct ? ` (${sslcPct}%)` : ''}`} />

@@ -4,12 +4,19 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   uppercase?: boolean;
+  tone?: 'emerald' | 'dark';
 }
+
+const TONE_FOCUS_RING: Record<'emerald' | 'dark', string> = {
+  emerald: 'focus:ring-emerald-400 focus:border-emerald-400',
+  dark: 'focus:ring-gray-400 focus:border-gray-400',
+};
 
 export function Input({
   label,
   error,
   uppercase = false,
+  tone = 'emerald',
   className = '',
   onChange,
   style,
@@ -28,7 +35,7 @@ export function Input({
         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{label}</label>
       )}
       <input
-        className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors ${
+        className={`block w-full rounded-lg border px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 ${TONE_FOCUS_RING[tone]} transition-colors ${
           error ? 'border-red-400 bg-red-50' : 'border-gray-200'
         } ${className}`}
         style={uppercase ? { textTransform: 'uppercase', ...style } : style}

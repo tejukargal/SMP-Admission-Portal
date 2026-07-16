@@ -42,7 +42,7 @@ export function CircularsTab({ circulars, loading, seenIds, onShareApp }: Circul
     return (
       <div className="space-y-3">
         <div className="flex flex-col items-center justify-center gap-3 py-14 px-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-100 to-cyan-100 border border-teal-100 flex items-center justify-center text-teal-600">
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
             </svg>
@@ -79,7 +79,7 @@ export function CircularsTab({ circulars, loading, seenIds, onShareApp }: Circul
 
       <ShareAppButton onClick={onShareApp} />
 
-      {selected && <CircularModal circular={selected} onClose={() => setSelected(null)} />}
+      {selected && <CircularModal circular={selected} onClose={() => setSelected(null)} className="font-portal" />}
     </div>
   );
 }
@@ -89,7 +89,7 @@ function ShareAppButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full sm:w-auto sm:mx-auto flex items-center justify-center gap-2 rounded-full border-2 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 text-sm font-semibold transition-colors cursor-pointer group"
+      className="w-full sm:w-auto sm:mx-auto flex items-center justify-center gap-2 rounded-full border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-semibold transition-colors cursor-pointer group"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform">
         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>

@@ -24,8 +24,9 @@ export function DepartmentFilterChips({ counts, active, onChange }: DepartmentFi
           <button
             key={dept}
             onClick={() => onChange(dept)}
-            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors cursor-pointer ${isActive ? meta.chipActive : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors cursor-pointer ${isActive ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
+            {!isActive && <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />}
             {dept}
             <span className={`rounded-full px-1.5 py-px text-[9px] font-bold ${isActive ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'}`}>
               {count}

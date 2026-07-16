@@ -5,11 +5,20 @@
    Inter is loaded as a web-font fallback for non-Windows platforms.        */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+/* Student Portal — matches the "SMP Connect" notice-board reference design.
+   Scoped to .font-portal (StudentLogin + StudentPortal roots) so the admin
+   app keeps its Segoe UI / Inter stack untouched. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 :root {
   font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-portal {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 @keyframes stat-pop {

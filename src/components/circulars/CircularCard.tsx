@@ -20,12 +20,13 @@ export function CircularCard({ circular, onClick, index, unread }: CircularCardP
     <div
       onClick={onClick}
       style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(index, 12) * 0.05}s` }}
-      className={`${meta.cardBg} border border-gray-100 border-l-4 ${meta.borderLSoft} rounded-xl shadow-sm hover:shadow-lg transition-shadow cursor-pointer overflow-hidden group`}
+      className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden group"
     >
       <div className="p-4">
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold ${meta.pill}`}>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600">
+              <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
               {circular.department}
             </span>
             {unread && (
@@ -40,10 +41,10 @@ export function CircularCard({ circular, onClick, index, unread }: CircularCardP
           </span>
         </div>
 
-        <h3 className="text-[15px] font-bold text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+        <h3 className="text-[15px] font-bold text-gray-900 leading-snug line-clamp-2">
           {circular.title}
         </h3>
-        <p className={`text-xs ${meta.text} font-semibold mt-1 line-clamp-2`}>{circular.subject}</p>
+        <p className="text-xs text-gray-500 font-semibold mt-1 line-clamp-2">{circular.subject}</p>
         {preview && <p className="text-xs text-gray-600 mt-2 line-clamp-3">{preview}</p>}
 
         <div className="flex items-center justify-between pt-2.5 mt-3 border-t border-gray-200/70">
@@ -57,7 +58,7 @@ export function CircularCard({ circular, onClick, index, unread }: CircularCardP
           ) : (
             <span className="text-[11px] text-gray-400">No attachments</span>
           )}
-          <span className="text-blue-600 text-xs font-semibold group-hover:underline">View Details →</span>
+          <span className="text-gray-900 text-xs font-bold group-hover:underline">Read more →</span>
         </div>
       </div>
     </div>

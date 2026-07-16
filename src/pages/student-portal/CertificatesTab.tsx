@@ -56,7 +56,7 @@ export function CertificatesTab({ regNumber }: { regNumber: string }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" style={{ animation: 'content-enter 0.3s ease-out both' }}>
       {/* Sub-tab pills */}
       <div className="flex items-center gap-1.5">
         {SUB_TABS.map((t) => (
@@ -64,28 +64,30 @@ export function CertificatesTab({ regNumber }: { regNumber: string }) {
             key={t.key}
             onClick={() => setSubTab(t.key)}
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer border ${
-              subTab === t.key ? 'bg-violet-100 text-violet-700 border-violet-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              subTab === t.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
             {t.label}
-            <span className={`rounded-full text-[10px] px-1.5 leading-4 ${subTab === t.key ? 'bg-white/60' : 'bg-gray-100 text-gray-500'}`}>
+            <span className={`rounded-full text-[10px] px-1.5 leading-4 ${subTab === t.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'}`}>
               {t.count}
             </span>
           </button>
         ))}
       </div>
 
-      {subTab === 'tc' && <TcList records={tcRecords} />}
-      {subTab === 'pc' && <PcList records={pcRecords} />}
-      {subTab === 'refund' && <RefundList records={refundRecords} />}
+      <div key={subTab} style={{ animation: 'content-enter 0.25s ease-out both' }}>
+        {subTab === 'tc' && <TcList records={tcRecords} />}
+        {subTab === 'pc' && <PcList records={pcRecords} />}
+        {subTab === 'refund' && <RefundList records={refundRecords} />}
+      </div>
     </div>
   );
 }
 
 function EmptyState({ icon, title, subtitle }: { icon: string; title: string; subtitle: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-14 px-6">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-100 flex items-center justify-center text-2xl">
+    <div className="flex flex-col items-center justify-center gap-3 py-14 px-6" style={{ animation: 'content-enter 0.3s ease-out both' }}>
+      <div className="w-14 h-14 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl">
         {icon}
       </div>
       <div className="text-center">
@@ -105,14 +107,18 @@ function TcList({ records }: { records: TCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-violet-200 border-l-violet-300'}`}>
-            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-violet-50'}`}>
+          <div
+            key={r.id}
+            style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(idx, 12) * 0.05}s` }}
+            className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-gray-200 border-l-gray-900'}`}
+          >
+            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-gray-50'}`}>
               <div className="flex items-center gap-2.5">
-                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-violet-800'}`}>TC #{r.tcNumber}</span>
+                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-gray-900'}`}>TC #{r.tcNumber}</span>
                 {idx === 0 && records.length > 1 && <span className="text-[10px] text-gray-400 font-medium">· Latest</span>}
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-violet-100 text-violet-700 border-violet-300'}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-gray-900 text-white border-gray-900'}`}>
                   {isDup ? 'Duplicate Copy' : 'Original'}
                 </span>
                 <span className="text-[10px] text-gray-400">Issued {fmtDate(r.issuedAt)}</span>
@@ -152,14 +158,18 @@ function PcList({ records }: { records: PCRecord[] }) {
       {records.map((r, idx) => {
         const isDup = r.isDuplicate;
         return (
-          <div key={r.id} className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-emerald-200 border-l-emerald-300'}`}>
-            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+          <div
+            key={r.id}
+            style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(idx, 12) * 0.05}s` }}
+            className={`rounded-xl border overflow-hidden shadow-sm border-l-4 ${isDup ? 'border-amber-200 border-l-amber-300' : 'border-gray-200 border-l-gray-900'}`}
+          >
+            <div className={`px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 ${isDup ? 'bg-amber-50' : 'bg-gray-50'}`}>
               <div className="flex items-center gap-2.5">
-                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-emerald-800'}`}>{r.examPeriod}</span>
+                <span className={`text-sm font-bold ${isDup ? 'text-amber-800' : 'text-gray-900'}`}>{r.examPeriod}</span>
                 {idx === 0 && records.length > 1 && <span className="text-[10px] text-gray-400 font-medium">· Latest</span>}
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-emerald-100 text-emerald-700 border-emerald-300'}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${isDup ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-gray-900 text-white border-gray-900'}`}>
                   {isDup ? 'Duplicate Copy' : 'Original'}
                 </span>
                 <span className="text-[10px] text-gray-400">Issued {fmtDate(r.issuedAt)}</span>
@@ -194,16 +204,20 @@ function RefundList({ records }: { records: RefundRecord[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-white text-gray-700 border-gray-200">
           {records.length} refund{records.length > 1 ? 's' : ''} · Total Refunded ₹{totalRefunded.toLocaleString()}
         </span>
       </div>
       {records.map((r, idx) => (
-        <div key={r.id} className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-rose-200 border-l-rose-300">
-          <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 bg-rose-50">
+        <div
+          key={r.id}
+          style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(idx, 12) * 0.05}s` }}
+          className="rounded-xl border overflow-hidden shadow-sm border-l-4 border-gray-200 border-l-gray-900"
+        >
+          <div className="px-4 py-2.5 flex items-center justify-between flex-wrap gap-1 bg-gray-50">
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-bold text-rose-800">₹{r.refundAmount.toLocaleString()}</span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white/70 border border-rose-200 text-rose-700">
+              <span className="text-sm font-bold text-gray-900">₹{r.refundAmount.toLocaleString()}</span>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-700">
                 {r.refundCategory === 'SEAT_CANCELLATION' ? 'Seat Cancellation' : 'SNQ'}
               </span>
               {idx === 0 && records.length > 1 && <span className="text-[10px] text-gray-400 font-medium">· Latest</span>}

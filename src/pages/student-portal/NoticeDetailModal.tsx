@@ -4,20 +4,14 @@ import type { Notice } from '../../types';
 import { formatBytes, attachmentKind } from '../../utils/htmlContent';
 import { AttachmentPreview } from '../../components/circulars/AttachmentPreview';
 
-const CATEGORY_STYLE: Record<Notice['category'], string> = {
-  fee: 'bg-red-50 text-red-700 border-red-200',
-  document: 'bg-amber-50 text-amber-700 border-amber-200',
-  general: 'bg-sky-50 text-sky-700 border-sky-200',
+const CATEGORY_DOT: Record<Notice['category'], string> = {
+  fee: 'bg-red-500',
+  document: 'bg-amber-500',
+  general: 'bg-sky-500',
 };
 
 const CATEGORY_LABEL: Record<Notice['category'], string> = {
   fee: 'Fee', document: 'Documents', general: 'General',
-};
-
-const CATEGORY_HEADER_BG: Record<Notice['category'], string> = {
-  fee: 'bg-red-50/60',
-  document: 'bg-amber-50/60',
-  general: 'bg-sky-50/60',
 };
 
 interface NoticeDetailModalProps {
@@ -40,7 +34,7 @@ export function NoticeDetailModal({ notice, onClose }: NoticeDetailModalProps) {
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+    <div className="font-portal fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
       <div className="absolute inset-0 bg-black/50" style={{ animation: 'backdrop-enter 0.18s ease-out' }} onClick={onClose} aria-hidden="true" />
       <div
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
@@ -49,10 +43,11 @@ export function NoticeDetailModal({ notice, onClose }: NoticeDetailModalProps) {
         aria-modal="true"
         aria-label={notice.title}
       >
-        <div className={`${CATEGORY_HEADER_BG[notice.category]} border-b border-gray-200 px-4 sm:px-5 py-3.5 shrink-0`}>
+        <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-5 py-3.5 shrink-0">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${CATEGORY_STYLE[notice.category]}`}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600">
+                <span className={`w-1.5 h-1.5 rounded-full ${CATEGORY_DOT[notice.category]}`} />
                 {CATEGORY_LABEL[notice.category]}
               </span>
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${notice.inactiveAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
