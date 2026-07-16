@@ -112,6 +112,7 @@ export function Students() {
   const [refundStudent, setRefundStudent] = useState<Student | null>(null);
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_students_filters_visible') === 'true');
   const [sortByRecent, setSortByRecent] = useState(false);
+  const [recentPaidStatus, setRecentPaidStatus] = useState<'ADMITTED' | 'NOT_ADMITTED'>('ADMITTED');
   const [firstPaymentByStudent, setFirstPaymentByStudent] = useState<Map<string, string>>(new Map());
 
   // ── Right-click context menu ──────────────────────────────────────────────
@@ -175,7 +176,11 @@ export function Students() {
   }, [sortByRecent, academicYear]);
 
   const filteredStudents = useMemo(() => {
-    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    let result = allStudents.filter((s) =>
+      sortByRecent && recentPaidStatus === 'NOT_ADMITTED'
+        ? s.admissionStatus !== 'CONFIRMED'
+        : s.admissionStatus === 'CONFIRMED'
+    );
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
@@ -208,7 +213,7 @@ export function Students() {
       if (c !== 0) return c;
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
-  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch, sortByRecent, firstPaymentByStudent]);
+  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch, sortByRecent, recentPaidStatus, firstPaymentByStudent]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -269,16 +274,22 @@ export function Students() {
     // Defer to next tick so the button state renders before the synchronous PDF work
     setTimeout(() => {
       try {
-        exportStudentsPdf(filteredStudents, {
-          academicYear,
-          courseFilter,
-          yearFilter,
-          genderFilter,
-          admTypeFilter,
-          admCatFilter,
-          admStatusFilter: 'CONFIRMED',
-          searchTerm: debouncedSearch,
-        });
+        exportStudentsPdf(
+          filteredStudents,
+          {
+            academicYear,
+            courseFilter,
+            yearFilter,
+            genderFilter,
+            admTypeFilter,
+            admCatFilter,
+            admStatusFilter: sortByRecent
+              ? (recentPaidStatus === 'ADMITTED' ? 'ADMITTED' : 'NOT ADMITTED')
+              : 'CONFIRMED',
+            searchTerm: debouncedSearch,
+          },
+          sortByRecent ? firstPaymentByStudent : undefined,
+        );
       } finally {
         setSavingPdf(false);
       }
@@ -638,6 +649,30 @@ export function Students() {
               </svg>
               Recently Paid
             </button>
+          )}
+          {!isLoading && sortByRecent && allStudents.length > 0 && (
+            <div className="shrink-0 flex items-center rounded-full border border-emerald-200 bg-white overflow-hidden text-[12px] font-medium">
+              <button
+                onClick={() => setRecentPaidStatus('ADMITTED')}
+                className={`px-2.5 py-1 cursor-pointer transition-colors whitespace-nowrap ${
+                  recentPaidStatus === 'ADMITTED'
+                    ? 'bg-emerald-500 text-white'
+                    : 'text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                Admitted
+              </button>
+              <button
+                onClick={() => setRecentPaidStatus('NOT_ADMITTED')}
+                className={`px-2.5 py-1 cursor-pointer transition-colors whitespace-nowrap border-l border-emerald-200 ${
+                  recentPaidStatus === 'NOT_ADMITTED'
+                    ? 'bg-emerald-500 text-white'
+                    : 'text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                Not Admitted
+              </button>
+            </div>
           )}
           {!isLoading && allStudents.length > 0 && (
             <button

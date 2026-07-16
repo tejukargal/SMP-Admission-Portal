@@ -50,27 +50,59 @@ function sortStudents(students: Student[]): Student[] {
   });
 }
 
+function sortByPaymentDate(students: Student[], paymentDates: Map<string, string>): Student[] {
+  return [...students].sort((a, b) => {
+    const pa = paymentDates.get(a.id);
+    const pb = paymentDates.get(b.id);
+    if (pa && pb) return pb.localeCompare(pa);
+    if (pa && !pb) return -1;
+    if (!pa && pb) return 1;
+    const y = (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
+    if (y !== 0) return y;
+    const c = a.course.localeCompare(b.course);
+    if (c !== 0) return c;
+    return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
+  });
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
-export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilters): void {
+export function exportStudentsPdf(
+  students: Student[],
+  filters: StudentsPdfFilters,
+  paymentDates?: Map<string, string>,
+): void {
   const margin        = 10;
   const PORTRAIT_W    = 210 - margin * 2;  // 190mm
   const LANDSCAPE_W   = 297 - margin * 2;  // 277mm
 
-  const sorted = sortStudents(students);
+  const sorted = paymentDates ? sortByPaymentDate(students, paymentDates) : sortStudents(students);
+
+  const columns: ColDef[] = paymentDates
+    ? [...COLUMNS, {
+        header: 'Paid Date',
+        halign: 'center',
+        get: (s) => {
+          const d = paymentDates.get(s.id);
+          return d
+            ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—';
+        },
+      }]
+    : COLUMNS;
 
   // ── Orientation: portrait unless column count rule forces landscape ────────
-  const orientation: 'portrait' | 'landscape' = COLUMNS.length > 9 ? 'landscape' : 'portrait';
+  const orientation: 'portrait' | 'landscape' = columns.length > 9 ? 'landscape' : 'portrait';
   const usableW = orientation === 'landscape' ? LANDSCAPE_W : PORTRAIT_W;
 
   // ── Measure fixed columns (everything except Name) ────────────────────────
   // Name is intentionally excluded — it gets whatever space remains after the
   // fixed columns, guaranteeing the table always fits on the chosen page size.
-  const NAME_IDX   = COLUMNS.findIndex((c) => c.header === 'Name');
+  const NAME_IDX   = columns.findIndex((c) => c.header === 'Name');
   const measureDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   measureDoc.setFontSize(FONT_SIZE);
 
   let fixedTotal = 0;
-  const colWidths: number[] = COLUMNS.map((col, idx) => {
+  const colWidths: number[] = columns.map((col, idx) => {
     if (idx === NAME_IDX) return 0; // placeholder — filled below
 
     measureDoc.setFont('helvetica', 'bold');
@@ -100,7 +132,10 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text('SMP Admissions — Student List', margin, 13);
+  doc.text(
+    paymentDates ? 'SMP Admissions — Recently Paid List' : 'SMP Admissions — Student List',
+    margin, 13,
+  );
 
   // ── Line 2: filter context  ·  count  |  date ────────────────────────────
   const chips: string[] = [];
@@ -131,11 +166,11 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
   doc.line(margin, 22, pageW - margin, 22);
 
   // ── Build table data ──────────────────────────────────────────────────────
-  const rows    = sorted.map((s, i) => COLUMNS.map((c) => c.get(s, i)));
-  const headers = [COLUMNS.map((c) => c.header)];
+  const rows    = sorted.map((s, i) => columns.map((c) => c.get(s, i)));
+  const headers = [columns.map((c) => c.header)];
 
   const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
-  COLUMNS.forEach((col, idx) => {
+  columns.forEach((col, idx) => {
     columnStyles[idx] = { cellWidth: finalWidths[idx], halign: col.halign };
   });
 
@@ -180,7 +215,7 @@ export function exportStudentsPdf(students: Student[], filters: StudentsPdfFilte
   });
 
   // ── Filename ──────────────────────────────────────────────────────────────
-  const parts = ['students'];
+  const parts = [paymentDates ? 'recently_paid' : 'students'];
   if (filters.academicYear) parts.push(filters.academicYear.replace(/[^0-9-]/g, ''));
   if (filters.courseFilter)  parts.push(filters.courseFilter);
   if (filters.yearFilter)    parts.push(filters.yearFilter.replace(/\s+/g, ''));
