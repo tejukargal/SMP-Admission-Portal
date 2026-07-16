@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { updateStudentAllottedCategory } from '../services/studentService';
+import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
@@ -110,6 +111,8 @@ export function Students() {
   const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
   const [refundStudent, setRefundStudent] = useState<Student | null>(null);
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_students_filters_visible') === 'true');
+  const [sortByRecent, setSortByRecent] = useState(false);
+  const [firstPaymentByStudent, setFirstPaymentByStudent] = useState<Map<string, string>>(new Map());
 
   // ── Right-click context menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -154,6 +157,23 @@ export function Students() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  // Fee-paid dates — fetched only when "sort by recent" is toggled on, since it's
+  // an extra Firestore read not needed for the default view.
+  useEffect(() => {
+    if (!sortByRecent || !academicYear) return;
+    let cancelled = false;
+    getFeeRecordsByAcademicYear(academicYear).then((records) => {
+      if (cancelled) return;
+      const map = new Map<string, string>();
+      for (const r of records) {
+        const existing = map.get(r.studentId);
+        if (!existing || r.date < existing) map.set(r.studentId, r.date);
+      }
+      setFirstPaymentByStudent(map);
+    });
+    return () => { cancelled = true; };
+  }, [sortByRecent, academicYear]);
+
   const filteredStudents = useMemo(() => {
     let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
@@ -175,13 +195,20 @@ export function Students() {
       });
     }
     return result.slice().sort((a, b) => {
+      if (sortByRecent) {
+        const pa = firstPaymentByStudent.get(a.id);
+        const pb = firstPaymentByStudent.get(b.id);
+        if (pa && pb) return pb.localeCompare(pa);
+        if (pa && !pb) return -1;
+        if (!pa && pb) return 1;
+      }
       const y = (YEAR_ORDER[a.year] ?? 9) - (YEAR_ORDER[b.year] ?? 9);
       if (y !== 0) return y;
       const c = a.course.localeCompare(b.course);
       if (c !== 0) return c;
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
-  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch]);
+  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch, sortByRecent, firstPaymentByStudent]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -598,6 +625,22 @@ export function Students() {
           {/* Action buttons */}
           {!isLoading && allStudents.length > 0 && (
             <button
+              onClick={() => setSortByRecent((v) => !v)}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors font-medium whitespace-nowrap flex items-center gap-1 ${
+                sortByRecent
+                  ? 'bg-emerald-500 border-emerald-500 text-white'
+                  : 'border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300'
+              }`}
+              title="Sort by most recent fee payment date"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20V4M12 4l-6 6M12 4l6 6"/>
+              </svg>
+              Recently Paid
+            </button>
+          )}
+          {!isLoading && allStudents.length > 0 && (
+            <button
               onClick={() => setShowMissingDocs(true)}
               className="shrink-0 rounded-full border border-violet-200 px-2.5 py-1 text-[12px] text-violet-700 bg-white hover:bg-violet-50 hover:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
             >
@@ -724,6 +767,9 @@ export function Students() {
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
+                {sortByRecent && (
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Receipt Date</th>
+                )}
                 {isAdmin && (
                   <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-48">Actions</th>
                 )}
@@ -789,6 +835,16 @@ export function Students() {
                       {student.admissionStatus || '—'}
                     </span>
                   </td>
+                  {sortByRecent && (
+                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                      {(() => {
+                        const paid = firstPaymentByStudent.get(student.id);
+                        return paid
+                          ? new Date(paid).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '—';
+                      })()}
+                    </td>
+                  )}
                   {isAdmin && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <Button
@@ -805,7 +861,7 @@ export function Students() {
 
               {hasMore && (
                 <tr>
-                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-2.5 text-center">
+                  <td colSpan={(isAdmin ? 12 : 11) + (sortByRecent ? 1 : 0)} className="px-4 py-2.5 text-center">
                     <button
                       className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
