@@ -112,7 +112,6 @@ export function Students() {
   const [refundStudent, setRefundStudent] = useState<Student | null>(null);
   const [showFilters, setShowFilters] = useState(() => localStorage.getItem('smp_students_filters_visible') === 'true');
   const [sortByRecent, setSortByRecent] = useState(false);
-  const [recentPaidStatus, setRecentPaidStatus] = useState<'ADMITTED' | 'NOT_ADMITTED'>('ADMITTED');
   const [firstPaymentByStudent, setFirstPaymentByStudent] = useState<Map<string, string>>(new Map());
 
   // ── Right-click context menu ──────────────────────────────────────────────
@@ -176,11 +175,7 @@ export function Students() {
   }, [sortByRecent, academicYear]);
 
   const filteredStudents = useMemo(() => {
-    let result = allStudents.filter((s) =>
-      sortByRecent && recentPaidStatus === 'NOT_ADMITTED'
-        ? s.admissionStatus !== 'CONFIRMED'
-        : s.admissionStatus === 'CONFIRMED'
-    );
+    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
     if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
@@ -213,7 +208,7 @@ export function Students() {
       if (c !== 0) return c;
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
-  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch, sortByRecent, recentPaidStatus, firstPaymentByStudent]);
+  }, [allStudents, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, debouncedSearch, sortByRecent, firstPaymentByStudent]);
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -283,9 +278,7 @@ export function Students() {
             genderFilter,
             admTypeFilter,
             admCatFilter,
-            admStatusFilter: sortByRecent
-              ? (recentPaidStatus === 'ADMITTED' ? 'ADMITTED' : 'NOT ADMITTED')
-              : 'CONFIRMED',
+            admStatusFilter: 'CONFIRMED',
             searchTerm: debouncedSearch,
           },
           sortByRecent ? firstPaymentByStudent : undefined,
@@ -482,6 +475,27 @@ export function Students() {
                   </div>
                 </>
               )}
+
+              {/* Recently Paid toggle + Admitted/Not Admitted filter */}
+              {!isLoading && allStudents.length > 0 && (
+                <>
+                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+                  <button
+                    onClick={() => setSortByRecent((v) => !v)}
+                    className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors font-medium whitespace-nowrap flex items-center gap-1 ${
+                      sortByRecent
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300'
+                    }`}
+                    title="Sort by most recent fee payment date"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20V4M12 4l-6 6M12 4l6 6"/>
+                    </svg>
+                    Recently Paid
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}
@@ -634,46 +648,6 @@ export function Students() {
           )}
 
           {/* Action buttons */}
-          {!isLoading && allStudents.length > 0 && (
-            <button
-              onClick={() => setSortByRecent((v) => !v)}
-              className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors font-medium whitespace-nowrap flex items-center gap-1 ${
-                sortByRecent
-                  ? 'bg-emerald-500 border-emerald-500 text-white'
-                  : 'border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300'
-              }`}
-              title="Sort by most recent fee payment date"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20V4M12 4l-6 6M12 4l6 6"/>
-              </svg>
-              Recently Paid
-            </button>
-          )}
-          {!isLoading && sortByRecent && allStudents.length > 0 && (
-            <div className="shrink-0 flex items-center rounded-full border border-emerald-200 bg-white overflow-hidden text-[12px] font-medium">
-              <button
-                onClick={() => setRecentPaidStatus('ADMITTED')}
-                className={`px-2.5 py-1 cursor-pointer transition-colors whitespace-nowrap ${
-                  recentPaidStatus === 'ADMITTED'
-                    ? 'bg-emerald-500 text-white'
-                    : 'text-emerald-700 hover:bg-emerald-50'
-                }`}
-              >
-                Admitted
-              </button>
-              <button
-                onClick={() => setRecentPaidStatus('NOT_ADMITTED')}
-                className={`px-2.5 py-1 cursor-pointer transition-colors whitespace-nowrap border-l border-emerald-200 ${
-                  recentPaidStatus === 'NOT_ADMITTED'
-                    ? 'bg-emerald-500 text-white'
-                    : 'text-emerald-700 hover:bg-emerald-50'
-                }`}
-              >
-                Not Admitted
-              </button>
-            </div>
-          )}
           {!isLoading && allStudents.length > 0 && (
             <button
               onClick={() => setShowMissingDocs(true)}

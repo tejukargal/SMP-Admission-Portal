@@ -405,6 +405,16 @@ export function StudentReports() {
     [prevYearStudents, notAdmittedStatusMap]
   );
 
+  const notAdmittedStats = useMemo(() => {
+    const byYear: Record<string, number> = {};
+    const byCourse: Record<string, number> = {};
+    for (const s of notAdmittedBase) {
+      byYear[s.year]     = (byYear[s.year] ?? 0) + 1;
+      byCourse[s.course] = (byCourse[s.course] ?? 0) + 1;
+    }
+    return { byYear, byCourse, total: notAdmittedBase.length };
+  }, [notAdmittedBase]);
+
   // Same filters as the main pipeline, minus the Admitted/Not Admitted status
   // filter itself — used to drive the summary sentence above the toolbar so it
   // always reflects the full admitted+pending breakdown for the active filters.
@@ -1297,6 +1307,77 @@ export function StudentReports() {
                   <div className="flex items-center gap-1 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
                     <span className="text-violet-600 font-semibold">Filtered</span>
                     <span className="font-bold tabular-nums">{pcRows.length}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Stats chips — Not Admitted List */}
+        {reportType === 'not-admitted' && !isLoading && notAdmittedStats.total > 0 && (
+          <>
+            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
+
+              <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-emerald-500 font-semibold">Total</span>
+                <span className="font-bold tabular-nums">{notAdmittedStats.total}</span>
+              </div>
+
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+
+              {YEARS.map((yr) => {
+                const count  = notAdmittedStats.byYear[yr] ?? 0;
+                const label  = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
+                const active = yearFilter === yr;
+                return (
+                  <button
+                    key={yr}
+                    onClick={() => setYearFilter(active ? '' : yr)}
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      active
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : count === 0
+                        ? 'bg-white/50 border-gray-100 text-gray-300'
+                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{label}</span>
+                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
+                  </button>
+                );
+              })}
+
+              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+
+              {COURSES.map((c) => {
+                const count  = notAdmittedStats.byCourse[c] ?? 0;
+                const active = courseFilter === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setCourseFilter(active ? '' : c)}
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      active
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : count === 0
+                        ? 'bg-white/50 border-gray-100 text-gray-300'
+                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
+                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
+                  </button>
+                );
+              })}
+
+              {hasActiveFilters && (
+                <>
+                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-emerald-600 font-semibold">Filtered</span>
+                    <span className="font-bold tabular-nums">{notAdmittedSummaryPool.length}</span>
                   </div>
                 </>
               )}
