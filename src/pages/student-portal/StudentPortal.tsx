@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStudentAuth } from '../../contexts/StudentAuthContext';
 import { PageSpinner } from '../../components/common/PageSpinner';
 import { ProfileTab } from './ProfileTab';
@@ -50,18 +50,23 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   // },
 ];
 
-function HeaderPill({ value }: { value: string }) {
-  if (!value) return null;
-  return (
-    <span className="shrink-0 inline-flex items-center rounded-full bg-gray-50 border border-gray-200 px-2 py-0.5">
-      <span className="text-[11px] font-black text-gray-900 leading-none">{value}</span>
-    </span>
-  );
-}
-
 export function StudentPortal() {
   const { student, allRecords, regNumber, loading, logout } = useStudentAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('circulars');
+
+  // "Welcome Back" until the student switches tabs for the first time, then
+  // the time-of-day greeting (Good Morning/Afternoon/Evening/Night) takes over.
+  // Compares against the previous tab (rather than an effect-ran-once flag)
+  // because StrictMode double-invokes mount effects in dev, which would
+  // otherwise consume the "skip once" flag before any real tab switch.
+  const [greeting, setGreeting] = useState('Welcome Back');
+  const prevTab = useRef(activeTab);
+  useEffect(() => {
+    if (prevTab.current !== activeTab) {
+      setGreeting(getGreeting());
+      prevTab.current = activeTab;
+    }
+  }, [activeTab]);
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [noticesLoading, setNoticesLoading] = useState(true);
@@ -214,16 +219,15 @@ export function StudentPortal() {
   const firstName = student.studentNameSSLC.split(' ')[0];
 
   return (
-    <div className="font-portal min-h-screen bg-gray-50 pb-20 md:pb-0">
+    <div className="font-portal no-scrollbar h-screen overflow-y-auto bg-gray-50 pb-20 md:pb-0">
       {/* Header */}
       <div className="sticky top-0 z-20">
         <div className="bg-white border-b border-gray-200">
-        <div className="max-w-3xl mx-auto px-4 pt-3 pb-2">
-          {/* Row 1: college name + greeting on the left, refresh/logout on the right — always same row */}
+        <div className="max-w-3xl mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 leading-none">SMP Admissions</p>
-              <h1 className="text-base font-black text-gray-900 leading-tight mt-1 truncate">{getGreeting()}, {firstName}</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 leading-none">SMP Admissions - Students Portal</p>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mt-1.5 truncate">{greeting}, {firstName}</h1>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -248,15 +252,6 @@ export function StudentPortal() {
                 Log Out
               </button>
             </div>
-          </div>
-
-          {/* Row 2: compact detail pills — label-free values, single row on any width */}
-          <div className="flex flex-nowrap items-center gap-1 mt-1.5 overflow-x-auto no-scrollbar">
-            <HeaderPill value={student.regNumber} />
-            <HeaderPill value={student.course} />
-            <HeaderPill value={student.year} />
-            <HeaderPill value={student.admType} />
-            <HeaderPill value={student.admCat} />
           </div>
         </div>
         </div>

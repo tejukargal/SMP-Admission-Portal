@@ -70,7 +70,7 @@ export function NoticeDetailModal({ notice, onClose }: NoticeDetailModalProps) {
           <h2 className="text-base sm:text-lg font-bold text-gray-900 leading-snug mt-2">{notice.title}</h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
+        <div className="no-scrollbar flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">{notice.body}</p>
 
           {(notice.attachments?.length ?? 0) > 0 && (

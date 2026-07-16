@@ -21,6 +21,16 @@
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* Hides the CircularModal's scrollbar only when opened from the student
+   portal (which stamps 'font-portal' on the modal root) — the admin preview
+   uses the same modal without that class and keeps its native scrollbar. */
+.font-portal .circular-scroll-body {
+  scrollbar-width: none;
+}
+.font-portal .circular-scroll-body::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes stat-pop {
   0%   { opacity: 0.4; transform: scale(0.88); }
   60%  { opacity: 1;   transform: scale(1.06); }

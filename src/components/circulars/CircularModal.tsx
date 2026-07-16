@@ -68,7 +68,7 @@ export function CircularModal({ circular, onClose, className = '' }: CircularMod
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
+        <div className="circular-scroll-body flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Subject</p>
             <p className="text-sm font-semibold text-gray-500">{circular.subject}</p>
