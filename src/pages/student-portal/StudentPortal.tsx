@@ -227,7 +227,10 @@ export function StudentPortal() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 leading-none">SMP Admissions - Students Portal</p>
-              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mt-1.5 truncate">{greeting}, {firstName}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight mt-1.5 truncate">
+                <span className="block">{greeting},</span>
+                <span className="block">{firstName}</span>
+              </h1>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
