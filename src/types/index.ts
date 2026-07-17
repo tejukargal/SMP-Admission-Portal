@@ -32,6 +32,11 @@ export type AcademicYear =
   | '2018-19' | '2019-20' | '2020-21' | '2021-22' | '2022-23' | '2023-24'
   | '2024-25' | '2025-26' | '2026-27' | '2027-28' | '2028-29' | '2029-30';
 
+// Manually-set (or TC-auto-detected) outcome tag for a student who did not
+// re-enroll in the current academic year — shown/edited from the Not Admitted
+// List's right-click context menu in StudentReports.tsx.
+export type NotAdmittedStatusTag = 'ANS' | 'LEFTOUT' | 'TRANSFERRED' | 'TC_ISSUED';
+
 export interface Student {
   id: string;
   studentNameSSLC: string;
@@ -80,13 +85,15 @@ export interface Student {
   aadharNumber: string;
   apaarId: string;
   allottedCategory?: string;
+  notAdmittedStatusTag?: NotAdmittedStatusTag;
   createdAt: string;
   updatedAt: string;
 }
 
-// allottedCategory is intentionally excluded — it's set post-confirmation via its own service call,
-// not through the enrollment form, so normal edits must never accidentally clear it.
-export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory'>;
+// allottedCategory and notAdmittedStatusTag are intentionally excluded — both are set via their
+// own dedicated service calls (not through the enrollment form), so normal edits must never
+// accidentally clear them.
+export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory' | 'notAdmittedStatusTag'>;
 
 // ─── Fee types ────────────────────────────────────────────────────────────────
 

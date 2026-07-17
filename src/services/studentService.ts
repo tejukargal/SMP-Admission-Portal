@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   deleteDoc,
+  deleteField,
   getDoc,
   updateDoc,
   query,
@@ -14,7 +15,7 @@ import {
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { Student, StudentFormData, AcademicYear, Course, Year, Gender } from '../types';
+import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, NotAdmittedStatusTag } from '../types';
 
 export interface StudentFilters {
   course?: Course;
@@ -323,6 +324,11 @@ export async function updateStudentStatus(id: string, status: string): Promise<v
 export async function updateStudentAllottedCategory(id: string, allottedCategory: string): Promise<void> {
   const ref = doc(db, STUDENTS_COLLECTION, id);
   await updateDoc(ref, { allottedCategory, updatedAt: new Date().toISOString() });
+}
+
+export async function updateStudentNotAdmittedStatus(id: string, tag: NotAdmittedStatusTag | null): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, { notAdmittedStatusTag: tag ?? deleteField(), updatedAt: new Date().toISOString() });
 }
 
 export async function deleteStudent(id: string): Promise<void> {

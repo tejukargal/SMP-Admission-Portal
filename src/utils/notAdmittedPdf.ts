@@ -32,9 +32,6 @@ const FONT_SIZE = 8.5;
 const CELL_PAD  = { top: 2.8, right: 3, bottom: 2.8, left: 3 };
 const PAD_H     = CELL_PAD.left + CELL_PAD.right; // 6mm horizontal padding per cell
 
-const ADMITTED_FILL:     [number, number, number] = [220, 252, 231]; // emerald-100
-const NOT_ADMITTED_FILL: [number, number, number] = [254, 226, 226]; // red-100
-
 // ── Column definitions — mirrors the autofit approach used by studentsPdf.ts ───
 interface ColDef {
   header: string;
@@ -57,12 +54,18 @@ const COLUMNS: ColDef[] = [
 ];
 
 export function exportNotAdmittedPdf(rows: NotAdmittedRow[], filters: NotAdmittedPdfFilters): void {
-  const margin  = 10;
-  const usableW = 210 - margin * 2; // 190mm — always portrait
+  const margin      = 10;
+  const PORTRAIT_W  = 210 - margin * 2; // 190mm
+  const LANDSCAPE_W = 297 - margin * 2; // 277mm
+
+  // ── Orientation: portrait unless column count rule forces landscape ────────
+  // (mirrors studentsPdf.ts — 11 columns here reads far cleaner in landscape)
+  const orientation: 'portrait' | 'landscape' = COLUMNS.length > 9 ? 'landscape' : 'portrait';
+  const usableW = orientation === 'landscape' ? LANDSCAPE_W : PORTRAIT_W;
 
   // ── Measure fixed columns (everything except Student Name) ─────────────────
   // Student Name is excluded — it gets whatever space remains after the fixed
-  // columns, guaranteeing the table always fits the portrait page width.
+  // columns, guaranteeing the table always fits the chosen page width.
   const NAME_IDX   = COLUMNS.findIndex((c) => c.header === 'Student Name');
   const measureDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   measureDoc.setFontSize(FONT_SIZE);
@@ -88,7 +91,7 @@ export function exportNotAdmittedPdf(rows: NotAdmittedRow[], filters: NotAdmitte
   const finalWidths = colWidths;
   const tableWidth  = finalWidths.reduce((s, w) => s + w, 0);
 
-  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc   = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
@@ -146,26 +149,26 @@ export function exportNotAdmittedPdf(rows: NotAdmittedRow[], filters: NotAdmitte
       textColor: [20, 20, 20] as [number, number, number],
     },
     headStyles: {
-      fillColor: [185, 28, 28],   // red-700
+      fillColor: [30, 64, 175],
       textColor: 255,
       fontStyle: 'bold',
       fontSize: FONT_SIZE,
     },
-    columnStyles,
-    // Tint each row by admitted/not-admitted status instead of plain alternating stripes.
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const row = rows[data.row.index];
-      if (!row) return;
-      data.cell.styles.fillColor = row.status === 'ADMITTED' ? ADMITTED_FILL : NOT_ADMITTED_FILL;
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
     },
+    columnStyles,
     didDrawPage: (data) => {
       const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
         .internal.getNumberOfPages();
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184);
-      doc.text('Not Admitted List', margin, pageH - 4);
-      doc.text(`Page ${data.pageNumber} of ${total}`, pageW - margin, pageH - 4, { align: 'right' });
+      doc.text(
+        `Page ${data.pageNumber} of ${total}`,
+        pageW - margin,
+        pageH - 4,
+        { align: 'right' },
+      );
       doc.setTextColor(0);
     },
   });

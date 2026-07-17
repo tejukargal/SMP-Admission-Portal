@@ -213,6 +213,7 @@ export function Dashboard() {
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
   const [totalModal, setTotalModal] = useState(false);
+  const [summaryModal, setSummaryModal] = useState(false);
   const [intakeModal, setIntakeModal] = useState(false);
   const [catModal, setCatModal] = useState(false);
   const [admTypeModal, setAdmTypeModal] = useState(false);
@@ -1121,9 +1122,9 @@ const [barsReady, setBarsReady] = useState(false);
 
           {!isSearchMode && academicYearFilter && (
             <button
-              onClick={() => exportSummaryReport(allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED'), academicYearFilter, undefined, 'emerald')}
+              onClick={() => setSummaryModal(true)}
               className="flex items-center gap-1.5 group cursor-pointer shrink-0"
-              title="Export Summary PDF"
+              title="View Summary"
             >
               <span className="w-1 h-3.5 rounded-full shrink-0 bg-emerald-400 group-hover:bg-emerald-600 transition-colors" />
               <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 group-hover:text-emerald-800 transition-colors">Summary</span>
@@ -2581,6 +2582,82 @@ const [barsReady, setBarsReady] = useState(false);
                     <td className="px-3 py-2.5 text-right tabular-nums font-bold text-sky-700 text-sm border-l-2 border-sky-400">{grandTotal}</td>
                   </tr>
                 </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* Summary modal — Year, Course & Admission Type-wise breakdown (mirrors Admission Type-wise Count modal) */}
+    {summaryModal && (() => {
+      const summaryStudents = allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED');
+
+      const sumRows = YEARS.flatMap((yr) => {
+        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+        const yrSt = summaryStudents.filter((s) => s.year === yr);
+        const sub = { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 };
+        const courseRows = COURSES.map((course) => {
+          const ss = yrSt.filter((s) => s.course === course);
+          let regular = 0, ltrl = 0, snq = 0, rptr = 0;
+          for (const s of ss) {
+            if (s.admCat === 'SNQ')            snq++;
+            else if (s.admType === 'LATERAL')  ltrl++;
+            else if (s.admType === 'REPEATER') rptr++;
+            else                               regular++;
+          }
+          const total = ss.length;
+          sub.regular += regular; sub.ltrl += ltrl; sub.snq += snq; sub.rptr += rptr; sub.total += total;
+          return { yrLabel, course, regular, ltrl, snq, rptr, total, isSubtotal: false };
+        });
+        return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
+      });
+      const grand = sumRows.filter((r) => r.isSubtotal).reduce(
+        (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
+        { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
+      );
+      const tc = 'px-2.5 py-0.5 text-right tabular-nums text-sm';
+      const tl = 'px-2.5 py-0.5 text-left text-xs';
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSummaryModal(false)} aria-hidden="true" />
+          <div className="relative rounded-2xl border-2 border-emerald-400 bg-emerald-50 shadow-2xl w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+            <div className="px-5 py-3 flex items-center justify-between border-b border-emerald-300">
+              <div className="flex items-center gap-2.5">
+                <span className="w-1 h-4 rounded-full shrink-0 bg-emerald-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Summary — Year, Course &amp; Adm Type-wise Count</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => exportSummaryReport(summaryStudents, academicYearFilter, undefined, 'emerald')} className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
+                <button onClick={() => setSummaryModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
+              </div>
+            </div>
+            <div className="p-3 bg-white">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-emerald-300">
+                    {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h, hi) => (
+                      <th key={h} className={`px-2.5 py-1.5 text-emerald-800 font-bold whitespace-nowrap text-right uppercase tracking-wide [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left ${hi >= 2 ? 'text-xs' : 'text-[11px]'}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sumRows.map((r, i) => r.isSubtotal ? (
+                    <tr key={i} className="font-semibold text-emerald-800 bg-emerald-50/80 border-y border-emerald-200">
+                      <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
+                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                    </tr>
+                  ) : (
+                    <tr key={i} className="border-b border-gray-100 hover:bg-emerald-50/40 transition-colors">
+                      <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-semibold text-gray-700'}>{r.course}</td>
+                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="text-white font-bold" style={{ background: '#065f46' }}>
+                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
+                    {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
+                  </tr>
+                </tbody>
               </table>
             </div>
           </div>

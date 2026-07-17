@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -24,8 +24,9 @@ import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue } from '../u
 import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } from '../utils/sortStudents';
 import { exportCustomStudentReportPdf } from '../utils/customStudentReportPdf';
 import { exportNotAdmittedPdf } from '../utils/notAdmittedPdf';
+import { updateStudentNotAdmittedStatus } from '../services/studentService';
 import { ACADEMIC_YEARS, CATEGORY_GROUPS, CATEGORY_GROUP_LABELS } from '../types';
-import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear, CategoryGroup } from '../types';
+import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear, CategoryGroup, NotAdmittedStatusTag } from '../types';
 
 const PAGE_SIZE = 100;
 
@@ -355,7 +356,44 @@ export function StudentReports() {
   // ── Not Admitted List: full previous-year 1st/2nd year CONFIRMED pool, each
   // tagged ADMITTED / NOT_ADMITTED depending on whether a matching CONFIRMED
   // record (any year) exists in the current academic year ─────────────────────
-  const [notAdmittedStatusFilter, setNotAdmittedStatusFilter] = useState<'' | 'ADMITTED' | 'NOT_ADMITTED'>('');
+  type EffectiveNotAdmittedStatus = 'ADMITTED' | 'NOT_ADMITTED' | NotAdmittedStatusTag;
+  const [notAdmittedStatusFilter, setNotAdmittedStatusFilter] = useState<'' | EffectiveNotAdmittedStatus>('');
+
+  // Right-click context menu (Not Admitted List rows) — mark/clear ANS/LEFTOUT/TRANSFERRED/TC_ISSUED
+  const [statusCtxMenu, setStatusCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
+  const statusCtxMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!statusCtxMenu) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setStatusCtxMenu(null); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [statusCtxMenu]);
+
+  useLayoutEffect(() => {
+    const el = statusCtxMenuRef.current;
+    if (!el || !statusCtxMenu) return;
+    const GAP = 6;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    let x = statusCtxMenu.x;
+    let y = statusCtxMenu.y;
+    if (x + w > window.innerWidth  - GAP) x = window.innerWidth  - w - GAP;
+    if (y + h > window.innerHeight - GAP) y = window.innerHeight - h - GAP;
+    if (x < GAP) x = GAP;
+    if (y < GAP) y = GAP;
+    el.style.left       = `${x}px`;
+    el.style.top        = `${y}px`;
+    el.style.visibility = 'visible';
+  }, [statusCtxMenu]);
+
+  async function handleSetNotAdmittedStatus(studentId: string, tag: NotAdmittedStatusTag | null) {
+    setStatusCtxMenu(null);
+    try {
+      await updateStudentNotAdmittedStatus(studentId, tag);
+    } catch (err) {
+      console.error('Failed to update student status', err);
+    }
+  }
 
   const notAdmittedStatusMap = useMemo(() => {
     const map = new Map<string, 'ADMITTED' | 'NOT_ADMITTED'>();
@@ -444,6 +482,24 @@ export function StudentReports() {
   const NEXT_YEAR_LABEL: Record<Year, string> = { '1ST YEAR': '2nd Year', '2ND YEAR': '3rd Year', '3RD YEAR': '' };
   const YEAR_SHORT_LABEL: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
 
+  // Resolves the status actually shown/filtered-on for a Not Admitted List row:
+  // a manually-set tag wins, then TC-issued auto-detected from tcHistory, then
+  // falls back to the existing computed Admitted/Not-Admitted tag.
+  function effectiveNotAdmittedStatus(s: Student & { tcHistory?: TCRecord[] }, base?: 'ADMITTED' | 'NOT_ADMITTED'): EffectiveNotAdmittedStatus {
+    if (s.notAdmittedStatusTag) return s.notAdmittedStatusTag;
+    if (s.tcHistory && s.tcHistory.length > 0) return 'TC_ISSUED';
+    return base ?? 'NOT_ADMITTED';
+  }
+
+  const STATUS_TAG_META: Record<EffectiveNotAdmittedStatus, { label: string; row: string; badge: string }> = {
+    ADMITTED:     { label: 'Admitted',     row: 'bg-emerald-50/70 hover:bg-emerald-100/60', badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
+    NOT_ADMITTED: { label: 'Not Admitted', row: 'bg-red-50/70 hover:bg-red-100/60',          badge: 'bg-red-100 text-red-700 border border-red-200' },
+    ANS:          { label: 'ANS',          row: 'bg-amber-50/70 hover:bg-amber-100/60',      badge: 'bg-amber-100 text-amber-700 border border-amber-200' },
+    LEFTOUT:      { label: 'Left Out',     row: 'bg-slate-100/70 hover:bg-slate-200/60',     badge: 'bg-slate-200 text-slate-700 border border-slate-300' },
+    TRANSFERRED:  { label: 'Transferred',  row: 'bg-sky-50/70 hover:bg-sky-100/60',          badge: 'bg-sky-100 text-sky-700 border border-sky-200' },
+    TC_ISSUED:    { label: 'TC Issued',    row: 'bg-violet-50/70 hover:bg-violet-100/60',    badge: 'bg-violet-100 text-violet-700 border border-violet-200' },
+  };
+
   const notAdmittedSummary = useMemo(() => {
     if (reportType !== 'not-admitted' || !previousAcademicYear || !academicYear) return null;
     const total = notAdmittedSummaryPool.length;
@@ -477,7 +533,7 @@ export function StudentReports() {
     if (admTypeFilter)  result = result.filter((s) => s.admType === admTypeFilter);
     if (admCatFilter)   result = result.filter((s) => s.admCat === admCatFilter);
     if (reportType === 'not-admitted' && notAdmittedStatusFilter) {
-      result = result.filter((s) => notAdmittedStatusMap.get(s.id) === notAdmittedStatusFilter);
+      result = result.filter((s) => effectiveNotAdmittedStatus(s, notAdmittedStatusMap.get(s.id)) === notAdmittedStatusFilter);
     }
     if (dateFrom || dateTo) {
       result = result.filter((s) => {
@@ -785,7 +841,12 @@ export function StudentReports() {
               categoryFilter,
               admTypeFilter,
               admCatFilter,
-              statusFilter: notAdmittedStatusFilter,
+              // notAdmittedPdf.ts only models the original ADMITTED/NOT_ADMITTED tag —
+              // new status tags (ANS/LEFTOUT/TRANSFERRED/TC_ISSUED) aren't representable
+              // there, so fall back to no filter chip rather than widening that util.
+              statusFilter: (notAdmittedStatusFilter === 'ADMITTED' || notAdmittedStatusFilter === 'NOT_ADMITTED')
+                ? notAdmittedStatusFilter
+                : '',
               searchTerm: debouncedSearch,
             }
           );
@@ -1566,13 +1627,17 @@ export function StudentReports() {
               ]}
             />
             {reportType === 'not-admitted' && (
-              <FilterDropdown<'ADMITTED' | 'NOT_ADMITTED'>
+              <FilterDropdown<EffectiveNotAdmittedStatus>
                 value={notAdmittedStatusFilter}
                 onChange={(v) => setNotAdmittedStatusFilter(v)}
                 placeholder="Status"
                 options={[
                   { value: 'ADMITTED', label: 'Admitted' },
                   { value: 'NOT_ADMITTED', label: 'Not Admitted' },
+                  { value: 'ANS', label: 'ANS' },
+                  { value: 'LEFTOUT', label: 'Left Out' },
+                  { value: 'TRANSFERRED', label: 'Transferred' },
+                  { value: 'TC_ISSUED', label: 'TC Issued' },
                 ]}
               />
             )}
@@ -2087,12 +2152,15 @@ export function StudentReports() {
               </thead>
               <tbody className="divide-y divide-red-50/60">
                 {visibleStudents.map((s, idx) => {
-                  const status = notAdmittedStatusMap.get(s.id);
-                  const admitted = status === 'ADMITTED';
+                  const status = effectiveNotAdmittedStatus(s, notAdmittedStatusMap.get(s.id));
+                  const meta = STATUS_TAG_META[status];
+                  const menuActive = statusCtxMenu?.student.id === s.id;
                   return (
                     <tr
                       key={s.id}
-                      className={`transition-colors ${admitted ? 'bg-emerald-50/70 hover:bg-emerald-100/60' : 'bg-red-50/70 hover:bg-red-100/60'}`}
+                      className={`transition-colors cursor-context-menu ${menuActive ? 'row-ctx-active' : meta.row}`}
+                      onContextMenu={(e) => { e.preventDefault(); setStatusCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
+                      title="Right-click to mark status"
                     >
                       <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
@@ -2105,12 +2173,8 @@ export function StudentReports() {
                       <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admCat || '—'}</td>
                       <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || s.fatherMobile || <span className="text-gray-300">—</span>}</td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          admitted
-                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                            : 'bg-red-100 text-red-700 border border-red-200'
-                        }`}>
-                          {admitted ? 'Admitted' : 'Not Admitted'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${meta.badge}`}>
+                          {meta.label}
                         </span>
                       </td>
                     </tr>
@@ -2487,6 +2551,79 @@ export function StudentReports() {
           </div>
         </div>
       )}
+
+      {/* ── Not Admitted List: status context menu (right-click a row) ─────── */}
+      {statusCtxMenu && (() => {
+        const student = statusCtxMenu.student;
+        const currentStatus = effectiveNotAdmittedStatus(student, notAdmittedStatusMap.get(student.id));
+        const currentMeta = STATUS_TAG_META[currentStatus];
+        const TAG_OPTIONS: { tag: NotAdmittedStatusTag; label: string }[] = [
+          { tag: 'ANS',         label: 'Mark as ANS' },
+          { tag: 'LEFTOUT',     label: 'Mark as Left Out' },
+          { tag: 'TRANSFERRED', label: 'Mark as Transferred' },
+          { tag: 'TC_ISSUED',   label: 'Mark as TC Issued' },
+        ];
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setStatusCtxMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setStatusCtxMenu(null); }}
+            />
+            <div
+              ref={statusCtxMenuRef}
+              className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[200px]"
+              style={{ left: statusCtxMenu.x, top: statusCtxMenu.y, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {/* Header */}
+              <div className="px-3 pt-2 pb-1.5 border-b border-gray-100">
+                <p className="text-[11px] font-semibold text-gray-800 truncate">{student.studentNameSSLC}</p>
+                <p className="text-[9px] text-gray-400 mt-0.5">{student.course} · {student.year} · {student.academicYear}</p>
+                <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${currentMeta.badge}`}>
+                  {currentMeta.label}
+                </span>
+              </div>
+              {/* Items */}
+              <div className="py-1">
+                {isAdmin ? (
+                  <>
+                    {TAG_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.tag}
+                        className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={student.notAdmittedStatusTag === opt.tag}
+                        onClick={() => { void handleSetNotAdmittedStatus(student.id, opt.tag); }}
+                      >
+                        <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </span>
+                        {opt.label}
+                      </button>
+                    ))}
+                    {student.notAdmittedStatusTag && (
+                      <>
+                        <div className="my-1 border-t border-gray-100" />
+                        <button
+                          className="group w-full text-left px-3 py-[5px] text-[12px] text-red-600 hover:bg-red-50 hover:text-red-900 flex items-center gap-2 transition-colors duration-100"
+                          onClick={() => { void handleSetNotAdmittedStatus(student.id, null); }}
+                        >
+                          <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </span>
+                          Clear Status
+                        </button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="px-3 py-[5px] text-[11px] text-gray-400">Only admins can edit status.</div>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
