@@ -86,14 +86,21 @@ export interface Student {
   apaarId: string;
   allottedCategory?: string;
   notAdmittedStatusTag?: NotAdmittedStatusTag;
+  transferredIn?: boolean;
+  transferInPolytechnic?: string;
+  transferOut?: boolean;
+  transferOutDate?: string;
+  transferOutPolytechnic?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-// allottedCategory and notAdmittedStatusTag are intentionally excluded — both are set via their
-// own dedicated service calls (not through the enrollment form), so normal edits must never
-// accidentally clear them.
-export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory' | 'notAdmittedStatusTag'>;
+// allottedCategory, notAdmittedStatusTag, transferOut, transferOutDate and
+// transferOutPolytechnic are intentionally excluded — they are set via their own dedicated
+// service calls (not through the enrollment form), so normal edits must never accidentally
+// clear them. transferredIn/transferInPolytechnic stay in the form — captured via the
+// enrollment form's "Transferred In" checkbox + polytechnic name field.
+export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory' | 'notAdmittedStatusTag' | 'transferOut' | 'transferOutDate' | 'transferOutPolytechnic'>;
 
 // ─── Fee types ────────────────────────────────────────────────────────────────
 

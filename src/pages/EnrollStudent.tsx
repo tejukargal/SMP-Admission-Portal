@@ -433,6 +433,8 @@ function emptyForm(defaultYear?: AcademicYear): StudentFormData {
     regNumber: '',
     aadharNumber: '',
     apaarId: '',
+    transferredIn: false,
+    transferInPolytechnic: '',
   };
 }
 
@@ -912,6 +914,12 @@ export function EnrollStudent() {
           updated.year = '' as Year;
           updated.admType = 'REGULAR';
         }
+      }
+
+      // "Transferred In" only applies to 2nd/3rd year — clear it if the year changes away from those
+      if (field === 'year' && value !== '2ND YEAR' && value !== '3RD YEAR') {
+        updated.transferredIn = false;
+        updated.transferInPolytechnic = '';
       }
 
       // regNumber auto-preview is handled by a dedicated useEffect
@@ -1862,6 +1870,34 @@ export function EnrollStudent() {
                 onChange={handleTextChange('enrollmentDate')}
                 error={displayErrors['enrollmentDate']}
               />
+              {(form.year === '2ND YEAR' || form.year === '3RD YEAR') && (
+                <div className="lg:col-span-2 flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!form.transferredIn}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        transferredIn: e.target.checked,
+                        transferInPolytechnic: e.target.checked ? prev.transferInPolytechnic : '',
+                      }))}
+                      className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-400 cursor-pointer"
+                    />
+                    <span className="font-semibold text-gray-600 uppercase tracking-wider text-xs">
+                      Transferred In (from another Polytechnic)
+                    </span>
+                  </label>
+                  {form.transferredIn && (
+                    <Input
+                      label="Transferred From (Polytechnic Name)"
+                      value={form.transferInPolytechnic ?? ''}
+                      onChange={handleTextChange('transferInPolytechnic')}
+                      uppercase
+                      placeholder="Enter polytechnic name"
+                    />
+                  )}
+                </div>
+              )}
               <Input
                 label="Reg Number"
                 value={form.regNumber}

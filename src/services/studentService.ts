@@ -331,6 +331,16 @@ export async function updateStudentNotAdmittedStatus(id: string, tag: NotAdmitte
   await updateDoc(ref, { notAdmittedStatusTag: tag ?? deleteField(), updatedAt: new Date().toISOString() });
 }
 
+export async function updateStudentTransferOut(id: string, transferOut: boolean, polytechnic?: string): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, {
+    transferOut: transferOut ? true : deleteField(),
+    transferOutDate: transferOut ? new Date().toISOString() : deleteField(),
+    transferOutPolytechnic: transferOut && polytechnic ? polytechnic : deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export async function deleteStudent(id: string): Promise<void> {
   // Cascade-delete all associated data: fee records, fee overrides, student documents
   const [feeRecordsSnap, feeOverridesSnap] = await Promise.all([

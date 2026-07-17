@@ -846,6 +846,21 @@ const [barsReady, setBarsReady] = useState(false);
     };
   }, [allStudents, settings]);
 
+  // Transfer Students — current-year students flagged transferOut or transferredIn
+  const transferStats = useMemo(() => {
+    const currentYear = settings?.currentAcademicYear;
+    if (!currentYear) return null;
+    let transferIn = 0, transferOut = 0;
+    for (const s of allStudents) {
+      if (s.academicYear !== currentYear) continue;
+      if (s.transferredIn) transferIn++;
+      if (s.transferOut) transferOut++;
+    }
+    const total = transferIn + transferOut;
+    if (total === 0) return null;
+    return { transferIn, transferOut, total };
+  }, [allStudents, settings]);
+
 
   const hasNonSearchFilters =
     !!courseFilter || !!yearFilter || !!genderFilter ||
@@ -1142,6 +1157,21 @@ const [barsReady, setBarsReady] = useState(false);
               <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 group-hover:text-amber-800 transition-colors">Pending</span>
               <span className="text-xs font-black tabular-nums text-amber-700">
                 <AnimNum value={admissionPendingStats.totalRegular + admissionPendingStats.totalLateral} />
+              </span>
+            </button>
+          )}
+
+          {/* Transfer Students label */}
+          {transferStats && (
+            <button
+              onClick={() => void navigate('/student-reports?report=transfer-students')}
+              className="flex items-center gap-1.5 group cursor-pointer shrink-0"
+              title="View Transfer Students"
+            >
+              <span className="w-1 h-3.5 rounded-full shrink-0 bg-sky-400 group-hover:bg-sky-600 transition-colors" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-sky-600 group-hover:text-sky-800 transition-colors">Transfers</span>
+              <span className="text-xs font-black tabular-nums text-sky-700">
+                <AnimNum value={transferStats.total} />
               </span>
             </button>
           )}

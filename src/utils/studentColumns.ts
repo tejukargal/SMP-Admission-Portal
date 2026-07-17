@@ -59,6 +59,10 @@ export const STUDENT_COLUMNS: ColumnDef[] = [
   { key: 'regNumber',          label: 'Reg No',            group: 'Admission', align: 'left'   },
   { key: 'aadharNumber',       label: 'Aadhar No',         group: 'Admission', align: 'left'   },
   { key: 'apaarId',            label: 'APAAR ID',          group: 'Admission', align: 'left'   },
+  { key: 'transferredIn',      label: 'Transferred In',    group: 'Admission', align: 'center' },
+  { key: 'transferInPolytechnic', label: 'Transferred From', group: 'Admission', align: 'left' },
+  { key: 'transferOut',        label: 'Transfer Out',      group: 'Admission', align: 'center' },
+  { key: 'transferOutPolytechnic', label: 'Transferred To', group: 'Admission', align: 'left' },
 
   // ── Contact ───────────────────────────────────────────────────────────────
   { key: 'fatherMobile',  label: 'Father Mobile',  group: 'Contact', align: 'left' },
@@ -75,5 +79,6 @@ export const DEFAULT_CUSTOM_COLUMNS: (keyof Student)[] = [
 export function formatColumnValue(col: ColumnDef, s: Student): string {
   const v = s[col.key];
   if (v === undefined || v === null || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : '—';
   return String(v);
 }

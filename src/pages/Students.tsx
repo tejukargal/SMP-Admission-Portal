@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
-import { updateStudentAllottedCategory } from '../services/studentService';
+import { updateStudentAllottedCategory, updateStudentTransferOut } from '../services/studentService';
 import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { Button } from '../components/common/Button';
@@ -23,6 +23,7 @@ import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
 import { SnqRefundModal } from '../components/common/SnqRefundModal';
+import { Modal } from '../components/common/Modal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
 
@@ -151,6 +152,35 @@ export function Students() {
 
   // Single unfiltered fetch — all filtering done client-side
   const { students: allStudents, loading, error, refetch } = useStudents(academicYear);
+
+  // Marking Transfer Out captures a polytechnic name via a small modal; clearing needs no input.
+  const [transferOutStudent, setTransferOutStudent] = useState<Student | null>(null);
+  const [transferOutPolytechnicInput, setTransferOutPolytechnicInput] = useState('');
+  const [savingTransferOut, setSavingTransferOut] = useState(false);
+
+  async function handleClearTransferOut(student: Student) {
+    setContextMenu(null);
+    try {
+      await updateStudentTransferOut(student.id, false);
+      refetch();
+    } catch (err) {
+      console.error('Failed to clear transfer-out status', err);
+    }
+  }
+
+  async function handleConfirmTransferOut() {
+    if (!transferOutStudent) return;
+    setSavingTransferOut(true);
+    try {
+      await updateStudentTransferOut(transferOutStudent.id, true, transferOutPolytechnicInput.trim() || undefined);
+      refetch();
+    } catch (err) {
+      console.error('Failed to mark transfer-out status', err);
+    } finally {
+      setSavingTransferOut(false);
+      setTransferOutStudent(null);
+    }
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -843,6 +873,22 @@ export function Students() {
                     >
                       {student.admissionStatus || '—'}
                     </span>
+                    {student.transferOut && (
+                      <span
+                        className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700 border border-sky-200"
+                        title={student.transferOutPolytechnic ? `To: ${student.transferOutPolytechnic}` : undefined}
+                      >
+                        TRF OUT
+                      </span>
+                    )}
+                    {student.transferredIn && (
+                      <span
+                        className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700 border border-violet-200"
+                        title={student.transferInPolytechnic ? `From: ${student.transferInPolytechnic}` : undefined}
+                      >
+                        TRF IN
+                      </span>
+                    )}
                   </td>
                   {sortByRecent && (
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
@@ -1048,6 +1094,25 @@ export function Students() {
                 SNQ Refund
               </button>
             )}
+            {isAdmin && (contextMenu.student.year === '2ND YEAR' || contextMenu.student.year === '3RD YEAR') && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-sky-50 hover:text-sky-900 flex items-center gap-2 transition-colors duration-100"
+                onClick={() => {
+                  if (contextMenu.student.transferOut) {
+                    void handleClearTransferOut(contextMenu.student);
+                  } else {
+                    setTransferOutStudent(contextMenu.student);
+                    setTransferOutPolytechnicInput('');
+                    setContextMenu(null);
+                  }
+                }}
+              >
+                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 group-hover:text-sky-600 transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </span>
+                {contextMenu.student.transferOut ? 'Clear Transfer Out' : 'Mark Transfer Out'}
+              </button>
+            )}
           </div>
         </div>
       </>
@@ -1137,6 +1202,30 @@ export function Students() {
         onClose={() => setAdmOrderStudent(null)}
       />
     )}
+
+    <Modal
+      open={!!transferOutStudent}
+      title="Mark Transfer Out"
+      message={
+        <div className="space-y-3">
+          <p>
+            Mark <span className="font-semibold text-gray-900">{transferOutStudent?.studentNameSSLC}</span> as transferring out to another polytechnic.
+          </p>
+          <input
+            type="text"
+            value={transferOutPolytechnicInput}
+            onChange={(e) => setTransferOutPolytechnicInput(e.target.value.toUpperCase())}
+            placeholder="Polytechnic name (optional)"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sky-400 focus:border-sky-400"
+          />
+        </div>
+      }
+      confirmLabel="Mark Transfer Out"
+      variant="primary"
+      loading={savingTransferOut}
+      onConfirm={() => void handleConfirmTransferOut()}
+      onCancel={() => setTransferOutStudent(null)}
+    />
 
     {refundStudent && (
       <SnqRefundModal
