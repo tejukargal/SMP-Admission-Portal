@@ -7,7 +7,7 @@ import { updateStudentAllottedCategory, updateStudentTransferOut } from '../serv
 import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { Button } from '../components/common/Button';
-import { FilterDropdown } from '../components/common/FilterDropdown';
+import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilterDropdown';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
@@ -72,12 +72,18 @@ export function Students() {
   } = studentsFilters;
 
   function setSearchTerm(v: string) { setStudentsFilters({ searchTerm: v }); }
-  function setCourseFilter(v: Course | '') { setStudentsFilters({ courseFilter: v }); }
-  function setYearFilter(v: Year | '') { setStudentsFilters({ yearFilter: v }); }
-  function setGenderFilter(v: Gender | '') { setStudentsFilters({ genderFilter: v }); }
-  function setCategoryFilter(v: Category | '') { setStudentsFilters({ categoryFilter: v }); }
-  function setAdmTypeFilter(v: AdmType | '') { setStudentsFilters({ admTypeFilter: v }); }
-  function setAdmCatFilter(v: AdmCat | '') { setStudentsFilters({ admCatFilter: v }); }
+  function setCourseFilter(v: Course[]) { setStudentsFilters({ courseFilter: v }); }
+  function setYearFilter(v: Year[]) { setStudentsFilters({ yearFilter: v }); }
+  function setGenderFilter(v: Gender[]) { setStudentsFilters({ genderFilter: v }); }
+  function setCategoryFilter(v: Category[]) { setStudentsFilters({ categoryFilter: v }); }
+  function setAdmTypeFilter(v: AdmType[]) { setStudentsFilters({ admTypeFilter: v }); }
+  function setAdmCatFilter(v: AdmCat[]) { setStudentsFilters({ admCatFilter: v }); }
+  function toggleYearFilter(yr: Year) {
+    setYearFilter(yearFilter.includes(yr) ? yearFilter.filter((y) => y !== yr) : [...yearFilter, yr]);
+  }
+  function toggleCourseFilter(c: Course) {
+    setCourseFilter(courseFilter.includes(c) ? courseFilter.filter((x) => x !== c) : [...courseFilter, c]);
+  }
   function setVisibleCount(updater: ((c: number) => number) | number) {
     const next = typeof updater === 'function' ? updater(visibleCount) : updater;
     setStudentsFilters({ visibleCount: next });
@@ -206,12 +212,12 @@ export function Students() {
 
   const filteredStudents = useMemo(() => {
     let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
-    if (courseFilter)    result = result.filter((s) => s.course === courseFilter);
-    if (yearFilter)      result = result.filter((s) => s.year === yearFilter);
-    if (genderFilter)    result = result.filter((s) => s.gender === genderFilter);
-    if (categoryFilter)  result = result.filter((s) => s.category === categoryFilter);
-    if (admTypeFilter)   result = result.filter((s) => s.admType === admTypeFilter);
-    if (admCatFilter)    result = result.filter((s) => s.admCat === admCatFilter);
+    if (courseFilter.length)    result = result.filter((s) => courseFilter.includes(s.course));
+    if (yearFilter.length)      result = result.filter((s) => yearFilter.includes(s.year));
+    if (genderFilter.length)    result = result.filter((s) => genderFilter.includes(s.gender));
+    if (categoryFilter.length)  result = result.filter((s) => categoryFilter.includes(s.category));
+    if (admTypeFilter.length)   result = result.filter((s) => admTypeFilter.includes(s.admType));
+    if (admCatFilter.length)    result = result.filter((s) => admCatFilter.includes(s.admCat));
     if (debouncedSearch) {
       const search = debouncedSearch.trim().toUpperCase();
       result = result.filter((s) => {
@@ -252,12 +258,12 @@ export function Students() {
   const hasMore = visibleCount < filteredStudents.length;
 
   const hasActiveFilters =
-    !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!categoryFilter || !!admTypeFilter || !!admCatFilter;
+    !!searchTerm || courseFilter.length > 0 || yearFilter.length > 0 || genderFilter.length > 0 ||
+    categoryFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0;
 
   const hasNonSearchFilters =
-    !!courseFilter || !!yearFilter || !!genderFilter ||
-    !!categoryFilter || !!admTypeFilter || !!admCatFilter;
+    courseFilter.length > 0 || yearFilter.length > 0 || genderFilter.length > 0 ||
+    categoryFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0;
 
   useEffect(() => {
     if (hasNonSearchFilters) setShowFilters(true);
@@ -303,11 +309,11 @@ export function Students() {
           filteredStudents,
           {
             academicYear,
-            courseFilter,
-            yearFilter,
-            genderFilter,
-            admTypeFilter,
-            admCatFilter,
+            courseFilter: courseFilter.join('/'),
+            yearFilter: yearFilter.join('/'),
+            genderFilter: genderFilter.join('/'),
+            admTypeFilter: admTypeFilter.join('/'),
+            admCatFilter: admCatFilter.join('/'),
             admStatusFilter: 'CONFIRMED',
             searchTerm: debouncedSearch,
           },
@@ -441,13 +447,13 @@ export function Students() {
               {/* Study-year chips */}
               {YEARS.map((yr) => {
                 const count = stats.yearCount[yr] ?? 0;
-                const isSelected = yearFilter === yr;
-                const isDimmed = (!!yearFilter && !isSelected) || count === 0;
+                const isSelected = yearFilter.includes(yr);
+                const isDimmed = (yearFilter.length > 0 && !isSelected) || count === 0;
                 const label = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
                 return (
                   <button
                     key={yr}
-                    onClick={() => setYearFilter(isSelected ? '' : yr)}
+                    onClick={() => toggleYearFilter(yr)}
                     className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-500 border-emerald-500 text-white'
@@ -471,12 +477,12 @@ export function Students() {
               {/* Course chips */}
               {COURSES.map((c) => {
                 const count = stats.courseCount[c] ?? 0;
-                const isSelected = courseFilter === c;
-                const isDimmed = (!!courseFilter && !isSelected) || count === 0;
+                const isSelected = courseFilter.includes(c);
+                const isDimmed = (courseFilter.length > 0 && !isSelected) || count === 0;
                 return (
                   <button
                     key={c}
-                    onClick={() => setCourseFilter(isSelected ? '' : c)}
+                    onClick={() => toggleCourseFilter(c)}
                     className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-500 border-emerald-500 text-white'
@@ -592,9 +598,9 @@ export function Students() {
             >
               <div className="overflow-hidden">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
-                  <FilterDropdown<Course | ''>
+                  <MultiSelectFilterDropdown<Course>
                     value={courseFilter}
-                    onChange={(v) => setCourseFilter(v as Course | '')}
+                    onChange={setCourseFilter}
                     placeholder="Course"
                     options={[
                       { value: 'CE', label: 'CE' },
@@ -604,9 +610,9 @@ export function Students() {
                       { value: 'EE', label: 'EE' },
                     ]}
                   />
-                  <FilterDropdown<Year | ''>
+                  <MultiSelectFilterDropdown<Year>
                     value={yearFilter}
-                    onChange={(v) => setYearFilter(v as Year | '')}
+                    onChange={setYearFilter}
                     placeholder="Study Yr"
                     options={[
                       { value: '1ST YEAR', label: '1ST YEAR' },
@@ -614,18 +620,18 @@ export function Students() {
                       { value: '3RD YEAR', label: '3RD YEAR' },
                     ]}
                   />
-                  <FilterDropdown<Gender | ''>
+                  <MultiSelectFilterDropdown<Gender>
                     value={genderFilter}
-                    onChange={(v) => setGenderFilter(v as Gender | '')}
+                    onChange={setGenderFilter}
                     placeholder="Gender"
                     options={[
                       { value: 'BOY', label: 'BOY' },
                       { value: 'GIRL', label: 'GIRL' },
                     ]}
                   />
-                  <FilterDropdown<Category | ''>
+                  <MultiSelectFilterDropdown<Category>
                     value={categoryFilter}
-                    onChange={(v) => setCategoryFilter(v as Category | '')}
+                    onChange={setCategoryFilter}
                     placeholder="Cat"
                     options={[
                       { value: 'GM', label: 'GM' },
@@ -638,9 +644,9 @@ export function Students() {
                       { value: '3B', label: '3B' },
                     ]}
                   />
-                  <FilterDropdown<AdmType | ''>
+                  <MultiSelectFilterDropdown<AdmType>
                     value={admTypeFilter}
-                    onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                    onChange={setAdmTypeFilter}
                     placeholder="Adm Type"
                     options={[
                       { value: 'REGULAR', label: 'REGULAR' },
@@ -649,9 +655,9 @@ export function Students() {
                       { value: 'EXTERNAL', label: 'EXTERNAL' },
                     ]}
                   />
-                  <FilterDropdown<AdmCat | ''>
+                  <MultiSelectFilterDropdown<AdmCat>
                     value={admCatFilter}
-                    onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                    onChange={setAdmCatFilter}
                     placeholder="Adm Cat"
                     options={[
                       { value: 'GM', label: 'GM' },

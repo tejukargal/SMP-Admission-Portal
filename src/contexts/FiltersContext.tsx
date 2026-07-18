@@ -20,12 +20,12 @@ interface DashboardFilters {
 
 interface StudentsFilters {
   searchTerm: string;
-  courseFilter: Course | '';
-  yearFilter: Year | '';
-  genderFilter: Gender | '';
-  categoryFilter: Category | '';
-  admTypeFilter: AdmType | '';
-  admCatFilter: AdmCat | '';
+  courseFilter: Course[];
+  yearFilter: Year[];
+  genderFilter: Gender[];
+  categoryFilter: Category[];
+  admTypeFilter: AdmType[];
+  admCatFilter: AdmCat[];
   admStatusFilter: string;
   visibleCount: number;
 }
@@ -54,12 +54,12 @@ const defaultDashboard: DashboardFilters = {
 
 const defaultStudents: StudentsFilters = {
   searchTerm: '',
-  courseFilter: '',
-  yearFilter: '',
-  genderFilter: '',
-  categoryFilter: '',
-  admTypeFilter: '',
-  admCatFilter: '',
+  courseFilter: [],
+  yearFilter: [],
+  genderFilter: [],
+  categoryFilter: [],
+  admTypeFilter: [],
+  admCatFilter: [],
   admStatusFilter: '',
   visibleCount: PAGE_SIZE,
 };

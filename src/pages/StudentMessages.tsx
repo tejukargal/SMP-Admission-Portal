@@ -18,7 +18,7 @@ import { subscribeToStudentLoginActivity } from '../services/studentLoginActivit
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
-import { FilterDropdown } from '../components/common/FilterDropdown';
+import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilterDropdown';
 import { StudentPickerTable } from '../components/messages/StudentPickerTable';
 import type { PickerRow, FeeStatusValue } from '../components/messages/StudentPickerTable';
 import { ActiveUsersModal } from '../components/messages/ActiveUsersModal';
@@ -144,25 +144,25 @@ export function StudentMessages() {
   );
 
   // ── Notices tab: filters + search + selection ───────────────────────────────
-  const [courseFilter, setCourseFilter] = useState<Course | ''>('');
-  const [yearFilter, setYearFilter] = useState<Year | ''>('');
-  const [genderFilter, setGenderFilter] = useState<Gender | ''>('');
-  const [categoryFilter, setCategoryFilter] = useState<Category | ''>('');
-  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
-  const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
-  const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatusValue | ''>('');
+  const [courseFilter, setCourseFilter] = useState<Course[]>([]);
+  const [yearFilter, setYearFilter] = useState<Year[]>([]);
+  const [genderFilter, setGenderFilter] = useState<Gender[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<Category[]>([]);
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType[]>([]);
+  const [admCatFilter, setAdmCatFilter] = useState<AdmCat[]>([]);
+  const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatusValue[]>([]);
   const [pickerSearch, setPickerSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filteredRows = useMemo(() => {
     let rows = allRows.filter((r) => r.student.admissionStatus === 'CONFIRMED');
-    if (courseFilter)     rows = rows.filter((r) => r.student.course === courseFilter);
-    if (yearFilter)       rows = rows.filter((r) => r.student.year === yearFilter);
-    if (genderFilter)     rows = rows.filter((r) => r.student.gender === genderFilter);
-    if (categoryFilter)   rows = rows.filter((r) => r.student.category === categoryFilter);
-    if (admTypeFilter)    rows = rows.filter((r) => r.student.admType === admTypeFilter);
-    if (admCatFilter)     rows = rows.filter((r) => r.student.admCat === admCatFilter);
-    if (feeStatusFilter)  rows = rows.filter((r) => matchesFeeFilter(r, feeStatusFilter));
+    if (courseFilter.length)     rows = rows.filter((r) => courseFilter.includes(r.student.course));
+    if (yearFilter.length)       rows = rows.filter((r) => yearFilter.includes(r.student.year));
+    if (genderFilter.length)     rows = rows.filter((r) => genderFilter.includes(r.student.gender));
+    if (categoryFilter.length)   rows = rows.filter((r) => categoryFilter.includes(r.student.category));
+    if (admTypeFilter.length)    rows = rows.filter((r) => admTypeFilter.includes(r.student.admType));
+    if (admCatFilter.length)     rows = rows.filter((r) => admCatFilter.includes(r.student.admCat));
+    if (feeStatusFilter.length)  rows = rows.filter((r) => feeStatusFilter.some((f) => matchesFeeFilter(r, f)));
     if (pickerSearch.trim()) {
       const q = pickerSearch.trim().toUpperCase();
       rows = rows.filter((r) =>
@@ -196,20 +196,22 @@ export function StudentMessages() {
   );
 
   function clearAudienceFilters() {
-    setCourseFilter(''); setYearFilter(''); setGenderFilter('');
-    setCategoryFilter(''); setAdmTypeFilter(''); setAdmCatFilter('');
-    setFeeStatusFilter(''); setPickerSearch(''); setSelected(new Set());
+    setCourseFilter([]); setYearFilter([]); setGenderFilter([]);
+    setCategoryFilter([]); setAdmTypeFilter([]); setAdmCatFilter([]);
+    setFeeStatusFilter([]); setPickerSearch(''); setSelected(new Set());
   }
 
   function buildAudienceLabel(count: number): string {
     const parts: string[] = [];
-    if (courseFilter) parts.push(courseFilter);
-    if (yearFilter) parts.push(yearFilter);
-    if (genderFilter) parts.push(genderFilter);
-    if (categoryFilter) parts.push(categoryFilter);
-    if (admTypeFilter) parts.push(admTypeFilter);
-    if (admCatFilter) parts.push(admCatFilter);
-    if (feeStatusFilter) parts.push(FEE_STATUS_OPTIONS.find((o) => o.value === feeStatusFilter)?.label ?? '');
+    if (courseFilter.length) parts.push(courseFilter.join('/'));
+    if (yearFilter.length) parts.push(yearFilter.join('/'));
+    if (genderFilter.length) parts.push(genderFilter.join('/'));
+    if (categoryFilter.length) parts.push(categoryFilter.join('/'));
+    if (admTypeFilter.length) parts.push(admTypeFilter.join('/'));
+    if (admCatFilter.length) parts.push(admCatFilter.join('/'));
+    if (feeStatusFilter.length) {
+      parts.push(feeStatusFilter.map((f) => FEE_STATUS_OPTIONS.find((o) => o.value === f)?.label ?? '').join('/'));
+    }
     const prefix = parts.length > 0 ? parts.join(' · ') : 'All Students';
     return `${prefix} (${count} student${count !== 1 ? 's' : ''})`;
   }
@@ -499,19 +501,19 @@ export function StudentMessages() {
                   </div>
 
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                    <FilterDropdown<Course | ''> value={courseFilter} onChange={setCourseFilter} placeholder="Course"
+                    <MultiSelectFilterDropdown<Course> value={courseFilter} onChange={setCourseFilter} placeholder="Course"
                       options={COURSES.map((c) => ({ value: c, label: c }))} />
-                    <FilterDropdown<Year | ''> value={yearFilter} onChange={setYearFilter} placeholder="Year"
+                    <MultiSelectFilterDropdown<Year> value={yearFilter} onChange={setYearFilter} placeholder="Year"
                       options={YEARS.map((y) => ({ value: y, label: y }))} />
-                    <FilterDropdown<Gender | ''> value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
+                    <MultiSelectFilterDropdown<Gender> value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
                       options={[{ value: 'BOY', label: 'BOY' }, { value: 'GIRL', label: 'GIRL' }]} />
-                    <FilterDropdown<Category | ''> value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
+                    <MultiSelectFilterDropdown<Category> value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
                       options={['GM', 'SC', 'ST', 'C1', '2A', '2B', '3A', '3B'].map((c) => ({ value: c as Category, label: c }))} />
-                    <FilterDropdown<AdmType | ''> value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
+                    <MultiSelectFilterDropdown<AdmType> value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
                       options={['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'].map((v) => ({ value: v as AdmType, label: v }))} />
-                    <FilterDropdown<AdmCat | ''> value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
+                    <MultiSelectFilterDropdown<AdmCat> value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
                       options={['GM', 'SNQ', 'OTHERS'].map((v) => ({ value: v as AdmCat, label: v }))} />
-                    <FilterDropdown<FeeStatusValue | ''> value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
+                    <MultiSelectFilterDropdown<FeeStatusValue> value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
                       options={FEE_STATUS_OPTIONS} />
                   </div>
                 </div>
