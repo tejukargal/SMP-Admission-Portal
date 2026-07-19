@@ -1525,7 +1525,7 @@ export function EnrollStudent() {
                 />
               </div>
               <Input
-                label={`Town / City${form.address.trim() ? ' *' : ''}`}
+                label="Town / City"
                 value={form.town}
                 onChange={handleTextChange('town')}
                 error={displayErrors['town']}
@@ -1534,7 +1534,7 @@ export function EnrollStudent() {
               />
               <div className="flex flex-col gap-1 relative">
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  {`Taluk${form.address.trim() ? ' *' : ''}`}
+                  Taluk
                 </label>
                 <input
                   type="text"
@@ -1564,7 +1564,7 @@ export function EnrollStudent() {
                 )}
               </div>
               <Input
-                label={`District${form.address.trim() ? ' *' : ''}`}
+                label="District"
                 value={form.district}
                 onChange={handleTextChange('district')}
                 error={displayErrors['district']}
