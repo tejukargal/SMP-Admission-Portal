@@ -784,7 +784,7 @@ export function FeeRegister() {
           }}
         >
           <div className="overflow-hidden">
-            <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2.5 pt-0.5 border-t border-[#3B5B8A]/10">
+            <div className="flex flex-wrap content-center items-center gap-1.5 px-3 py-2 border-t border-[#3B5B8A]/10">
               <select
                 className={fs}
                 value={selectedYear}

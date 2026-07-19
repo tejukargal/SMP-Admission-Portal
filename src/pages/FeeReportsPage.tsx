@@ -144,44 +144,97 @@ const TAB_ORDER_INDEX: Partial<Record<TabId, number>> = Object.fromEntries(
   TAB_META.map((t, i) => [t.id, i]),
 );
 
-interface HubCardContent { headline: string; rows: [string, string?][] }
+interface HubStat { label: string; value: string }
+// Row-header x column-header matrix with a totals row — same table idiom as Dashboard's
+// "Admission Type-wise" modal (Year rows x Regular/Lateral/SNQ/Repeater/Total columns).
+interface HubMatrix { columns: string[]; rowLabels: string[]; data: string[][]; totalRow: string[] }
+// One shared header row (stat labels) above one data row (values) — same column-headed
+// table idiom, used for cards whose stats don't decompose into a row x column matrix.
+interface HubCardContent { headline: string; rows?: HubStat[]; matrix?: HubMatrix }
 
 function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; content: Partial<Record<TabId, HubCardContent>> }) {
   return (
-    <div className="flex flex-col gap-3 h-full" style={{ animation: 'content-enter 0.22s ease-out' }}>
+    <div className="flex flex-col gap-4" style={{ animation: 'content-enter 0.22s ease-out' }}>
       {REPORT_GROUPS.map((group) => (
         <div key={group}>
-          <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#3B5B8A]/70 mb-1.5">{group}</h2>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <span className="w-1 h-4 rounded-full shrink-0 bg-[#3B5B8A]" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#3B5B8A]">{group}</h2>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {TAB_META.filter((t) => t.group === group).map((tab) => { const c = content[tab.id]; return (
               <button
                 key={tab.id}
                 onClick={() => onSelect(tab.id)}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:border-[#3B5B8A]/50 hover:shadow-sm transition-all"
+                className="group flex flex-col rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:border-[#3B5B8A]/50 hover:shadow-sm transition-all"
                 style={{ animation: `content-enter 0.25s ease-out ${Math.min((TAB_ORDER_INDEX[tab.id] ?? 0) * 0.03, 0.3)}s both` }}
               >
                 <span className="flex items-center gap-2">
                   <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-[#D0E2F2]/50 text-[#3B5B8A]">
                     {tab.icon}
                   </span>
-                  <span className="text-xs font-semibold text-gray-800 truncate">{tab.label}</span>
+                  <span className="flex-1 min-w-0 text-xs font-semibold text-gray-800 truncate">{tab.label}</span>
+                  <svg className="shrink-0 text-gray-300 group-hover:text-[#3B5B8A] transition-colors" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                 </span>
 
                 {c && (
                   <>
                     <span className="text-sm font-bold text-[#3B5B8A] mt-1.5 truncate">{c.headline}</span>
-                    <span className="mt-1 space-y-0.5">
-                      {c.rows.map((row, i) => (
-                        <span key={i} className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                          <span className="truncate">{row[0]}</span>
-                          {row[1] && <span className="truncate text-gray-600 font-medium shrink-0">{row[1]}</span>}
-                        </span>
-                      ))}
-                    </span>
-                    <span className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center gap-1 text-[10px] font-semibold text-[#3B5B8A]">
-                      View details
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                    </span>
+                    {c.matrix ? (
+                      <table className="mt-1.5 w-full border-collapse table-fixed">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            <th className="pb-1 w-[20%]" />
+                            {c.matrix.columns.map((col) => (
+                              <th key={col} className="pb-1 pl-1 w-[20%] text-[8px] font-semibold uppercase tracking-wide text-gray-400 text-right truncate">{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {c.matrix.rowLabels.map((label, r) => (
+                            <tr key={label}>
+                              <td className="py-0.5 pr-1 text-[9px] font-semibold text-gray-600 truncate">{label}</td>
+                              {c.matrix!.data[r].map((v, ci) => (
+                                <td key={ci} className="py-0.5 pl-1 text-[9px] font-bold text-gray-700 tabular-nums text-right truncate">{v}</td>
+                              ))}
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-[#3B5B8A]/30">
+                            <td className="pt-1 pr-1 text-[8px] font-bold uppercase text-[#3B5B8A] truncate">Total</td>
+                            {c.matrix.totalRow.map((v, ci) => (
+                              <td key={ci} className="pt-1 pl-1 text-[9px] font-black text-[#3B5B8A] tabular-nums text-right truncate">{v}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    ) : c.rows && (
+                      <table className="mt-1.5 w-full border-collapse table-fixed">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            {c.rows.map((stat, i) => {
+                              const isTotal = i === c.rows!.length - 1 && (stat.label === 'Total' || stat.label === 'Balance');
+                              return (
+                                <th key={i} className={`pb-1 text-[9px] font-semibold uppercase tracking-wide text-left truncate ${isTotal ? 'pl-1.5 border-l border-gray-200 text-[#3B5B8A]/70' : 'text-gray-400'}`}>
+                                  {stat.label}
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            {c.rows.map((stat, i) => {
+                              const isTotal = i === c.rows!.length - 1 && (stat.label === 'Total' || stat.label === 'Balance');
+                              return (
+                                <td key={i} className={`pt-1 text-[11px] font-bold tabular-nums truncate ${isTotal ? 'pl-1.5 border-l border-gray-200 text-[#3B5B8A]' : 'text-gray-700'}`}>
+                                  {stat.value}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
                   </>
                 )}
               </button>
@@ -195,6 +248,16 @@ function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; conte
 
 function fmt(n: number): string {
   return `\u20B9${n.toLocaleString('en-IN')}`;
+}
+
+// Lakh-shorthand currency, for narrow matrix-table cells where the full comma-grouped
+// figure (e.g. \u20B936,40,069) would overflow/truncate. Amounts under 1L are short enough
+// to show in full already.
+function fmtCompact(n: number): string {
+  if (Math.abs(n) >= 100000) {
+    return `\u20B9${(n / 100000).toFixed(1).replace(/\.0$/, '')}L`;
+  }
+  return fmt(n);
 }
 
 // Force-download a cross-origin file (Storage download URLs don't honor the `download` attribute cross-origin).
@@ -4520,70 +4583,82 @@ export function FeeReportsPage() {
 
   const hubCardContent = useMemo((): Partial<Record<TabId, HubCardContent>> => {
     const t = dashboardTotals;
-    const feeRowRows: [string, string?][] = [
-      [`Students ${stats.total}`, `Allotted ${fmt(t.totalAllotted)}`],
-      [`Paid ${fmt(t.totalPaid)}`, `Balance ${fmt(t.totalBalance)}`],
-      [`SMP ${fmt(t.smpPaid)} · SVK ${fmt(t.svkPaid)} · Addl ${fmt(t.additionalPaid)}`],
-    ];
+    const st = (label: string, value: string): HubStat => ({ label, value });
+    // Students, Allotted, Paid, Balance columns x SMP/SVK/Additional rows + Total row —
+    // same row-header x column-header + totals-row idiom as Dashboard's Admission
+    // Type-wise modal. Student count doesn't decompose by fee type, so it's shown only
+    // on the Total row and left blank on the per-type rows.
+    const feeMatrix: HubMatrix = {
+      columns: ['Students', 'Allotted', 'Paid', 'Balance'],
+      rowLabels: ['SMP', 'SVK', 'Additional'],
+      data: [
+        ['—', fmtCompact(t.smpAllotted),        fmtCompact(t.smpPaid),        fmtCompact(t.smpBalance)],
+        ['—', fmtCompact(t.svkBaseAllotted),    fmtCompact(t.svkPaid),        fmtCompact(t.svkBalance)],
+        ['—', fmtCompact(t.additionalAllotted), fmtCompact(t.additionalPaid), fmtCompact(t.additionalBalance)],
+      ],
+      totalRow: [String(stats.total), fmtCompact(t.totalAllotted), fmtCompact(t.totalPaid), fmtCompact(t.totalBalance)],
+    };
     return {
-      statistics:        { headline: `${fmt(t.totalPaid)} Collected`,     rows: feeRowRows },
-      'fee-list':        { headline: `${stats.total} Students`,           rows: feeRowRows },
-      dues:              {
-        headline: `${stats.duesCount} With Dues`,
-        rows: [
-          [`Students ${stats.total}`, `Balance ${fmt(t.totalBalance)}`],
-          [`Allotted ${fmt(t.totalAllotted)}`, `Paid ${fmt(t.totalPaid)}`],
-          [`SMP ${fmt(t.smpPaid)} · SVK ${fmt(t.svkPaid)} · Addl ${fmt(t.additionalPaid)}`],
-        ],
-      },
-      'course-year':     { headline: `${stats.total} Students`,           rows: feeRowRows },
-      consolidated:      { headline: `${feeRecords.length} Records`,      rows: feeRowRows },
+      statistics:        { headline: `${fmt(t.totalPaid)} Collected`,     matrix: feeMatrix },
+      'fee-list':        { headline: `${stats.total} Students`,           matrix: feeMatrix },
+      dues:              { headline: `${stats.duesCount} With Dues`,      matrix: feeMatrix },
+      'course-year':     { headline: `${stats.total} Students`,           matrix: feeMatrix },
+      consolidated:      { headline: `${feeRecords.length} Records`,      matrix: feeMatrix },
       'daily-collections': {
         headline: `${fmt(t.totalPaid)} Collected`,
         rows: [
-          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
-          [`Days ${uniqueCollectionDays}`, `Students ${stats.total}`],
+          st('Cash', fmt(cashUpiSplit.cash)),
+          st('UPI', fmt(cashUpiSplit.upi)),
+          st('Days', String(uniqueCollectionDays)),
+          st('Students', String(stats.total)),
         ],
       },
       'day-summary': {
         headline: `${uniqueCollectionDays} Collection Days`,
         rows: [
-          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
-          [`Total ${fmt(t.totalPaid)}`],
+          st('Cash', fmt(cashUpiSplit.cash)),
+          st('UPI', fmt(cashUpiSplit.upi)),
+          st('Total', fmt(t.totalPaid)),
         ],
       },
       'datewise-headwise': {
         headline: `${fmt(t.smpPaid)} SMP Collected`,
         rows: [
-          [`Records ${feeRecords.length}`],
-          [`Total ${fmt(t.totalPaid)}`],
+          st('Records', String(feeRecords.length)),
+          st('Total', fmt(t.totalPaid)),
         ],
       },
       'bank-remittance': {
         headline: `${fmt(t.totalPaid)} To Remit`,
         rows: [
-          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
-          [`Aided ${fmt(aidedUnaidedSplit.aided)}`, `Unaided ${fmt(aidedUnaidedSplit.unaided)}`],
+          st('Cash', fmt(cashUpiSplit.cash)),
+          st('UPI', fmt(cashUpiSplit.upi)),
+          st('Aided', fmt(aidedUnaidedSplit.aided)),
+          st('Unaided', fmt(aidedUnaidedSplit.unaided)),
         ],
       },
       'fee-distribution': {
         headline: `${fmt(t.totalPaid)} Distributed`,
         rows: [
-          [`Aided ${fmt(aidedUnaidedSplit.aided)}`, `Unaided ${fmt(aidedUnaidedSplit.unaided)}`],
-          [`SMP ${fmt(t.smpPaid)}`, `SVK ${fmt(t.svkPaid)}`],
+          st('Aided', fmt(aidedUnaidedSplit.aided)),
+          st('Unaided', fmt(aidedUnaidedSplit.unaided)),
+          st('SMP', fmt(t.smpPaid)),
+          st('SVK', fmt(t.svkPaid)),
         ],
       },
       'fee-reg-1': {
         headline: `${feeRecords.length} Records`,
         rows: [
-          [`Total ${fmt(t.totalPaid)}`],
-          [`SMP ${fmt(t.smpPaid)}`, `SVK ${fmt(t.svkPaid)}`],
+          st('SMP', fmt(t.smpPaid)),
+          st('SVK', fmt(t.svkPaid)),
+          st('Total', fmt(t.totalPaid)),
         ],
       },
       'fee-structure': {
         headline: `${feeStructureStats.count} Combinations`,
         rows: [
-          [`Courses ${feeStructureStats.courses}`, `Years ${feeStructureStats.years}`],
+          st('Courses', String(feeStructureStats.courses)),
+          st('Years', String(feeStructureStats.years)),
         ],
       },
     };
@@ -4662,12 +4737,17 @@ export function FeeReportsPage() {
   };
 
   return (
-    <div className="h-full flex flex-col" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div className={activeTab === null ? 'flex flex-col' : 'h-full flex flex-col'} style={{ animation: 'page-enter 0.22s ease-out' }}>
       {activeTab === null ? (
         /* Header — hub only, stays at top, not sticky */
-        <div className="shrink-0 px-5 pt-4 pb-2">
-          <h1 className="text-base font-bold text-gray-900">Fee Reports</h1>
-          {academicYear && <p className="text-xs text-gray-400 mt-0.5">{academicYear}</p>}
+        <div className="shrink-0 pt-4 pb-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-[3px] h-7 rounded-full bg-[#3B5B8A] shrink-0" />
+            <div>
+              {academicYear && <p className="text-[11px] font-semibold uppercase tracking-widest text-[#3B5B8A]/70 leading-none">{academicYear}</p>}
+              <h2 className="text-xl font-black text-gray-800 leading-none tracking-tight mt-px">Fee Reports</h2>
+            </div>
+          </div>
         </div>
       ) : (
         /* Back-to-hub bar — replaces the header entirely inside a report. Same technique as
@@ -4676,7 +4756,7 @@ export function FeeReportsPage() {
            range has room to work. -mt-4/-mx-4 cancel the page's p-4 padding unconditionally
            (flush with the app header at rest); -top-4 matches that offset so it locks in the
            exact same flush position once scrolled — no gap at rest or while scrolling. */
-        <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-white border-b border-gray-200 px-5 py-2 flex items-center gap-2" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <button
             onClick={() => setActiveTab(null)}
             className="flex items-center gap-1.5 rounded-full border border-[#3B5B8A]/25 bg-white px-3 py-1.5 text-xs font-semibold text-[#3B5B8A] hover:bg-[#D0E2F2]/40 hover:border-[#3B5B8A]/50 transition-colors"
@@ -4704,7 +4784,7 @@ export function FeeReportsPage() {
       )}
 
       {/* Content */}
-      <div className="flex-1 min-h-0 flex flex-col p-5 pt-3">
+      <div className={activeTab === null ? 'flex flex-col pt-3' : 'flex-1 min-h-0 flex flex-col pt-3'}>
         {loading ? (
           <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
         ) : !academicYear ? (
