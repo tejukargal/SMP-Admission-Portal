@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, Fragment, type ReactNode } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -37,8 +37,24 @@ const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD 
 const ADM_TYPES: AdmType[] = ['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'];
 const ADM_CATS:  AdmCat[]  = ['GM', 'SNQ', 'OTHERS'];
 
+// Per-course left-border accent, matching Fee Register's row styling.
+const COURSE_COLORS: Record<Course, string> = {
+  CE: 'border-l-blue-400',
+  ME: 'border-l-orange-400',
+  EC: 'border-l-green-500',
+  CS: 'border-l-purple-400',
+  EE: 'border-l-rose-400',
+};
+
+// ── Design tokens ───────────────────────────────────────────────────────────
+// Matches the Fee Register page's navy design system (see src/pages/FeeRegister.tsx):
+// #3B5B8A primary, #D0E2F2 light tint, #2e4a72 dark accent for nested/total cells.
 const fs =
-  'rounded border border-gray-300 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer';
+  'shrink-0 rounded-full border border-[#3B5B8A]/25 px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] hover:border-[#3B5B8A]/50 cursor-pointer transition-colors';
+
+const ACCENT      = 'bg-[#3B5B8A]';
+const ACCENT_DARK = 'bg-[#2e4a72]';
+const TFOOT       = 'sticky bottom-0 z-10 bg-[#D0E2F2]/50 border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]';
 
 const GOV_HEADS: { key: keyof GovHeadAmounts; label: string }[] = [
   { key: 'tuition',  label: 'Tuition'  },
@@ -58,20 +74,124 @@ function ordinal(n: number) {
   return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 }
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'statistics',         label: 'Statistics'          },
-  { id: 'fee-list',           label: 'Fee List'             },
-  { id: 'dues',               label: 'Dues Report'          },
-  { id: 'course-year',        label: 'Course & Year Wise'   },
-  { id: 'daily-collections',  label: 'Daily Collections'    },
-  { id: 'day-summary',        label: 'Day Summary'          },
-  { id: 'datewise-headwise',  label: 'Datewise Headwise'    },
-  { id: 'bank-remittance',    label: 'Bank Remittance'       },
-  { id: 'fee-distribution',   label: 'Fee Distribution'     },
-  { id: 'consolidated',       label: 'Consolidated'         },
-  { id: 'fee-reg-1',          label: 'Fee Reg_1'            },
-  { id: 'fee-structure',      label: 'Fee Structure'        },
+// ── Report hub metadata (single source of truth for the dashboard cards) ─────
+type ReportGroup = 'Overview' | 'Student Reports' | 'Collections' | 'Remittance & Structure';
+
+interface TabMeta { id: TabId; label: string; group: ReportGroup; icon: ReactNode }
+
+const ICON_PROPS = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+
+const TAB_ICONS: Record<TabId, ReactNode> = {
+  statistics: (
+    <svg {...ICON_PROPS}><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="8" width="3" height="10" /><rect x="17" y="5" width="3" height="13" /></svg>
+  ),
+  'fee-list': (
+    <svg {...ICON_PROPS}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+  ),
+  dues: (
+    <svg {...ICON_PROPS}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+  ),
+  'course-year': (
+    <svg {...ICON_PROPS}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+  ),
+  consolidated: (
+    <svg {...ICON_PROPS}><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+  ),
+  'daily-collections': (
+    <svg {...ICON_PROPS}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+  ),
+  'day-summary': (
+    <svg {...ICON_PROPS}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><path d="M9 16l2 2 4-4" /></svg>
+  ),
+  'datewise-headwise': (
+    <svg {...ICON_PROPS}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>
+  ),
+  'bank-remittance': (
+    <svg {...ICON_PROPS}><path d="M3 21h18" /><path d="M4 21V9l8-5 8 5v12" /><path d="M9 21V13h6v8" /></svg>
+  ),
+  'fee-distribution': (
+    <svg {...ICON_PROPS}><path d="M21.21 15.89A10 10 0 118 2.83" /><path d="M22 12A10 10 0 0012 2v10z" /></svg>
+  ),
+  'fee-reg-1': (
+    <svg {...ICON_PROPS}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="15" y2="17" /></svg>
+  ),
+  'fee-structure': (
+    <svg {...ICON_PROPS}><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
+  ),
+};
+
+const TAB_META: TabMeta[] = [
+  { id: 'statistics',         label: 'Statistics',          group: 'Overview',                icon: TAB_ICONS.statistics },
+  { id: 'fee-list',           label: 'Fee List',             group: 'Student Reports',         icon: TAB_ICONS['fee-list'] },
+  { id: 'dues',               label: 'Dues Report',          group: 'Student Reports',         icon: TAB_ICONS.dues },
+  { id: 'course-year',        label: 'Course & Year Wise',   group: 'Student Reports',         icon: TAB_ICONS['course-year'] },
+  { id: 'consolidated',       label: 'Consolidated',         group: 'Student Reports',         icon: TAB_ICONS.consolidated },
+  { id: 'daily-collections',  label: 'Daily Collections',    group: 'Collections',             icon: TAB_ICONS['daily-collections'] },
+  { id: 'day-summary',        label: 'Day Summary',          group: 'Collections',             icon: TAB_ICONS['day-summary'] },
+  { id: 'datewise-headwise',  label: 'Datewise Headwise',    group: 'Collections',             icon: TAB_ICONS['datewise-headwise'] },
+  { id: 'bank-remittance',    label: 'Bank Remittance',      group: 'Remittance & Structure',  icon: TAB_ICONS['bank-remittance'] },
+  { id: 'fee-distribution',   label: 'Fee Distribution',     group: 'Remittance & Structure',  icon: TAB_ICONS['fee-distribution'] },
+  { id: 'fee-reg-1',          label: 'Fee Reg_1',            group: 'Remittance & Structure',  icon: TAB_ICONS['fee-reg-1'] },
+  { id: 'fee-structure',      label: 'Fee Structure',        group: 'Remittance & Structure',  icon: TAB_ICONS['fee-structure'] },
 ];
+
+const REPORT_GROUPS: ReportGroup[] = ['Overview', 'Student Reports', 'Collections', 'Remittance & Structure'];
+
+// ── Report hub — dashboard landing screen with grouped cards ─────────────────
+// Overall display order (0..11) per tab, used to stagger each card's entrance —
+// same technique as Students.tsx's row-by-row `content-enter` delay.
+const TAB_ORDER_INDEX: Partial<Record<TabId, number>> = Object.fromEntries(
+  TAB_META.map((t, i) => [t.id, i]),
+);
+
+interface HubCardContent { headline: string; rows: [string, string?][] }
+
+function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; content: Partial<Record<TabId, HubCardContent>> }) {
+  return (
+    <div className="flex flex-col gap-3 h-full" style={{ animation: 'content-enter 0.22s ease-out' }}>
+      {REPORT_GROUPS.map((group) => (
+        <div key={group}>
+          <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#3B5B8A]/70 mb-1.5">{group}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {TAB_META.filter((t) => t.group === group).map((tab) => { const c = content[tab.id]; return (
+              <button
+                key={tab.id}
+                onClick={() => onSelect(tab.id)}
+                className="flex flex-col rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:border-[#3B5B8A]/50 hover:shadow-sm transition-all"
+                style={{ animation: `content-enter 0.25s ease-out ${Math.min((TAB_ORDER_INDEX[tab.id] ?? 0) * 0.03, 0.3)}s both` }}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-[#D0E2F2]/50 text-[#3B5B8A]">
+                    {tab.icon}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-800 truncate">{tab.label}</span>
+                </span>
+
+                {c && (
+                  <>
+                    <span className="text-sm font-bold text-[#3B5B8A] mt-1.5 truncate">{c.headline}</span>
+                    <span className="mt-1 space-y-0.5">
+                      {c.rows.map((row, i) => (
+                        <span key={i} className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                          <span className="truncate">{row[0]}</span>
+                          {row[1] && <span className="truncate text-gray-600 font-medium shrink-0">{row[1]}</span>}
+                        </span>
+                      ))}
+                    </span>
+                    <span className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center gap-1 text-[10px] font-semibold text-[#3B5B8A]">
+                      View details
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                    </span>
+                  </>
+                )}
+              </button>
+            );})}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function fmt(n: number): string {
   return `\u20B9${n.toLocaleString('en-IN')}`;
@@ -125,11 +245,165 @@ function Chip({ label, count, active, colorClass, onClick }: ChipProps) {
 }
 
 // ── Export buttons ─────────────────────────────────────────────────────────────
-function ExportBar({ onPdf, onExcel }: { onPdf: () => void; onExcel: () => void }) {
+// Pill-shaped, matching Fee Register's "Export Excel" button.
+function ExportBar({ onPdf, onExcel }: { onPdf?: () => void; onExcel?: () => void }) {
+  const cls = 'flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm';
   return (
     <div className="flex gap-2">
-      <Button variant="secondary" size="sm" onClick={onPdf}>PDF</Button>
-      <Button variant="secondary" size="sm" onClick={onExcel}>Excel</Button>
+      {onPdf   && <button onClick={onPdf} className={cls}>PDF</button>}
+      {onExcel && <button onClick={onExcel} className={cls}>Excel</button>}
+    </div>
+  );
+}
+
+// ── Clear filters button ─────────────────────────────────────────────────────
+function ClearButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+        active
+          ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400'
+          : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
+      }`}
+    >
+      Clear
+    </button>
+  );
+}
+
+// ── Stat chip strip ──────────────────────────────────────────────────────────
+// Pill-shaped stat badges, matching Fee Register's header "Records"/"Collected" pills.
+interface StatChipEntry { label: string; value: string | number; color: string; bg: string; border: string; }
+function StatChipRow({ entries }: { entries: StatChipEntry[] }) {
+  return (
+    <div className="shrink-0 flex flex-wrap gap-2">
+      {entries.map((c) => (
+        <div key={c.label} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-1 shadow-sm whitespace-nowrap`}>
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
+          <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Segmented toggle (replaces bespoke pill-toggle / underline-tab variants) ──
+interface SegmentedOption { value: string; label: string; }
+function SegmentedToggle({ options, value, onChange }: { options: SegmentedOption[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+            value === o.value ? `${ACCENT} text-white shadow-sm` : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Search box ──────────────────────────────────────────────────────────────
+// Pill search input matching Fee Register's search bar: icon + amber circular clear button.
+function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div className="relative shrink-0 w-60">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3B5B8A]/50 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+      </svg>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-full border border-[#3B5B8A]/30 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${value ? 'pr-8' : 'pr-3'}`}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+          aria-label="Clear search"
+        >
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+            <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Collapsible filter panel ──────────────────────────────────────────────────
+// Matches Fee Register's gradient toolbar: an always-visible top row (search / stat
+// pills / export / clear / toggle) with a collapsible row of filter selects below it,
+// hidden until the user expands it. `showFilters` is local — each tab only has one
+// panel mounted at a time, so per-mount state (not lifted to the parent) is correct.
+function FilterPanel({
+  search, right, hasActiveFilters, onClear, children,
+}: {
+  search?: ReactNode;
+  right?: ReactNode;
+  hasActiveFilters: boolean;
+  onClear: () => void;
+  children: ReactNode;
+}) {
+  const [showFilters, setShowFilters] = useState(false);
+  return (
+    <div
+      className="shrink-0 rounded-2xl border border-[#3B5B8A]/15 overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #eef3fa 0%, #f8fafc 45%, #eaf1fb 100%)', boxShadow: '0 1px 4px 0 rgba(59,91,138,0.08)' }}
+    >
+      {/* Top row — search / right slot / clear / toggle. Fixed in place: expanding the
+          filters below never shifts this row, matching Fee Register's filter bar. */}
+      <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+        {search}
+        <div className="flex-1" />
+        {right}
+        {hasActiveFilters && (
+          <>
+            <span className="w-px h-5 bg-[#3B5B8A]/20 shrink-0" />
+            <ClearButton active={hasActiveFilters} onClick={onClear} />
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowFilters((v) => !v)}
+          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+            showFilters
+              ? 'bg-[#D0E2F2] border-[#3B5B8A]/40 text-[#3B5B8A]'
+              : 'border-[#3B5B8A]/20 text-[#3B5B8A]/50 hover:bg-[#D0E2F2]/40 hover:text-[#3B5B8A]'
+          }`}
+          title="Toggle filters"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="11" y1="18" x2="13" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Collapsible filter row — expands below the top row, never displacing it */}
+      <div
+        className="grid"
+        style={{
+          gridTemplateRows: showFilters ? '1fr' : '0fr',
+          opacity: showFilters ? 1 : 0,
+          transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-wrap content-center items-center gap-1.5 px-3 py-2 border-t border-[#3B5B8A]/10">
+            {children}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -137,7 +411,7 @@ function ExportBar({ onPdf, onExcel }: { onPdf: () => void; onExcel: () => void 
 // ── Shared: grouped 2-row header for fee detail tables ─────────────────────────
 function FeeTableHead({ headerColor }: { headerColor: string }) {
   return (
-    <thead className={`sticky top-0 z-10 ${headerColor} text-white text-[10px]`}>
+    <thead className={`sticky top-0 z-10 ${headerColor} text-white text-[11px]`}>
       <tr>
         <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Name</th>
@@ -150,7 +424,7 @@ function FeeTableHead({ headerColor }: { headerColor: string }) {
       </tr>
       <tr>
         {(['SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total'] as const).map((h, i) => (
-          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
+          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''} ${i % 3 === 2 ? ACCENT_DARK : ''}`}>{h}</th>
         ))}
       </tr>
     </thead>
@@ -160,26 +434,36 @@ function FeeTableHead({ headerColor }: { headerColor: string }) {
 // ── Shared: fee detail row cells ───────────────────────────────────────────────
 function FeeDetailRow({ r, i, stripe }: { r: StudentFeeRow; i: number; stripe: boolean }) {
   return (
-    <tr className={stripe ? 'bg-gray-50' : 'bg-white'}>
-      <td className="px-2 py-1.5 text-center text-gray-400 text-[10px]">{i + 1}</td>
-      <td className="px-2 py-1.5 font-medium text-[10px] max-w-[140px] truncate">{r.student.studentNameSSLC}</td>
-      <td className="px-2 py-1.5 text-gray-500 text-[10px]">{r.student.regNumber || '—'}</td>
-      <td className="px-2 py-1.5 text-center font-semibold text-[10px]">{r.student.course}</td>
-      <td className="px-2 py-1.5 text-[10px]">{r.student.year}</td>
+    <tr className={`border-l-2 ${COURSE_COLORS[r.student.course]} hover:bg-[#3B5B8A]/10 transition-colors ${stripe ? 'bg-gray-50' : 'bg-white'}`}>
+      <td className="px-2 py-1.5 text-center text-gray-400 text-[11px]">{i + 1}</td>
+      <td className="px-2 py-1.5 font-medium text-[11px] max-w-[140px] truncate">{r.student.studentNameSSLC}</td>
+      <td className="px-2 py-1.5 text-gray-500 text-[11px]">{r.student.regNumber || '—'}</td>
+      <td className="px-2 py-1.5 text-center font-semibold text-[11px]">{r.student.course}</td>
+      <td className="px-2 py-1.5 text-[11px]">{r.student.year}</td>
       {/* Allotted */}
-      <td className="px-2 py-1.5 text-right text-[10px] border-l border-gray-100">{r.smpAllotted !== null ? fmt(r.smpAllotted) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[10px]">{r.svkAllotted !== null ? fmt(r.svkAllotted) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[10px] font-semibold">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] border-l border-gray-100">{r.smpAllotted !== null ? fmt(r.smpAllotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px]">{r.svkAllotted !== null ? fmt(r.svkAllotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] font-semibold">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
       {/* Paid */}
-      <td className="px-2 py-1.5 text-right text-[10px] text-green-700 border-l border-gray-100">{r.smpPaid > 0 ? fmt(r.smpPaid) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[10px] text-green-700">{r.svkPaid > 0 ? fmt(r.svkPaid) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[10px] text-green-700 font-semibold">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700 border-l border-gray-100">{r.smpPaid > 0 ? fmt(r.smpPaid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.svkPaid > 0 ? fmt(r.svkPaid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700 font-semibold">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
       {/* Balance */}
-      <td className={`px-2 py-1.5 text-right text-[10px] border-l border-gray-100 ${r.smpBalance !== null && r.smpBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.smpBalance !== null ? fmt(r.smpBalance) : '—'}</td>
-      <td className={`px-2 py-1.5 text-right text-[10px] ${r.svkBalance !== null && r.svkBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.svkBalance !== null ? fmt(r.svkBalance) : '—'}</td>
-      <td className={`px-2 py-1.5 text-right text-[10px] font-semibold ${r.balance !== null && r.balance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance !== null ? fmt(r.balance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] border-l border-gray-100 ${r.smpBalance !== null && r.smpBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.smpBalance !== null ? fmt(r.smpBalance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] ${r.svkBalance !== null && r.svkBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.svkBalance !== null ? fmt(r.svkBalance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] font-semibold ${r.balance !== null && r.balance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance !== null ? fmt(r.balance) : '—'}</td>
     </tr>
   );
+}
+
+// ── Shared: local text-search over student fee rows (name / reg no) ──────────
+function searchStudentRows(rows: StudentFeeRow[], query: string): StudentFeeRow[] {
+  if (!query) return rows;
+  const q = query.trim().toUpperCase();
+  return rows.filter((r) => {
+    const s = r.student;
+    return s.studentNameSSLC.toUpperCase().includes(q) || (s.regNumber ?? '').toUpperCase().includes(q);
+  });
 }
 
 // ── Shared: course/year breakdown data ────────────────────────────────────────
@@ -217,8 +501,8 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
 }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-      <table className="w-full text-[10px]">
-        <thead className="bg-blue-700 text-white">
+      <table className="w-full text-[11px]">
+        <thead className={`${ACCENT} text-white`}>
           <tr>
             <th className="px-2 py-1.5 text-center font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}>Course / Year</th>
             <th className="px-2 py-1.5 text-center font-semibold">Students</th>
@@ -232,7 +516,7 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             <th className="px-2 py-1 font-semibold"></th>
             <th className="px-2 py-1 font-semibold"></th>
             {(['SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total'] as const).map((h, i) => (
-              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
+              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''} ${i % 3 === 2 ? ACCENT_DARK : ''}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -259,7 +543,7 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t border-gray-300 text-[10px]">
+        <tfoot className="bg-gray-50 font-bold border-t border-gray-200 text-[11px]">
           <tr>
             <td className="px-2 py-2" colSpan={colSpanLabel === 1 ? 1 : 2}>Total</td>
             <td className="px-2 py-2 text-center">{totals.students}</td>
@@ -300,25 +584,18 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
       } />
 
       {/* Count summary strip */}
-      <div className="shrink-0 flex flex-wrap gap-2">
-        {[
-          { label: 'Total',    value: total,       color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'   },
-          { label: 'Paid',     value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
-          { label: 'Not Paid', value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
-          { label: 'Fee Dues', value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
-          { label: 'No Dues',  value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-        ].map((c) => (
-          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
-            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
-          </div>
-        ))}
-      </div>
+      <StatChipRow entries={[
+        { label: 'Total',    value: total,       color: 'text-[#3B5B8A]',    bg: 'bg-[#D0E2F2]/40',    border: 'border-[#3B5B8A]/25'   },
+        { label: 'Paid',     value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
+        { label: 'Not Paid', value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
+        { label: 'Fee Dues', value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
+        { label: 'No Dues',  value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+      ]} />
 
       {/* SMP / SVK / Total amount table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-blue-700 text-white">
+        <table className="w-full text-sm">
+          <thead className={`${ACCENT} text-white`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Metric</th>
               <th className="px-3 py-2 text-right font-semibold">SMP</th>
@@ -353,7 +630,16 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
 }
 
 // ── Tab: Fee List ─────────────────────────────────────────────────────────────
-function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
+function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const rows = useMemo(() => searchStudentRows(allRows, debouncedSearch), [allRows, debouncedSearch]);
+
   const totals = useMemo(() => ({
     smpAllt: rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
     svkAllt: rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
@@ -361,19 +647,29 @@ function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academi
     svkPaid: rows.reduce((s, r) => s + r.svkPaid, 0),
   }), [rows]);
 
+  const fpWithSearch: CommonFilterProps = {
+    ...fp,
+    hasActiveFilters: fp.hasActiveFilters || !!searchTerm,
+    clearFilters: () => { fp.clearFilters(); setSearchTerm(''); },
+  };
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="shrink-0">
-        <CommonFilters fp={fp} extra={
-          <>
-            <span className="text-xs text-gray-500">{rows.length} student{rows.length !== 1 ? 's' : ''}</span>
-            <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
-          </>
-        } />
+        <CommonFilters
+          fp={fpWithSearch}
+          search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg no…" />}
+          extra={
+            <>
+              <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} student{rows.length !== 1 ? 's' : ''}</span>
+              <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
+            </>
+          }
+        />
       </div>
       <div className="flex-1 min-h-0 rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full bg-white">
-          <FeeTableHead headerColor="bg-blue-700" />
+          <FeeTableHead headerColor={ACCENT} />
           <tbody>
             {rows.map((r, i) => <FeeDetailRow key={r.student.id} r={r} i={i} stripe={i % 2 !== 0} />)}
             {rows.length === 0 && (
@@ -381,7 +677,7 @@ function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academi
             )}
           </tbody>
           {rows.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className={TFOOT}>
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {rows.length} student{rows.length !== 1 ? 's' : ''}</td>
@@ -404,7 +700,15 @@ function FeeListTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academi
 }
 
 // ── Tab: Dues Report ──────────────────────────────────────────────────────────
-function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
+function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const rows = useMemo(() => searchStudentRows(allRows, debouncedSearch), [allRows, debouncedSearch]);
   const dueRows = useMemo(() => rows.filter((r) => r.balance !== null && r.balance > 0), [rows]);
   const totals = useMemo(() => ({
     smpAllt: dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
@@ -413,15 +717,25 @@ function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYe
     svkPaid: dueRows.reduce((s, r) => s + r.svkPaid, 0),
   }), [dueRows]);
 
+  const fpWithSearch: CommonFilterProps = {
+    ...fp,
+    hasActiveFilters: fp.hasActiveFilters || !!searchTerm,
+    clearFilters: () => { fp.clearFilters(); setSearchTerm(''); },
+  };
+
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="shrink-0">
-        <CommonFilters fp={fp} extra={
-          <>
-            <span className="text-xs text-gray-500">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with dues</span>
-            <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
-          </>
-        } />
+        <CommonFilters
+          fp={fpWithSearch}
+          search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg no…" />}
+          extra={
+            <>
+              <span className="text-xs text-gray-500 whitespace-nowrap">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with dues</span>
+              <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
+            </>
+          }
+        />
       </div>
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-red-200 overflow-auto">
         <table className="w-full">
@@ -433,7 +747,7 @@ function DuesTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYe
             )}
           </tbody>
           {dueRows.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-red-50 font-bold border-t-2 border-red-200 text-[10px]">
+            <tfoot className="sticky bottom-0 z-10 bg-red-50 font-bold border-t-2 border-red-200 text-[11px]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
@@ -497,23 +811,24 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
 
   return (
     <div className="space-y-3">
-      <CommonFilters fp={fp} />
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">{feeRecords.length} payment record{feeRecords.length !== 1 ? 's' : ''}</p>
-        <ExportBar onPdf={() => exportConsolidatedPdf(feeRecords, academicYear)} onExcel={() => exportConsolidatedExcel(feeRecords, academicYear)} />
-      </div>
+      <CommonFilters fp={fp} extra={
+        <>
+          <span className="text-xs text-gray-500">{feeRecords.length} payment record{feeRecords.length !== 1 ? 's' : ''}</span>
+          <ExportBar onPdf={() => exportConsolidatedPdf(feeRecords, academicYear)} onExcel={() => exportConsolidatedExcel(feeRecords, academicYear)} />
+        </>
+      } />
 
       {/* SMP vs SVK summary */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-auto max-w-xs">
-        <table className="w-full text-xs">
-          <thead className="bg-blue-700 text-white">
+        <table className="w-full text-sm">
+          <thead className={`${ACCENT} text-white`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Category</th>
               <th className="px-3 py-2 text-right font-semibold">Amount</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="bg-blue-50">
+            <tr className="bg-[#D0E2F2]/40">
               <td className="px-3 py-1.5 font-semibold">SMP Total</td>
               <td className="px-3 py-1.5 text-right font-semibold">{fmt(smpGrandTotal)}</td>
             </tr>
@@ -525,13 +840,13 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
               <td className="px-3 py-1.5 pl-5 text-gray-500">SVK (Add-ons)</td>
               <td className="px-3 py-1.5 text-right">{fmt(additionalTotal)}</td>
             </tr>
-            <tr className="bg-blue-50">
+            <tr className="bg-[#D0E2F2]/40">
               <td className="px-3 py-1.5 font-semibold">SVK Total</td>
               <td className="px-3 py-1.5 text-right font-semibold">{fmt(svkFullTotal)}</td>
             </tr>
           </tbody>
-          <tfoot className="border-t border-gray-300">
-            <tr className="bg-blue-700 text-white font-bold">
+          <tfoot className="border-t border-gray-200">
+            <tr className={`${ACCENT} text-white font-bold`}>
               <td className="px-3 py-2">Grand Total</td>
               <td className="px-3 py-2 text-right">{fmt(grandTotal)}</td>
             </tr>
@@ -541,8 +856,8 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
 
       {/* SMP head-wise breakdown */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-auto max-w-xs">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-600 text-white">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-500 text-white">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">SMP Fee Head</th>
               <th className="px-3 py-2 text-right font-semibold">Amount</th>
@@ -556,8 +871,8 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t border-gray-300">
-            <tr className="bg-blue-50 font-bold">
+          <tfoot className="border-t border-gray-200">
+            <tr className="bg-[#D0E2F2]/40 font-bold">
               <td className="px-3 py-2">SMP Total</td>
               <td className="px-3 py-2 text-right">{fmt(smpGrandTotal)}</td>
             </tr>
@@ -767,7 +1082,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
     const totBg   = isCash ? 'bg-emerald-50'  : 'bg-blue-50';
     const totClr  = isCash ? 'text-green-700' : 'text-blue-700';
     const grand   = totals.smp + totals.svk + totals.add;
-    const cell    = 'px-2 py-1.5 text-right text-[10px]';
+    const cell    = 'px-2 py-1.5 text-right text-[11px]';
     const hCell   = 'px-2 py-1.5 text-right font-semibold';
 
     if (sectionRecords.length === 0) {
@@ -780,7 +1095,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
 
     return (
       <div className="overflow-auto max-h-[186px] rounded-lg border border-gray-200">
-        <table className="w-full text-[10px]">
+        <table className="w-full text-[11px]">
           <thead className={`sticky top-0 z-10 ${hdrCls} text-white`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
@@ -821,7 +1136,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
               );
             })}
           </tbody>
-          <tfoot className={`sticky bottom-0 z-10 ${totBg} font-bold border-t-2 border-gray-300 text-[10px]`}>
+          <tfoot className={`sticky bottom-0 z-10 ${totBg} font-bold border-t-2 border-gray-300 text-[11px]`}>
             <tr>
               <td className="px-2 py-2 text-center text-gray-400">—</td>
               <td className="px-2 py-2" colSpan={6}>
@@ -960,20 +1275,26 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         />
       )}
 
-      {/* Summary strip + filters on one row */}
-      <div className="shrink-0 flex flex-wrap gap-2 items-center">
-        {[
+      {/* Summary strip + export */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
+        <StatChipRow entries={[
           { label: 'Cash',     value: fmt(totals.cashTotal), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
           { label: 'UPI',      value: fmt(totals.upiTotal),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
           { label: 'Total',    value: fmt(totals.dayTotal),  color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
           { label: 'Receipts', value: totals.receiptCount,   color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
-        ].map((c) => (
-          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
-            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
-          </div>
-        ))}
-        <span className="w-px h-5 bg-gray-200 mx-1" />
+        ]} />
+        {showAllYears && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+            Incl. Prior Year Dues
+          </span>
+        )}
+        <div className="ml-auto">
+          <ExportBar onExcel={() => exportDailyCollectionsExcel(filteredDays, academicYear)} />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <FilterPanel hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); setModeFilter('ALL'); }}>
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -983,30 +1304,12 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
           <option value="CASH">Cash Only</option>
           <option value="UPI">UPI Only</option>
         </select>
-        {hasFilter && (
-          <button
-            onClick={() => { setDateFrom(''); setDateTo(''); setModeFilter('ALL'); }}
-            className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
-          >
-            Clear
-          </button>
-        )}
-        {showAllYears && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
-            Incl. Prior Year Dues
-          </span>
-        )}
-        <div className="ml-auto">
-          <Button variant="secondary" size="sm" onClick={() => exportDailyCollectionsExcel(filteredDays, academicYear)}>
-            Excel
-          </Button>
-        </div>
-      </div>
+      </FilterPanel>
 
       {/* Day-wise summary table — 13 columns */}
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-[10px]">
-          <thead className="sticky top-0 z-10 bg-emerald-700 text-white">
+        <table className="w-full text-[11px]">
+          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Date</th>
@@ -1058,7 +1361,7 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
             )}
           </tbody>
           {filteredDays.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className={TFOOT}>
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
@@ -1155,51 +1458,36 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
-      {/* Filters + export */}
-      <div className="shrink-0 flex flex-wrap gap-2 items-center">
-        <span className="text-xs text-gray-500 font-medium">From</span>
-        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
-        <span className="text-xs text-gray-500 font-medium">To</span>
-        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} />
-        {hasFilter && (
-          <button
-            onClick={() => { setDateFrom(''); setDateTo(''); }}
-            className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
-          >
-            Clear
-          </button>
-        )}
+      {/* Summary strip + export */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
+        <StatChipRow entries={[
+          { label: 'Cash',      value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+          { label: 'UPI',       value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+          { label: 'Total',     value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Days',      value: `${filteredDays.length} / ${allDays.length}`,            color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
+        ]} />
         {showAllYears && (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
             Incl. Prior Year Dues
           </span>
         )}
         <div className="ml-auto">
-          <Button variant="secondary" size="sm" onClick={() => exportDaySummaryExcel(filteredDays, academicYear)}>
-            Excel
-          </Button>
+          <ExportBar onExcel={() => exportDaySummaryExcel(filteredDays, academicYear)} />
         </div>
       </div>
 
-      {/* Summary strip */}
-      <div className="shrink-0 flex flex-wrap gap-2">
-        {[
-          { label: 'Cash',      value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-          { label: 'UPI',       value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
-          { label: 'Total',     value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
-          { label: 'Days',      value: `${filteredDays.length} / ${allDays.length}`,           color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
-        ].map((c) => (
-          <div key={c.label} className={`flex items-center gap-2 rounded-lg border ${c.border} ${c.bg} px-3 py-1.5`}>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
-            <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
-          </div>
-        ))}
-      </div>
+      {/* Filters */}
+      <FilterPanel hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); }}>
+        <span className="text-xs text-gray-500 font-medium">From</span>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
+        <span className="text-xs text-gray-500 font-medium">To</span>
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} />
+      </FilterPanel>
 
       {/* Table */}
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-[10px] whitespace-nowrap">
-          <thead className="sticky top-0 z-10 bg-slate-700 text-white">
+        <table className="w-full text-[11px] whitespace-nowrap">
+          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold" rowSpan={2}>Date</th>
               <th className="px-2 py-2 text-center font-semibold" rowSpan={2}>Students</th>
@@ -1220,7 +1508,7 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
           <tbody>
             {filteredDays.map((e, i) => (
               <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-3 py-1.5 font-medium text-slate-700">{e.dateLabel}</td>
+                <td className="px-3 py-1.5 font-medium text-[#3B5B8A]">{e.dateLabel}</td>
                 <td className="px-2 py-1.5 text-center text-gray-600">{e.studentCount}</td>
                 <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.smpCash)}</td>
                 <td className="px-2 py-1.5 text-right text-blue-700">{n(e.smpUpi)}</td>
@@ -1240,17 +1528,17 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
             )}
           </tbody>
           {filteredDays.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-slate-100 font-bold border-t-2 border-slate-300 text-[10px]">
+            <tfoot className={TFOOT}>
               <tr>
-                <td className="px-3 py-2 text-slate-700">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
-                <td className="px-2 py-2 text-center text-slate-700">{totals.studentCount}</td>
-                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.smpCash)}</td>
+                <td className="px-3 py-2 text-gray-700">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
+                <td className="px-2 py-2 text-center text-gray-700">{totals.studentCount}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.smpCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.smpUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.svkCash)}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.svkCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.svkUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-slate-200 text-emerald-700">{n(totals.addCash)}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.addCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.addUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-slate-200 text-slate-900">{fmt(totals.dayTotal)}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(totals.dayTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -1285,7 +1573,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
           <>
             <span className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</span>
             {grandTotal > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-teal-300 bg-teal-50 text-xs font-semibold text-teal-700">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#3B5B8A]/30 bg-[#D0E2F2]/50 text-xs font-semibold text-[#3B5B8A]">
                 {fmt(grandTotal)}
               </span>
             )}
@@ -1302,8 +1590,8 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
         } />
       </div>
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-[10px] whitespace-nowrap">
-          <thead className="sticky top-0 z-10 bg-teal-700 text-white">
+        <table className="w-full text-[11px] whitespace-nowrap">
+          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
             <tr>
               <th className="px-2 py-1.5 text-left font-semibold">Date</th>
               {SMP_FEE_HEADS.map(({ key, label }) => (
@@ -1315,7 +1603,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
           <tbody>
             {entries.map((e, i) => (
               <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-2 py-1.5 font-medium text-teal-700">{e.dateLabel}</td>
+                <td className="px-2 py-1.5 font-medium text-[#3B5B8A]">{e.dateLabel}</td>
                 {SMP_FEE_HEADS.map(({ key }) => (
                   <td key={key} className="px-2 py-1.5 text-right">
                     {e.heads[key] > 0 ? fmt(e.heads[key]) : '—'}
@@ -1333,7 +1621,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
             )}
           </tbody>
           {entries.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+            <tfoot className={TFOOT}>
               <tr>
                 <td className="px-2 py-2">Total</td>
                 {SMP_FEE_HEADS.map(({ key }) => (
@@ -1436,18 +1724,18 @@ function BankRemittanceTable({
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className="bg-gray-700 text-white">
+        <thead className={`${ACCENT} text-white`}>
           <tr>
             <th className="px-4 py-2 text-left font-semibold" rowSpan={2}>Fee Head</th>
-            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-blue-800/60" colSpan={2}>Aided</th>
-            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-indigo-800/60" colSpan={2}>Unaided</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-[#2e4a72]/70" colSpan={2}>Aided</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-slate-600/60" colSpan={2}>Unaided</th>
             <th className="px-4 py-2 text-right font-semibold border-l border-white/20" rowSpan={2}>Total</th>
           </tr>
           <tr>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-blue-900/40">Cash</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-blue-900/40">Pay</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-indigo-900/40">Cash</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-indigo-900/40">Pay</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-[#2e4a72]/50">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-[#2e4a72]/50">Pay</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-slate-700/40">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-slate-700/40">Pay</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -1465,14 +1753,14 @@ function BankRemittanceTable({
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
           <tr>
             <td className="px-4 py-2.5 font-bold">Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totAidedCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
-            <td className={`px-4 py-2.5 text-right ${totAidedPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{totAidedPay > 0 ? fmt(totAidedPay) : '—'}</td>
-            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totUnaidedCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{totUnaidedCash > 0 ? fmt(totUnaidedCash) : '—'}</td>
-            <td className={`px-4 py-2.5 text-right ${totUnaidedPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{totUnaidedPay > 0 ? fmt(totUnaidedPay) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandTotal)}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${totAidedPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{totAidedPay > 0 ? fmt(totAidedPay) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totUnaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totUnaidedCash > 0 ? fmt(totUnaidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${totUnaidedPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{totUnaidedPay > 0 ? fmt(totUnaidedPay) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
           </tr>
         </tfoot>
       </table>
@@ -1522,11 +1810,11 @@ function RemittanceAbstractTable({
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className="bg-gray-700 text-white">
+        <thead className={`${ACCENT} text-white`}>
           <tr>
             <th className="px-4 py-2 text-left font-semibold"></th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-blue-800/60">Aided</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-indigo-800/60">Unaided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-[#2e4a72]/70">Aided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-slate-600/60">Unaided</th>
             <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Total</th>
           </tr>
         </thead>
@@ -1552,12 +1840,12 @@ function RemittanceAbstractTable({
             </Fragment>
           ))}
         </tbody>
-        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
           <tr>
             <td className="px-4 py-2.5">Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totAided   > 0 ? 'text-white' : 'text-white/30'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
-            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${totUnaided > 0 ? 'text-white' : 'text-white/30'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandTotal)}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totUnaided > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
           </tr>
         </tfoot>
       </table>
@@ -1601,7 +1889,7 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
   const grandCash = sbiCash + svkCash;
   const grandPay  = sbiPay  + svkPay;
 
-  const detailCell = 'px-3 py-2 text-xs';
+  const detailCell = 'px-3 py-2 text-sm';
   const subCell    = 'px-4 py-2 text-sm font-bold';
 
   const moneyCls = (v: number, pos: string) => v > 0 ? pos : 'text-gray-300';
@@ -1612,7 +1900,7 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bank Account Summary</span>
       </div>
       <table className="w-full text-sm">
-        <thead className="bg-gray-700 text-white">
+        <thead className={`${ACCENT} text-white`}>
           <tr>
             <th className="px-4 py-2 text-left font-semibold">Bank</th>
             <th className="px-4 py-2 text-left font-semibold">Account No.</th>
@@ -1693,11 +1981,11 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
           <tr className="bg-emerald-50/60 border-b border-emerald-100">
             <td className={`${subCell} text-emerald-300`}></td>
             <td className={`${detailCell} font-mono text-gray-400`}>{CANARA_ACCOUNT}</td>
-            <td className={`${detailCell} font-semibold text-teal-500`}>Unaided</td>
+            <td className={`${detailCell} font-semibold text-slate-500`}>Unaided</td>
             <td className={`${detailCell} pl-5 text-gray-600`}>SVK</td>
             <td className={`${detailCell} text-right border-l border-emerald-100 font-medium ${moneyCls(svkUnaidedCash, 'text-emerald-700')}`}>{svkUnaidedCash > 0 ? fmt(svkUnaidedCash) : '—'}</td>
             <td className={`${detailCell} text-right font-medium ${moneyCls(svkUnaidedPay, 'text-blue-700')}`}>{svkUnaidedPay > 0 ? fmt(svkUnaidedPay) : '—'}</td>
-            <td className={`${detailCell} text-right font-semibold border-l border-emerald-100 text-teal-600`}>{(svkUnaidedCash + svkUnaidedPay) > 0 ? fmt(svkUnaidedCash + svkUnaidedPay) : '—'}</td>
+            <td className={`${detailCell} text-right font-semibold border-l border-emerald-100 text-slate-600`}>{(svkUnaidedCash + svkUnaidedPay) > 0 ? fmt(svkUnaidedCash + svkUnaidedPay) : '—'}</td>
           </tr>
           {/* SVK sub-total */}
           <tr className="bg-emerald-200 border-b-2 border-emerald-400">
@@ -1707,12 +1995,12 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
             <td className="px-4 py-2 text-right font-bold border-l border-emerald-300 text-emerald-900">{(svkCash + svkPay) > 0 ? fmt(svkCash + svkPay) : '—'}</td>
           </tr>
         </tbody>
-        <tfoot className="bg-gray-800 text-white font-bold border-t-2 border-gray-600">
+        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
           <tr>
             <td className="px-4 py-2.5" colSpan={4}>Grand Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-white/10 ${grandCash > 0 ? 'text-emerald-300' : 'text-white/30'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
-            <td className={`px-4 py-2.5 text-right ${grandPay > 0 ? 'text-blue-300' : 'text-white/30'}`}>{grandPay > 0 ? fmt(grandPay) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-white/10 text-white">{fmt(grandCash + grandPay)}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${grandCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right ${grandPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{grandPay > 0 ? fmt(grandPay) : '—'}</td>
+            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandCash + grandPay)}</td>
           </tr>
         </tfoot>
       </table>
@@ -2064,19 +2352,15 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
 
   const activeSummary = viewMode === 'daily' ? dailySummary : periodSummary;
 
-  const tabCls = (active: boolean) =>
-    `px-4 py-1.5 rounded-md text-xs font-semibold border transition-colors cursor-pointer ${
-      active ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-    }`;
-
   return (
     <div className="space-y-4">
       {/* View toggle + date navigation + export buttons */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1.5">
-          <button className={tabCls(viewMode === 'daily')}  onClick={() => setViewMode('daily')}>Daily</button>
-          <button className={tabCls(viewMode === 'period')} onClick={() => setViewMode('period')}>Period</button>
-        </div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <SegmentedToggle
+          options={[{ value: 'daily', label: 'Daily' }, { value: 'period', label: 'Period' }]}
+          value={viewMode}
+          onChange={(v) => setViewMode(v as 'daily' | 'period')}
+        />
 
         {viewMode === 'daily' && (
           <div className="flex items-center gap-2">
@@ -2100,23 +2384,17 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
             <span className="text-xs text-gray-500 font-medium">To</span>
             <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="px-3 py-1.5 rounded border text-xs font-medium border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors">Clear</button>
-            )}
+            <ClearButton active={!!(dateFrom || dateTo)} onClick={() => { setDateFrom(''); setDateTo(''); }} />
           </div>
         )}
 
         {/* Export buttons */}
         {activeSummary && (
-          <div className="flex items-center gap-2 ml-auto">
-            <Button
-              variant="secondary" size="sm"
-              onClick={() => exportRemittanceExcel(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
-            >Excel</Button>
-            <Button
-              variant="secondary" size="sm"
-              onClick={() => exportRemittancePdf(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
-            >PDF</Button>
+          <div className="ml-auto">
+            <ExportBar
+              onExcel={() => exportRemittanceExcel(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
+              onPdf={() => exportRemittancePdf(activeSummary.aided, activeSummary.unaided, exportLabel, academicYear)}
+            />
           </div>
         )}
       </div>
@@ -2322,7 +2600,7 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
   );
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-      <table className="w-full text-[10px]">
+      <table className="w-full text-[11px]">
         <thead className={`${headerColor} text-white`}>
           <tr>
             <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
@@ -2356,7 +2634,7 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
           )}
         </tbody>
         {dist.length > 0 && (
-          <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+          <tfoot className={TFOOT}>
             <tr>
               <td className="px-2 py-2" colSpan={4}>GRAND TOTAL</td>
               <td className="px-2 py-2 text-right">{fmt(totals.tot)}</td>
@@ -2489,13 +2767,14 @@ function RemittanceModal({
   const payeeLabel   = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
   const refLabel     = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
   const challanLabel = payee === 'GOV' ? 'K2 Challan Copy' : 'Payment Proof Copy';
-  const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400';
+  const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]/50 focus:border-[#3B5B8A]';
   const amtInp  = inp + ' text-right tabular-nums [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+  const fileInp = 'w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-xs file:font-semibold file:text-gray-700 hover:file:bg-gray-200';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${payee === 'GOV' ? 'max-w-md' : 'max-w-sm'} flex flex-col overflow-hidden`}>
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50">
           <div>
@@ -2573,7 +2852,7 @@ function RemittanceModal({
                             <input
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png"
-                              className="w-full text-[11px] text-gray-500 file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:bg-gray-100 file:text-[11px] file:font-semibold file:text-gray-700 hover:file:bg-gray-200"
+                              className={`${fileInp} text-[11px] file:text-[11px]`}
                               onChange={(e) => handleHeadFileChange(key, e.target.files?.[0] ?? null)}
                             />
                             {headChallanRemoved[key] && <p className="text-[10px] text-amber-600 mt-0.5">Current file will be removed on save.</p>}
@@ -2584,9 +2863,9 @@ function RemittanceModal({
                   );
                 })}
               </div>
-              <div className="flex justify-between items-center bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                <span className="text-sm font-bold text-blue-700">Total</span>
-                <span className="text-base font-bold text-blue-700 tabular-nums">{fmt(govTotal)}</span>
+              <div className="flex justify-between items-center bg-[#D0E2F2]/40 border border-[#3B5B8A]/25 rounded-lg px-3 py-2">
+                <span className="text-sm font-bold text-[#3B5B8A]">Total</span>
+                <span className="text-base font-bold text-[#3B5B8A] tabular-nums">{fmt(govTotal)}</span>
               </div>
             </>
           ) : (
@@ -2616,7 +2895,7 @@ function RemittanceModal({
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
-                  className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-xs file:font-semibold file:text-gray-700 hover:file:bg-gray-200"
+                  className={fileInp}
                   onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
                 />
                 {removeChallan && <p className="text-[10px] text-amber-600 mt-1">Current file will be removed on save.</p>}
@@ -2635,14 +2914,14 @@ function RemittanceModal({
 
         {/* Footer */}
         <div className="flex gap-2 justify-end px-5 py-3 border-t border-gray-100">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg">Cancel</button>
-          <button
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary" size="sm"
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors"
           >
             {saving ? (challanFile ? 'Uploading…' : 'Saving…') : 'Save'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -2912,26 +3191,23 @@ function FeeDistributionTab({
 
   return (
     <div className="space-y-5">
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-7 gap-2">
-        {[
-          { label: 'Total Students',    value: filteredStudents.length.toString(),    color: 'text-blue-700',   bg: 'bg-blue-50',    border: 'border-blue-200'   },
-          { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),                 color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200'   },
-          { label: 'To Government',     value: fmt(grandTotals.gov),                  color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
-          { label: 'To SVK Management', value: fmt(grandTotals.svk),                  color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
-          { label: 'To SMP',            value: fmt(grandTotals.smp),                  color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
-          { label: 'Aided Students',    value: aidedFiltered.length.toString(),        color: 'text-indigo-700', bg: 'bg-indigo-50',  border: 'border-indigo-200' },
-          { label: 'Unaided Students',  value: unaidedFiltered.length.toString(),      color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200'  },
-        ].map(c => (
-          <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-2.5 py-2`}>
-            <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5 leading-tight">{c.label}</p>
-            <p className={`text-sm font-bold ${c.color} leading-tight`}>{c.value}</p>
-          </div>
-        ))}
-      </div>
+      {/* Metrics strip */}
+      <StatChipRow entries={[
+        { label: 'Total Students',    value: filteredStudents.length,   color: 'text-[#3B5B8A]',   bg: 'bg-[#D0E2F2]/40',    border: 'border-[#3B5B8A]/25'   },
+        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),     color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200'   },
+        { label: 'To Government',     value: fmt(grandTotals.gov),      color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
+        { label: 'To SVK Management', value: fmt(grandTotals.svk),      color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
+        { label: 'To SMP',            value: fmt(grandTotals.smp),      color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
+        { label: 'Aided Students',    value: aidedFiltered.length,      color: 'text-indigo-700', bg: 'bg-indigo-50',  border: 'border-indigo-200' },
+        { label: 'Unaided Students',  value: unaidedFiltered.length,    color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200'  },
+      ]} />
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <FilterPanel
+        right={<ExportBar onExcel={exportDistExcel} />}
+        hasActiveFilters={!!(courseTypeFilter || yearFilter2 || courseFilter2 || admTypeFilter2 || tableView !== 'all')}
+        onClear={clearFilters}
+      >
         <select value={courseTypeFilter} onChange={e => setCourseTypeFilter(e.target.value as DistCourseType)} className={fs}>
           <option value="">All Courses</option>
           <option value="Aided">Aided (CE, ME, EC, CS)</option>
@@ -2960,24 +3236,15 @@ function FeeDistributionTab({
           <option value="unaided">Unaided Distribution Only</option>
           <option value="combined">Combined Distribution Only</option>
         </select>
-        <button
-          onClick={clearFilters}
-          className="px-3 py-1.5 rounded border text-xs font-medium transition-colors border-gray-200 bg-white text-gray-400 hover:border-gray-300"
-        >
-          Clear Filters
-        </button>
-        <div className="flex gap-2 ml-auto">
-          <Button variant="secondary" size="sm" onClick={exportDistExcel}>Excel</Button>
-        </div>
-      </div>
+      </FilterPanel>
 
       {/* ── Student Statistics Summary ── */}
       {show('studentstats') && (
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">SMP Students Statistics Summary</h2>
           <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-            <table className="w-full text-[10px]">
-              <thead className="bg-blue-700 text-white">
+            <table className="w-full text-[11px]">
+              <thead className={`${ACCENT} text-white`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
@@ -3022,7 +3289,7 @@ function FeeDistributionTab({
                   );
                 })}
               </tbody>
-              <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+              <tfoot className={TFOOT}>
                 <tr>
                   <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
                   <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr1.reg}</td>
@@ -3048,8 +3315,8 @@ function FeeDistributionTab({
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
           <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-            <table className="w-full text-[10px]">
-              <thead className="bg-blue-700 text-white">
+            <table className="w-full text-[11px]">
+              <thead className={`${ACCENT} text-white`}>
                 <tr>
                   <th className="px-2 py-1.5 font-semibold">Course Type</th>
                   <th className="px-2 py-1.5 text-center font-semibold">Students</th>
@@ -3077,7 +3344,7 @@ function FeeDistributionTab({
                   <td className="px-2 py-1.5 text-right text-green-700">{fmt(unaidedTotals.smp)}</td>
                 </tr>
               </tbody>
-              <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+              <tfoot className={TFOOT}>
                 <tr>
                   <td className="px-2 py-2">GRAND TOTAL</td>
                   <td className="px-2 py-2 text-center">{filteredStudents.length}</td>
@@ -3113,8 +3380,8 @@ function FeeDistributionTab({
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">Combined Fee Remittance Abstract (Aided &amp; Unaided)</h2>
           <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-            <table className="w-full text-[10px]">
-              <thead className="bg-gray-700 text-white">
+            <table className="w-full text-[11px]">
+              <thead className={`${ACCENT} text-white`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
@@ -3162,7 +3429,7 @@ function FeeDistributionTab({
                 )}
               </tbody>
               {(aidedDist.length > 0 || unaidedDist.length > 0) && (
-                <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300 text-[10px]">
+                <tfoot className={TFOOT}>
                   <tr>
                     <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
                     <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
@@ -3196,24 +3463,17 @@ function FeeDistributionTab({
         </div>
 
         {/* Payee tabs */}
-        <div className="flex border-b border-gray-100">
-          {(['GOV', 'SVK', 'SMP', 'CONSOLIDATED'] as const).map((tab) => {
-            const label = tab === 'GOV' ? 'Government (K2)' : tab === 'SVK' ? 'SVK Management' : tab === 'SMP' ? 'SMP' : 'Consolidated';
-            const active = trackerTab === tab;
-            return (
-              <button
-                key={tab}
-                onClick={() => { setTrackerTab(tab); setDeleteConfirming(null); setEditingRemittance(null); }}
-                className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-                  active
-                    ? 'border-blue-500 text-blue-700 bg-blue-50/30'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        <div className="px-4 py-2.5 border-b border-gray-100">
+          <SegmentedToggle
+            options={[
+              { value: 'GOV',  label: 'Government (K2)' },
+              { value: 'SVK',  label: 'SVK Management'   },
+              { value: 'SMP',  label: 'SMP'              },
+              { value: 'CONSOLIDATED', label: 'Consolidated' },
+            ]}
+            value={trackerTab}
+            onChange={(v) => { setTrackerTab(v as RemittancePayee | 'CONSOLIDATED'); setDeleteConfirming(null); setEditingRemittance(null); }}
+          />
         </div>
 
         <div className="p-4 space-y-4">
@@ -3243,8 +3503,8 @@ function FeeDistributionTab({
 
                 {/* Headwise phase table */}
                 <div className="overflow-auto rounded-lg border border-gray-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-yellow-50 border-b border-yellow-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#D0E2F2]/40 border-b border-[#3B5B8A]/20">
                       <tr>
                         <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
                         <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
@@ -3278,7 +3538,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
                       <tr>
                         <td className="px-3 py-1.5 text-gray-800">Total</td>
                         <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
@@ -3346,7 +3606,7 @@ function FeeDistributionTab({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-[#3B5B8A] hover:text-[#2e4a72] border border-[#3B5B8A]/25 hover:border-[#3B5B8A]/50 bg-[#D0E2F2]/40 hover:bg-[#D0E2F2]/70 rounded-full px-3 py-1.5 transition-colors"
                   >
                     <span className="text-sm leading-none">+</span> Record Govt Payment
                   </button>
@@ -3411,8 +3671,8 @@ function FeeDistributionTab({
 
                 {/* Head / Total Payable / Phase / Balance table */}
                 <div className="overflow-auto rounded-lg border border-gray-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-yellow-50 border-b border-yellow-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-[#D0E2F2]/40 border-b border-[#3B5B8A]/20">
                       <tr>
                         <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
                         <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
@@ -3489,7 +3749,7 @@ function FeeDistributionTab({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-[#3B5B8A] hover:text-[#2e4a72] border border-[#3B5B8A]/25 hover:border-[#3B5B8A]/50 bg-[#D0E2F2]/40 hover:bg-[#D0E2F2]/70 rounded-full px-3 py-1.5 transition-colors"
                   >
                     <span className="text-sm leading-none">+</span> Record {label} Payment
                   </button>
@@ -3587,8 +3847,8 @@ function FeeDistributionTab({
 
                 {/* Payee summary table */}
                 <div className="overflow-auto rounded-lg border border-gray-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-700 text-white">
+                  <table className="w-full text-sm">
+                    <thead className={`${ACCENT} text-white`}>
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Payee</th>
                         <th className="px-3 py-2 text-right font-semibold">Payable</th>
@@ -3611,7 +3871,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
                       <tr>
                         <td className="px-3 py-2 text-gray-800">Grand Total</td>
                         <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
@@ -3749,13 +4009,19 @@ function FeeReg1Tab({
   const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
   const [dateFrom,      setDateFrom]      = useState('');
   const [dateTo,        setDateTo]        = useState('');
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   const studentMap = useMemo(
     () => new Map(allStudents.map((s) => [s.id, s])),
     [allStudents],
   );
 
-  const rows = useMemo((): Reg1Row[] => {
+  const baseRows = useMemo((): Reg1Row[] => {
     let list = feeRecords;
     if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
     if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
@@ -3802,6 +4068,20 @@ function FeeReg1Tab({
     });
   }, [feeRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
 
+  const rows = useMemo(() => {
+    if (!debouncedSearch) return baseRows;
+    const q = debouncedSearch.trim().toUpperCase();
+    return baseRows.filter((r) => {
+      const rec = r.record;
+      const name = (studentMap.get(rec.studentId)?.studentNameSSLC ?? rec.studentName).toUpperCase();
+      return (
+        name.includes(q) ||
+        (rec.regNumber ?? '').toUpperCase().includes(q) ||
+        (rec.receiptNumber ?? '').includes(q)
+      );
+    });
+  }, [baseRows, debouncedSearch, studentMap]);
+
   const totals = useMemo(() => rows.reduce(
     (acc, r) => ({
       smpCash: acc.smpCash + r.smpCash,
@@ -3817,20 +4097,34 @@ function FeeReg1Tab({
     { smpCash: 0, smpPay: 0, svkCash: 0, svkPay: 0, rcCash: 0, rcPay: 0, insCash: 0, insPay: 0, total: 0 },
   ), [rows]);
 
-  const hasActiveFilters = !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
   function clearFilters() {
+    setSearchTerm('');
     setAidedFilter(''); setCourseFilter(''); setYearFilter('');
     setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
   }
 
-  const td  = 'px-2 py-1.5 text-right text-[10px] tabular-nums';
-  const tdL = 'px-2 py-1.5 text-left  text-[10px]';
-  const tdC = 'px-2 py-1.5 text-center text-[10px]';
+  const td  = 'px-2 py-1.5 text-right text-[11px] tabular-nums';
+  const tdL = 'px-2 py-1.5 text-left  text-[11px]';
+  const tdC = 'px-2 py-1.5 text-center text-[11px]';
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* Filters */}
-      <div className="shrink-0 flex flex-wrap gap-2 items-center">
+      <FilterPanel
+        search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />}
+        right={<>
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
+            </span>
+          )}
+          <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
+          <ExportBar onExcel={() => exportFeeReg1Excel(rows, academicYear)} />
+        </>}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      >
         <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
           <option value="">Aided &amp; Unaided</option>
           <option value="AIDED">Aided (CE, ME, EC, CS)</option>
@@ -3856,31 +4150,12 @@ function FeeReg1Tab({
           className={fs} title="From date" />
         <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
           className={fs} title="To date" />
-        <button
-          onClick={clearFilters}
-          className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
-            hasActiveFilters
-              ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
-              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
-          }`}
-        >Clear</button>
-        {showAllYears && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
-            Incl. Prior Year Dues
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-gray-500">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
-          <Button variant="secondary" size="sm" onClick={() => exportFeeReg1Excel(rows, academicYear)}>
-            Excel
-          </Button>
-        </div>
-      </div>
+      </FilterPanel>
 
       {/* Table */}
       <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-[10px] border-collapse">
-          <thead className="sticky top-0 z-10 bg-indigo-700 text-white">
+        <table className="w-full text-[11px] border-collapse">
+          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Date</th>
@@ -3897,7 +4172,7 @@ function FeeReg1Tab({
             </tr>
             <tr>
               {(['Cash','Pay','Cash','Pay','Cash','Pay','Cash','Pay'] as const).map((h, i) => (
-                <th key={i} className={`px-2 py-1 text-right text-[9px] font-semibold ${i % 2 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
+                <th key={i} className={`px-2 py-1 text-right text-[10px] font-semibold ${i % 2 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -3934,20 +4209,20 @@ function FeeReg1Tab({
             })}
           </tbody>
           {rows.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-indigo-800 text-white font-bold text-[10px]">
+            <tfoot className={TFOOT}>
               <tr>
-                <td className="px-2 py-2 text-center text-indigo-400">—</td>
+                <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
-                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.smpCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
-                <td className={`px-2 py-2 text-right ${totals.smpPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.smpPay  > 0 ? fmt(totals.smpPay)  : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.svkCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
-                <td className={`px-2 py-2 text-right ${totals.svkPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.svkPay  > 0 ? fmt(totals.svkPay)  : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.rcCash  > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.rcCash  > 0 ? fmt(totals.rcCash)  : '—'}</td>
-                <td className={`px-2 py-2 text-right ${totals.rcPay   > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.rcPay   > 0 ? fmt(totals.rcPay)   : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-indigo-700 ${totals.insCash > 0 ? 'text-emerald-300' : 'text-indigo-500'}`}>{totals.insCash > 0 ? fmt(totals.insCash) : '—'}</td>
-                <td className={`px-2 py-2 text-right ${totals.insPay  > 0 ? 'text-blue-300'    : 'text-indigo-500'}`}>{totals.insPay  > 0 ? fmt(totals.insPay)  : '—'}</td>
-                <td className="px-2 py-2 text-right border-l border-indigo-700">{fmt(totals.total)}</td>
-                <td className="px-2 py-2 border-l border-indigo-700"></td>
+                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.smpPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.smpPay  > 0 ? fmt(totals.smpPay)  : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.svkPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.svkPay  > 0 ? fmt(totals.svkPay)  : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.rcCash  > 0 ? fmt(totals.rcCash)  : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.rcPay   > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.rcPay   > 0 ? fmt(totals.rcPay)   : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.insCash > 0 ? fmt(totals.insCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right ${totals.insPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.insPay  > 0 ? fmt(totals.insPay)  : '—'}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.total)}</td>
+                <td className="px-2 py-2 border-l border-gray-200"></td>
               </tr>
             </tfoot>
           )}
@@ -3976,19 +4251,19 @@ interface CommonFilterProps {
   clearFilters: () => void;
 }
 
-function CommonFilters({ fp, extra }: { fp: CommonFilterProps; extra?: ReactNode }) {
+function CommonFilters({ fp, extra, search }: { fp: CommonFilterProps; extra?: ReactNode; search?: ReactNode }) {
   return (
-    <div className="space-y-1.5 pb-2 border-b border-gray-100">
+    <div className="space-y-1.5">
       {fp.stats.total > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-gray-400 bg-gray-100 text-gray-700"         onClick={() => fp.setFeeStatusFilter('ALL')} />
+          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-[#3B5B8A]/50 bg-[#D0E2F2] text-[#3B5B8A]"          onClick={() => fp.setFeeStatusFilter('ALL')} />
           <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter === 'PAID'}         colorClass="border-green-400 bg-green-100 text-green-700"       onClick={() => fp.setFeeStatusFilter('PAID')} />
           <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter === 'NOT_PAID'}     colorClass="border-red-400 bg-red-100 text-red-700"             onClick={() => fp.setFeeStatusFilter('NOT_PAID')} />
           <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter === 'FEE_DUES'}     colorClass="border-amber-400 bg-amber-100 text-amber-700"       onClick={() => fp.setFeeStatusFilter('FEE_DUES')} />
           <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-emerald-400 bg-emerald-100 text-emerald-700" onClick={() => fp.setFeeStatusFilter('NO_FEE_DUES')} />
         </div>
       )}
-      <div className="flex flex-wrap gap-2 items-center">
+      <FilterPanel search={search} right={extra} hasActiveFilters={fp.hasActiveFilters} onClear={fp.clearFilters}>
         <select value={fp.aidedFilter} onChange={(e) => fp.setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
           <option value="">Aided &amp; Unaided</option>
           <option value="AIDED">Aided (CE, ME, EC, CS)</option>
@@ -4017,18 +4292,7 @@ function CommonFilters({ fp, extra }: { fp: CommonFilterProps; extra?: ReactNode
           <option value="FEE_DUES">Fee Dues</option>
           <option value="NO_FEE_DUES">No Fee Dues</option>
         </select>
-        <button
-          onClick={fp.clearFilters}
-          className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors ${
-            fp.hasActiveFilters
-              ? 'border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100'
-              : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
-          }`}
-        >
-          Clear
-        </button>
-        {extra && <div className="ml-auto flex items-center gap-3">{extra}</div>}
-      </div>
+      </FilterPanel>
     </div>
   );
 }
@@ -4044,7 +4308,7 @@ export function FeeReportsPage() {
   const [admTypeFilter,   setAdmTypeFilter]   = useState<AdmType | ''>('');
   const [admCatFilter,    setAdmCatFilter]    = useState<AdmCat | ''>('');
   const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatus>('ALL');
-  const [activeTab,       setActiveTab]       = useState<TabId>('statistics');
+  const [activeTab,       setActiveTab]       = useState<TabId | null>(null);
   const [showAllYears,    setShowAllYears]    = useState(false);
 
   const DATE_TAB_IDS = new Set<TabId>(['daily-collections', 'day-summary', 'datewise-headwise', 'bank-remittance', 'fee-reg-1']);
@@ -4088,17 +4352,25 @@ export function FeeReportsPage() {
   // ── Allotted maps (split SMP / SVK) ──────────────────────────────────────
   // smpAllottedNoFineByKey: SMP total excluding fine (fine is dynamic per student)
   // structureFineByKey: the static fine from the fee structure
-  const { smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey } = useMemo(() => {
+  const { smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, svkBaseAllottedByKey, additionalAllottedByKey } = useMemo(() => {
     const smpNoFineMap = new Map<string, number>();
     const fineMap      = new Map<string, number>();
     const svkMap       = new Map<string, number>();
+    const svkBaseMap   = new Map<string, number>();
+    const additionalMap = new Map<string, number>();
     for (const s of feeStructures) {
       const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+      const additionalSum = s.additionalHeads.reduce((t, h) => t + h.amount, 0);
       smpNoFineMap.set(key, SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : s.smp[k]), 0));
       fineMap.set(key, s.smp.fine);
-      svkMap.set(key, s.svk + s.additionalHeads.reduce((t, h) => t + h.amount, 0));
+      svkMap.set(key, s.svk + additionalSum);
+      svkBaseMap.set(key, s.svk);
+      additionalMap.set(key, additionalSum);
     }
-    return { smpAllottedNoFineByKey: smpNoFineMap, structureFineByKey: fineMap, svkAllottedByKey: svkMap };
+    return {
+      smpAllottedNoFineByKey: smpNoFineMap, structureFineByKey: fineMap, svkAllottedByKey: svkMap,
+      svkBaseAllottedByKey: svkBaseMap, additionalAllottedByKey: additionalMap,
+    };
   }, [feeStructures]);
 
   // ── Paid maps (split SMP / SVK) + fine paid per student ──────────────────
@@ -4130,6 +4402,8 @@ export function FeeReportsPage() {
 
       let smpAllotted: number | null;
       let svkAllotted: number | null;
+      let svkBaseAllotted: number | null;
+      let additionalAllotted: number | null;
 
       if (override) {
         // Per-student override: sum all SMP heads (fine uses effective logic)
@@ -4137,13 +4411,17 @@ export function FeeReportsPage() {
         const effFine   = Math.max(baseFine, finePaid);
         const smpNoFine = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : override.smp[k]), 0);
         smpAllotted = smpNoFine + effFine;
-        svkAllotted = override.svk + override.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        additionalAllotted = override.additionalHeads.reduce((t, h) => t + h.amount, 0);
+        svkBaseAllotted = override.svk;
+        svkAllotted = svkBaseAllotted + additionalAllotted;
       } else {
         const smpNoFine  = smpAllottedNoFineByKey.has(key) ? smpAllottedNoFineByKey.get(key)! : null;
         const structFine = structureFineByKey.get(key) ?? 0;
         const effFine    = Math.max(structFine, finePaid);
         smpAllotted = smpNoFine !== null ? smpNoFine + effFine : null;
         svkAllotted = svkAllottedByKey.has(key) ? svkAllottedByKey.get(key)! : null;
+        svkBaseAllotted = svkBaseAllottedByKey.has(key) ? svkBaseAllottedByKey.get(key)! : null;
+        additionalAllotted = additionalAllottedByKey.has(key) ? additionalAllottedByKey.get(key)! : null;
       }
 
       const allotted   = smpAllotted !== null ? (smpAllotted + (svkAllotted ?? 0)) : null;
@@ -4160,9 +4438,15 @@ export function FeeReportsPage() {
       const smpBalance = smpAllotted !== null ? Math.max(0, smpAllotted - smpPaid) : null;
       const svkBalance = svkAllotted !== null ? Math.max(0, svkAllotted - svkPaid) : null;
       const balance    = allotted    !== null ? Math.max(0, allotted    - paid)    : null;
-      return { student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance };
+      return {
+        student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance,
+        svkBaseAllotted, additionalAllotted,
+      };
     }),
-  [allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent, refundedByStudent]);
+  [
+    allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey,
+    svkBaseAllottedByKey, additionalAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent, refundedByStudent,
+  ]);
 
   // ── Stats for chips ───────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -4172,6 +4456,138 @@ export function FeeReportsPage() {
     const noDuesCount = allStudentRows.filter((r) => r.balance !== null && r.balance <= 0).length;
     return { total, paidCount, notPaid: total - paidCount, duesCount, noDuesCount };
   }, [allStudentRows]);
+
+  // ── Report hub card content (cheap, derived from data already loaded — no new
+  //    Firestore reads: everything below comes from allStudentRows/feeRecords/
+  //    feeStructures, all already subscribed to above) ───────────────────────
+  const uniqueCollectionDays = useMemo(() => new Set(feeRecords.map((r) => r.date.slice(0, 10))).size, [feeRecords]);
+
+  // True SMP / SVK / Additional split for both allotted and paid, plus per-bucket
+  // balances (clamped at 0, matching the existing per-student balance convention).
+  const dashboardTotals = useMemo(() => {
+    const smpAllotted        = allStudentRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
+    const svkBaseAllotted    = allStudentRows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+    const additionalAllotted = allStudentRows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+    const totalAllotted      = smpAllotted + svkBaseAllotted + additionalAllotted;
+
+    // Paid is decomposed straight from feeRecords (not the combined svkPaidByStudent
+    // map above) so SVK and Additional come out as genuinely separate figures.
+    let smpPaid = 0, svkPaid = 0, additionalPaid = 0;
+    for (const r of feeRecords) {
+      smpPaid        += SMP_FEE_HEADS.reduce((t, { key }) => t + r.smp[key], 0);
+      svkPaid        += r.svk;
+      additionalPaid += r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+    }
+    const totalPaid = smpPaid + svkPaid + additionalPaid;
+
+    return {
+      smpAllotted, svkBaseAllotted, additionalAllotted, totalAllotted,
+      smpPaid, svkPaid, additionalPaid, totalPaid,
+      smpBalance:        Math.max(0, smpAllotted - smpPaid),
+      svkBalance:        Math.max(0, svkBaseAllotted - svkPaid),
+      additionalBalance: Math.max(0, additionalAllotted - additionalPaid),
+      totalBalance:      Math.max(0, totalAllotted - totalPaid),
+    };
+  }, [allStudentRows, feeRecords]);
+
+  // Cash vs UPI, reusing the existing getRecordSplit() helper (already used by
+  // Bank Remittance / Fee Reg_1) instead of reimplementing mode detection.
+  const cashUpiSplit = useMemo(() => {
+    let cash = 0, upi = 0;
+    for (const r of feeRecords) {
+      const s = getRecordSplit(r);
+      cash += s.smpCash + s.svkCash + s.addCash;
+      upi  += s.smpUpi  + s.svkUpi  + s.addUpi;
+    }
+    return { cash, upi };
+  }, [feeRecords]);
+
+  // Aided vs Unaided collected, filtering the same allStudentRows other tabs use.
+  const aidedUnaidedSplit = useMemo(() => {
+    let aided = 0, unaided = 0;
+    for (const r of allStudentRows) {
+      if ((AIDED_COURSES as Course[]).includes(r.student.course))        aided   += r.paid;
+      else if ((UNAIDED_COURSES as Course[]).includes(r.student.course)) unaided += r.paid;
+    }
+    return { aided, unaided };
+  }, [allStudentRows]);
+
+  const feeStructureStats = useMemo(() => ({
+    count:   feeStructures.length,
+    courses: new Set(feeStructures.map((s) => s.course)).size,
+    years:   new Set(feeStructures.map((s) => s.year)).size,
+  }), [feeStructures]);
+
+  const hubCardContent = useMemo((): Partial<Record<TabId, HubCardContent>> => {
+    const t = dashboardTotals;
+    const feeRowRows: [string, string?][] = [
+      [`Students ${stats.total}`, `Allotted ${fmt(t.totalAllotted)}`],
+      [`Paid ${fmt(t.totalPaid)}`, `Balance ${fmt(t.totalBalance)}`],
+      [`SMP ${fmt(t.smpPaid)} · SVK ${fmt(t.svkPaid)} · Addl ${fmt(t.additionalPaid)}`],
+    ];
+    return {
+      statistics:        { headline: `${fmt(t.totalPaid)} Collected`,     rows: feeRowRows },
+      'fee-list':        { headline: `${stats.total} Students`,           rows: feeRowRows },
+      dues:              {
+        headline: `${stats.duesCount} With Dues`,
+        rows: [
+          [`Students ${stats.total}`, `Balance ${fmt(t.totalBalance)}`],
+          [`Allotted ${fmt(t.totalAllotted)}`, `Paid ${fmt(t.totalPaid)}`],
+          [`SMP ${fmt(t.smpPaid)} · SVK ${fmt(t.svkPaid)} · Addl ${fmt(t.additionalPaid)}`],
+        ],
+      },
+      'course-year':     { headline: `${stats.total} Students`,           rows: feeRowRows },
+      consolidated:      { headline: `${feeRecords.length} Records`,      rows: feeRowRows },
+      'daily-collections': {
+        headline: `${fmt(t.totalPaid)} Collected`,
+        rows: [
+          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
+          [`Days ${uniqueCollectionDays}`, `Students ${stats.total}`],
+        ],
+      },
+      'day-summary': {
+        headline: `${uniqueCollectionDays} Collection Days`,
+        rows: [
+          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
+          [`Total ${fmt(t.totalPaid)}`],
+        ],
+      },
+      'datewise-headwise': {
+        headline: `${fmt(t.smpPaid)} SMP Collected`,
+        rows: [
+          [`Records ${feeRecords.length}`],
+          [`Total ${fmt(t.totalPaid)}`],
+        ],
+      },
+      'bank-remittance': {
+        headline: `${fmt(t.totalPaid)} To Remit`,
+        rows: [
+          [`Cash ${fmt(cashUpiSplit.cash)}`, `UPI ${fmt(cashUpiSplit.upi)}`],
+          [`Aided ${fmt(aidedUnaidedSplit.aided)}`, `Unaided ${fmt(aidedUnaidedSplit.unaided)}`],
+        ],
+      },
+      'fee-distribution': {
+        headline: `${fmt(t.totalPaid)} Distributed`,
+        rows: [
+          [`Aided ${fmt(aidedUnaidedSplit.aided)}`, `Unaided ${fmt(aidedUnaidedSplit.unaided)}`],
+          [`SMP ${fmt(t.smpPaid)}`, `SVK ${fmt(t.svkPaid)}`],
+        ],
+      },
+      'fee-reg-1': {
+        headline: `${feeRecords.length} Records`,
+        rows: [
+          [`Total ${fmt(t.totalPaid)}`],
+          [`SMP ${fmt(t.smpPaid)}`, `SVK ${fmt(t.svkPaid)}`],
+        ],
+      },
+      'fee-structure': {
+        headline: `${feeStructureStats.count} Combinations`,
+        rows: [
+          [`Courses ${feeStructureStats.courses}`, `Years ${feeStructureStats.years}`],
+        ],
+      },
+    };
+  }, [dashboardTotals, stats, feeRecords.length, uniqueCollectionDays, cashUpiSplit, aidedUnaidedSplit, feeStructureStats]);
 
   // ── Filtered rows ─────────────────────────────────────────────────────────
   const filteredRows = useMemo((): StudentFeeRow[] => {
@@ -4231,10 +4647,7 @@ export function FeeReportsPage() {
 
   const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading || (showAllYears && allYearsLoading);
 
-  const tabsScrollRef = useRef<HTMLDivElement>(null);
-  function scrollTabs(dir: 'left' | 'right') {
-    tabsScrollRef.current?.scrollBy({ left: dir === 'left' ? -160 : 160, behavior: 'smooth' });
-  }
+  const activeMeta = activeTab ? TAB_META.find((t) => t.id === activeTab) : undefined;
 
   const fp: CommonFilterProps = {
     aidedFilter, setAidedFilter,
@@ -4250,73 +4663,56 @@ export function FeeReportsPage() {
 
   return (
     <div className="h-full flex flex-col" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      {/* Header — stays at top, not sticky */}
-      <div className="shrink-0 px-5 pt-4 pb-2 flex items-center justify-between">
-        <div>
+      {activeTab === null ? (
+        /* Header — hub only, stays at top, not sticky */
+        <div className="shrink-0 px-5 pt-4 pb-2">
           <h1 className="text-base font-bold text-gray-900">Fee Reports</h1>
           {academicYear && <p className="text-xs text-gray-400 mt-0.5">{academicYear}</p>}
         </div>
-        {DATE_TAB_IDS.has(activeTab) && (
+      ) : (
+        /* Back-to-hub bar — replaces the header entirely inside a report. Same technique as
+           Dashboard's own sticky toolbar (Dashboard.tsx): negative margin + sticky top offset
+           on the SAME element, with a tall flex-column parent (this whole page) so the sticky
+           range has room to work. -mt-4/-mx-4 cancel the page's p-4 padding unconditionally
+           (flush with the app header at rest); -top-4 matches that offset so it locks in the
+           exact same flush position once scrolled — no gap at rest or while scrolling. */
+        <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-white border-b border-gray-200 px-5 py-2 flex items-center gap-2" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <button
-            onClick={() => setShowAllYears((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-              showAllYears
-                ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
-            }`}
-            title={showAllYears ? 'Showing all payments collected in this financial year (incl. prior-year dues) — click to show current year only' : 'Click to also show prior-year dues collected in this financial year'}
+            onClick={() => setActiveTab(null)}
+            className="flex items-center gap-1.5 rounded-full border border-[#3B5B8A]/25 bg-white px-3 py-1.5 text-xs font-semibold text-[#3B5B8A] hover:bg-[#D0E2F2]/40 hover:border-[#3B5B8A]/50 transition-colors"
           >
-            {showAllYears ? 'Incl. Prior Dues' : 'Current Year Only'}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            Back to Reports
           </button>
-        )}
-      </div>
-
-      {/* Sticky tab bar */}
-      <div className="sticky -top-4 -mx-4 z-20 bg-white border-b border-gray-200" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-        <div className="flex items-center gap-1 px-2 py-2">
-          {/* Left arrow */}
-          <button
-            type="button"
-            onClick={() => scrollTabs('left')}
-            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer text-base leading-none select-none"
-            aria-label="Scroll left"
-          >‹</button>
-
-          {/* Tabs — scrollable, no scrollbar */}
-          <div ref={tabsScrollRef} className="chips-scroll flex items-center gap-1 flex-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Right arrow */}
-          <button
-            type="button"
-            onClick={() => scrollTabs('right')}
-            className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer text-base leading-none select-none"
-            aria-label="Scroll right"
-          >›</button>
+          <span className="text-gray-300">/</span>
+          <span className="text-sm font-semibold text-gray-700">{activeMeta?.label}</span>
+          <div className="flex-1" />
+          {DATE_TAB_IDS.has(activeTab) && (
+            <button
+              onClick={() => setShowAllYears((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                showAllYears
+                  ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
+                  : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+              title={showAllYears ? 'Showing all payments collected in this financial year (incl. prior-year dues) — click to show current year only' : 'Click to also show prior-year dues collected in this financial year'}
+            >
+              {showAllYears ? 'Incl. Prior Dues' : 'Current Year Only'}
+            </button>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Tab content */}
+      {/* Content */}
       <div className="flex-1 min-h-0 flex flex-col p-5 pt-3">
         {loading ? (
           <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
         ) : !academicYear ? (
           <p className="text-sm text-gray-400 py-8 text-center">No academic year configured.</p>
+        ) : activeTab === null ? (
+          <ReportHub onSelect={setActiveTab} content={hubCardContent} />
         ) : (
-          <>
+          <div key={activeTab} className="flex-1 min-h-0 flex flex-col" style={{ animation: 'content-enter 0.22s ease-out' }}>
             {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'fee-list'          && <FeeListTab          rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'dues'              && <DuesTab             rows={filteredRows}             academicYear={academicYear} fp={fp} />}
@@ -4329,7 +4725,7 @@ export function FeeReportsPage() {
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
             {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'fee-structure'     && <FeeStructureView />}
-          </>
+          </div>
         )}
       </div>
     </div>

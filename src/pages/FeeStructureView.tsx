@@ -196,7 +196,7 @@ export function FeeStructureView() {
               setCourseFilter(''); setYearFilter('');
               setAdmTypeFilter(''); setAdmCatFilter('');
             }}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
           >
             {ACADEMIC_YEARS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -213,7 +213,7 @@ export function FeeStructureView() {
           <select
             value={courseFilter}
             onChange={(e) => setCourseFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
           >
             <option value="">All Courses</option>
             {COURSES.filter((c) => availableCourses.includes(c)).map((c) => (
@@ -225,7 +225,7 @@ export function FeeStructureView() {
           <select
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
           >
             <option value="">All Years</option>
             {YEARS.map((y) => (
@@ -237,7 +237,7 @@ export function FeeStructureView() {
           <select
             value={admTypeFilter}
             onChange={(e) => setAdmTypeFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
           >
             <option value="">All Adm Types</option>
             {ADM_TYPES.map((t) => (
@@ -249,7 +249,7 @@ export function FeeStructureView() {
           <select
             value={admCatFilter}
             onChange={(e) => setAdmCatFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
           >
             <option value="">All Adm Cats</option>
             {ADM_CATS.map((c) => (
@@ -276,7 +276,7 @@ export function FeeStructureView() {
             title={showSmpBreakup ? 'Hide Govt Fee Breakup' : 'Show Govt Fee Breakup'}
             className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
               showSmpBreakup
-                ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                ? 'bg-[#D0E2F2]/40 border-[#3B5B8A]/25 text-[#3B5B8A] hover:bg-[#D0E2F2]/70'
                 : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
             }`}
           >
@@ -301,7 +301,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportExcel(filteredStructures, additionalLabels, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
@@ -314,7 +314,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportFeeStructureFormattedPDF(structures, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
@@ -327,7 +327,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportFeeStructureFormatted(structures, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-[#3B5B8A]/25 bg-[#D0E2F2]/40 text-[#3B5B8A] hover:bg-[#D0E2F2]/70 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
@@ -341,7 +341,7 @@ export function FeeStructureView() {
       {/* ── Loading / error / empty ───────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <div className="w-7 h-7 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-7 h-7 border-2 border-[#3B5B8A] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>
@@ -358,7 +358,7 @@ export function FeeStructureView() {
           <span>No combinations match the selected filters.</span>
           <button
             onClick={() => { setCourseFilter(''); setYearFilter(''); setAdmTypeFilter(''); setAdmCatFilter(''); }}
-            className="text-xs text-emerald-600 underline"
+            className="text-xs text-[#3B5B8A] underline"
           >
             Clear filters
           </button>
@@ -500,7 +500,7 @@ export function FeeStructureView() {
                     const rowBg  = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
 
                     return (
-                      <tr key={s.id} className={`${rowBg} hover:bg-emerald-50/40 transition-colors`}>
+                      <tr key={s.id} className={`${rowBg} hover:bg-[#D0E2F2]/40 transition-colors`}>
                         <td className={`${stickyBase} ${rowBg} px-3 py-2.5 font-semibold text-gray-900 border-r border-gray-100 whitespace-nowrap`}>{s.course}</td>
                         <td className={`${stickySecond} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-gray-100 whitespace-nowrap`}>{s.year}</td>
                         <td className={`${stickyThird} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-gray-100 whitespace-nowrap`}>{s.admType}</td>

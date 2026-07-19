@@ -15,6 +15,11 @@ export interface StudentFeeRow {
   smpBalance: number | null;
   svkBalance: number | null;
   balance: number | null;
+  // SVK management fee and Additional heads (Red Cross, Insurance, etc.), tracked
+  // separately from the combined `svkAllotted` above — used by the Fee Reports
+  // dashboard cards for a true 3-way SMP/SVK/Additional allotment breakdown.
+  svkBaseAllotted: number | null;
+  additionalAllotted: number | null;
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
