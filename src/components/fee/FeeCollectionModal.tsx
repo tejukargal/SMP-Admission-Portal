@@ -139,7 +139,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
       ),
       getFeeRecordsByStudent(student.id, academicYear),
       peekNextReceiptNumbers(counterYear, student.course),
-      getFineSchedule(academicYear),
+      getFineSchedule(academicYear, student.year),
       getFeeOverride(student.id, academicYear),
     ])
       .then(([struct, prior, receipts, schedule, override]) => {

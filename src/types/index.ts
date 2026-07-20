@@ -214,9 +214,10 @@ export const ACADEMIC_YEARS: AcademicYear[] = [
   '2024-25', '2025-26', '2026-27', '2027-28', '2028-29', '2029-30',
 ];
 
-/** Academic-year-level fine schedule — one document per year in `fineSchedules` collection. */
+/** Academic-year-level fine schedule — one document per year (or per year+study-year) in `fineSchedules` collection. */
 export interface AcademicFineSchedule {
   academicYear: AcademicYear;
+  year?: Year;       // present on per-study-year docs; absent on legacy academic-year-only docs
   periods: FinePeriod[];
   updatedAt: string;
 }

@@ -98,15 +98,15 @@ export function FeeStructurePage() {
     }
   }, [settings, selectedYear]);
 
-  // Load fine schedule whenever the academic year changes
+  // Load fine schedule whenever the academic year or study year changes
   useEffect(() => {
-    if (!selectedYear) { setFineSchedule([]); return; }
-    getFineSchedule(selectedYear as AcademicYear)
+    if (!selectedYear || !selectedStudyYear) { setFineSchedule([]); return; }
+    getFineSchedule(selectedYear as AcademicYear, selectedStudyYear as Year)
       .then(setFineSchedule)
       .catch(() => setFineSchedule([]));
     setFineSuccess(false);
     setFineError(null);
-  }, [selectedYear]);
+  }, [selectedYear, selectedStudyYear]);
 
   const allSelected =
     !!selectedYear && !!selectedCourse &&
@@ -239,13 +239,14 @@ export function FeeStructurePage() {
   }
 
   async function handleSaveFineSchedule() {
-    if (!selectedYear) return;
+    if (!selectedYear || !selectedStudyYear) return;
     setFineSaving(true);
     setFineSuccess(false);
     setFineError(null);
     try {
       await saveFineSchedule(
         selectedYear as AcademicYear,
+        selectedStudyYear as Year,
         fineSchedule.filter((p) => p.from && p.to)
       );
       setFineSuccess(true);
@@ -519,17 +520,17 @@ export function FeeStructurePage() {
         {/* Left: form / loading / empty state */}
         <div className="flex-1 min-h-0 overflow-auto">
 
-      {/* Year-level Fine Schedule — visible as soon as a year is selected */}
-      {selectedYear && (
+      {/* Per-study-year Fine Schedule — visible once academic year + study year are selected */}
+      {selectedYear && selectedStudyYear && (
         <div className="bg-white rounded-lg border border-amber-200 shadow-sm px-5 py-4 mb-1">
           <div className="flex items-start justify-between mb-3">
             <div>
               <h3 className="text-sm font-semibold text-gray-800">
                 Late Fee Schedule
-                <span className="ml-2 text-xs font-normal text-amber-600">{selectedYear}</span>
+                <span className="ml-2 text-xs font-normal text-amber-600">{selectedStudyYear} · {selectedYear}</span>
               </h3>
               <p className="text-[10px] text-gray-400 mt-0.5">
-                Applies to all combinations for this academic year. Fine auto-fills based on payment date when collecting fee.
+                Applies to {selectedStudyYear} students for this academic year (falls back to the shared schedule if none is set here). Fine auto-fills based on payment date when collecting fee.
               </p>
             </div>
             {fineSchedule.length > 0 && (
