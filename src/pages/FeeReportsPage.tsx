@@ -54,7 +54,7 @@ const fs =
 
 const ACCENT      = 'bg-[#3B5B8A]';
 const ACCENT_DARK = 'bg-[#2e4a72]';
-const TFOOT       = 'sticky bottom-0 z-10 bg-[#D0E2F2]/50 border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]';
+const TFOOT       = 'sticky bottom-0 z-10 bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]';
 
 const GOV_HEADS: { key: keyof GovHeadAmounts; label: string }[] = [
   { key: 'tuition',  label: 'Tuition'  },
@@ -606,7 +606,7 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-50 font-bold border-t border-gray-200 text-[11px]">
+        <tfoot className="bg-gray-100 font-bold border-t border-gray-300 text-[11px]">
           <tr>
             <td className="px-2 py-2" colSpan={colSpanLabel === 1 ? 1 : 2}>Total</td>
             <td className="px-2 py-2 text-center">{totals.students}</td>
@@ -800,9 +800,9 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
           }
         />
       </div>
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-red-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full">
-          <FeeTableHead headerColor="bg-red-600" />
+          <FeeTableHead headerColor={ACCENT} />
           <tbody>
             {dueRows.map((r, i) => <FeeDetailRow key={r.student.id} r={r} i={i} stripe={i % 2 !== 0} />)}
             {dueRows.length === 0 && (
@@ -810,17 +810,17 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
             )}
           </tbody>
           {dueRows.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-red-50 font-bold border-t-2 border-red-200 text-[11px]">
+            <tfoot className="sticky bottom-0 z-10 bg-[#B9D4EC] font-bold border-t-2 border-[#3B5B8A]/40 text-[11px] text-[#3B5B8A]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
-                <td className="px-2 py-2 text-right border-l border-red-200">{fmt(totals.smpAllt)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
-                <td className="px-2 py-2 text-right text-green-700 border-l border-red-200">{fmt(totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700 border-l border-[#3B5B8A]/20">{fmt(totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
-                <td className="px-2 py-2 text-right text-red-600 border-l border-red-200">{fmt(totals.smpAllt - totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600 border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt - totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
               </tr>
@@ -1142,7 +1142,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
   }) {
     const isCash  = mode === 'CASH';
     const hdrCls  = isCash ? 'bg-emerald-700' : 'bg-blue-700';
-    const totBg   = isCash ? 'bg-emerald-50'  : 'bg-blue-50';
+    const totBg   = isCash ? 'bg-emerald-100' : 'bg-blue-100';
     const totClr  = isCash ? 'text-green-700' : 'text-blue-700';
     const grand   = totals.smp + totals.svk + totals.add;
     const cell    = 'px-2 py-1.5 text-right text-[11px]';
@@ -1816,7 +1816,7 @@ function BankRemittanceTable({
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
           <tr>
             <td className="px-4 py-2.5 font-bold">Total</td>
             <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
@@ -1903,7 +1903,7 @@ function RemittanceAbstractTable({
             </Fragment>
           ))}
         </tbody>
-        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
           <tr>
             <td className="px-4 py-2.5">Total</td>
             <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
@@ -2058,7 +2058,7 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
             <td className="px-4 py-2 text-right font-bold border-l border-emerald-300 text-emerald-900">{(svkCash + svkPay) > 0 ? fmt(svkCash + svkPay) : '—'}</td>
           </tr>
         </tbody>
-        <tfoot className="bg-gray-50 font-bold border-t-2 border-gray-200">
+        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
           <tr>
             <td className="px-4 py-2.5" colSpan={4}>Grand Total</td>
             <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${grandCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
@@ -3601,7 +3601,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
+                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
                       <tr>
                         <td className="px-3 py-1.5 text-gray-800">Total</td>
                         <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
@@ -3934,7 +3934,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-bold">
+                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
                       <tr>
                         <td className="px-3 py-2 text-gray-800">Grand Total</td>
                         <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
