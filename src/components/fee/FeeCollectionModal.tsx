@@ -200,12 +200,15 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
   // Auto-fill Fine from the year-level schedule whenever date or schedule changes.
   // Skip when a custom override specifies its own fine — the override is authoritative.
+  // Also skip for due/installment payments — the fine is decided once, on the first
+  // payment, and must not be re-evaluated against a later due-payment date.
   useEffect(() => {
     if (!fineSchedule.length || !date || isFineExempt) return;
     if (loadedOverride !== undefined && loadedOverride !== null) return;
+    if (priorPayments.length > 0) return;
     const fine = lookupFine(date, fineSchedule);
     setSmpNow((prev) => ({ ...prev, fine }));
-  }, [date, fineSchedule, isFineExempt, loadedOverride]);
+  }, [date, fineSchedule, isFineExempt, loadedOverride, priorPayments]);
 
   function handleSMPChange(key: SMPFeeHead, val: string) {
     setSmpNow((prev) => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
