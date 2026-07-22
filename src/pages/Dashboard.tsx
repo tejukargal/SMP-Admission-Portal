@@ -17,6 +17,7 @@ import { TransferCertificateModal } from '../components/common/TransferCertifica
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
 import { generateTCApplication } from '../utils/tcApplicationPdf';
+import { isConfirmedActive } from '../utils/studentStatus';
 import {
   exportSummaryReport, exportCategoryReport,
   exportGenderCourseYearReport, exportGenderCategoryReport,
@@ -524,7 +525,7 @@ export function Dashboard() {
   const stats = useMemo(() => {
     const confirmed = admStatusFilter
       ? filteredStudents
-      : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+      : filteredStudents.filter(isConfirmedActive);
 
     const total = confirmed.length;
     const boys  = confirmed.filter((s) => s.gender === 'BOY').length;
@@ -654,7 +655,7 @@ export function Dashboard() {
   const confirmedStudents = useMemo(
     () => admStatusFilter
       ? filteredStudents
-      : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED'),
+      : filteredStudents.filter(isConfirmedActive),
     [filteredStudents, admStatusFilter],
   );
 
@@ -671,7 +672,7 @@ export function Dashboard() {
       if (
         s.academicYear === prevAcYear &&
         s.year === '1ST YEAR' &&
-        s.admissionStatus === 'CONFIRMED' &&
+        isConfirmedActive(s) &&
         s.admCat !== 'SNQ' &&
         s.admType !== 'REPEATER' &&
         s.course in prevConfirmed
@@ -724,7 +725,7 @@ export function Dashboard() {
   const activeStats = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of activeSource) {
-      if (s.admissionStatus === 'CONFIRMED') {
+      if (isConfirmedActive(s)) {
         map[s.academicYear] = (map[s.academicYear] ?? 0) + 1;
       }
     }
@@ -777,11 +778,11 @@ const [barsReady, setBarsReady] = useState(false);
   }, [barsReady, barChartMode]);
 
   const confirmedActiveCount = useMemo(
-    () => activeSource.filter((s) => s.admissionStatus === 'CONFIRMED').length,
+    () => activeSource.filter(isConfirmedActive).length,
     [activeSource]
   );
   const confirmedTotalCount = useMemo(
-    () => allStudents.filter((s) => s.admissionStatus === 'CONFIRMED').length,
+    () => allStudents.filter(isConfirmedActive).length,
     [allStudents]
   );
 
@@ -793,7 +794,7 @@ const [barsReady, setBarsReady] = useState(false);
     if (!feeRecords.length) return [];
     // Only count students visible under current filters (confirmed by default)
     const confirmedIds = new Set(
-      (admStatusFilter ? filteredStudents : filteredStudents.filter((s) => s.admissionStatus === 'CONFIRMED'))
+      (admStatusFilter ? filteredStudents : filteredStudents.filter(isConfirmedActive))
         .map((s) => s.id)
     );
     // Per student: keep only the earliest payment date (first installment)
@@ -2621,7 +2622,7 @@ const [barsReady, setBarsReady] = useState(false);
 
     {/* Summary modal — Year, Course & Admission Type-wise breakdown (mirrors Admission Type-wise Count modal) */}
     {summaryModal && (() => {
-      const summaryStudents = allStudents.filter((s) => s.academicYear === academicYearFilter && s.admissionStatus === 'CONFIRMED');
+      const summaryStudents = allStudents.filter((s) => s.academicYear === academicYearFilter && isConfirmedActive(s));
 
       const sumRows = YEARS.flatMap((yr) => {
         const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';

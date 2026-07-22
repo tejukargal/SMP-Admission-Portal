@@ -11,6 +11,7 @@ import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilte
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentsPdf } from '../utils/studentsPdf';
+import { isConfirmedActive } from '../utils/studentStatus';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { PrintProfileModal } from '../components/student/PrintProfileModal';
 import { AnsLetterPreviewModal } from '../components/student/AnsLetterPreviewModal';
@@ -211,7 +212,7 @@ export function Students() {
   }, [sortByRecent, academicYear]);
 
   const filteredStudents = useMemo(() => {
-    let result = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    let result = allStudents.filter(isConfirmedActive);
     if (courseFilter.length)    result = result.filter((s) => courseFilter.includes(s.course));
     if (yearFilter.length)      result = result.filter((s) => yearFilter.includes(s.year));
     if (genderFilter.length)    result = result.filter((s) => genderFilter.includes(s.gender));
@@ -276,7 +277,7 @@ export function Students() {
 
   // Stats from confirmed students only
   const stats = useMemo(() => {
-    const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    const confirmed = allStudents.filter(isConfirmedActive);
     if (!confirmed.length) return null;
     const yearCount: Record<string, number> = {};
     const courseCount: Record<string, number> = {};

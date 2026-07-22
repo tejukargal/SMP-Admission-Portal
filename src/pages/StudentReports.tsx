@@ -8,6 +8,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentReportPdf } from '../utils/studentReportPdf';
+import { isConfirmedActive } from '../utils/studentStatus';
 import { exportStudentsPdf, type StudentsPdfFilters } from '../utils/studentsPdf';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
@@ -537,7 +538,7 @@ export function StudentReports() {
       ? notAdmittedBase
       : reportType === 'transfer-students'
       ? allStudents.filter((s) => s.transferOut || s.transferredIn)
-      : allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+      : allStudents.filter(isConfirmedActive);
     if (courseFilter)   result = result.filter((s) => s.course === courseFilter);
     if (yearFilter)     result = result.filter((s) => s.year === yearFilter);
     if (genderFilter)   result = result.filter((s) => s.gender === genderFilter);
@@ -761,7 +762,7 @@ export function StudentReports() {
 
   // ── Stats (SNQ Allotment & WhatsApp Numbers) ──────────────────────────────────
   const stats = useMemo(() => {
-    const confirmed = allStudents.filter((s) => s.admissionStatus === 'CONFIRMED');
+    const confirmed = allStudents.filter(isConfirmedActive);
     const byYear: Record<string, number> = {};
     const byCourse: Record<string, number> = {};
     for (const s of confirmed) {

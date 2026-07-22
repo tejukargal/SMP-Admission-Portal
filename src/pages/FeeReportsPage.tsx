@@ -16,6 +16,7 @@ import {
   buildDatewiseHeadwise, exportDatewiseHeadwisePdf,
 } from '../utils/feeReportPdf';
 import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportPdf';
+import { isConfirmedActive } from '../utils/studentStatus';
 import {
   exportStatsExcel, exportFeeListExcel, exportDuesExcel,
   exportCourseYearExcel, exportConsolidatedExcel,
@@ -3030,7 +3031,7 @@ function FeeDistributionTab({
 
   // ── CONFIRMED students only ──
   const confirmedStudents = useMemo(
-    () => students.filter(s => s.admissionStatus?.trim() === 'CONFIRMED'),
+    () => students.filter(isConfirmedActive),
     [students],
   );
 
