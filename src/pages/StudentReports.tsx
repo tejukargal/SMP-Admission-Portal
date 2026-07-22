@@ -27,7 +27,7 @@ import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } 
 import { exportCustomStudentReportPdf } from '../utils/customStudentReportPdf';
 import { exportNotAdmittedPdf } from '../utils/notAdmittedPdf';
 import { exportTransferStudentsPdf } from '../utils/transferStudentsPdf';
-import { updateStudentNotAdmittedStatus } from '../services/studentService';
+import { updateStudentNotAdmittedStatus, updateStudentTransferOut } from '../services/studentService';
 import { ACADEMIC_YEARS, CATEGORY_GROUPS, CATEGORY_GROUP_LABELS } from '../types';
 import type { Student, Course, Year, Gender, Category, AdmType, AdmCat, AcademicYear, CategoryGroup, NotAdmittedStatusTag } from '../types';
 
@@ -277,8 +277,21 @@ export function StudentReports() {
     ? (ACADEMIC_YEARS[ACADEMIC_YEARS.indexOf(academicYear) - 1] ?? null)
     : null) as AcademicYear | null;
 
-  const { students: allStudents, loading, error } = useStudents(academicYear);
+  const { students: allStudents, loading, error, refetch } = useStudents(academicYear);
   const { students: prevYearStudents, loading: prevYearLoading } = useStudents(previousAcademicYear);
+
+  const [clearingTransferOutId, setClearingTransferOutId] = useState<string | null>(null);
+  async function handleClearTransferOut(student: Student) {
+    setClearingTransferOutId(student.id);
+    try {
+      await updateStudentTransferOut(student.id, false);
+      refetch();
+    } catch (err) {
+      console.error('Failed to clear transfer-out status', err);
+    } finally {
+      setClearingTransferOutId(null);
+    }
+  }
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
   const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
 
@@ -2284,6 +2297,7 @@ export function StudentReports() {
                 <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-28 border-b border-sky-200">Direction</th>
                 <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-36 border-b border-sky-200">Polytechnic</th>
                 <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-24 border-b border-sky-200">Date</th>
+                {isAdmin && <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-sky-200">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-sky-50/60">
@@ -2312,12 +2326,25 @@ export function StudentReports() {
                     <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">
                       {dateVal ? new Date(dateVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </td>
+                    {isAdmin && (
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        {isOut && (
+                          <button
+                            className="text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:underline disabled:opacity-50 disabled:no-underline"
+                            disabled={clearingTransferOutId === s.id}
+                            onClick={() => handleClearTransferOut(s)}
+                          >
+                            {clearingTransferOutId === s.id ? 'Clearing…' : 'Clear'}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {hasMore && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-2 text-center border-t border-sky-100/50">
+                  <td colSpan={isAdmin ? 12 : 11} className="px-3 py-2 text-center border-t border-sky-100/50">
                     <button
                       className="text-xs text-sky-600 hover:text-sky-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
