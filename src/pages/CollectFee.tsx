@@ -21,9 +21,13 @@ import type {
   AdmType,
   AdmCat,
   FeeStructure,
+  StudentFeeOverride,
+  FeeRecord,
 } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
+import { effectiveValues, calcAllotted } from '../utils/feeCalc';
+import type { YearData } from '../utils/feeCalc';
 
 const PAGE_SIZE = 100;
 
@@ -144,36 +148,52 @@ export function CollectFee() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Map: "${course}__${year}__${admType}__${admCat}" → allotted grand total (structure fallback)
-  const allottedByKey = useMemo(() => {
-    const map = new Map<string, number>();
+  // Map: "${course}__${year}__${admType}__${admCat}" → fee structure (structure fallback)
+  const structureByKey = useMemo(() => {
+    const map = new Map<string, FeeStructure>();
     for (const s of feeStructures) {
-      const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + s.smp[key], 0);
-      const svkTotal = s.svk + s.additionalHeads.reduce((t, h) => t + h.amount, 0);
-      map.set(`${s.course}__${s.year}__${s.admType}__${s.admCat}`, smpTotal + svkTotal);
+      map.set(`${s.course}__${s.year}__${s.admType}__${s.admCat}`, s);
     }
     return map;
   }, [feeStructures]);
 
-  // Map: studentId → override allotted total (takes precedence over structure)
-  const overrideTotalByStudent = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const o of feeOverrides) {
-      const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + o.smp[key], 0);
-      const svkTotal = o.svk + o.additionalHeads.reduce((t, h) => t + h.amount, 0);
-      map.set(o.studentId, smpTotal + svkTotal);
-    }
+  // Map: studentId → override (takes precedence over structure)
+  const overrideByStudent = useMemo(() => {
+    const map = new Map<string, StudentFeeOverride>();
+    for (const o of feeOverrides) map.set(o.studentId, o);
     return map;
   }, [feeOverrides]);
 
-  /** Returns the effective allotted total for a student (override > structure). */
+  // Map: studentId → this year's fee records (needed to compute the effective fine)
+  const recordsByStudent = useMemo(() => {
+    const map = new Map<string, FeeRecord[]>();
+    for (const r of feeRecords) {
+      const arr = map.get(r.studentId);
+      if (arr) arr.push(r);
+      else map.set(r.studentId, [r]);
+    }
+    return map;
+  }, [feeRecords]);
+
+  /**
+   * Returns the effective allotted total for a student (override > structure), with the SMP
+   * fine head bumped up to match any fine actually paid — mirrors FeeHistoryModal/feeCalc so
+   * the list badge never disagrees with the Fee Details modal once fines are collected.
+   */
   const getAllotted = useCallback(
     (s: { id: string; course: string; year: string; admType: string; admCat: string }): number | null => {
-      if (overrideTotalByStudent.has(s.id)) return overrideTotalByStudent.get(s.id)!;
-      const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
-      return allottedByKey.has(key) ? allottedByKey.get(key)! : null;
+      if (!academicYear) return null;
+      const override = overrideByStudent.get(s.id) ?? null;
+      const structure = override
+        ? null
+        : structureByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`) ?? null;
+      const records = recordsByStudent.get(s.id) ?? [];
+      const yd: YearData = { academicYear, records, structure, override };
+      const ev = effectiveValues(yd);
+      if (!ev) return null;
+      return calcAllotted(ev.smp, ev.svk, ev.additional, records);
     },
-    [overrideTotalByStudent, allottedByKey],
+    [overrideByStudent, structureByKey, recordsByStudent, academicYear],
   );
 
   // Aggregate: per-student whether they have payments + total paid amount
@@ -240,9 +260,9 @@ export function CollectFee() {
       return a.studentNameSSLC.localeCompare(b.studentNameSSLC);
     });
   }, [
-    allStudents, allottedByKey, overrideTotalByStudent, totalPaidByStudent,
+    allStudents, structureByKey, overrideByStudent, recordsByStudent, totalPaidByStudent,
     courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter,
-    feeStatusFilter, debouncedSearch, paidStudents,
+    feeStatusFilter, debouncedSearch, paidStudents, getAllotted,
   ]);
 
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredStudents]);
@@ -304,7 +324,7 @@ export function CollectFee() {
       return allotted !== null && paid >= allotted;
     }).length;
     return { yearCount, courseCount, total: confirmedStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
-  }, [confirmedStudents, feeRecords, allottedByKey, overrideTotalByStudent, totalPaidByStudent]);
+  }, [confirmedStudents, feeRecords, getAllotted, totalPaidByStudent]);
 
   const isLoading = settingsLoading || studentsLoading || feeLoading;
 
