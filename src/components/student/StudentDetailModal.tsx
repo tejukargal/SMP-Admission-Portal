@@ -1582,6 +1582,11 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
               }`}>
                 {student.admissionStatus}
               </span>
+              {student.transferOut && (
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-sky-400/30 text-white border border-sky-300/40">
+                  Transferred Out{student.transferOutPolytechnic ? ` · ${student.transferOutPolytechnic}` : ''}
+                </span>
+              )}
               {feeLoaded && !feeError && yearData.length > 0 && (
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-white/20 border border-white/30 text-white`}>
                   {overallDue > 0 ? `Due ₹${overallDue.toLocaleString()}` : '✓ No Dues'}
