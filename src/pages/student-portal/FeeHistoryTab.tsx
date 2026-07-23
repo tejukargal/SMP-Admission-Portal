@@ -7,6 +7,8 @@ import {
   type YearData,
 } from '../../utils/feeCalc';
 
+const TIP_DISMISSED_KEY = 'smp-fee-breakup-tip-dismissed';
+
 export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; allRecords: Student[] }) {
   const navigate = useNavigate();
   function openBreakup(record: FeeRecord, kind: 'smp' | 'svk' | 'additional') {
@@ -15,6 +17,12 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
   const [yearData, setYearData] = useState<YearData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showTip, setShowTip] = useState(() => localStorage.getItem(TIP_DISMISSED_KEY) !== '1');
+
+  function dismissTip() {
+    setShowTip(false);
+    localStorage.setItem(TIP_DISMISSED_KEY, '1');
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +84,24 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
 
   return (
     <div className="space-y-3">
+      {showTip && (
+        <div
+          style={{ animation: 'content-enter 0.3s ease-out both' }}
+          className="rounded-xl bg-blue-50 border border-blue-200 text-blue-800 px-3.5 py-2.5 flex items-center gap-2 shadow-sm"
+        >
+          <span className="text-sm shrink-0">💡</span>
+          <p className="text-[11px] font-semibold leading-tight flex-1">
+            Tap the <span className="underline">underlined amounts</span> below to view the fee receipt breakup.
+          </p>
+          <button
+            onClick={dismissTip}
+            aria-label="Dismiss"
+            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-blue-500 hover:bg-blue-100 hover:text-blue-700 transition-colors cursor-pointer text-sm leading-none"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {totalDue > 0 && (
         <div
           style={{ animation: 'content-enter 0.3s ease-out both' }}
@@ -162,51 +188,58 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                     <th className="text-left font-semibold py-1 whitespace-nowrap">Receipt</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">SMP</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">SVK</th>
+                    <th className="text-right font-semibold py-1 whitespace-nowrap">Addl</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">Total</th>
-                    <th className="text-right font-semibold py-1 whitespace-nowrap">Breakup</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {records.map((r) => {
-                    const hasSMP = sumSMPRecord(r.smp) > 0;
+                    const smpAmount = sumSMPRecord(r.smp);
+                    const addlAmount = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+                    const hasSMP = smpAmount > 0;
                     const hasSVK = r.svk > 0;
-                    const hasAddl = r.additionalPaid.some((h) => h.amount > 0);
+                    const hasAddl = addlAmount > 0;
                     return (
                       <tr key={r.id}>
                         <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.date ? r.date.split('T')[0] : '—'}</td>
                         <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.receiptNumber || '—'}</td>
-                        <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{sumSMPRecord(r.smp).toLocaleString()}</td>
-                        <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{r.svk.toLocaleString()}</td>
-                        <td className="py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">₹{calcRecordTotal(r).toLocaleString()}</td>
                         <td className="py-1.5 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            {hasSMP && (
-                              <button
-                                onClick={() => openBreakup(r, 'smp')}
-                                className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
-                              >
-                                SMP
-                              </button>
-                            )}
-                            {hasSVK && (
-                              <button
-                                onClick={() => openBreakup(r, 'svk')}
-                                className="text-[10px] font-semibold text-violet-600 hover:text-violet-700 hover:underline cursor-pointer"
-                              >
-                                SVK
-                              </button>
-                            )}
-                            {hasAddl && (
-                              <button
-                                onClick={() => openBreakup(r, 'additional')}
-                                className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                              >
-                                Addl
-                              </button>
-                            )}
-                            {!hasSMP && !hasSVK && !hasAddl && <span className="text-[10px] text-gray-300">—</span>}
-                          </div>
+                          {hasSMP ? (
+                            <button
+                              onClick={() => openBreakup(r, 'smp')}
+                              className="underline decoration-dotted underline-offset-2 text-blue-600 hover:text-blue-700 cursor-pointer"
+                            >
+                              ₹{smpAmount.toLocaleString()}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
+                        <td className="py-1.5 text-right whitespace-nowrap">
+                          {hasSVK ? (
+                            <button
+                              onClick={() => openBreakup(r, 'svk')}
+                              className="underline decoration-dotted underline-offset-2 text-violet-600 hover:text-violet-700 cursor-pointer"
+                            >
+                              ₹{r.svk.toLocaleString()}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 text-right whitespace-nowrap">
+                          {hasAddl ? (
+                            <button
+                              onClick={() => openBreakup(r, 'additional')}
+                              className="underline decoration-dotted underline-offset-2 text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                            >
+                              ₹{addlAmount.toLocaleString()}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">₹{calcRecordTotal(r).toLocaleString()}</td>
                       </tr>
                     );
                   })}
