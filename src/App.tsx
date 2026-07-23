@@ -14,6 +14,9 @@ const StudentLogin = lazy(() =>
 const StudentPortal = lazy(() =>
   import('./pages/student-portal/StudentPortal').then((m) => ({ default: m.StudentPortal }))
 );
+const ReceiptBreakup = lazy(() =>
+  import('./pages/student-portal/ReceiptBreakup').then((m) => ({ default: m.ReceiptBreakup }))
+);
 const StudentMessages = lazy(() =>
   import('./pages/StudentMessages').then((m) => ({ default: m.StudentMessages }))
 );
@@ -60,6 +63,7 @@ function AppRoutes() {
         <Suspense fallback={<PageSpinner fullScreen />}>
           <Routes>
             <Route path="/portal" element={<StudentPortal />} />
+            <Route path="/portal/receipt" element={<ReceiptBreakup />} />
             <Route path="*" element={<Navigate to="/portal" replace />} />
           </Routes>
         </Suspense>

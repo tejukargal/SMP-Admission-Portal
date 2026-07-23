@@ -11,7 +11,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function formatDate(iso: string): string {
+export function formatDate(iso: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -48,7 +48,7 @@ function _cvt(n: number): string {
   return ONES[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + _cvt(n % 100) : '');
 }
 
-function numToWords(n: number): string {
+export function numToWords(n: number): string {
   n = Math.round(n);
   if (n === 0) return 'Zero Rupees Only';
   let r = '';
@@ -61,7 +61,7 @@ function numToWords(n: number): string {
 
 // ── SMP line items ────────────────────────────────────────────────────────────
 
-const SMP_LINES: { label: string; key: SMPFeeHead | null }[] = [
+export const SMP_LINES: { label: string; key: SMPFeeHead | null }[] = [
   { label: 'Admission Fee',             key: 'adm'     },
   { label: 'Tution Fee',                key: 'tuition' },
   { label: 'Reading Room Fee',          key: 'rr'      },
@@ -398,148 +398,6 @@ export function generateSMPReceipt(record: FeeRecord): void {
   openHtml(html);
 }
 
-// ── SMP: view-only, Student Copy, no print/close ─────────────────────────────
-
-export function viewSMPReceipt(record: FeeRecord): void {
-  const studentCopy = buildSMPCopy(record, 'STUDENT COPY');
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>SMP Receipt – ${esc(record.studentName)}</title>
-<style>
-  @page { size: A4 landscape; margin: 0; }
-  html, body { margin: 0; padding: 0; width: 297mm; min-height: 210mm; background: #ddd; }
-  * { box-sizing: border-box; }
-
-  body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; color: #000; display: flex; justify-content: center; padding: 8mm 0; }
-
-  .copy {
-    width: 148.5mm;
-    height: 210mm;
-    padding: 4mm 5.5mm 3mm;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: #fff;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-  }
-
-  .copy-tag { font-size: 6.5pt; font-weight: bold; letter-spacing: 1pt; color: #666; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; border-bottom: 0.4pt solid #ccc; padding-bottom: 1.5pt; margin-bottom: 2pt; flex-shrink: 0; }
-  .hdr { text-align: center; flex-shrink: 0; margin-bottom: 1pt; }
-  .inst { font-size: 14.5pt; font-weight: bold; letter-spacing: 1pt; line-height: 1.2; }
-  .addr { font-size: 8.5pt; margin-top: 1pt; letter-spacing: 0.3pt; }
-  .rbox-wrap { margin-top: 2pt; }
-  .rbox { display: inline-block; border: 2pt solid #000; padding: 1pt 18pt; font-size: 11.5pt; font-weight: bold; letter-spacing: 3pt; }
-  .meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 9pt; margin: 3pt 0 1.5pt; flex-shrink: 0; }
-  .rno { font-size: 15pt; font-weight: bold; color: #bb0000; }
-  .field-row { font-size: 9pt; flex-shrink: 0; display: flex; align-items: baseline; }
-  .field-lbl { flex-shrink: 0; margin-right: 5pt; }
-  .name-field { margin: 1.5pt 0; }
-  .class-field { margin: 1.5pt 0 2.5pt; }
-  .date-dl { display: inline-block; border-bottom: 0.7pt dotted #444; min-width: 55pt; vertical-align: bottom; padding: 0 2pt; }
-  .name-dl { flex: 1; border-bottom: 0.7pt dotted #444; vertical-align: bottom; padding: 0 2pt; }
-  .cls-group { flex: 1; display: flex; align-items: baseline; min-width: 0; }
-  .class-dl, .sec-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; min-width: 0; }
-  .bval { font-weight: bold; font-size: 10.5pt; }
-  .fee-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-  .fee-head { display: flex; flex-shrink: 0; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
-  .fee-head .fc-part, .fee-head .fc-amt, .fee-head .fc-rem { font-weight: bold; font-size: 9pt; text-align: center; justify-content: center; padding: 2.5pt 3pt; }
-  .fee-body { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
-  .rem-note { position: absolute; right: 0; top: 0; bottom: 0; width: 60pt; display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8.5pt; font-weight: bold; color: #555; letter-spacing: 1pt; pointer-events: none; white-space: nowrap; }
-  .fee-row { flex: 1; display: flex; align-items: stretch; min-height: 0; }
-  .total-row { border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
-  .fc-part { flex: 1; display: flex; align-items: center; border-right: 0.8pt solid #000; padding: 0 4pt; font-size: 8.5pt; overflow: hidden; }
-  .fc-amt { width: 54pt; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; border-right: 0.8pt solid #000; padding: 0 6pt; font-size: 9.5pt; }
-  .fc-rem { width: 60pt; flex-shrink: 0; display: flex; align-items: center; padding: 0 6pt; font-size: 8.5pt; }
-  .rn { flex-shrink: 0; min-width: 14pt; font-size: 8.5pt; }
-  .item-name { flex: 1; font-size: 8.5pt; }
-  .dots { flex-shrink: 0; color: #444; font-size: 8.5pt; margin-left: 2pt; }
-  .total-lbl { justify-content: flex-end !important; font-weight: bold; font-size: 9pt; }
-  .total-val { font-weight: bold; font-size: 9pt; }
-  .amt-dots { color: #555; font-size: 8.5pt; }
-  .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; gap: 5pt; }
-  .words-line2 { margin-top: 2pt; }
-  .words-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; vertical-align: bottom; }
-  .words-ul { display: block; border-bottom: 0.7pt dotted #444; width: 100%; min-height: 9pt; }
-  .wval { font-weight: bold; font-size: 10.5pt; }
-  .sig-space { flex-shrink: 0; height: 20pt; }
-  .sig { text-align: right; flex-shrink: 0; font-style: italic; font-weight: bold; font-size: 10pt; }
-</style>
-</head>
-<body>
-  ${studentCopy}
-</body>
-</html>`;
-
-  openHtml(html);
-}
-
-// ── Additional Fee: view-only, Student Copy, no print/close ──────────────────
-
-export function viewAdditionalReceipt(record: FeeRecord): void {
-  const studentCopy = buildAdditionalCopy(record, 'STUDENT COPY');
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Additional Fee Receipt – ${esc(record.studentName)}</title>
-<style>
-  @page { size: A4 landscape; margin: 0; }
-  html, body { margin: 0; padding: 0; width: 297mm; min-height: 210mm; background: #ddd; }
-  * { box-sizing: border-box; }
-  body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; color: #000; display: flex; justify-content: center; padding: 8mm 0; }
-  .copy { width: 148.5mm; height: 210mm; padding: 4mm 5.5mm 3mm; display: flex; flex-direction: column; overflow: hidden; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
-  .copy-tag { font-size: 6.5pt; font-weight: bold; letter-spacing: 1pt; color: #666; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; border-bottom: 0.4pt solid #ccc; padding-bottom: 1.5pt; margin-bottom: 2pt; flex-shrink: 0; }
-  .hdr { text-align: center; flex-shrink: 0; margin-bottom: 1pt; }
-  .inst { font-size: 14.5pt; font-weight: bold; letter-spacing: 1pt; line-height: 1.2; }
-  .addr { font-size: 8.5pt; margin-top: 1pt; letter-spacing: 0.3pt; }
-  .rbox-wrap { margin-top: 2pt; }
-  .rbox { display: inline-block; border: 2pt solid #000; padding: 1pt 10pt; font-size: 9.5pt; font-weight: bold; letter-spacing: 1.5pt; }
-  .meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 9pt; margin: 3pt 0 1.5pt; flex-shrink: 0; }
-  .rno { font-size: 15pt; font-weight: bold; color: #006600; }
-  .field-row { font-size: 9pt; flex-shrink: 0; display: flex; align-items: baseline; }
-  .field-lbl { flex-shrink: 0; }
-  .name-field { margin: 1.5pt 0; }
-  .class-field { margin: 1.5pt 0 2.5pt; }
-  .date-dl { display: inline-block; border-bottom: 0.7pt dotted #444; min-width: 55pt; vertical-align: bottom; padding: 0 2pt; }
-  .name-dl { flex: 1; border-bottom: 0.7pt dotted #444; vertical-align: bottom; padding: 0 2pt; }
-  .cls-group { flex: 1; display: flex; align-items: baseline; min-width: 0; }
-  .class-dl, .sec-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; min-width: 0; }
-  .bval { font-weight: bold; font-size: 10.5pt; }
-  .fee-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; margin-top: 2pt; }
-  .fee-head { display: flex; flex-shrink: 0; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; }
-  .fee-head .fc-part, .fee-head .fc-amt, .fee-head .fc-rem { font-weight: bold; font-size: 9pt; text-align: center; justify-content: center; padding: 2.5pt 3pt; }
-  .fee-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .fee-row { flex: 1; display: flex; align-items: stretch; min-height: 0; }
-  .total-row { flex: 0 0 auto; border-top: 0.8pt solid #000; border-bottom: 0.8pt solid #000; min-height: 16pt; }
-  .fc-part { flex: 1; display: flex; align-items: center; border-right: 0.8pt solid #000; padding: 0 4pt; font-size: 12.5pt; overflow: hidden; }
-  .fc-amt { width: 54pt; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; border-right: 0.8pt solid #000; padding: 0 6pt; font-size: 12.5pt; }
-  .fc-rem { width: 60pt; flex-shrink: 0; display: flex; align-items: center; padding: 0 6pt; font-size: 8.5pt; }
-  .rn { flex-shrink: 0; min-width: 14pt; font-size: 12.5pt; }
-  .item-name { flex: 1; font-size: 12.5pt; }
-  .dots { flex-shrink: 0; color: #444; font-size: 12.5pt; margin-left: 2pt; }
-  .total-lbl { justify-content: flex-end !important; font-weight: bold; font-size: 12.5pt; }
-  .total-val { font-weight: bold; font-size: 12.5pt; }
-  .words-row { font-size: 9pt; flex-shrink: 0; margin-top: 3pt; display: flex; align-items: baseline; }
-  .words-line2 { margin-top: 2pt; }
-  .words-dl { flex: 1; border-bottom: 0.7pt dotted #444; padding: 0 2pt; vertical-align: bottom; }
-  .words-ul { display: block; border-bottom: 0.7pt dotted #444; width: 100%; min-height: 9pt; }
-  .wval { font-weight: bold; font-size: 10.5pt; }
-  .sig-space { flex-shrink: 0; height: 20pt; }
-  .sig { text-align: right; flex-shrink: 0; font-style: italic; font-weight: bold; font-size: 10pt; }
-</style>
-</head>
-<body>
-  ${studentCopy}
-</body>
-</html>`;
-
-  openHtml(html);
-}
-
 // ── Additional Fee: one copy HTML fragment ────────────────────────────────────
 
 function buildAdditionalCopy(record: FeeRecord, copyLabel: string): string {
@@ -868,70 +726,6 @@ export function generateSVKReceipt(record: FeeRecord): void {
     window.addEventListener('afterprint', function () { window.close(); });
   };
 </script>
-</body>
-</html>`;
-
-  openHtml(html);
-}
-
-
-// ── SVK: view-only, Student Copy, no print/close ──────────────────────────────
-
-export function viewSVKReceipt(record: FeeRecord): void {
-  const studentCopy = buildSVKCopy(record, 'STUDENT COPY');
-
-  const html = `<!DOCTYPE html>
-<html lang="kn">
-<head>
-<meta charset="UTF-8">
-<title>SVK Receipt – ${esc(record.studentName)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Kannada:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  @page { size: A4 portrait; margin: 0; }
-  html, body { margin: 0; padding: 0; width: 210mm; min-height: 297mm; background: #ddd; }
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Noto Sans Kannada', 'Tunga', 'Nirmala UI', sans-serif;
-    font-size: 10pt; color: #000; display: flex; justify-content: center; padding: 8mm 0;
-  }
-
-  .copy {
-    width: 210mm; height: 148.5mm;
-    padding: 5mm 8mm 4mm;
-    display: flex; flex-direction: column;
-    overflow: hidden;
-    background: #fff;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-  }
-
-  .copy-tag { font-size: 6pt; font-weight: bold; letter-spacing: 1pt; color: #666; text-align: center; text-transform: uppercase; font-family: Arial, sans-serif; border-bottom: 0.4pt solid #ccc; padding-bottom: 1pt; margin-bottom: 2.5pt; flex-shrink: 0; }
-  .receipt-box { flex: 1; border: 1.5pt solid #111; padding: 6pt 12pt 8pt; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
-  .hdr { text-align: center; flex-shrink: 0; }
-  .inst { font-size: 14pt; font-weight: bold; line-height: 1.3; letter-spacing: 0.3pt; }
-  .sub { font-size: 8.5pt; margin-top: 2pt; line-height: 1.5; }
-  .rbox-wrap { margin-top: 5pt; }
-  .rbox { display: inline-block; border: 2pt solid #000; padding: 2pt 22pt; font-size: 11pt; font-weight: bold; letter-spacing: 2pt; }
-  .meta { display: flex; justify-content: space-between; align-items: center; font-size: 10pt; flex-shrink: 0; padding: 4pt 0; }
-  .rno { font-size: 22pt; font-weight: bold; color: #bb0000; line-height: 1; }
-  .date-ul { display: inline-block; border-bottom: 0.8pt dotted #555; min-width: 55pt; padding: 0 3pt; vertical-align: bottom; }
-  .bval { font-weight: bold; font-size: 11pt; }
-  .body { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; padding: 4pt 0 2pt; }
-  .bline { display: flex; align-items: baseline; font-size: 11pt; line-height: 1.6; }
-  .blbl { flex-shrink: 0; white-space: nowrap; margin-right: 5pt; }
-  .bsfx { flex-shrink: 0; white-space: nowrap; margin-left: 5pt; }
-  .bfill { flex: 1; border-bottom: 0.8pt dotted #555; padding: 0 3pt; min-width: 30pt; }
-  .bline-end .bfill { margin-left: 0; }
-  .bline-plain { font-size: 11pt; line-height: 1.6; }
-  .footer { display: flex; justify-content: space-between; align-items: flex-end; flex-shrink: 0; }
-  .ft-amt-box { display: flex; align-items: center; gap: 4pt; border: 1.2pt solid #111; padding: 3pt 10pt 3pt 8pt; min-width: 80pt; }
-  .ft-amt-label { font-size: 10pt; font-weight: bold; flex-shrink: 0; }
-  .ft-amt-val { font-size: 13pt; font-weight: bold; min-width: 40pt; text-align: center; }
-  .ft-sig { font-size: 10pt; font-weight: bold; border-top: 0.8pt solid #111; padding-top: 2pt; min-width: 100pt; text-align: center; }
-</style>
-</head>
-<body>
-  ${studentCopy}
 </body>
 </html>`;
 

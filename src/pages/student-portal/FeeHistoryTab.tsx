@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import type { AcademicYear, Student } from '../../types';
+import { useNavigate } from 'react-router-dom';
+import type { AcademicYear, FeeRecord, Student } from '../../types';
 import { fetchMyFeeRecords, fetchMyFeeStructure, fetchMyFeeOverride } from '../../services/studentPortalService';
 import {
   calcAllotted, calcEffectiveFine, calcRecordTotal, sumSMPRecord, effectiveValues,
   type YearData,
 } from '../../utils/feeCalc';
-import { viewSMPReceipt, viewSVKReceipt, viewAdditionalReceipt } from '../../utils/feeReceipts';
 
 export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; allRecords: Student[] }) {
+  const navigate = useNavigate();
+  function openBreakup(record: FeeRecord, kind: 'smp' | 'svk' | 'additional') {
+    navigate('/portal/receipt', { state: { record, kind } });
+  }
   const [yearData, setYearData] = useState<YearData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +182,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             {hasSMP && (
                               <button
-                                onClick={() => viewSMPReceipt(r)}
+                                onClick={() => openBreakup(r, 'smp')}
                                 className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
                               >
                                 SMP
@@ -186,7 +190,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                             )}
                             {hasSVK && (
                               <button
-                                onClick={() => viewSVKReceipt(r)}
+                                onClick={() => openBreakup(r, 'svk')}
                                 className="text-[10px] font-semibold text-violet-600 hover:text-violet-700 hover:underline cursor-pointer"
                               >
                                 SVK
@@ -194,7 +198,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                             )}
                             {hasAddl && (
                               <button
-                                onClick={() => viewAdditionalReceipt(r)}
+                                onClick={() => openBreakup(r, 'additional')}
                                 className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
                               >
                                 Addl
