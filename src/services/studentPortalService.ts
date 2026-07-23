@@ -10,7 +10,9 @@ import type {
   Student, FeeRecord, FeeStructure, StudentFeeOverride, ExamResult,
   Notice, StudentMessage, StudentMessageCategory, AcademicYear, Course,
   StudentNoticeState, StudentNotification, Circular, StudentCircularState,
+  StudentOnboardingState,
 } from '../types';
+import { calcAllotted, calcRecordTotal, effectiveValues, type YearData } from '../utils/feeCalc';
 import type { TCRecord } from './tcService';
 import type { PCRecord } from './pcService';
 import type { RefundRecord } from './refundService';
@@ -45,6 +47,34 @@ export async function fetchMyFeeOverride(studentId: string, academicYear: Academ
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as StudentFeeOverride) : null;
 }
 
+/** Total pending due across every academic year — drives the Fee History tab badge.
+ *  Mirrors the per-year grouping/calculation FeeHistoryTab does for its full view. */
+export async function fetchMyTotalDue(regNumber: string, allRecords: Student[]): Promise<number> {
+  const records = await fetchMyFeeRecords(regNumber);
+  const grouped = new Map<AcademicYear, FeeRecord[]>();
+  for (const r of records) {
+    const list = grouped.get(r.academicYear) ?? [];
+    list.push(r);
+    grouped.set(r.academicYear, list);
+  }
+  const yearData: YearData[] = await Promise.all(
+    [...grouped.entries()].map(async ([ay, recs]) => {
+      const first = recs[0];
+      const structure = await fetchMyFeeStructure(ay, first.course, first.year, first.admType, first.admCat);
+      const ownDocForYear = allRecords.find((s) => s.academicYear === ay);
+      const override = ownDocForYear ? await fetchMyFeeOverride(ownDocForYear.id, ay) : null;
+      return { academicYear: ay, records: recs, structure, override };
+    }),
+  );
+  return yearData.reduce((sum, yd) => {
+    const ev = effectiveValues(yd);
+    if (!ev) return sum;
+    const paid = yd.records.reduce((s, r) => s + calcRecordTotal(r), 0);
+    const allotted = calcAllotted(ev.smp, ev.svk, ev.additional, yd.records);
+    return sum + Math.max(0, allotted - paid);
+  }, 0);
+}
+
 /** TC/PC history live as arrays on each year's student doc — read via the
  *  student-portal Firestore instance (`studentDb`) so the request carries the
  *  student's own auth token, not the admin app's. Collects across every
@@ -69,6 +99,16 @@ export async function fetchMyPcRecords(regNumber: string): Promise<PCRecord[]> {
     all.push(...(data.pcHistory ?? []));
   }
   return all.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+const RECENT_CERTIFICATE_DAYS = 14;
+
+/** True if a TC/PC was issued within the last two weeks — drives the Certificates tab badge. */
+export async function fetchHasRecentCertificate(regNumber: string): Promise<boolean> {
+  const [tcRecords, pcRecords] = await Promise.all([fetchMyTcRecords(regNumber), fetchMyPcRecords(regNumber)]);
+  const cutoff = Date.now() - RECENT_CERTIFICATE_DAYS * 24 * 60 * 60 * 1000;
+  const latest = [tcRecords[0]?.issuedAt, pcRecords[0]?.issuedAt].filter((d): d is string => !!d);
+  return latest.some((issuedAt) => new Date(issuedAt).getTime() >= cutoff);
 }
 
 export async function fetchMyRefundRecords(regNumber: string): Promise<RefundRecord[]> {
@@ -168,6 +208,18 @@ export async function markCircularsSeen(regNumber: string, circularIds: string[]
   const seenCircularIds = [...new Set([...currentSeenIds, ...circularIds])];
   await setDoc(doc(studentDb, 'studentCircularState', regNumber), {
     regNumber, seenCircularIds, updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function fetchOnboardingState(regNumber: string): Promise<StudentOnboardingState | null> {
+  const snap = await getDoc(doc(studentDb, 'studentOnboardingState', regNumber));
+  return snap.exists() ? (snap.data() as StudentOnboardingState) : null;
+}
+
+/** Marks the one-time "tab bar" coach mark as seen so it never shows again for this student. */
+export async function markTabOnboardingSeen(regNumber: string): Promise<void> {
+  await setDoc(doc(studentDb, 'studentOnboardingState', regNumber), {
+    regNumber, hasSeenTabOnboarding: true, updatedAt: new Date().toISOString(),
   });
 }
 

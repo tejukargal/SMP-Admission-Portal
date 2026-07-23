@@ -436,6 +436,13 @@ export interface StudentNoticeState {
   updatedAt: string;
 }
 
+/** Per-student portal onboarding flags — one doc per student, keyed by regNumber. */
+export interface StudentOnboardingState {
+  regNumber: string;
+  hasSeenTabOnboarding: boolean;
+  updatedAt: string;
+}
+
 // ─── Student Portal — Circulars ────────────────────────────────────────────────
 
 export type Department =

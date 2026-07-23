@@ -11,12 +11,15 @@ import { noticeAppliesToMe } from './noticeUtils';
 // Contact tab temporarily disabled — see TABS array and content render below. Re-enable by uncommenting this import and those spots.
 // import { ContactTab } from './ContactTab';
 import { NotificationModal } from './NotificationModal';
+import { TabOnboarding } from './TabOnboarding';
 import { getGreeting } from '../../utils/greeting';
 import { circularSeenKey } from '../../utils/htmlContent';
 import {
   subscribeToNotices, fetchNoticeSeenState, markNoticesSeen,
   subscribeToCirculars, fetchCircularSeenState, markCircularsSeen,
   fetchMyNotifications, markNotificationsSeen,
+  fetchMyTotalDue, fetchHasRecentCertificate,
+  fetchOnboardingState, markTabOnboardingSeen,
 } from '../../services/studentPortalService';
 import type { Circular, Notice, StudentNotification } from '../../types';
 
@@ -82,6 +85,10 @@ export function StudentPortal() {
 
   const [unseenNotifications, setUnseenNotifications] = useState<StudentNotification[]>([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
+
+  const [feeDue, setFeeDue] = useState(0);
+  const [hasNewCertificate, setHasNewCertificate] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -179,6 +186,27 @@ export function StudentPortal() {
     loadNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student, regNumber]);
+
+  // Drives the Fee History / Certificates tab badges — a lightweight parallel
+  // fetch, independent of whichever tab is actually open.
+  useEffect(() => {
+    if (!regNumber) return;
+    fetchMyTotalDue(regNumber, allRecords).then(setFeeDue);
+    fetchHasRecentCertificate(regNumber).then(setHasNewCertificate);
+  }, [regNumber, allRecords, refreshKey]);
+
+  // One-time mobile coach mark pointing at the bottom tab bar.
+  useEffect(() => {
+    if (!regNumber) return;
+    fetchOnboardingState(regNumber).then((state) => {
+      if (!state?.hasSeenTabOnboarding) setShowOnboarding(true);
+    });
+  }, [regNumber]);
+
+  function dismissOnboarding() {
+    setShowOnboarding(false);
+    if (regNumber) void markTabOnboardingSeen(regNumber);
+  }
 
   // Viewing the Notices tab marks everything currently loaded as seen — clears the unread badge.
   // Students cannot dismiss/hide notices themselves; only admin can clear a notice for students.
@@ -283,6 +311,12 @@ export function StudentPortal() {
                 {t.key === 'circulars' && unreadCircularCount > 0 && (
                   <span className="rounded-full bg-red-500 text-white text-[10px] leading-none px-1.5 py-0.5">{unreadCircularCount}</span>
                 )}
+                {t.key === 'fees' && feeDue > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                )}
+                {t.key === 'certificates' && hasNewCertificate && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                )}
               </button>
             ))}
           </div>
@@ -331,9 +365,17 @@ export function StudentPortal() {
             {t.key === 'circulars' && unreadCircularCount > 0 && (
               <span className="absolute top-1 right-1/4 rounded-full bg-red-500 text-white text-[9px] leading-none px-1 py-0.5">{unreadCircularCount}</span>
             )}
+            {t.key === 'fees' && feeDue > 0 && (
+              <span className="absolute top-1 right-1/4 w-2 h-2 rounded-full bg-red-500" />
+            )}
+            {t.key === 'certificates' && hasNewCertificate && (
+              <span className="absolute top-1 right-1/4 w-2 h-2 rounded-full bg-red-500" />
+            )}
           </button>
         ))}
       </div>
+
+      {showOnboarding && <TabOnboarding onDismiss={dismissOnboarding} />}
 
       {showNotifModal && (
         <NotificationModal notifications={unseenNotifications} onClose={handleCloseNotifModal} />
