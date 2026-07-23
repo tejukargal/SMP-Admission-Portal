@@ -5,6 +5,7 @@ import {
   calcAllotted, calcEffectiveFine, calcRecordTotal, sumSMPRecord, effectiveValues,
   type YearData,
 } from '../../utils/feeCalc';
+import { viewSMPReceipt, viewSVKReceipt, viewAdditionalReceipt } from '../../utils/feeReceipts';
 
 export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; allRecords: Student[] }) {
   const [yearData, setYearData] = useState<YearData[]>([]);
@@ -100,9 +101,9 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
             style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(idx, 12) * 0.05}s` }}
             className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
           >
-            <div className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b ${noDues ? 'bg-emerald-50/70 border-emerald-100' : 'bg-rose-50/70 border-rose-100'}`}>
+            <div className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b bg-gray-50 border-gray-200">
               <div className="flex items-center gap-2">
-                <span className={`rounded-full text-[10px] font-bold px-2.5 py-0.5 border ${noDues ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'}`}>
+                <span className="rounded-full text-[10px] font-bold px-2.5 py-0.5 border bg-gray-900 text-white border-gray-900">
                   {academicYear}
                 </span>
                 <span className="text-xs text-gray-500">
@@ -115,7 +116,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                 )}
               </div>
               {allotted !== null ? (
-                <div className={`text-xs font-bold ${noDues ? 'text-emerald-700' : 'text-red-700'}`}>
+                <div className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full text-white ${noDues ? 'bg-emerald-600' : 'bg-red-600'}`}>
                   {noDues ? 'No Dues' : `Due ₹${due!.toLocaleString()}`}
                 </div>
               ) : (
@@ -126,17 +127,17 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
             </div>
 
             <div className="px-4 py-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-gray-50/80 py-2">
+              <div className="rounded-xl bg-gray-50 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Allotted</p>
                 <p className="text-base font-black text-gray-800">{allotted !== null ? `₹${allotted.toLocaleString()}` : '—'}</p>
               </div>
-              <div className="rounded-xl bg-emerald-50 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-emerald-500">Paid</p>
-                <p className="text-base font-black text-emerald-700">₹{totalPaid.toLocaleString()}</p>
+              <div className="rounded-xl bg-gray-50 py-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Paid</p>
+                <p className="text-base font-black text-emerald-600">₹{totalPaid.toLocaleString()}</p>
               </div>
-              <div className={`rounded-xl py-2 ${noDues ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                <p className={`text-[9px] font-semibold uppercase tracking-wider ${noDues ? 'text-emerald-500' : 'text-red-500'}`}>Due</p>
-                <p className={`text-base font-black ${noDues ? 'text-emerald-700' : 'text-red-700'}`}>
+              <div className="rounded-xl bg-gray-50 py-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Due</p>
+                <p className={`text-base font-black ${noDues ? 'text-emerald-600' : 'text-red-600'}`}>
                   {due !== null ? `₹${Math.max(0, due).toLocaleString()}` : '—'}
                 </p>
               </div>
@@ -145,7 +146,7 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
             {/* Receipts */}
             <div className="border-t border-gray-200 px-4 py-2 overflow-x-auto">
               <div className="flex items-center gap-1.5 mt-1 mb-0.5">
-                <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-500 flex items-center justify-center">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Receipts</span>
@@ -158,18 +159,53 @@ export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; al
                     <th className="text-right font-semibold py-1 whitespace-nowrap">SMP</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">SVK</th>
                     <th className="text-right font-semibold py-1 whitespace-nowrap">Total</th>
+                    <th className="text-right font-semibold py-1 whitespace-nowrap">Breakup</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {records.map((r) => (
-                    <tr key={r.id}>
-                      <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.date ? r.date.split('T')[0] : '—'}</td>
-                      <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.receiptNumber || '—'}</td>
-                      <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{sumSMPRecord(r.smp).toLocaleString()}</td>
-                      <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{r.svk.toLocaleString()}</td>
-                      <td className="py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">₹{calcRecordTotal(r).toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {records.map((r) => {
+                    const hasSMP = sumSMPRecord(r.smp) > 0;
+                    const hasSVK = r.svk > 0;
+                    const hasAddl = r.additionalPaid.some((h) => h.amount > 0);
+                    return (
+                      <tr key={r.id}>
+                        <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.date ? r.date.split('T')[0] : '—'}</td>
+                        <td className="py-1.5 text-gray-600 whitespace-nowrap">{r.receiptNumber || '—'}</td>
+                        <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{sumSMPRecord(r.smp).toLocaleString()}</td>
+                        <td className="py-1.5 text-right text-gray-700 whitespace-nowrap">₹{r.svk.toLocaleString()}</td>
+                        <td className="py-1.5 text-right font-semibold text-gray-900 whitespace-nowrap">₹{calcRecordTotal(r).toLocaleString()}</td>
+                        <td className="py-1.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {hasSMP && (
+                              <button
+                                onClick={() => viewSMPReceipt(r)}
+                                className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                              >
+                                SMP
+                              </button>
+                            )}
+                            {hasSVK && (
+                              <button
+                                onClick={() => viewSVKReceipt(r)}
+                                className="text-[10px] font-semibold text-violet-600 hover:text-violet-700 hover:underline cursor-pointer"
+                              >
+                                SVK
+                              </button>
+                            )}
+                            {hasAddl && (
+                              <button
+                                onClick={() => viewAdditionalReceipt(r)}
+                                className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+                              >
+                                Addl
+                              </button>
+                            )}
+                            {!hasSMP && !hasSVK && !hasAddl && <span className="text-[10px] text-gray-300">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {(smpPaid > 0 || svkPaid > 0) && calcEffectiveFine(0, records) > 0 && (
