@@ -10,7 +10,6 @@ import type {
   Student, FeeRecord, FeeStructure, StudentFeeOverride, ExamResult,
   Notice, StudentMessage, StudentMessageCategory, AcademicYear, Course,
   StudentNoticeState, StudentNotification, Circular, StudentCircularState,
-  StudentOnboardingState,
 } from '../types';
 import { calcAllotted, calcRecordTotal, effectiveValues, type YearData } from '../utils/feeCalc';
 import type { TCRecord } from './tcService';
@@ -208,18 +207,6 @@ export async function markCircularsSeen(regNumber: string, circularIds: string[]
   const seenCircularIds = [...new Set([...currentSeenIds, ...circularIds])];
   await setDoc(doc(studentDb, 'studentCircularState', regNumber), {
     regNumber, seenCircularIds, updatedAt: new Date().toISOString(),
-  });
-}
-
-export async function fetchOnboardingState(regNumber: string): Promise<StudentOnboardingState | null> {
-  const snap = await getDoc(doc(studentDb, 'studentOnboardingState', regNumber));
-  return snap.exists() ? (snap.data() as StudentOnboardingState) : null;
-}
-
-/** Marks the one-time "tab bar" coach mark as seen so it never shows again for this student. */
-export async function markTabOnboardingSeen(regNumber: string): Promise<void> {
-  await setDoc(doc(studentDb, 'studentOnboardingState', regNumber), {
-    regNumber, hasSeenTabOnboarding: true, updatedAt: new Date().toISOString(),
   });
 }
 

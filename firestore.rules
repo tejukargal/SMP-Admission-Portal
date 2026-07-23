@@ -290,11 +290,6 @@ service cloud.firestore {
         || (isStudentClaim() && regNumber == request.auth.token.regNumber);
     }
 
-    // ── Student Portal Onboarding (one-time tab-bar coach mark) ────────────
-    match /studentOnboardingState/{regNumber} {
-      allow read, write: if isActiveUser()
-        || (isStudentClaim() && regNumber == request.auth.token.regNumber);
-    }
 
     // ── Student Notifications (admin/staff → student, record-change alerts) ─
     match /studentNotifications/{id} {

@@ -19,7 +19,6 @@ import {
   subscribeToCirculars, fetchCircularSeenState, markCircularsSeen,
   fetchMyNotifications, markNotificationsSeen,
   fetchMyTotalDue, fetchHasRecentCertificate,
-  fetchOnboardingState, markTabOnboardingSeen,
 } from '../../services/studentPortalService';
 import type { Circular, Notice, StudentNotification } from '../../types';
 
@@ -88,7 +87,7 @@ export function StudentPortal() {
 
   const [feeDue, setFeeDue] = useState(0);
   const [hasNewCertificate, setHasNewCertificate] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(true);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -195,17 +194,8 @@ export function StudentPortal() {
     fetchHasRecentCertificate(regNumber).then(setHasNewCertificate);
   }, [regNumber, allRecords, refreshKey]);
 
-  // One-time mobile coach mark pointing at the bottom tab bar.
-  useEffect(() => {
-    if (!regNumber) return;
-    fetchOnboardingState(regNumber).then((state) => {
-      if (!state?.hasSeenTabOnboarding) setShowOnboarding(true);
-    });
-  }, [regNumber]);
-
   function dismissOnboarding() {
     setShowOnboarding(false);
-    if (regNumber) void markTabOnboardingSeen(regNumber);
   }
 
   // Viewing the Notices tab marks everything currently loaded as seen — clears the unread badge.
@@ -228,6 +218,7 @@ export function StudentPortal() {
     setRefreshing(true);
     loadNotifications();
     setRefreshKey((k) => k + 1);
+    setShowOnboarding(true);
     setTimeout(() => setRefreshing(false), 500);
   }
 
