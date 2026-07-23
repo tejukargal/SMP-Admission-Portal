@@ -10,7 +10,7 @@ import {
 export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; allRecords: Student[] }) {
   const navigate = useNavigate();
   function openBreakup(record: FeeRecord, kind: 'smp' | 'svk' | 'additional') {
-    navigate('/portal/receipt', { state: { record, kind } });
+    navigate('/portal/receipt', { state: { record, kind, fromTab: 'fees' } });
   }
   const [yearData, setYearData] = useState<YearData[]>([]);
   const [loading, setLoading] = useState(true);

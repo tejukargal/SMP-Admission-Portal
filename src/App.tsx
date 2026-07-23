@@ -17,6 +17,9 @@ const StudentPortal = lazy(() =>
 const ReceiptBreakup = lazy(() =>
   import('./pages/student-portal/ReceiptBreakup').then((m) => ({ default: m.ReceiptBreakup }))
 );
+const CircularDetail = lazy(() =>
+  import('./pages/student-portal/CircularDetail').then((m) => ({ default: m.CircularDetail }))
+);
 const StudentMessages = lazy(() =>
   import('./pages/StudentMessages').then((m) => ({ default: m.StudentMessages }))
 );
@@ -64,6 +67,7 @@ function AppRoutes() {
           <Routes>
             <Route path="/portal" element={<StudentPortal />} />
             <Route path="/portal/receipt" element={<ReceiptBreakup />} />
+            <Route path="/portal/circular" element={<CircularDetail />} />
             <Route path="*" element={<Navigate to="/portal" replace />} />
           </Routes>
         </Suspense>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useStudentAuth } from '../../contexts/StudentAuthContext';
 import { PageSpinner } from '../../components/common/PageSpinner';
 import { ProfileTab } from './ProfileTab';
@@ -19,7 +20,7 @@ import {
 } from '../../services/studentPortalService';
 import type { Circular, Notice, StudentNotification } from '../../types';
 
-type TabKey = 'profile' | 'fees' | 'certificates' | 'circulars' | 'notices' | 'contact';
+export type TabKey = 'profile' | 'fees' | 'certificates' | 'circulars' | 'notices' | 'contact';
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -52,7 +53,10 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 
 export function StudentPortal() {
   const { student, allRecords, regNumber, loading, logout } = useStudentAuth();
-  const [activeTab, setActiveTab] = useState<TabKey>('circulars');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    (location.state as { activeTab?: TabKey } | null)?.activeTab ?? 'circulars'
+  );
 
   // "Welcome Back" until the student switches tabs for the first time, then
   // the time-of-day greeting (Good Morning/Afternoon/Evening/Night) takes over.

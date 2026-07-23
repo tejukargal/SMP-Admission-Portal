@@ -2,12 +2,14 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { FeeRecord } from '../../types';
 import { SMP_LINES, formatDate, numToWords } from '../../utils/feeReceipts';
+import type { TabKey } from './StudentPortal';
 
 type ReceiptKind = 'smp' | 'svk' | 'additional';
 
 interface ReceiptState {
   record: FeeRecord;
   kind: ReceiptKind;
+  fromTab?: TabKey;
 }
 
 const KIND_LABEL: Record<ReceiptKind, string> = {
@@ -45,7 +47,7 @@ export function ReceiptBreakup() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/portal', { state: { activeTab: state.fromTab ?? 'fees' } })}
             aria-label="Back"
             className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
           >

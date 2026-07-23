@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Circular, Department } from '../../types';
 import { CircularCard } from '../../components/circulars/CircularCard';
-import { CircularModal } from '../../components/circulars/CircularModal';
 import { DepartmentFilterChips } from '../../components/circulars/DepartmentFilterChips';
 import { circularSeenKey } from '../../utils/htmlContent';
 
@@ -15,8 +15,8 @@ interface CircularsTabProps {
 /** Student-facing Circulars tab — SMP Connect design: department filter chips
  *  + colored cards + full-detail modal. All students see all circulars. */
 export function CircularsTab({ circulars, loading, seenIds, onShareApp }: CircularsTabProps) {
+  const navigate = useNavigate();
   const [activeDept, setActiveDept] = useState<Department>('All');
-  const [selected, setSelected] = useState<Circular | null>(null);
 
   const counts = useMemo(() => {
     const map: Partial<Record<Department, number>> = { All: circulars.length };
@@ -72,15 +72,13 @@ export function CircularsTab({ circulars, loading, seenIds, onShareApp }: Circul
               circular={c}
               index={i}
               unread={!seenIds.has(circularSeenKey(c))}
-              onClick={() => setSelected(c)}
+              onClick={() => navigate('/portal/circular', { state: { circular: c, fromTab: 'circulars' } })}
             />
           ))}
         </div>
       )}
 
       <ShareAppButton onClick={onShareApp} />
-
-      {selected && <CircularModal circular={selected} onClose={() => setSelected(null)} className="font-portal" />}
     </div>
   );
 }
