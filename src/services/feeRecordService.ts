@@ -135,11 +135,22 @@ export function isPlausibleReceiptJump(current: number, candidate: number): bool
 //    Called when the modal opens so the user sees the suggested next number.
 //  • updateReceiptCounters()   – called AFTER a successful save; updates
 //    max(current, usedNumber) in a transaction so the counter always reflects
-//    the highest receipt number ever written.
+//    the highest receipt number ever written, gated by isPlausibleReceiptJump()
+//    so a number that actually belongs to the other series can't drag it forward.
+//
+// Series continuity only applies from RECEIPT_SERIES_BASE_YEAR onward — years
+// before it are never used to seed a counter (see that constant's comment).
 //
 // This means cancelling the modal never wastes a receipt number.
 
 const RECEIPT_COUNTERS_COL = 'receiptCounters';
+
+// Receipt series continuity only applies from this academic year onward. Years
+// before it are known to contain unreliable/uninvestigated counter data (including
+// the cross-series contamination this constant was introduced to fix) and must
+// never be used to seed a counter — each series' running sequence effectively
+// (re)starts clean at this year and continues normally into every year after it.
+const RECEIPT_SERIES_BASE_YEAR: AcademicYear = '2026-27';
 
 interface ReceiptCounterDoc {
   smpAided: number;    smpAidedPadLen: number;
@@ -148,8 +159,9 @@ interface ReceiptCounterDoc {
   additional: number;                        // shared across all courses
 }
 
-/** Returns the highest receipt numbers found across ALL academic years' counter docs.
- *  Used to seed a new year's counter so receipt numbers never reset between years. */
+/** Returns the highest receipt numbers found across academic years' counter docs
+ *  from RECEIPT_SERIES_BASE_YEAR onward (older years are excluded — see its comment).
+ *  Used to seed a new year's counter so receipt numbers continue across years. */
 async function _getGlobalCounterMax(): Promise<ReceiptCounterDoc> {
   const snapshot = await getDocs(collection(db, RECEIPT_COUNTERS_COL));
   const result: ReceiptCounterDoc = {
@@ -158,18 +170,26 @@ async function _getGlobalCounterMax(): Promise<ReceiptCounterDoc> {
     svk: 0, svkPadLen: 1,
     additional: 0,
   };
-  for (const snap of snapshot.docs) {
+  const docs = snapshot.docs
+    .filter((snap) => snap.id >= RECEIPT_SERIES_BASE_YEAR)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  for (const snap of docs) {
     const d = snap.data() as Partial<ReceiptCounterDoc>;
-    if ((d.smpAided   ?? 0) > result.smpAided)   { result.smpAided   = d.smpAided!;   result.smpAidedPadLen   = d.smpAidedPadLen   ?? 1; }
-    if ((d.smpUnaided ?? 0) > result.smpUnaided) { result.smpUnaided = d.smpUnaided!; result.smpUnaidedPadLen = d.smpUnaidedPadLen ?? 1; }
-    if ((d.svk        ?? 0) > result.svk)        { result.svk        = d.svk!;        result.svkPadLen        = d.svkPadLen        ?? 1; }
-    if ((d.additional ?? 0) > result.additional)   result.additional = d.additional!;
+    const a = d.smpAided ?? 0;
+    if (a > result.smpAided && isPlausibleReceiptJump(result.smpAided, a)) { result.smpAided = a; result.smpAidedPadLen = d.smpAidedPadLen ?? 1; }
+    const u = d.smpUnaided ?? 0;
+    if (u > result.smpUnaided && isPlausibleReceiptJump(result.smpUnaided, u)) { result.smpUnaided = u; result.smpUnaidedPadLen = d.smpUnaidedPadLen ?? 1; }
+    const s = d.svk ?? 0;
+    if (s > result.svk && isPlausibleReceiptJump(result.svk, s)) { result.svk = s; result.svkPadLen = d.svkPadLen ?? 1; }
+    const ad = d.additional ?? 0;
+    if (ad > result.additional && isPlausibleReceiptJump(result.additional, ad)) result.additional = ad;
   }
   return result;
 }
 
 /** Scans existing records and builds initial counter values, seeded from the
- *  global max across all years so receipt numbers never reset between years.
+ *  global max from RECEIPT_SERIES_BASE_YEAR onward so receipt numbers continue
+ *  across years (but never inherit pre-base-year data).
  *  SMP is split by aided/unaided; SVK and Additional are shared series. */
 async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<ReceiptCounterDoc> {
   const [records, globalMax] = await Promise.all([
