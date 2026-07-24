@@ -2547,7 +2547,43 @@ function calcDistribution(
   }
 
   const rows: FeeDistRow[] = [];
-  let n = 1;
+  const nRef = { n: 1 };
+
+  // Splits a year's tuition bucket into one row per distinct fee amount actually
+  // charged, instead of a single row averaging over students who may be on
+  // different fee-structure amounts (e.g. differing by course or admission category).
+  // When every student in the bucket pays the same amount, this yields exactly one
+  // row identical to the old averaged behavior.
+  function pushTuitionRows(bucket: Student[], label: string) {
+    if (bucket.length === 0) return;
+    const byAmount = new Map<number, Student[]>();
+    for (const s of bucket) {
+      const a = amt(s, 'tuition');
+      if (!byAmount.has(a)) byAmount.set(a, []);
+      byAmount.get(a)!.push(s);
+    }
+    const distinctPaid = [...byAmount.keys()].filter(a => a > 0);
+    const bucketTot = bucket.reduce((a, s) => a + amt(s, 'tuition'), 0);
+    if (bucketTot <= 0) return;
+
+    const groups: [number, Student[]][] = distinctPaid.length > 1
+      ? [...byAmount.entries()].filter(([a]) => a > 0).sort((a, b) => a[0] - b[0])
+      : [[bucketTot / bucket.length, bucket]];
+
+    for (const [amount, students] of groups) {
+      const tot = students.reduce((a, s) => a + amt(s, 'tuition'), 0);
+      rows.push({
+        slNo: nRef.n++,
+        feeType: distinctPaid.length > 1 ? `${label} — ₹${Math.round(amount).toLocaleString('en-IN')}` : label,
+        studentCount: students.length,
+        feeAmountPerStudent: Math.round(tot / students.length),
+        totalCollected: tot,
+        toGov: isAided ? tot / 2 : 0,
+        toSVK: isAided ? tot / 2 : tot,
+        toSMP: 0,
+      });
+    }
+  }
 
   // ── Tuition fees by year group ──
   // 1st Yr: 1ST YEAR non-SNQ + LATERAL 2ND YEAR non-SNQ (both pay 1st yr tuition rate)
@@ -2555,45 +2591,15 @@ function calcDistribution(
     (s.year === '1ST YEAR' && s.admCat !== 'SNQ') ||
     (s.year === '2ND YEAR' && s.admType === 'LATERAL' && s.admCat !== 'SNQ'),
   );
-  const t1tot = t1.reduce((a, s) => a + amt(s, 'tuition'), 0);
-  if (t1.length > 0 && t1tot > 0) {
-    rows.push({
-      slNo: n++, feeType: 'Tuition Fee 1st Yr',
-      studentCount: t1.length, feeAmountPerStudent: Math.round(t1tot / t1.length),
-      totalCollected: t1tot,
-      toGov: isAided ? t1tot / 2 : 0,
-      toSVK: isAided ? t1tot / 2 : t1tot,
-      toSMP: 0,
-    });
-  }
+  pushTuitionRows(t1, 'Tuition Fee 1st Yr');
 
   // 2nd Yr: 2ND YEAR non-LATERAL non-SNQ
   const t2 = ss.filter(s => s.year === '2ND YEAR' && s.admType !== 'LATERAL' && s.admCat !== 'SNQ');
-  const t2tot = t2.reduce((a, s) => a + amt(s, 'tuition'), 0);
-  if (t2.length > 0 && t2tot > 0) {
-    rows.push({
-      slNo: n++, feeType: 'Tuition Fee 2nd Yr',
-      studentCount: t2.length, feeAmountPerStudent: Math.round(t2tot / t2.length),
-      totalCollected: t2tot,
-      toGov: isAided ? t2tot / 2 : 0,
-      toSVK: isAided ? t2tot / 2 : t2tot,
-      toSMP: 0,
-    });
-  }
+  pushTuitionRows(t2, 'Tuition Fee 2nd Yr');
 
   // 3rd Yr: 3RD YEAR non-SNQ (includes LATERAL 3rd yr counted as regular)
   const t3 = ss.filter(s => s.year === '3RD YEAR' && s.admCat !== 'SNQ');
-  const t3tot = t3.reduce((a, s) => a + amt(s, 'tuition'), 0);
-  if (t3.length > 0 && t3tot > 0) {
-    rows.push({
-      slNo: n++, feeType: 'Tuition Fee 3rd Yr',
-      studentCount: t3.length, feeAmountPerStudent: Math.round(t3tot / t3.length),
-      totalCollected: t3tot,
-      toGov: isAided ? t3tot / 2 : 0,
-      toSVK: isAided ? t3tot / 2 : t3tot,
-      toSMP: 0,
-    });
-  }
+  pushTuitionRows(t3, 'Tuition Fee 3rd Yr');
 
   // ── Other SMP fee heads ──
   // Order matches reference HTML: dvp, adm, lab, rr, mag, idCard, sports, ass, lib, swf, twf, nss
@@ -2633,7 +2639,7 @@ function calcDistribution(
         else toSMP = tot;
       }
       rows.push({
-        slNo: n++, feeType: h.label,
+        slNo: nRef.n++, feeType: h.label,
         studentCount: eligible.length, feeAmountPerStudent: Math.round(tot / eligible.length),
         totalCollected: tot, toGov, toSVK, toSMP,
       });
@@ -2648,7 +2654,7 @@ function calcDistribution(
   }
   if (fineTot > 0) {
     rows.push({
-      slNo: n++, feeType: 'FINE',
+      slNo: nRef.n++, feeType: 'FINE',
       studentCount: fineCount, feeAmountPerStudent: Math.round(fineTot / fineCount),
       totalCollected: fineTot, toGov: fineTot, toSVK: 0, toSMP: 0,
     });
