@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react';
-import { updateFeeRecord, updateReceiptCounters } from '../../services/feeRecordService';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  updateFeeRecord,
+  updateReceiptCounters,
+  peekNextReceiptNumbers,
+  isPlausibleReceiptJump,
+} from '../../services/feeRecordService';
 import { Button } from '../common/Button';
 import type {
   FeeRecord,
@@ -48,6 +53,17 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [suggestedSmpReceipt, setSuggestedSmpReceipt] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    peekNextReceiptNumbers(record.academicYear, record.course).then((receipts) => {
+      if (!cancelled) setSuggestedSmpReceipt(receipts.smp);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [record.academicYear, record.course]);
 
   function handleSMPChange(key: SMPFeeHead, val: string) {
     setSmp((prev) => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
@@ -111,6 +127,18 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
       const combinedRemarks = [splitNote, userRemarks].filter(Boolean).join('; ');
 
       const primaryMode = smpTotal > 0 ? smpPaymentMode : svk > 0 ? svkPaymentMode : additionalPaymentMode;
+
+      if (receiptNo) {
+        const suggestedN = parseInt(suggestedSmpReceipt, 10);
+        const usedN = parseInt(receiptNo, 10);
+        if (!isNaN(suggestedN) && !isNaN(usedN) && !isPlausibleReceiptJump(suggestedN, usedN)) {
+          const proceed = window.confirm(
+            `SMP Receipt No "${receiptNo}" looks unusually high for this series (current next: ${suggestedSmpReceipt}). ` +
+            `This may belong to the other (Aided/Unaided) series. Continue anyway?`
+          );
+          if (!proceed) return;
+        }
+      }
 
       await updateFeeRecord(
         record.id,

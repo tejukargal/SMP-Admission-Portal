@@ -6,6 +6,7 @@ import {
   saveFeeRecord,
   peekNextReceiptNumbers,
   updateReceiptCounters,
+  isPlausibleReceiptJump,
 } from '../../services/feeRecordService';
 import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
 import { getFineSchedule } from '../../services/fineScheduleService';
@@ -92,6 +93,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
   const [additionalNow, setAdditionalNow] = useState<FeeAdditionalHead[]>([]);
   const [date, setDate] = useState(today());
   const [receiptNo, setReceiptNo] = useState('');
+  const [suggestedSmpReceipt, setSuggestedSmpReceipt] = useState('');
   const [svkReceiptNo, setSvkReceiptNo] = useState('');
   const [additionalReceiptNo, setAdditionalReceiptNo] = useState('');
   const [smpPaymentMode, setSmpPaymentMode] = useState<PaymentMode>('CASH');
@@ -146,6 +148,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         setStructure(struct);
         setPriorPayments(prior);
         setReceiptNo(receipts.smp);
+        setSuggestedSmpReceipt(receipts.smp);
         setSvkReceiptNo(receipts.svk);
         setAdditionalReceiptNo(receipts.additional);
         setFineSchedule(schedule);
@@ -379,6 +382,20 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
       const usedSmpReceipt  = smpNowTotal        > 0 ? receiptNo           : '';
       const usedSvkReceipt  = svkNowTotal        > 0 ? svkReceiptNo        : '';
       const usedAddReceipt  = additionalNowTotal  > 0 ? additionalReceiptNo : '';
+
+      if (usedSmpReceipt) {
+        const suggestedN = parseInt(suggestedSmpReceipt, 10);
+        const usedN = parseInt(usedSmpReceipt, 10);
+        if (!isNaN(suggestedN) && !isNaN(usedN) && !isPlausibleReceiptJump(suggestedN, usedN)) {
+          const proceed = window.confirm(
+            `SMP Receipt No "${usedSmpReceipt}" looks unusually high for this series (suggested next: ${suggestedSmpReceipt}). ` +
+            `This may belong to the other (Aided/Unaided) series. Continue anyway?`
+          );
+          if (!proceed) {
+            return;
+          }
+        }
+      }
 
       await saveFeeRecord({
         studentId: student.id,

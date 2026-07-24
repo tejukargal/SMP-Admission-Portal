@@ -110,6 +110,20 @@ export async function getFeeRecordsByAcademicYear(
 
 const SVK_RPT_PREFIX = 'SVK DVP ';
 
+// A candidate receipt number is only treated as legitimate forward progress for a
+// series if it's within a plausible jump of the current counter. This lets a series
+// grow across digit boundaries naturally (e.g. 999 -> 1000) while rejecting a number
+// that actually belongs to the OTHER series (e.g. an Aided ~6xxx number mistakenly
+// recorded against an Unaided ~2xx student) — that record is kept as-saved, but it
+// never drags the shared counter forward.
+const MAX_PLAUSIBLE_JUMP_RATIO = 5;
+const MAX_PLAUSIBLE_JUMP_FLOOR = 50;
+
+export function isPlausibleReceiptJump(current: number, candidate: number): boolean {
+  if (current <= 0) return true;
+  return candidate <= Math.max(current * MAX_PLAUSIBLE_JUMP_RATIO, current + MAX_PLAUSIBLE_JUMP_FLOOR);
+}
+
 // ── Receipt number counters ────────────────────────────────────────────────────
 //
 // Counter documents live at receiptCounters/{academicYear}.
@@ -163,21 +177,22 @@ async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<Rec
     _getGlobalCounterMax(),
   ]);
   const c: ReceiptCounterDoc = { ...globalMax };
-  for (const r of records) {
+  const sorted = [...records].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  for (const r of sorted) {
     const aided = AIDED_COURSES.has(r.course);
     const smpN = parseInt(r.receiptNumber ?? '', 10);
     if (!isNaN(smpN)) {
-      if (aided  && smpN > c.smpAided)   { c.smpAided   = smpN; c.smpAidedPadLen   = (r.receiptNumber ?? '').length; }
-      if (!aided && smpN > c.smpUnaided) { c.smpUnaided = smpN; c.smpUnaidedPadLen = (r.receiptNumber ?? '').length; }
+      if (aided  && smpN > c.smpAided   && isPlausibleReceiptJump(c.smpAided, smpN))   { c.smpAided   = smpN; c.smpAidedPadLen   = (r.receiptNumber ?? '').length; }
+      if (!aided && smpN > c.smpUnaided && isPlausibleReceiptJump(c.smpUnaided, smpN)) { c.smpUnaided = smpN; c.smpUnaidedPadLen = (r.receiptNumber ?? '').length; }
     }
     const svkRpt = r.svkReceiptNumber ?? '';
     if (svkRpt.startsWith(SVK_RPT_PREFIX)) {
       const numPart = svkRpt.slice(SVK_RPT_PREFIX.length);
       const svkN = parseInt(numPart, 10);
-      if (!isNaN(svkN) && svkN > c.svk) { c.svk = svkN; c.svkPadLen = numPart.length; }
+      if (!isNaN(svkN) && svkN > c.svk && isPlausibleReceiptJump(c.svk, svkN)) { c.svk = svkN; c.svkPadLen = numPart.length; }
     }
     const addN = parseInt(r.additionalReceiptNumber ?? '', 10);
-    if (!isNaN(addN) && addN > c.additional) c.additional = addN;
+    if (!isNaN(addN) && addN > c.additional && isPlausibleReceiptJump(c.additional, addN)) c.additional = addN;
   }
   return c;
 }
@@ -250,22 +265,22 @@ export async function updateReceiptCounters(
     const updates: Partial<ReceiptCounterDoc> = {};
 
     if (aided) {
-      if (!isNaN(smpN) && smpN > d.smpAided) {
+      if (!isNaN(smpN) && smpN > d.smpAided && isPlausibleReceiptJump(d.smpAided, smpN)) {
         updates.smpAided = smpN;
         updates.smpAidedPadLen = used.smp.length;
       }
     } else {
-      if (!isNaN(smpN) && smpN > d.smpUnaided) {
+      if (!isNaN(smpN) && smpN > d.smpUnaided && isPlausibleReceiptJump(d.smpUnaided, smpN)) {
         updates.smpUnaided = smpN;
         updates.smpUnaidedPadLen = used.smp.length;
       }
     }
 
-    if (!isNaN(svkN) && svkN > d.svk) {
+    if (!isNaN(svkN) && svkN > d.svk && isPlausibleReceiptJump(d.svk, svkN)) {
       updates.svk = svkN;
       updates.svkPadLen = svkStr.length;
     }
-    if (!isNaN(addN) && addN > d.additional) updates.additional = addN;
+    if (!isNaN(addN) && addN > d.additional && isPlausibleReceiptJump(d.additional, addN)) updates.additional = addN;
 
     if (Object.keys(updates).length > 0) tx.update(ref, updates);
   });
