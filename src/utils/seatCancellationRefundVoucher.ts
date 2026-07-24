@@ -14,6 +14,7 @@ const PAYMENT_TYPE_LABELS: Record<RefundPaymentType, string> = {
   ACCOUNT_PAYEE_CHEQUE: 'Account Payee Cheque',
   NEFT: 'NEFT',
   CASH: 'Cash',
+  UPI: 'UPI',
 };
 
 export interface SeatCancellationVoucherData {

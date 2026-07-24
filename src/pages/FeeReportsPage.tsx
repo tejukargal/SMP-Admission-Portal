@@ -4,7 +4,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { getRefundRecordsByAcademicYear, type RefundRecord } from '../services/refundService';
+import { getRefundRecordsByAcademicYear, isFeeNettingRefund, type RefundRecord } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
 import { Button } from '../components/common/Button';
 import * as XLSX from 'xlsx';
@@ -4409,7 +4409,7 @@ export function FeeReportsPage() {
 
   const refundedByStudent = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of refunds) map.set(r.studentId, (map.get(r.studentId) ?? 0) + r.refundAmount);
+    for (const r of refunds.filter(isFeeNettingRefund)) map.set(r.studentId, (map.get(r.studentId) ?? 0) + r.refundAmount);
     return map;
   }, [refunds]);
 

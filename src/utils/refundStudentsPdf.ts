@@ -5,6 +5,7 @@ import type { RefundRecord } from '../services/refundService';
 const CATEGORY_LABEL: Record<string, string> = {
   SNQ: 'SNQ',
   SEAT_CANCELLATION: 'Seat Cancellation',
+  GENERAL: 'General Refund',
 };
 
 const FONT_SIZE = 8.5;

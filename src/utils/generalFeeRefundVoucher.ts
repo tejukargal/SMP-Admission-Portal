@@ -1,5 +1,5 @@
 import type { Student } from '../types';
-import type { RefundPaymentType, RefundReceiptLine } from '../services/refundService';
+import type { RefundPaymentType } from '../services/refundService';
 
 const COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -17,14 +17,12 @@ const PAYMENT_TYPE_LABELS: Record<RefundPaymentType, string> = {
   UPI: 'UPI',
 };
 
-export interface SnqRefundVoucherData {
-  totalPaid: number;
-  receiptBreakdown: RefundReceiptLine[];
+export interface GeneralRefundVoucherData {
   refundAmount: number;
   paymentType: RefundPaymentType;
   referenceNumber: string;
   paymentDate: string;  // DD/MM/YYYY
-  remarks: string;
+  remarks: string;       // reason for refund
 }
 
 function esc(s: string): string {
@@ -45,27 +43,18 @@ function fmtRupees(n: number): string {
   return n.toLocaleString('en-IN');
 }
 
-function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
+function buildVoucher(student: Student, data: GeneralRefundVoucherData): string {
   const name       = esc(student.studentNameSSLC.trim());
   const fatherName = esc(student.fatherName.trim());
   const courseFull = COURSE_NAMES[student.course] ?? esc(student.course);
   const prefix     = student.gender === 'GIRL' ? 'Kum.' : 'Sri.';
   const today      = fmtDMY(new Date().toISOString());
 
-  const receiptRows = data.receiptBreakdown
-    .map((r) => `
-      <tr>
-        <td>${fmtDMY(r.date)}</td>
-        <td>${esc(r.receiptNumber || '—')}</td>
-        <td class="amt">₹ ${fmtRupees(r.amount)}</td>
-      </tr>`)
-    .join('');
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SNQ Fee Refund Voucher &#8211; ${name}</title>
+<title>Fee Refund Voucher &#8211; ${name}</title>
 <style>
   @page { size: A4 portrait; margin: 8mm 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -81,10 +70,8 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
   }
   .page { min-height: calc(297mm - 16mm); display: flex; flex-direction: column; }
 
-  /* ── Letter box (matches ANS letter minimal style) ── */
   .letter-box { border: 1.5pt solid #000; padding: 12pt 18pt 20pt; flex: 1; display: flex; flex-direction: column; }
 
-  /* ── Header ── */
   .header { text-align: center; border-bottom: 1pt solid #000; padding-bottom: 8pt; margin-bottom: 8pt; }
   .college-name { font-size: 18pt; font-weight: bold; letter-spacing: 0.5pt; }
   .college-tagline { font-size: 8.5pt; margin: 3pt 0 2pt; }
@@ -107,11 +94,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
   .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4pt 18pt; font-size: 11pt; }
   .details-grid div span.lbl { font-weight: bold; }
 
-  table.fee-table { width: 100%; border-collapse: collapse; margin-top: 4pt; font-size: 10.5pt; }
-  table.fee-table th, table.fee-table td { border: 0.75pt solid #000; padding: 3pt 6pt; }
-  table.fee-table th { background: #f0f0f0; text-align: left; }
-  table.fee-table td.amt, table.fee-table th.amt { text-align: right; }
-  table.fee-table tr.total-row td { font-weight: bold; background: #f7f7f7; }
+  .reason-box { font-size: 11pt; line-height: 1.6; border: 0.75pt solid #000; padding: 8pt 10pt; margin-top: 4pt; min-height: 22pt; }
 
   .refund-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4pt 18pt; font-size: 11pt; margin-top: 4pt; }
   .refund-amount-line {
@@ -147,7 +130,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
   <!-- Body -->
   <div class="body">
     <div class="date-line">Date : ${today}</div>
-    <div class="title">SNQ ADMISSION &#8211; FEE REFUND VOUCHER</div>
+    <div class="title">FEE REFUND VOUCHER</div>
     <div class="subtitle">For Accounts Department Record &amp; Audit Purposes</div>
 
     <div class="section-label">Student Details</div>
@@ -158,39 +141,22 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
       <div><span class="lbl">Year:</span> ${esc(student.year)}</div>
       <div><span class="lbl">Academic Year:</span> ${esc(student.academicYear)}</div>
       <div><span class="lbl">Register No.:</span> ${esc(student.regNumber || '—')}</div>
-      <div><span class="lbl">Admission Category:</span> SNQ</div>
-      <div><span class="lbl">Enrollment Date:</span> ${fmtDMY(student.enrollmentDate)}</div>
     </div>
 
-    <div class="section-label">SMP Fee Receipts Paid</div>
-    <table class="fee-table">
-      <thead>
-        <tr><th>Date</th><th>Receipt No.</th><th class="amt">Amount</th></tr>
-      </thead>
-      <tbody>
-        ${receiptRows || '<tr><td colspan="3" style="text-align:center;color:#666;">No fee records found</td></tr>'}
-        <tr class="total-row">
-          <td colspan="2">Total SMP Fee Paid</td>
-          <td class="amt">₹ ${fmtRupees(data.totalPaid)}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="section-label">Reason for Refund</div>
+    <div class="reason-box">${esc(data.remarks || '—')}</div>
 
     <div class="section-label">Refund Details</div>
     <div class="refund-grid">
       <div><span class="lbl">Mode of Refund:</span> ${PAYMENT_TYPE_LABELS[data.paymentType]}</div>
-      <div><span class="lbl">Reference / Cheque No.:</span> ${esc(data.referenceNumber || '—')}</div>
+      <div><span class="lbl">Reference / Cheque / UTR No.:</span> ${esc(data.referenceNumber || '—')}</div>
       <div><span class="lbl">Date of Refund:</span> ${esc(data.paymentDate)}</div>
-      <div><span class="lbl">Remarks:</span> ${esc(data.remarks || '—')}</div>
     </div>
     <div class="refund-amount-line">Refund Amount &#8202;:&#8202; ₹ ${fmtRupees(data.refundAmount)}</div>
 
     <p class="ack-para">I, <strong>${name}</strong>, acknowledge that I have received the above refund amount of
-      <strong>₹ ${fmtRupees(data.refundAmount)}</strong> for being allotted admission under the SNQ category,
-      in full and final settlement, and confirm having no further claim in this regard.
-      I further undertake that I shall study all three (3) years of the diploma course in this institution,
-      that there shall be no transfer to any other institution during this period, and that I have read,
-      understood and agreed to the SNQ admission terms and conditions.</p>
+      <strong>₹ ${fmtRupees(data.refundAmount)}</strong>, in full and final settlement, and confirm having no
+      further claim against the institution in this regard.</p>
 
     <div class="sign-row">
       <div class="sign-block">
@@ -207,7 +173,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
       </div>
     </div>
 
-    <div class="footer-note">This voucher is a manual record of fee refund issued for SNQ admission category students and is to be retained for audit and accounts verification.</div>
+    <div class="footer-note">This voucher is a manual record of fee refund issued to the student and is to be retained for audit and accounts verification.</div>
   </div>
 
 </div>
@@ -222,7 +188,7 @@ function buildVoucher(student: Student, data: SnqRefundVoucherData): string {
 </html>`;
 }
 
-export function generateSnqRefundVoucher(student: Student, data: SnqRefundVoucherData): void {
+export function generateGeneralFeeRefundVoucher(student: Student, data: GeneralRefundVoucherData): void {
   const html = buildVoucher(student, data);
   const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
   const url  = URL.createObjectURL(blob);

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
-import { getRefundRecordsByStudent } from '../../services/refundService';
+import { getRefundRecordsByStudent, isFeeNettingRefund } from '../../services/refundService';
 import type { FeeRecord, FeeStructure, AcademicYear, StudentFeeOverride, SMPHeads, FeeAdditionalHead, AdmType, AdmCat } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 
@@ -170,7 +170,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
       .then((refunds) => {
         if (cancelled) return;
         const map = new Map<string, number>();
-        for (const r of refunds) map.set(r.academicYear, (map.get(r.academicYear) ?? 0) + r.refundAmount);
+        for (const r of refunds.filter(isFeeNettingRefund)) map.set(r.academicYear, (map.get(r.academicYear) ?? 0) + r.refundAmount);
         setRefundedByYear(map);
       })
       .catch(() => { /* non-fatal — dues simply won't be netted */ });

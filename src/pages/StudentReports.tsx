@@ -1761,6 +1761,7 @@ export function StudentReports() {
                   <option value="">All Categories</option>
                   <option value="SNQ">SNQ</option>
                   <option value="SEAT_CANCELLATION">Seat Cancellation</option>
+                  <option value="GENERAL">General Refund</option>
                 </select>
               </div>
               <span className="text-gray-200 text-sm select-none shrink-0">|</span>
@@ -2571,7 +2572,13 @@ export function StudentReports() {
               </thead>
               <tbody className="divide-y divide-rose-50/60">
                 {refundRows.map((r, idx) => {
-                  const isSNQ = (r.refundCategory ?? 'SNQ') === 'SNQ';
+                  const category = r.refundCategory ?? 'SNQ';
+                  const categoryBadgeClass = category === 'SNQ'
+                    ? 'bg-blue-50 border-blue-100 text-blue-700'
+                    : category === 'GENERAL'
+                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                    : 'bg-amber-50 border-amber-100 text-amber-700';
+                  const categoryLabel = category === 'SNQ' ? 'SNQ' : category === 'GENERAL' ? 'General Refund' : 'Seat Cancellation';
                   return (
                     <tr key={r.id} className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-rose-50/40`}>
                       <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
@@ -2579,10 +2586,8 @@ export function StudentReports() {
                       <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                          isSNQ ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-amber-50 border-amber-100 text-amber-700'
-                        }`}>
-                          {isSNQ ? 'SNQ' : 'Seat Cancellation'}
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${categoryBadgeClass}`}>
+                          {categoryLabel}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-rose-700 whitespace-nowrap tabular-nums">₹{r.refundAmount.toLocaleString('en-IN')}</td>

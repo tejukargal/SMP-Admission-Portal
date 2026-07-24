@@ -6,7 +6,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { getRefundRecordsByAcademicYear } from '../services/refundService';
+import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/refundService';
 import type { RefundRecord } from '../services/refundService';
 import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
@@ -137,7 +137,7 @@ export function CollectFee() {
   // comparing against the allotted structure, matching FeeHistoryModal's logic.
   const refundedByStudent = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of refundRecords) {
+    for (const r of refundRecords.filter(isFeeNettingRefund)) {
       map.set(r.studentId, (map.get(r.studentId) ?? 0) + r.refundAmount);
     }
     return map;

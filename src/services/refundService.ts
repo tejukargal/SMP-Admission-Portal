@@ -2,8 +2,8 @@ import { doc, setDoc, deleteDoc, collection, query, where, getDocs } from 'fireb
 import { db } from '../config/firebase';
 import type { Course, Year, AcademicYear } from '../types';
 
-export type RefundPaymentType = 'CHEQUE' | 'ACCOUNT_PAYEE_CHEQUE' | 'NEFT' | 'CASH';
-export type RefundCategory = 'SNQ' | 'SEAT_CANCELLATION';
+export type RefundPaymentType = 'CHEQUE' | 'ACCOUNT_PAYEE_CHEQUE' | 'NEFT' | 'CASH' | 'UPI';
+export type RefundCategory = 'SNQ' | 'SEAT_CANCELLATION' | 'GENERAL';
 
 export interface RefundReceiptLine {
   date: string;
@@ -70,4 +70,11 @@ export async function getRefundRecordsByAcademicYear(academicYear: AcademicYear)
 /** Permanently delete a refund record (admin-only per Firestore rules). */
 export async function deleteRefundRecord(id: string): Promise<void> {
   await deleteDoc(doc(db, COL, id));
+}
+
+/** True for refund categories that correspond to a feeRecords entry and must be
+ *  netted against paid totals. GENERAL refunds cover money paid outside the fee
+ *  system (e.g. direct UPI to bank), so they're excluded from all netting. */
+export function isFeeNettingRefund(r: RefundRecord): boolean {
+  return (r.refundCategory ?? 'SNQ') !== 'GENERAL';
 }
