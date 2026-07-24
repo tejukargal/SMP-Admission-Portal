@@ -56,6 +56,10 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 export function StudentPortal() {
   const { student, allRecords, regNumber, loading, logout } = useStudentAuth();
   const location = useLocation();
+  // Present only when landing here via a sub-page's Back button (see
+  // ReceiptBreakup/CircularDetail) — distinguishes "returning from a
+  // sub-page" from a genuine fresh login/refresh, which has no nav state.
+  const returnedFromSubPage = !!(location.state as { activeTab?: TabKey } | null)?.activeTab;
   const [activeTab, setActiveTab] = useState<TabKey>(
     (location.state as { activeTab?: TabKey } | null)?.activeTab ?? 'circulars'
   );
@@ -71,6 +75,10 @@ export function StudentPortal() {
     if (prevTab.current !== activeTab) {
       setGreeting(getGreeting());
       prevTab.current = activeTab;
+      // The student has just demonstrated they can navigate the tab bar —
+      // the coach mark has done its job, so hide it instead of leaving it
+      // stuck on screen for the rest of the session.
+      setShowOnboarding(false);
     }
   }, [activeTab]);
 
@@ -87,7 +95,7 @@ export function StudentPortal() {
 
   const [feeDue, setFeeDue] = useState(0);
   const [hasNewCertificate, setHasNewCertificate] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(!returnedFromSubPage);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -193,6 +201,14 @@ export function StudentPortal() {
     fetchMyTotalDue(regNumber, allRecords).then(setFeeDue);
     fetchHasRecentCertificate(regNumber).then(setHasNewCertificate);
   }, [regNumber, allRecords, refreshKey]);
+
+  // Auto-hide the coach mark after a few seconds even if the student never
+  // taps a tab or the "Got it" button, so it never lingers indefinitely.
+  useEffect(() => {
+    if (!showOnboarding) return;
+    const t = setTimeout(() => setShowOnboarding(false), 3000);
+    return () => clearTimeout(t);
+  }, [showOnboarding]);
 
   function dismissOnboarding() {
     setShowOnboarding(false);

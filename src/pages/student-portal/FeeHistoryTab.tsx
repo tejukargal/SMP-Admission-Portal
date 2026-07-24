@@ -7,22 +7,32 @@ import {
   type YearData,
 } from '../../utils/feeCalc';
 
-const TIP_DISMISSED_KEY = 'smp-fee-breakup-tip-dismissed';
-
 export function FeeHistoryTab({ regNumber, allRecords }: { regNumber: string; allRecords: Student[] }) {
   const navigate = useNavigate();
+  const [showTip, setShowTip] = useState(true);
+
   function openBreakup(record: FeeRecord, kind: 'smp' | 'svk' | 'additional') {
+    // The student has just used the underlined amounts as intended — the tip
+    // has done its job, so hide it instead of leaving it stuck on screen.
+    setShowTip(false);
     navigate('/portal/receipt', { state: { record, kind, fromTab: 'fees' } });
   }
-  const [yearData, setYearData] = useState<YearData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showTip, setShowTip] = useState(() => localStorage.getItem(TIP_DISMISSED_KEY) !== '1');
+
+  // Auto-hide the tip after a few seconds even if the student never taps a
+  // value or the dismiss button, so it never lingers indefinitely.
+  useEffect(() => {
+    if (!showTip) return;
+    const t = setTimeout(() => setShowTip(false), 6000);
+    return () => clearTimeout(t);
+  }, [showTip]);
 
   function dismissTip() {
     setShowTip(false);
-    localStorage.setItem(TIP_DISMISSED_KEY, '1');
   }
+
+  const [yearData, setYearData] = useState<YearData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
