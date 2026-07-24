@@ -19,6 +19,9 @@ import { buildTCHTML, type TCFormData } from '../utils/transferCertificate';
 import { CERT_CLEAR_PASSKEY } from '../config/constants';
 import type { PCRecord } from '../services/pcService';
 import { clearPcHistory } from '../services/pcService';
+import { useAllRefunds } from '../hooks/useAllRefunds';
+import { exportRefundStudentsPdf } from '../utils/refundStudentsPdf';
+import type { RefundCategory, RefundRecord } from '../services/refundService';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { ColumnPickerDropdown } from '../components/common/ColumnPickerDropdown';
@@ -36,7 +39,7 @@ const PAGE_SIZE = 100;
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[]     = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 
-type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list' | 'not-admitted' | 'transfer-students' | 'custom';
+type ReportType = 'snq-allotment' | 'whatsapp-numbers' | 'tc-issued' | 'pc-issued' | 'allotted-category' | 'student-list' | 'not-admitted' | 'transfer-students' | 'refund-students' | 'custom';
 
 const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'snq-allotment',      label: 'List for SNQ Allotment'  },
@@ -47,6 +50,7 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'student-list',       label: 'Student List'            },
   { value: 'not-admitted',       label: 'Not Admitted List'       },
   { value: 'transfer-students',  label: 'Transfer Students'       },
+  { value: 'refund-students',    label: 'Refund Students List'    },
   { value: 'custom',             label: 'Custom Report'           },
 ];
 
@@ -294,6 +298,7 @@ export function StudentReports() {
   }
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
   const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
+  const { refunds: allRefunds, loading: refundsLoading, error: refundsError } = useAllRefunds();
 
   // ── Report type ─────────────────────────────────────────────────────────────
   const [urlSearchParams] = useSearchParams();
@@ -327,6 +332,8 @@ export function StudentReports() {
   const [dateTo,         setDateTo]         = useState('');
   const [tcYearFilter,   setTcYearFilter]   = useState<string>('ALL');
   const [pcYearFilter,   setPcYearFilter]   = useState<string>('ALL');
+  const [refundYearFilter,     setRefundYearFilter]     = useState<string>('ALL');
+  const [refundCategoryFilter, setRefundCategoryFilter] = useState<RefundCategory | ''>('');
 
   // ── Custom Report: columns + multi-level sort ────────────────────────────────
   const [customColumns, setCustomColumns] = useState<Set<keyof Student>>(new Set(DEFAULT_CUSTOM_COLUMNS));
@@ -744,6 +751,38 @@ export function StudentReports() {
     return { totalPCs, byCourse };
   }, [reportType, allStudentsForTC]);
 
+  // ── Refund Students List rows ─────────────────────────────────────────────────
+  const refundRows = useMemo((): RefundRecord[] => {
+    if (reportType !== 'refund-students') return [];
+    let filtered = allRefunds;
+    if (courseFilter)         filtered = filtered.filter((r) => r.course === courseFilter);
+    if (yearFilter)           filtered = filtered.filter((r) => r.year === yearFilter);
+    if (refundYearFilter !== 'ALL') filtered = filtered.filter((r) => r.academicYear === refundYearFilter);
+    if (refundCategoryFilter) filtered = filtered.filter((r) => (r.refundCategory ?? 'SNQ') === refundCategoryFilter);
+
+    const q = debouncedSearch.trim().toUpperCase();
+    const result = q
+      ? filtered.filter((r) =>
+          r.studentName.toUpperCase().includes(q) ||
+          r.regNumber.toUpperCase().includes(q) ||
+          r.referenceNumber.toUpperCase().includes(q)
+        )
+      : filtered;
+    return [...result].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  }, [reportType, allRefunds, courseFilter, yearFilter, refundYearFilter, refundCategoryFilter, debouncedSearch]);
+
+  // ── Refund stats (unfiltered counts/total for header chips) ──────────────────
+  const refundStats = useMemo(() => {
+    if (reportType !== 'refund-students') return null;
+    const totalRefunds = allRefunds.length;
+    const totalAmount = allRefunds.reduce((sum, r) => sum + r.refundAmount, 0);
+    const byCourse: Record<string, number> = {};
+    for (const r of allRefunds) {
+      byCourse[r.course] = (byCourse[r.course] ?? 0) + 1;
+    }
+    return { totalRefunds, totalAmount, byCourse };
+  }, [reportType, allRefunds]);
+
   const hasActiveSort = sortLevels.some((l) => !!l.field);
 
   const hasActiveFilters =
@@ -753,6 +792,7 @@ export function StudentReports() {
     (reportType === 'pc-issued' && pcYearFilter !== 'ALL') ||
     (reportType === 'not-admitted' && !!notAdmittedStatusFilter) ||
     (reportType === 'transfer-students' && !!transferDirectionFilter) ||
+    (reportType === 'refund-students' && (refundYearFilter !== 'ALL' || !!refundCategoryFilter)) ||
     (reportType === 'custom' && hasActiveSort);
 
   function clearFilters() {
@@ -766,6 +806,8 @@ export function StudentReports() {
     setPcYearFilter('ALL');
     setNotAdmittedStatusFilter('');
     setTransferDirectionFilter('');
+    setRefundYearFilter('ALL');
+    setRefundCategoryFilter('');
     setSortLevels([
       { field: '', direction: 'asc' },
       { field: '', direction: 'asc' },
@@ -889,6 +931,14 @@ export function StudentReports() {
             yearFilter,
             admTypeFilter,
             directionFilter: transferDirectionFilter,
+            searchTerm: debouncedSearch,
+          });
+        } else if (reportType === 'refund-students') {
+          exportRefundStudentsPdf(refundRows, {
+            refundYearFilter,
+            refundCategoryFilter,
+            courseFilter,
+            yearFilter,
             searchTerm: debouncedSearch,
           });
         } else if (reportType === 'custom') {
@@ -1060,6 +1110,42 @@ export function StudentReports() {
           const parts = ['transfer_students'];
           if (academicYear) parts.push(academicYear.replace(/[^0-9-]/g, ''));
           if (courseFilter) parts.push(courseFilter);
+          XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        } else if (reportType === 'refund-students') {
+          const headers = [
+            'Sl No', 'Student Name', 'Father Name', 'Course', 'Year', 'Reg No',
+            'Category', 'Total Paid', 'Refund Amount', 'Payment Type', 'Reference No',
+            'Payment Date', 'Academic Year', 'Remarks', 'Issued By', 'Issued Date',
+          ];
+          const rows = refundRows.map((r, i) => [
+            i + 1,
+            r.studentName,
+            r.fatherName,
+            r.course,
+            r.year,
+            r.regNumber,
+            r.refundCategory ?? 'SNQ',
+            r.totalPaid,
+            r.refundAmount,
+            r.paymentType,
+            r.referenceNumber,
+            r.paymentDate,
+            r.academicYear,
+            r.remarks,
+            r.issuedBy,
+            r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          ]);
+          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws['!cols'] = [
+            { wch: 6 }, { wch: 26 }, { wch: 22 }, { wch: 8 }, { wch: 10 }, { wch: 14 },
+            { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 16 },
+            { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 20 }, { wch: 16 },
+          ];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Refund Students');
+          const parts = ['refund_students'];
+          if (refundYearFilter !== 'ALL') parts.push(refundYearFilter.replace(/[^0-9-]/g, ''));
+          if (courseFilter)               parts.push(courseFilter);
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'student-list') {
           const headers = [
@@ -1247,11 +1333,12 @@ export function StudentReports() {
     }
   }
 
-  const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading) || (reportType === 'not-admitted' && prevYearLoading);
+  const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading) || (reportType === 'not-admitted' && prevYearLoading) || (reportType === 'refund-students' && refundsLoading);
   if (isLoading) return <PageSpinner />;
 
   const activeCount = reportType === 'tc-issued' ? tcRows.length
     : reportType === 'pc-issued' ? pcRows.length
+    : reportType === 'refund-students' ? refundRows.length
     : filteredStudents.length;
 
   return (
@@ -1261,10 +1348,10 @@ export function StudentReports() {
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
         <div className="shrink-0">
           <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Reports</h2>
-          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && (
+          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && reportType !== 'refund-students' && (
             <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
           )}
-          {(reportType === 'tc-issued' || reportType === 'pc-issued') && (
+          {(reportType === 'tc-issued' || reportType === 'pc-issued' || reportType === 'refund-students') && (
             <p className="text-[10px] text-gray-400 leading-tight">All Academic Years</p>
           )}
           {reportType === 'not-admitted' && (
@@ -1275,7 +1362,7 @@ export function StudentReports() {
         </div>
 
         {/* Stats chips — SNQ Allotment & WhatsApp Numbers */}
-        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && !isLoading && stats.total > 0 && (
+        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && reportType !== 'refund-students' && !isLoading && stats.total > 0 && (
           <>
             <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
@@ -1439,6 +1526,60 @@ export function StudentReports() {
           </>
         )}
 
+        {/* Stats chips — Refund Students List */}
+        {reportType === 'refund-students' && !isLoading && refundStats && refundStats.totalRefunds > 0 && (
+          <>
+            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
+
+              <div className="flex items-center gap-1 bg-white/80 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-rose-600 font-semibold">Refunds</span>
+                <span className="font-bold tabular-nums">{refundStats.totalRefunds}</span>
+              </div>
+
+              <span className="text-rose-200 text-xs select-none shrink-0">·</span>
+
+              <div className="flex items-center gap-1 bg-white/80 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                <span className="text-rose-600 font-semibold">Total Amount</span>
+                <span className="font-bold tabular-nums">₹{refundStats.totalAmount.toLocaleString('en-IN')}</span>
+              </div>
+
+              <span className="text-rose-200 text-xs select-none shrink-0">·</span>
+
+              {COURSES.map((c) => {
+                const count  = refundStats.byCourse[c] ?? 0;
+                const active = courseFilter === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setCourseFilter(active ? '' : c)}
+                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
+                      active
+                        ? 'bg-rose-600 border-rose-600 text-white'
+                        : count === 0
+                        ? 'bg-white/50 border-gray-100 text-gray-300'
+                        : 'bg-white/80 border-rose-100 hover:border-rose-300 hover:bg-rose-50'
+                    }`}
+                  >
+                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
+                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
+                  </button>
+                );
+              })}
+
+              {hasActiveFilters && (
+                <>
+                  <span className="text-rose-200 text-xs select-none shrink-0">·</span>
+                  <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
+                    <span className="text-rose-600 font-semibold">Filtered</span>
+                    <span className="font-bold tabular-nums">{refundRows.length}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         {/* Stats chips — Not Admitted List */}
         {reportType === 'not-admitted' && !isLoading && notAdmittedStats.total > 0 && (
           <>
@@ -1595,6 +1736,37 @@ export function StudentReports() {
             </>
           )}
 
+          {/* Refund Year + Category filters — only for Refund Students List */}
+          {reportType === 'refund-students' && (
+            <>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">Refund Year</span>
+                <select
+                  value={refundYearFilter}
+                  onChange={(e) => setRefundYearFilter(e.target.value)}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 focus:outline-none focus:ring-1 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                >
+                  <option value="ALL">All Academic Years</option>
+                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <select
+                  value={refundCategoryFilter}
+                  onChange={(e) => setRefundCategoryFilter(e.target.value as RefundCategory | '')}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 focus:outline-none focus:ring-1 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                >
+                  <option value="">All Categories</option>
+                  <option value="SNQ">SNQ</option>
+                  <option value="SEAT_CANCELLATION">Seat Cancellation</option>
+                </select>
+              </div>
+              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+            </>
+          )}
+
           {/* Search — rounded-full with icon + amber clear, matching Students page */}
           <div className="relative shrink-0 w-56">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -1602,7 +1774,7 @@ export function StudentReports() {
             </svg>
             <input
               type="text"
-              placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : 'Search name / reg / mobile…'}
+              placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : reportType === 'refund-students' ? 'Search name / reg / reference no…' : 'Search name / reg / mobile…'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className={`w-full rounded-full border border-emerald-300 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
@@ -1635,61 +1807,71 @@ export function StudentReports() {
               placeholder="Study Yr"
               options={YEARS.map((yr) => ({ value: yr, label: yr }))}
             />
-            <FilterDropdown<Gender | ''>
-              value={genderFilter}
-              onChange={(v) => setGenderFilter(v as Gender | '')}
-              placeholder="Gender"
-              options={[
-                { value: 'BOY', label: 'BOY' },
-                { value: 'GIRL', label: 'GIRL' },
-              ]}
-            />
-            <FilterDropdown<Category | ''>
-              value={categoryFilter}
-              onChange={(v) => setCategoryFilter(v as Category | '')}
-              placeholder="Cat"
-              options={[
-                { value: 'GM', label: 'GM' },
-                { value: 'SC', label: 'SC' },
-                { value: 'ST', label: 'ST' },
-                { value: 'C1', label: 'C1' },
-                { value: '2A', label: '2A' },
-                { value: '2B', label: '2B' },
-                { value: '3A', label: '3A' },
-                { value: '3B', label: '3B' },
-              ]}
-            />
-            <FilterDropdown<CategoryGroup | ''>
-              value={categoryGroupFilter}
-              onChange={(v) => setCategoryGroupFilter(v as CategoryGroup | '')}
-              placeholder="Cat Group"
-              options={[
-                { value: 'GM', label: CATEGORY_GROUP_LABELS.GM },
-                { value: 'OBC', label: CATEGORY_GROUP_LABELS.OBC },
-                { value: 'SC_ST', label: CATEGORY_GROUP_LABELS.SC_ST },
-              ]}
-            />
-            <FilterDropdown<AdmType | ''>
-              value={admTypeFilter}
-              onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
-              placeholder="Adm Type"
-              options={[
-                { value: 'REGULAR', label: 'REGULAR' },
-                { value: 'REPEATER', label: 'REPEATER' },
-                { value: 'LATERAL', label: 'LATERAL' },
-                { value: 'EXTERNAL', label: 'EXTERNAL' },
-              ]}
-            />
-            <FilterDropdown<AdmCat | ''>
-              value={admCatFilter}
-              onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
-              placeholder="Adm Cat"
-              options={[
-                { value: 'GM', label: 'GM' },
-                { value: 'SNQ', label: 'SNQ' },
-                { value: 'OTHERS', label: 'OTHERS' },
-              ]}
-            />
+            {reportType !== 'refund-students' && (
+              <FilterDropdown<Gender | ''>
+                value={genderFilter}
+                onChange={(v) => setGenderFilter(v as Gender | '')}
+                placeholder="Gender"
+                options={[
+                  { value: 'BOY', label: 'BOY' },
+                  { value: 'GIRL', label: 'GIRL' },
+                ]}
+              />
+            )}
+            {reportType !== 'refund-students' && (
+              <FilterDropdown<Category | ''>
+                value={categoryFilter}
+                onChange={(v) => setCategoryFilter(v as Category | '')}
+                placeholder="Cat"
+                options={[
+                  { value: 'GM', label: 'GM' },
+                  { value: 'SC', label: 'SC' },
+                  { value: 'ST', label: 'ST' },
+                  { value: 'C1', label: 'C1' },
+                  { value: '2A', label: '2A' },
+                  { value: '2B', label: '2B' },
+                  { value: '3A', label: '3A' },
+                  { value: '3B', label: '3B' },
+                ]}
+              />
+            )}
+            {reportType !== 'refund-students' && (
+              <FilterDropdown<CategoryGroup | ''>
+                value={categoryGroupFilter}
+                onChange={(v) => setCategoryGroupFilter(v as CategoryGroup | '')}
+                placeholder="Cat Group"
+                options={[
+                  { value: 'GM', label: CATEGORY_GROUP_LABELS.GM },
+                  { value: 'OBC', label: CATEGORY_GROUP_LABELS.OBC },
+                  { value: 'SC_ST', label: CATEGORY_GROUP_LABELS.SC_ST },
+                ]}
+              />
+            )}
+            {reportType !== 'refund-students' && (
+              <FilterDropdown<AdmType | ''>
+                value={admTypeFilter}
+                onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                placeholder="Adm Type"
+                options={[
+                  { value: 'REGULAR', label: 'REGULAR' },
+                  { value: 'REPEATER', label: 'REPEATER' },
+                  { value: 'LATERAL', label: 'LATERAL' },
+                  { value: 'EXTERNAL', label: 'EXTERNAL' },
+                ]}
+              />
+            )}
+            {reportType !== 'refund-students' && (
+              <FilterDropdown<AdmCat | ''>
+                value={admCatFilter}
+                onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                placeholder="Adm Cat"
+                options={[
+                  { value: 'GM', label: 'GM' },
+                  { value: 'SNQ', label: 'SNQ' },
+                  { value: 'OTHERS', label: 'OTHERS' },
+                ]}
+              />
+            )}
             {reportType === 'not-admitted' && (
               <FilterDropdown<EffectiveNotAdmittedStatus>
                 value={notAdmittedStatusFilter}
@@ -1825,7 +2007,9 @@ export function StudentReports() {
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       {tcError && (reportType === 'tc-issued' || reportType === 'pc-issued') ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{tcError}</div>
-      ) : error && reportType !== 'tc-issued' && reportType !== 'pc-issued' ? (
+      ) : refundsError && reportType === 'refund-students' ? (
+        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{refundsError}</div>
+      ) : error && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'refund-students' ? (
         <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
       ) : reportType === 'tc-issued' ? (
         tcRows.length === 0 ? (
@@ -2360,6 +2544,75 @@ export function StudentReports() {
             Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
           </div>
         </div>
+      ) : reportType === 'refund-students' ? (
+        refundRows.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            No refund records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
+          </div>
+        ) : (
+          /* ── Refund Students List table ──────────────────────────────────── */
+          <div
+            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-rose-100 overflow-auto flex flex-col"
+            style={{ boxShadow: '0 1px 4px 0 rgba(190,18,60,0.06)' }}
+          >
+            <table className="min-w-full divide-y divide-rose-50 text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'linear-gradient(90deg, #fff1f2, #ffe4e6)' }}>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-rose-200">#</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-rose-200">Student Name</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-rose-200">Course</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-rose-200">Reg No</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Category</th>
+                  <th className="px-3 py-2 text-right font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Refund Amt</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-rose-200">Mode</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Payment Date</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-rose-200">Acad. Year</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rose-50/60">
+                {refundRows.map((r, idx) => {
+                  const isSNQ = (r.refundCategory ?? 'SNQ') === 'SNQ';
+                  return (
+                    <tr key={r.id} className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-rose-50/40`}>
+                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
+                      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.studentName}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                          isSNQ ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-amber-50 border-amber-100 text-amber-700'
+                        }`}>
+                          {isSNQ ? 'SNQ' : 'Seat Cancellation'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-rose-700 whitespace-nowrap tabular-nums">₹{r.refundAmount.toLocaleString('en-IN')}</td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.paymentType.replace(/_/g, ' ')}</td>
+                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                        {r.paymentDate ? new Date(r.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 border border-rose-100 text-rose-700">
+                          {r.academicYear}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="px-3 py-2 border-t border-rose-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
+              <span>
+                Showing {refundRows.length} refund{refundRows.length !== 1 ? 's' : ''}
+                {hasActiveFilters && refundStats && refundStats.totalRefunds > 0 && refundRows.length < refundStats.totalRefunds && (
+                  <span className="text-gray-400"> (filtered from {refundStats.totalRefunds} total)</span>
+                )}
+              </span>
+              <span className="font-semibold text-rose-700">
+                Total: ₹{refundRows.reduce((s, r) => s + r.refundAmount, 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+        )
       ) : reportType === 'custom' ? (
         orderedCustomColumns.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
