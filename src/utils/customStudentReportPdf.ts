@@ -29,31 +29,40 @@ export function exportCustomStudentReportPdf(
   const PORTRAIT_W  = 210 - margin * 2;
   const LANDSCAPE_W = 297 - margin * 2;
 
-  const orientation: 'portrait' | 'landscape' = columns.length > 7 ? 'landscape' : 'portrait';
-  const usableW = orientation === 'landscape' ? LANDSCAPE_W : PORTRAIT_W;
-
-  // Widest text column (by header length) gets the leftover width; the rest are measured.
-  const wideIdx = columns.reduce((best, col, idx, arr) =>
-    col.label.length > arr[best].label.length ? idx : best, 0);
+  const MIN_FLEX_W = 25; // mm — floor for the flexible column to stay legible
 
   const measureDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   measureDoc.setFontSize(FONT_SIZE);
 
-  let fixedTotal = 0;
-  const colWidths: number[] = columns.map((col, idx) => {
-    if (idx === wideIdx) return 0;
+  // Measure every column's true natural width (header + its widest value).
+  const allNaturalWidths = columns.map((col) => {
     measureDoc.setFont('helvetica', 'bold');
     let w = measureDoc.getTextWidth(col.label);
     measureDoc.setFont('helvetica', 'normal');
-    for (const r of rows) {
-      const cw = measureDoc.getTextWidth(formatColumnValue(col, r));
+    rows.forEach((r, i) => {
+      const cw = measureDoc.getTextWidth(formatColumnValue(col, r, i));
       if (cw > w) w = cw;
-    }
-    const colW = w + PAD_H + 2;
-    fixedTotal += colW;
-    return colW;
+    });
+    return w + PAD_H + 2;
   });
-  colWidths[wideIdx] = Math.max(usableW - fixedTotal, 25);
+
+  // The single widest column by actual content (typically a free-text field like
+  // Name or Address) is "flexible": it gets whatever width is left over and relies
+  // on ellipsize for long values, rather than forcing the page wide enough for its
+  // single longest value. Every other column keeps its measured natural width.
+  const wideIdx = allNaturalWidths.reduce((best, w, idx, arr) => w > arr[best] ? idx : best, 0);
+  const naturalWidths = allNaturalWidths.map((w, idx) => (idx === wideIdx ? 0 : w));
+  const fixedTotal = naturalWidths.reduce((s, w) => s + w, 0);
+
+  // Fits in portrait as long as the fixed columns leave the flexible column at
+  // least its minimum legible width — this is what lets a 9-column report (like
+  // the default view) stay portrait instead of always jumping to landscape.
+  const orientation: 'portrait' | 'landscape' =
+    fixedTotal + MIN_FLEX_W <= PORTRAIT_W ? 'portrait' : 'landscape';
+  const usableW = orientation === 'landscape' ? LANDSCAPE_W : PORTRAIT_W;
+
+  const colWidths: number[] = [...naturalWidths];
+  colWidths[wideIdx] = Math.max(usableW - fixedTotal, MIN_FLEX_W);
 
   const tableWidth = colWidths.reduce((s, w) => s + w, 0);
 
@@ -93,7 +102,7 @@ export function exportCustomStudentReportPdf(
   doc.line(margin, 22, pageW - margin, 22);
 
   const headers = [columns.map((c) => c.label)];
-  const body = rows.map((r) => columns.map((c) => formatColumnValue(c, r)));
+  const body = rows.map((r, i) => columns.map((c) => formatColumnValue(c, r, i)));
 
   const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right' }> = {};
   columns.forEach((col, idx) => {

@@ -1,15 +1,21 @@
 import type { Student } from '../types';
 
-export type ColumnGroup = 'Personal' | 'Academic' | 'Admission' | 'Contact';
+export type ColumnGroup = 'General' | 'Personal' | 'Academic' | 'Admission' | 'Contact';
+
+/** Real Student fields, plus synthetic columns computed at render time (row number, merged mobile). */
+export type ColumnKey = keyof Student | 'slNo' | 'mobile';
 
 export interface ColumnDef {
-  key: keyof Student;
+  key: ColumnKey;
   label: string;
   group: ColumnGroup;
   align: 'left' | 'center' | 'right';
 }
 
 export const STUDENT_COLUMNS: ColumnDef[] = [
+  // ── General ───────────────────────────────────────────────────────────────
+  { key: 'slNo', label: 'Sl No', group: 'General', align: 'center' },
+
   // ── Personal ──────────────────────────────────────────────────────────────
   { key: 'studentNameSSLC',   label: 'Name (SSLC)',    group: 'Personal', align: 'left'   },
   { key: 'studentNameAadhar', label: 'Name (Aadhar)',  group: 'Personal', align: 'left'   },
@@ -67,16 +73,20 @@ export const STUDENT_COLUMNS: ColumnDef[] = [
   // ── Contact ───────────────────────────────────────────────────────────────
   { key: 'fatherMobile',  label: 'Father Mobile',  group: 'Contact', align: 'left' },
   { key: 'studentMobile', label: 'Student Mobile', group: 'Contact', align: 'left' },
+  { key: 'mobile',        label: 'Mobile',         group: 'Contact', align: 'left' },
 ];
 
-export const COLUMN_GROUPS: ColumnGroup[] = ['Personal', 'Academic', 'Admission', 'Contact'];
+export const COLUMN_GROUPS: ColumnGroup[] = ['General', 'Personal', 'Academic', 'Admission', 'Contact'];
 
-export const DEFAULT_CUSTOM_COLUMNS: (keyof Student)[] = [
-  'studentNameSSLC', 'course', 'year', 'category', 'gender',
-  'studentMobile', 'sslcObtainedTotal', 'admissionStatus',
+export const DEFAULT_CUSTOM_COLUMNS: ColumnKey[] = [
+  'slNo', 'studentNameSSLC', 'regNumber', 'course', 'year',
+  'gender', 'admType', 'admCat', 'mobile',
 ];
 
-export function formatColumnValue(col: ColumnDef, s: Student): string {
+/** rowIndex (0-based) is only needed for the synthetic 'slNo' column. */
+export function formatColumnValue(col: ColumnDef, s: Student, rowIndex?: number): string {
+  if (col.key === 'slNo') return String((rowIndex ?? 0) + 1);
+  if (col.key === 'mobile') return s.studentMobile || s.fatherMobile || '—';
   const v = s[col.key];
   if (v === undefined || v === null || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'Yes' : '—';

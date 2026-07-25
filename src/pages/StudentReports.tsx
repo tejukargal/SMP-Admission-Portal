@@ -25,7 +25,7 @@ import type { RefundCategory, RefundRecord } from '../services/refundService';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { ColumnPickerDropdown } from '../components/common/ColumnPickerDropdown';
-import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue } from '../utils/studentColumns';
+import { STUDENT_COLUMNS, DEFAULT_CUSTOM_COLUMNS, formatColumnValue, type ColumnDef, type ColumnKey } from '../utils/studentColumns';
 import { sortByLevels, SORT_FIELD_OPTIONS, type SortLevel, type SortableField } from '../utils/sortStudents';
 import { exportCustomStudentReportPdf } from '../utils/customStudentReportPdf';
 import { exportNotAdmittedPdf } from '../utils/notAdmittedPdf';
@@ -336,14 +336,18 @@ export function StudentReports() {
   const [refundCategoryFilter, setRefundCategoryFilter] = useState<RefundCategory | ''>('');
 
   // ── Custom Report: columns + multi-level sort ────────────────────────────────
-  const [customColumns, setCustomColumns] = useState<Set<keyof Student>>(new Set(DEFAULT_CUSTOM_COLUMNS));
+  const [customColumns, setCustomColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_CUSTOM_COLUMNS));
   const [sortLevels, setSortLevels] = useState<SortLevel[]>([
     { field: '', direction: 'asc' },
     { field: '', direction: 'asc' },
     { field: '', direction: 'asc' },
   ]);
+  // Column order follows selection order (the order columns were checked), not a fixed
+  // group order — this is what lets DEFAULT_CUSTOM_COLUMNS dictate the default layout.
   const orderedCustomColumns = useMemo(
-    () => STUDENT_COLUMNS.filter((c) => customColumns.has(c.key)),
+    () => Array.from(customColumns)
+      .map((key) => STUDENT_COLUMNS.find((c) => c.key === key))
+      .filter((c): c is ColumnDef => c !== undefined),
     [customColumns]
   );
   function setSortLevel(idx: number, patch: Partial<SortLevel>) {
@@ -1274,13 +1278,12 @@ export function StudentReports() {
           if (yearFilter)             parts.push(yearFilter.replace(/\s+/g, ''));
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'custom') {
-          const headers = ['Sl No', ...orderedCustomColumns.map((c) => c.label)];
-          const rows = filteredStudents.map((s, i) => [
-            i + 1,
-            ...orderedCustomColumns.map((c) => formatColumnValue(c, s)),
-          ]);
+          const headers = orderedCustomColumns.map((c) => c.label);
+          const rows = filteredStudents.map((s, i) =>
+            orderedCustomColumns.map((c) => formatColumnValue(c, s, i))
+          );
           const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-          ws['!cols'] = [{ wch: 6 }, ...orderedCustomColumns.map(() => ({ wch: 16 }))];
+          ws['!cols'] = orderedCustomColumns.map((c) => ({ wch: c.key === 'slNo' ? 6 : 16 }));
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Custom Report');
           const parts = ['custom_student_report'];
@@ -2632,7 +2635,6 @@ export function StudentReports() {
             <table className="min-w-full divide-y divide-violet-50 text-xs">
               <thead className="sticky top-0 z-10">
                 <tr style={{ background: 'linear-gradient(90deg, #f5f3ff, #ede9fe)' }}>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-violet-200">#</th>
                   {orderedCustomColumns.map((c) => (
                     <th
                       key={c.key}
@@ -2649,17 +2651,16 @@ export function StudentReports() {
                     key={s.id}
                     className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-violet-50/40`}
                   >
-                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     {orderedCustomColumns.map((c) => (
                       <td key={c.key} className={`px-3 py-2 text-gray-700 whitespace-nowrap ${ALIGN_CLASS[c.align]}`}>
-                        {formatColumnValue(c, s)}
+                        {formatColumnValue(c, s, idx)}
                       </td>
                     ))}
                   </tr>
                 ))}
                 {hasMore && (
                   <tr>
-                    <td colSpan={orderedCustomColumns.length + 1} className="px-3 py-2 text-center border-t border-violet-100/50">
+                    <td colSpan={orderedCustomColumns.length} className="px-3 py-2 text-center border-t border-violet-100/50">
                       <button
                         className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
                         onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}

@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { Student } from '../../types';
-import { COLUMN_GROUPS, type ColumnDef } from '../../utils/studentColumns';
+import { COLUMN_GROUPS, type ColumnDef, type ColumnKey } from '../../utils/studentColumns';
 
 interface ColumnPickerDropdownProps {
   columns: ColumnDef[];
-  selected: Set<keyof Student>;
-  onChange: (next: Set<keyof Student>) => void;
+  selected: Set<ColumnKey>;
+  onChange: (next: Set<ColumnKey>) => void;
 }
 
 export function ColumnPickerDropdown({ columns, selected, onChange }: ColumnPickerDropdownProps) {
@@ -45,7 +44,7 @@ export function ColumnPickerDropdown({ columns, selected, onChange }: ColumnPick
     menu.style.maxHeight = `${Math.max(maxHeight, 200)}px`;
   }, [open]);
 
-  function toggle(key: keyof Student) {
+  function toggle(key: ColumnKey) {
     const next = new Set(selected);
     if (next.has(key)) next.delete(key); else next.add(key);
     onChange(next);
