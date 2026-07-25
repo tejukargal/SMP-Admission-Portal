@@ -316,6 +316,36 @@ export async function updateStudent(
   });
 }
 
+/**
+ * Fields that describe the physical person rather than a specific year's
+ * enrollment — safe to copy onto this student's other-year records.
+ * Deliberately excludes course/year/admType/admCat/academicYear/admissionStatus/
+ * enrollmentDate/applicationNumber/meritNumber/regNumber/transfer fields, which are
+ * intentionally independent per academic year.
+ */
+export const CROSS_YEAR_PROPAGATABLE_FIELDS: (keyof StudentFormData)[] = [
+  'studentNameSSLC', 'studentNameAadhar', 'fatherName', 'motherName', 'dateOfBirth',
+  'gender', 'religion', 'caste', 'category', 'tenthBoard', 'priorQualification',
+  'sslcMaxTotal', 'sslcObtainedTotal', 'scienceMax', 'scienceObtained',
+  'mathsMax', 'mathsObtained', 'mathsScienceMaxTotal', 'mathsScienceObtainedTotal',
+  'annualIncome', 'address', 'town', 'taluk', 'district',
+  'pucMaxTotal', 'pucObtainedTotal', 'pucPercentage',
+  'itiMaxTotal', 'itiObtainedTotal', 'itiPercentage', 'itiPucCombination',
+  'fatherMobile', 'studentMobile', 'aadharNumber', 'apaarId',
+];
+
+/** Partial update used to propagate a corrected field onto a sibling year-record. */
+export async function updateStudentFields(
+  id: string,
+  fields: Partial<StudentFormData>
+): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, {
+    ...fields,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export async function updateStudentStatus(id: string, status: string): Promise<void> {
   const ref = doc(db, STUDENTS_COLLECTION, id);
   await updateDoc(ref, { admissionStatus: status, updatedAt: new Date().toISOString() });

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent,
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
-import { addStudent, getStudent, updateStudent, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber, updateStudentAllottedCategory } from '../services/studentService';
+import { addStudent, getStudent, updateStudent, updateStudentFields, CROSS_YEAR_PROPAGATABLE_FIELDS, getAllStudents, getStudentsByAcademicYear, peekNextDefaultRegNumber, peekNextDefaultAppNumber, updateStudentAllottedCategory } from '../services/studentService';
 import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
@@ -465,6 +465,8 @@ export function EnrollStudent() {
   const [editOriginalAdmCat, setEditOriginalAdmCat] = useState<AdmCat | null>(null);
   const [editOriginalCourse, setEditOriginalCourse] = useState<string | null>(null);
   const [editOriginalProfile, setEditOriginalProfile] = useState<{ studentNameSSLC: string; fatherName: string; motherName: string } | null>(null);
+  const [editOriginalFormData, setEditOriginalFormData] = useState<StudentFormData | null>(null);
+  const [applyToAllYears, setApplyToAllYears] = useState(false);
   const [enrollmentHistory, setEnrollmentHistory] = useState<Student[]>([]);
   const [showYearWarning, setShowYearWarning] = useState(false);
   const [yearConflictRecord, setYearConflictRecord] = useState<Student | null>(null);
@@ -846,6 +848,8 @@ export function EnrollStudent() {
         fatherName: formData.fatherName,
         motherName: formData.motherName,
       });
+      setEditOriginalFormData({ ...formData });
+      setApplyToAllYears(false);
       getAllStudents().then((all) => {
         const history = all
           .filter((s) => {
@@ -1065,6 +1069,23 @@ export function EnrollStudent() {
             editOriginalAdmCat,
             form.admCat,
           );
+        }
+
+        // If requested, copy the corrected physical-person fields onto this
+        // student's other-year records too (course/year/fee-related fields are
+        // never propagated — each year's enrollment stays independent).
+        if (applyToAllYears && editOriginalFormData && enrollmentHistory.length > 0) {
+          const changedFields: Partial<StudentFormData> = {};
+          for (const field of CROSS_YEAR_PROPAGATABLE_FIELDS) {
+            if (form[field] !== editOriginalFormData[field]) {
+              (changedFields as Record<string, unknown>)[field] = form[field];
+            }
+          }
+          if (Object.keys(changedFields).length > 0) {
+            await Promise.all(
+              enrollmentHistory.map((sibling) => updateStudentFields(sibling.id, changedFields))
+            );
+          }
         }
 
         // Notify the student of what changed, in a single summary notification
@@ -1945,6 +1966,27 @@ export function EnrollStudent() {
                 )}
               </div>
             </div>
+
+            {editId && enrollmentHistory.length > 0 && (
+              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-100/50 px-4 py-3">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={applyToAllYears}
+                    onChange={(e) => setApplyToAllYears(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-400 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-semibold">Apply name / profile corrections to all years for this student</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Copies personal details you change here (name, parents' names, DOB, address, mobile, marks, etc.) onto this
+                      student's other enrollment years: {enrollmentHistory.map((r) => r.academicYear).join(', ')}.
+                      Course, year, admission category and fee-related fields are never copied — those stay specific to each year.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
         </section>
 
