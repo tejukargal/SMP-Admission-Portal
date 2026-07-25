@@ -131,3 +131,31 @@ export async function getTcRecordsByStudent(studentId: string): Promise<TCRecord
   const history = (snap.data() as { tcHistory?: TCRecord[] } | undefined)?.tcHistory ?? [];
   return [...history].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }
+
+// ─── Extra-details edit history (Father/Mother name, DOB, Caste, Category) ────
+// Stored as a `tcEditHistory` array field on the students/{studentId} doc, kept
+// separate from `tcHistory` (TC issuance) but shown alongside it in the TC modal.
+
+export interface TCEditRecord {
+  id: string;
+  editedAt: string; // ISO timestamp
+  changes: { label: string; from: string; to: string }[];
+}
+
+/** Append a brief before/after note to the student document's tcEditHistory array. */
+export async function saveTcEditRecord(
+  studentId: string,
+  changes: { label: string; from: string; to: string }[],
+): Promise<void> {
+  const record: TCEditRecord = { id: makeId(), editedAt: new Date().toISOString(), changes };
+  await updateDoc(doc(db, 'students', studentId), {
+    tcEditHistory: arrayUnion(record),
+  });
+}
+
+/** Read the extra-details edit history from the student document, sorted newest-first. */
+export async function getTcEditRecordsByStudent(studentId: string): Promise<TCEditRecord[]> {
+  const snap    = await getDoc(doc(db, 'students', studentId));
+  const history = (snap.data() as { tcEditHistory?: TCEditRecord[] } | undefined)?.tcEditHistory ?? [];
+  return [...history].sort((a, b) => b.editedAt.localeCompare(a.editedAt));
+}

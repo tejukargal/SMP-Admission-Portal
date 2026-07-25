@@ -334,6 +334,24 @@ export const CROSS_YEAR_PROPAGATABLE_FIELDS: (keyof StudentFormData)[] = [
   'fatherMobile', 'studentMobile', 'aadharNumber', 'apaarId',
 ];
 
+/**
+ * Find this student's other-year records (same person, different academicYear),
+ * using the same match rule as the cross-year propagation feature above:
+ * regNumber if present, else studentNameSSLC.
+ */
+export async function getOtherYearRecords(student: Student): Promise<Student[]> {
+  const all = await getAllStudents();
+  return all
+    .filter((s) => {
+      if (s.id === student.id) return false;
+      if (student.regNumber) {
+        return s.regNumber?.toUpperCase() === student.regNumber.toUpperCase();
+      }
+      return s.studentNameSSLC.toUpperCase() === student.studentNameSSLC.toUpperCase();
+    })
+    .sort((a, b) => a.academicYear.localeCompare(b.academicYear));
+}
+
 /** Partial update used to propagate a corrected field onto a sibling year-record. */
 export async function updateStudentFields(
   id: string,

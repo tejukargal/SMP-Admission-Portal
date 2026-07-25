@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber, removeFeeRecordRemark } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
-import { getTcRecordsByStudent, type TCRecord } from '../../services/tcService';
+import { getTcRecordsByStudent, getTcEditRecordsByStudent, type TCRecord, type TCEditRecord } from '../../services/tcService';
 import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
 import {
   getRefundRecordsByStudent,
@@ -795,7 +795,13 @@ function FeeTab({
 
 // ─── TC History tab ───────────────────────────────────────────────────────────
 
-function TcHistoryTab({ records, loading }: { records: TCRecord[]; loading: boolean }) {
+function TcHistoryTab({
+  records, editRecords, loading,
+}: {
+  records: TCRecord[];
+  editRecords: TCEditRecord[];
+  loading: boolean;
+}) {
   if (loading) {
     return (
       <div className="px-6 py-5 space-y-3">
@@ -811,7 +817,7 @@ function TcHistoryTab({ records, loading }: { records: TCRecord[]; loading: bool
     );
   }
 
-  if (records.length === 0) {
+  if (records.length === 0 && editRecords.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
         <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-2xl">
@@ -828,16 +834,18 @@ function TcHistoryTab({ records, loading }: { records: TCRecord[]; loading: bool
   return (
     <div className="px-5 py-4 space-y-3">
       {/* Summary bar */}
-      <div className="flex items-center justify-between">
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-          records.length > 1
-            ? 'bg-amber-50 text-amber-700 border-amber-200'
-            : 'bg-blue-50 text-blue-700 border-blue-200'
-        }`}>
-          {records.length} TC{records.length > 1 ? 's' : ''} issued
-          {records.some((r) => r.isDuplicate) ? ' · includes duplicate' : ''}
-        </span>
-      </div>
+      {records.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+            records.length > 1
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-blue-50 text-blue-700 border-blue-200'
+          }`}>
+            {records.length} TC{records.length > 1 ? 's' : ''} issued
+            {records.some((r) => r.isDuplicate) ? ' · includes duplicate' : ''}
+          </span>
+        </div>
+      )}
 
       {/* Record cards */}
       <div className="space-y-3">
@@ -902,6 +910,37 @@ function TcHistoryTab({ records, loading }: { records: TCRecord[]; loading: bool
         <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
           <span className="shrink-0 mt-0.5">⚠</span>
           <span>Multiple TCs issued for this student. Any further TC must be a <strong>Duplicate Copy</strong>.</span>
+        </div>
+      )}
+
+      {/* Extra-details edit history — father/mother name, DOB, caste, category corrections */}
+      {editRecords.length > 0 && (
+        <div className="rounded-xl border border-violet-200 overflow-hidden shadow-sm border-l-4 border-l-violet-400">
+          <div className="px-4 py-2.5 bg-violet-50 flex items-center justify-between">
+            <span className="text-sm font-bold text-violet-800">Extra Details Edit History</span>
+            <span className="text-[10px] text-gray-400">
+              {editRecords.length} edit{editRecords.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="px-4 py-3 bg-white space-y-3">
+            {editRecords.map((rec) => (
+              <div key={rec.id} className="space-y-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+                  {new Date(rec.editedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+                <div className="space-y-0.5">
+                  {rec.changes.map((c, i) => (
+                    <div key={i} className="text-xs text-gray-700">
+                      <span className="font-medium text-gray-600">{c.label}:</span>{' '}
+                      <span className="line-through text-gray-400">{c.from}</span>
+                      {' → '}
+                      <span className="font-medium text-violet-700">{c.to}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1446,6 +1485,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const [tcLoading, setTcLoading] = useState(false);
   const [tcLoaded,  setTcLoaded]  = useState(false);
 
+  // Extra-details edit history (father/mother name, DOB, caste, category corrections)
+  const [tcEditRecords, setTcEditRecords] = useState<TCEditRecord[]>([]);
+
   // PC history state — lazy-loaded on first visit to pc tab
   const [pcRecords, setPcRecords] = useState<PCRecord[]>([]);
   const [pcLoading, setPcLoading] = useState(false);
@@ -1514,12 +1556,15 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, feeLoaded]);
 
-  // Lazy-load TC history when tc tab first activated
+  // Lazy-load TC history (and extra-details edit history) when tc tab first activated
   useEffect(() => {
     if (activeTab !== 'tc' || tcLoaded) return;
     setTcLoading(true);
-    getTcRecordsByStudent(student.id)
-      .then((records) => setTcRecords(records))
+    Promise.all([
+      getTcRecordsByStudent(student.id),
+      getTcEditRecordsByStudent(student.id).catch(() => [] as TCEditRecord[]),
+    ])
+      .then(([records, editRecords]) => { setTcRecords(records); setTcEditRecords(editRecords); })
       .catch(() => { /* non-fatal */ })
       .finally(() => { setTcLoading(false); setTcLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1732,7 +1777,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
             />
           )}
           {activeTab === 'tc' && (
-            <TcHistoryTab records={tcRecords} loading={tcLoading} />
+            <TcHistoryTab records={tcRecords} editRecords={tcEditRecords} loading={tcLoading} />
           )}
           {activeTab === 'pc' && (
             <PcHistoryTab records={pcRecords} loading={pcLoading} />

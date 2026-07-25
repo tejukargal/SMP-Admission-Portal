@@ -15,6 +15,7 @@ import {
   getTcRecordsByStudent,
   type TCRecord,
 } from '../../services/tcService';
+import { ExtraDetailsEditModal } from './ExtraDetailsEditModal';
 
 interface Props {
   student: Student;
@@ -56,7 +57,13 @@ const RESULTS = ['Distinction', 'First Class', 'Second Class', 'Pass Class', 'Fa
 
 const inp = 'w-full rounded border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500';
 
-export function TransferCertificateModal({ student, onClose }: Props) {
+export function TransferCertificateModal({ student: studentProp, onClose }: Props) {
+  // Local override so edits made via "Edit Extra Details" (father/mother name, DOB,
+  // caste, category) are reflected immediately in this modal's preview/print without
+  // requiring the parent page to re-fetch.
+  const [student,       setStudent]       = useState<Student>(studentProp);
+  const [showExtraDetailsEdit, setShowExtraDetailsEdit] = useState(false);
+
   const [tcNumber,      setTcNumber]      = useState('');
   const [loadingTc,     setLoadingTc]     = useState(false);
   const [dateAdmISO,    setDateAdmISO]    = useState(() => createdAtToISO(student.createdAt));
@@ -344,7 +351,21 @@ export function TransferCertificateModal({ student, onClose }: Props) {
           <div className="bg-gray-50 rounded-lg px-3 py-2.5 text-xs text-gray-500 space-y-0.5">
             <div><span className="font-medium text-gray-700">Course:</span> {TC_COURSE_NAMES[student.course] ?? student.course}</div>
             <div><span className="font-medium text-gray-700">Reg No:</span> {student.regNumber || '—'}</div>
+            <div><span className="font-medium text-gray-700">Father's Name:</span> {student.fatherName}</div>
+            <div><span className="font-medium text-gray-700">Mother's Name:</span> {student.motherName}</div>
+            <div><span className="font-medium text-gray-700">Date of Birth:</span> {student.dateOfBirth || '—'}</div>
             <div><span className="font-medium text-gray-700">Category / Caste:</span> {student.category} – {student.caste}</div>
+            <button
+              type="button"
+              onClick={() => setShowExtraDetailsEdit(true)}
+              className="mt-1.5 inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors cursor-pointer"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit Extra Details
+            </button>
           </div>
 
           {/* Dates */}
@@ -465,6 +486,17 @@ export function TransferCertificateModal({ student, onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {showExtraDetailsEdit && (
+        <ExtraDetailsEditModal
+          student={student}
+          onClose={() => setShowExtraDetailsEdit(false)}
+          onSaved={(updated) => {
+            setStudent((prev) => ({ ...prev, ...updated }));
+            setShowExtraDetailsEdit(false);
+          }}
+        />
+      )}
     </div>
   );
 }
