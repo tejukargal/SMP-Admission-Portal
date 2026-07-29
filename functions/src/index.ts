@@ -6,6 +6,8 @@ import * as https from 'https';
 admin.initializeApp();
 const db = admin.firestore();
 
+export { notifyOnNewNotice, notifyOnNewCircular, notifyOnCircularUpdated, notifyOnStudentNotification } from './pushNotifications';
+
 // ── Sync Firestore role/active onto the Auth custom claim `admin` ──────────
 // Storage Security Rules can't read Firestore documents, so admin-only Storage
 // writes (e.g. remittance challan uploads) are gated on this claim instead.

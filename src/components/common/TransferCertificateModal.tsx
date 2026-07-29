@@ -16,6 +16,8 @@ import {
   type TCRecord,
 } from '../../services/tcService';
 import { ExtraDetailsEditModal } from './ExtraDetailsEditModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { createStudentNotification } from '../../services/studentNotificationService';
 
 interface Props {
   student: Student;
@@ -61,6 +63,7 @@ export function TransferCertificateModal({ student: studentProp, onClose }: Prop
   // Local override so edits made via "Edit Extra Details" (father/mother name, DOB,
   // caste, category) are reflected immediately in this modal's preview/print without
   // requiring the parent page to re-fetch.
+  const { user } = useAuth();
   const [student,       setStudent]       = useState<Student>(studentProp);
   const [showExtraDetailsEdit, setShowExtraDetailsEdit] = useState(false);
 
@@ -170,6 +173,17 @@ export function TransferCertificateModal({ student: studentProp, onClose }: Prop
         isDuplicate:     pendingData.isDuplicate,
         issuedAt:        new Date().toISOString(),
       }).catch(() => {});
+
+      if (user && student.regNumber?.trim()) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: student.regNumber.trim(),
+          type: 'tc-issued',
+          title: 'Transfer Certificate Issued',
+          message: `Your Transfer Certificate (${pendingData.tcNumber}) has been issued. Check the Certificates tab for details.`,
+          createdBy: user.uid,
+        });
+      }
 
       // 3. Generate PDF
       generateTransferCertificate(student, pendingData);

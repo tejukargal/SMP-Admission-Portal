@@ -6,6 +6,8 @@ const TYPE_LABEL: Record<StudentNotification['type'], string> = {
   'profile-updated': 'Profile Update',
   'status-changed': 'Admission Status',
   'allotted-category': 'Allotted Category',
+  'tc-issued': 'Transfer Certificate',
+  'pc-issued': 'Provisional Certificate',
 };
 
 const TYPE_DOT: Record<StudentNotification['type'], string> = {
@@ -14,6 +16,8 @@ const TYPE_DOT: Record<StudentNotification['type'], string> = {
   'profile-updated': 'bg-blue-500',
   'status-changed': 'bg-violet-500',
   'allotted-category': 'bg-sky-500',
+  'tc-issued': 'bg-violet-500',
+  'pc-issued': 'bg-violet-500',
 };
 
 interface NotificationModalProps {

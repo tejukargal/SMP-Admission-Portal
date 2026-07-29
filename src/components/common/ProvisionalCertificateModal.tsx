@@ -10,6 +10,8 @@ import {
   getPcRecordsByStudent,
   type PCRecord,
 } from '../../services/pcService';
+import { useAuth } from '../../contexts/AuthContext';
+import { createStudentNotification } from '../../services/studentNotificationService';
 
 interface Props {
   student: Student;
@@ -36,6 +38,7 @@ const RESULT_CLASSES = ['DISTINCTION', 'FIRST CLASS', 'SECOND CLASS', 'PASS CLAS
 const inp = 'w-full rounded border border-gray-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500';
 
 export function ProvisionalCertificateModal({ student, onClose }: Props) {
+  const { user } = useAuth();
   const [dateIssueISO,  setDateIssueISO]  = useState(todayISO);
   const [examPeriod,    setExamPeriod]    = useState('');
   const [regNumber,     setRegNumber]     = useState(student.regNumber?.trim() ?? '');
@@ -81,6 +84,17 @@ export function ProvisionalCertificateModal({ student, onClose }: Props) {
         isDuplicate,
         issuedAt:    new Date().toISOString(),
       }).catch(() => {});
+
+      if (user && regNumber.trim()) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: regNumber.trim(),
+          type: 'pc-issued',
+          title: 'Provisional Certificate Issued',
+          message: `Your Provisional Certificate for ${examPeriod.trim()} has been issued. Check the Certificates tab for details.`,
+          createdBy: user.uid,
+        });
+      }
 
       const data: PCFormData = {
         dateOfIssue: isoToDDMMYYYY(dateIssueISO),

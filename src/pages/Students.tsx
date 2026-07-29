@@ -20,6 +20,7 @@ import { StudyCertificateModal } from '../components/common/StudyCertificateModa
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
+import { ManualCertificateModal } from '../components/common/ManualCertificateModal';
 import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
@@ -114,6 +115,7 @@ export function Students() {
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
   const [cccStudent, setCccStudent] = useState<Student | null>(null);
+  const [showManualCert, setShowManualCert] = useState(false);
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
   const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
@@ -693,6 +695,13 @@ export function Students() {
               Doc Status
             </button>
           )}
+          <button
+            onClick={() => setShowManualCert(true)}
+            title="Issue a Study/Provisional Certificate for a student with no database record (Evening College / Working Professional)"
+            className="shrink-0 rounded-full border border-indigo-200 px-2.5 py-1 text-[12px] text-indigo-700 bg-white hover:bg-indigo-50 hover:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
+          >
+            Manual Certificate
+          </button>
           {!isLoading && filteredStudents.length > 0 && (
             <>
               <button
@@ -1187,6 +1196,10 @@ export function Students() {
         student={cccStudent}
         onClose={() => setCccStudent(null)}
       />
+    )}
+
+    {showManualCert && (
+      <ManualCertificateModal onClose={() => setShowManualCert(false)} />
     )}
 
     {allottedCatStudent && (

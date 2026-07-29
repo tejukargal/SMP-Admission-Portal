@@ -291,6 +291,12 @@ service cloud.firestore {
     }
 
 
+    // ── Student Push Notification Tokens (mobile app device registration) ────
+    match /studentPushTokens/{regNumber} {
+      allow read, write: if isActiveUser()
+        || (isStudentClaim() && regNumber == request.auth.token.regNumber);
+    }
+
     // ── Student Notifications (admin/staff → student, record-change alerts) ─
     match /studentNotifications/{id} {
       allow read:   if isActiveUser()

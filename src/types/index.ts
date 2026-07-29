@@ -490,7 +490,8 @@ export interface StudentLoginActivity {
 }
 
 export type StudentNotificationType =
-  | 'fee-paid' | 'fee-dues-updated' | 'profile-updated' | 'status-changed' | 'allotted-category';
+  | 'fee-paid' | 'fee-dues-updated' | 'profile-updated' | 'status-changed' | 'allotted-category'
+  | 'tc-issued' | 'pc-issued';
 
 /** Auto-generated "your record changed" notification, shown once at portal login. */
 export interface StudentNotification {
