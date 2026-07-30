@@ -70,7 +70,7 @@ export function getDefaultBodyText(student: Student, certType: CertificateType, 
 
   let para1: string;
   if (isCompleted && isLateral) {
-    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution, having been admitted through Lateral Entry directly to the 2nd Year. ${pronoun} has successfully completed the Diploma in ${courseFull} (2nd Year to 3rd Year) during the Academic Years ${fromYear} to ${ay}.`;
+    para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution, having been admitted through Lateral Entry. ${pronoun} has successfully completed the Diploma in ${courseFull} (2nd Year to 3rd Year) during the Academic Years ${fromYear} to ${ay}.`;
   } else if (isCompleted) {
     para1 = `This is to certify that ${salutation} ${name}, ${sonDaughter} of Sri. ${father}${regClause} was a bonafide student of this institution. ${pronoun} has successfully completed the Three-Year Diploma in ${courseFull} during the Academic Year ${ay}.`;
   } else if (isLeft) {
@@ -305,7 +305,7 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
       was a <em>bonafide</em> student of this institution, having been admitted
-      through <span class="hl">Lateral Entry</span> directly to the 2nd Year.
+      through <span class="hl">Lateral Entry</span>.
       ${pronoun} has successfully completed the <span class="hl">Diploma</span>
       in <span class="hl">${esc(courseFull)}</span> (2nd Year to 3rd Year)
       during the Academic Years <span class="hl">${fromYear}</span> to

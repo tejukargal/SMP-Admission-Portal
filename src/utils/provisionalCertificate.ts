@@ -39,6 +39,7 @@ function buildPC(student: Student, data: PCFormData): string {
   const isLateral   = student.admType === 'LATERAL';
   const fromYear    = esc(computeFromYear(student.academicYear, student.admType));
   const toYear      = esc(student.academicYear);
+  const refNumber   = `SMP/ADM/${student.academicYear}/`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -119,8 +120,9 @@ function buildPC(student: Student, data: PCFormData): string {
     display: flex;
     flex-direction: column;
   }
-  .date-line {
-    text-align: right;
+  .ref-row {
+    display: flex;
+    justify-content: space-between;
     font-style: italic;
     font-size: 12pt;
     margin-bottom: 24pt;
@@ -194,7 +196,10 @@ function buildPC(student: Student, data: PCFormData): string {
 
   <!-- Body -->
   <div class="body">
-    <div class="date-line">Date : ${dateOfIssue}</div>
+    <div class="ref-row">
+      <span>Ref : ${esc(refNumber)}</span>
+      <span>Date : ${dateOfIssue}</span>
+    </div>
 
     <div class="pc-title">PROVISIONAL CERTIFICATE</div>
 
