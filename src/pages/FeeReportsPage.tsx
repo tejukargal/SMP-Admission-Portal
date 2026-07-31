@@ -1832,12 +1832,113 @@ function BankRemittanceTable({
   );
 }
 
+function totalAbstractCash(aided: RemittanceSummary, unaided: RemittanceSummary): number {
+  return aided.smpCash + aided.svkCash + aided.rcCash + aided.insCash
+    + unaided.smpCash + unaided.svkCash + unaided.rcCash + unaided.insCash;
+}
+
+function totalAbstractUpi(aided: RemittanceSummary, unaided: RemittanceSummary): number {
+  return aided.smpPay + aided.svkPay + aided.rcPay + aided.insPay
+    + unaided.smpPay + unaided.svkPay + unaided.rcPay + unaided.insPay;
+}
+
+function exportRemittanceAbstractPdf(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const MARGIN = 12;
+
+  const dateStr = (() => {
+    const d = new Date();
+    return `${String(d.getDate()).padStart(2,'0')}-${d.toLocaleString('en-US',{month:'short'})}-${String(d.getFullYear()).slice(2)}`;
+  })();
+
+  const HEAD: [number,number,number] = [55, 65, 81];
+  const WHITE: [number,number,number] = [255,255,255];
+  const NEAR_BLACK: [number,number,number] = [25,25,25];
+  const GRID: [number,number,number] = [210,215,220];
+
+  const headStyles = { fillColor: HEAD, textColor: WHITE, fontStyle: 'bold' as const, fontSize: 9, cellPadding: { top:2.5, right:3, bottom:2.5, left:3 }, lineWidth: 0 };
+  const bodyStyles = { fontSize: 9, cellPadding: { top:2.5, right:3, bottom:2.5, left:3 }, fillColor: WHITE, textColor: NEAR_BLACK, lineColor: GRID, lineWidth: 0.18 };
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...NEAR_BLACK);
+  doc.text('Fee Remittance Abstract', W / 2, 14, { align: 'center' });
+  doc.setFontSize(9); doc.text(`${label} — ${academicYear}`, W / 2, 20, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120,120,120);
+  doc.text(`Generated: ${dateStr}`, W / 2, 25, { align: 'center' });
+  doc.setTextColor(...NEAR_BLACK);
+
+  const fmtN = (v: number) => v > 0 ? numPdf(v) : '-';
+
+  const rows: [string, number, number][] = [
+    ['SMP Cash', aided.smpCash, unaided.smpCash],
+    ['SMP Pay',  aided.smpPay,  unaided.smpPay],
+    ['SVK Cash', aided.svkCash, unaided.svkCash],
+    ['SVK Pay',  aided.svkPay,  unaided.svkPay],
+    ['RC Cash',  aided.rcCash,  unaided.rcCash],
+    ['RC Pay',   aided.rcPay,   unaided.rcPay],
+    ['Ins Cash', aided.insCash, unaided.insCash],
+    ['Ins Pay',  aided.insPay,  unaided.insPay],
+  ];
+  const totAided   = rows.reduce((s, r) => s + r[1], 0);
+  const totUnaided = rows.reduce((s, r) => s + r[2], 0);
+  const body = rows.map(([name, a, u]) => [name, fmtN(a), fmtN(u), fmtN(a + u)]);
+  body.push(['Total', fmtN(totAided), fmtN(totUnaided), fmtN(totAided + totUnaided)]);
+
+  autoTable(doc, {
+    startY: 30, margin: { left: MARGIN, right: MARGIN },
+    head: [['', 'Aided', 'Unaided', 'Total']],
+    body,
+    headStyles,
+    bodyStyles,
+    alternateRowStyles: { fillColor: WHITE },
+    columnStyles: {
+      0: { cellWidth: 32 },
+      1: { halign: 'right' }, 2: { halign: 'right' },
+      3: { halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === body.length - 1) {
+        data.cell.styles.fillColor = HEAD;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  const afterTable = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  const cashTotal = totalAbstractCash(aided, unaided);
+  const upiTotal  = totalAbstractUpi(aided, unaided);
+  const boxGap    = 4;
+  const boxW      = (W - MARGIN * 2 - boxGap) / 2;
+
+  doc.setDrawColor(...GRID);
+  doc.setFillColor(236, 253, 245);
+  doc.roundedRect(MARGIN, afterTable, boxW, 12, 1.5, 1.5, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(6, 95, 70);
+  doc.text('Total Cash', MARGIN + 4, afterTable + 7.5);
+  doc.text(`₹${numPdf(cashTotal)}`, MARGIN + boxW - 4, afterTable + 7.5, { align: 'right' });
+
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(MARGIN + boxW + boxGap, afterTable, boxW, 12, 1.5, 1.5, 'F');
+  doc.setTextColor(29, 78, 216);
+  doc.text('Total UPI', MARGIN + boxW + boxGap + 4, afterTable + 7.5);
+  doc.text(`₹${numPdf(upiTotal)}`, W - MARGIN - 4, afterTable + 7.5, { align: 'right' });
+  doc.setTextColor(...NEAR_BLACK);
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,160,160);
+  doc.text(`Fee Remittance Abstract ${academicYear}`, MARGIN, H - 6);
+
+  doc.save(`Remittance_Abstract_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
+}
+
 function RemittanceAbstractTable({
-  aided, unaided, label,
+  aided, unaided, label, onPrint,
 }: {
   aided: RemittanceSummary;
   unaided: RemittanceSummary;
   label?: string;
+  onPrint?: () => void;
 }) {
   type AbstractRow = { name: string; aided: number; unaided: number; mode: 'cash' | 'pay' };
   const groups: AbstractRow[][] = [
@@ -1864,22 +1965,37 @@ function RemittanceAbstractTable({
   const totUnaided = rows.reduce((s, r) => s + r.unaided, 0);
   const grandTotal = totAided + totUnaided;
 
-  const cell = 'px-4 py-2 text-sm';
+  const cashRows = rows.filter((r) => r.mode === 'cash');
+  const upiRows  = rows.filter((r) => r.mode === 'pay');
+  const aidedCash   = cashRows.reduce((s, r) => s + r.aided,   0);
+  const unaidedCash = cashRows.reduce((s, r) => s + r.unaided, 0);
+  const aidedUpi    = upiRows.reduce((s, r) => s + r.aided,   0);
+  const unaidedUpi  = upiRows.reduce((s, r) => s + r.unaided, 0);
+
+  const cell = 'px-3 py-1.5 text-sm';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden max-w-md">
+    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
       {label && (
-        <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+          {onPrint && (
+            <button
+              onClick={onPrint}
+              className="flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm"
+            >
+              Print PDF
+            </button>
+          )}
         </div>
       )}
       <table className="w-full text-sm">
         <thead className={`${ACCENT} text-white`}>
           <tr>
-            <th className="px-4 py-2 text-left font-semibold"></th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-[#2e4a72]/70">Aided</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20 bg-slate-600/60">Unaided</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Total</th>
+            <th className="px-3 py-1.5 text-left font-semibold"></th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20 bg-[#2e4a72]/70">Aided</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20 bg-slate-600/60">Unaided</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Total</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -1896,20 +2012,243 @@ function RemittanceAbstractTable({
                   </tr>
                 );
               })}
-              {gi < groups.length - 1 && (
-                <tr className="h-2">
-                  <td colSpan={4} className="p-0" />
-                </tr>
-              )}
             </Fragment>
           ))}
         </tbody>
         <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
           <tr>
-            <td className="px-4 py-2.5">Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
-            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totUnaided > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
+            <td className="px-3 py-2">Total</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${totUnaided > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td className="px-3 py-2 text-emerald-700">Total Cash</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${aidedCash   > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{aidedCash   > 0 ? fmt(aidedCash)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${unaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{unaidedCash > 0 ? fmt(unaidedCash) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-emerald-700">{fmt(aidedCash + unaidedCash)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td className="px-3 py-2 text-blue-700">Total UPI</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${aidedUpi   > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{aidedUpi   > 0 ? fmt(aidedUpi)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-gray-200 ${unaidedUpi > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{unaidedUpi > 0 ? fmt(unaidedUpi) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-blue-700">{fmt(aidedUpi + unaidedUpi)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+const DENOMINATIONS = [500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
+
+function DenominationCalculator({
+  counts, onCountsChange, targetCash, label,
+}: {
+  counts: Record<number, string>;
+  onCountsChange: (next: Record<number, string>) => void;
+  targetCash: number;
+  label?: string;
+}) {
+  const total   = DENOMINATIONS.reduce((s, d) => s + d * (Number(counts[d]) || 0), 0);
+  const matched = total - targetCash;
+
+  const handleChange = (d: number, v: string) => {
+    if (v !== '' && !/^\d*$/.test(v)) return;
+    onCountsChange({ ...counts, [d]: v });
+  };
+
+  const handleReset = () => onCountsChange({});
+
+  const cell = 'px-3 py-1 text-sm';
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
+      {label && (
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead className={`${ACCENT} text-white`}>
+          <tr>
+            <th className="px-3 py-1.5 text-left font-semibold">Denomination</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Count</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Amount</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {DENOMINATIONS.map((d, i) => {
+            const count  = Number(counts[d]) || 0;
+            const amount = d * count;
+            return (
+              <tr key={d} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className={`${cell} font-semibold text-gray-700`}>₹{d}{d <= 2 ? ' coin' : ''}</td>
+                <td className={`${cell} text-right border-l border-gray-100`}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={counts[d] ?? ''}
+                    onChange={(e) => handleChange(d, e.target.value)}
+                    placeholder="0"
+                    className="w-14 text-right border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]"
+                  />
+                </td>
+                <td className={`${cell} text-right border-l border-gray-100 font-medium ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+          <tr>
+            <td className="px-3 py-2" colSpan={2}>Total Cash</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(total)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td
+              colSpan={3}
+              className={`px-3 py-2 text-center ${
+                matched === 0 ? 'text-emerald-700' :
+                matched > 0   ? 'text-amber-700' :
+                                 'text-red-700'
+              }`}
+            >
+              {matched === 0
+                ? 'Exactly Matched'
+                : matched > 0
+                  ? `Excess of ${fmt(matched)}`
+                  : `Shortage of ${fmt(Math.abs(matched))}`}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+interface DenomAllocationRow {
+  name: string;
+  amount: number;
+  shortfall: number;
+  alloc: Record<number, number>;
+}
+
+// Greedily allocates the physical note/coin inventory (`counts`) across `targets` in the given
+// order, largest denomination first. Any amount a head can't be covered for (inventory already
+// spent on earlier, higher-priority heads) becomes that row's shortfall — this makes the result
+// order-dependent and approximate by design, which matches how staff would physically hand out bundles.
+function allocateDenominations(
+  targets: { name: string; amount: number }[],
+  counts: Record<number, string>,
+): { rows: DenomAllocationRow[]; remaining: Record<number, number> } {
+  const available: Record<number, number> = {};
+  for (const d of DENOMINATIONS) available[d] = Number(counts[d]) || 0;
+
+  const rows = targets.map((t) => {
+    let remainingAmt = t.amount;
+    const alloc: Record<number, number> = {};
+    for (const d of DENOMINATIONS) {
+      const need = Math.floor(remainingAmt / d);
+      const take = Math.min(need, available[d]);
+      alloc[d] = take;
+      available[d] -= take;
+      remainingAmt -= take * d;
+    }
+    return { name: t.name, amount: t.amount, shortfall: remainingAmt, alloc };
+  });
+
+  return { rows, remaining: available };
+}
+
+function DenominationAllocationTable({
+  aided, unaided, counts, label,
+}: {
+  aided: RemittanceSummary;
+  unaided: RemittanceSummary;
+  counts: Record<number, string>;
+  label?: string;
+}) {
+  const targets = [
+    { name: 'SMP Cash (Aided)',   amount: aided.smpCash },
+    { name: 'SMP Cash (Unaided)', amount: unaided.smpCash },
+    { name: 'SVK Cash (Aided)',   amount: aided.svkCash },
+    { name: 'SVK Cash (Unaided)', amount: unaided.svkCash },
+    { name: 'RC Cash (Aided)',    amount: aided.rcCash },
+    { name: 'RC Cash (Unaided)',  amount: unaided.rcCash },
+    { name: 'Ins Cash (Aided)',   amount: aided.insCash },
+    { name: 'Ins Cash (Unaided)', amount: unaided.insCash },
+  ];
+  const { rows } = allocateDenominations(targets, counts);
+
+  const [idx, setIdx] = useState(0);
+  const current = rows[Math.min(idx, rows.length - 1)]!;
+  const allocated = current.amount - current.shortfall;
+
+  const cell = 'px-3 py-1 text-sm';
+
+  return (
+    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
+      {label && (
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              disabled={idx === 0}
+              onClick={() => setIdx((i) => Math.max(0, i - 1))}
+              className="w-6 h-6 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >‹</button>
+            <span className="text-[11px] font-semibold text-gray-700 whitespace-nowrap">{current.name}</span>
+            <button
+              disabled={idx === rows.length - 1}
+              onClick={() => setIdx((i) => Math.min(rows.length - 1, i + 1))}
+              className="w-6 h-6 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >›</button>
+          </div>
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead className={`${ACCENT} text-white`}>
+          <tr>
+            <th className="px-3 py-1.5 text-left font-semibold">Denomination</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Count</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Amount</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {DENOMINATIONS.map((d, i) => {
+            const count  = current.alloc[d];
+            const amount = d * count;
+            return (
+              <tr key={d} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className={`${cell} font-semibold text-gray-700`}>₹{d}{d <= 2 ? ' coin' : ''}</td>
+                <td className={`${cell} text-right border-l border-gray-100 tabular-nums ${count > 0 ? 'text-gray-800 font-medium' : 'text-gray-300'}`}>{count > 0 ? count : '—'}</td>
+                <td className={`${cell} text-right border-l border-gray-100 font-medium tabular-nums ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+          <tr>
+            <td className="px-3 py-2" colSpan={2}>Allocated</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(allocated)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td className="px-3 py-2 text-gray-500 font-medium" colSpan={2}>Required</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-700">{fmt(current.amount)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td
+              colSpan={3}
+              className={`px-3 py-2 text-center ${current.shortfall > 0 ? 'text-red-700' : 'text-emerald-700'}`}
+            >
+              {current.shortfall > 0 ? `Short of ${fmt(current.shortfall)}` : 'Fully Covered'}
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -2386,12 +2725,17 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
   const [selectedDate, setSelectedDate] = useState<string>(() => availableDates[availableDates.length - 1] ?? new Date().toISOString().slice(0, 10));
   const [dateFrom,     setDateFrom]     = useState('');
   const [dateTo,       setDateTo]       = useState('');
+  const [denomCounts,  setDenomCounts]  = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
       setSelectedDate(availableDates[availableDates.length - 1]);
     }
   }, [availableDates, selectedDate]);
+
+  useEffect(() => {
+    setDenomCounts({});
+  }, [viewMode, selectedDate, dateFrom, dateTo]);
 
   const dateIdx  = availableDates.indexOf(selectedDate);
   const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
@@ -2452,6 +2796,19 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
           </div>
         )}
 
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Cash = Challan deposit</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Pay = UPI / auto-remitted</span>
+          <span className="text-gray-300">·</span>
+          <span>Aided: CE · ME · EC · CS &nbsp;|&nbsp; Unaided: EE</span>
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
+            </span>
+          )}
+        </div>
+
         {/* Export buttons */}
         {activeSummary && (
           <div className="ml-auto">
@@ -2463,28 +2820,32 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Cash = Challan deposit</span>
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Pay = UPI / auto-remitted</span>
-        <span className="text-gray-300">·</span>
-        <span>Aided: CE · ME · EC · CS &nbsp;|&nbsp; Unaided: EE</span>
-        {showAllYears && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
-            Incl. Prior Year Dues
-          </span>
-        )}
-      </div>
-
       {availableDates.length === 0 ? (
         <p className="text-sm text-gray-400 py-8 text-center">No fee records found.</p>
       ) : viewMode === 'daily' ? (
         <>
-          <RemittanceAbstractTable
-            aided={dailySummary.aided}
-            unaided={dailySummary.unaided}
-            label={`Abstract — ${formatDayLabel(selectedDate)}`}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <RemittanceAbstractTable
+              aided={dailySummary.aided}
+              unaided={dailySummary.unaided}
+              label={`Abstract — ${formatDayLabel(selectedDate)}`}
+              onPrint={() => exportRemittanceAbstractPdf(dailySummary.aided, dailySummary.unaided, formatDayLabel(selectedDate), academicYear)}
+            />
+            <DenominationCalculator
+              key={`daily-${selectedDate}`}
+              counts={denomCounts}
+              onCountsChange={setDenomCounts}
+              targetCash={totalAbstractCash(dailySummary.aided, dailySummary.unaided)}
+              label="Denomination Calculator"
+            />
+            <DenominationAllocationTable
+              key={`daily-alloc-${selectedDate}`}
+              aided={dailySummary.aided}
+              unaided={dailySummary.unaided}
+              counts={denomCounts}
+              label="Denomination Allocation"
+            />
+          </div>
           <BankRemittanceTable
             aided={dailySummary.aided}
             unaided={dailySummary.unaided}
@@ -2494,11 +2855,28 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
         </>
       ) : periodSummary !== null ? (
         <>
-          <RemittanceAbstractTable
-            aided={periodSummary.aided}
-            unaided={periodSummary.unaided}
-            label={dateFrom || dateTo ? `Abstract — ${dateFrom || '…'} → ${dateTo || '…'}` : 'Abstract — All Records'}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <RemittanceAbstractTable
+              aided={periodSummary.aided}
+              unaided={periodSummary.unaided}
+              label={dateFrom || dateTo ? `Abstract — ${dateFrom || '…'} → ${dateTo || '…'}` : 'Abstract — All Records'}
+              onPrint={() => exportRemittanceAbstractPdf(periodSummary.aided, periodSummary.unaided, dateFrom || dateTo ? `${dateFrom || '…'} to ${dateTo || '…'}` : 'All Records', academicYear)}
+            />
+            <DenominationCalculator
+              key={`period-${dateFrom}-${dateTo}`}
+              counts={denomCounts}
+              onCountsChange={setDenomCounts}
+              targetCash={totalAbstractCash(periodSummary.aided, periodSummary.unaided)}
+              label="Denomination Calculator"
+            />
+            <DenominationAllocationTable
+              key={`period-alloc-${dateFrom}-${dateTo}`}
+              aided={periodSummary.aided}
+              unaided={periodSummary.unaided}
+              counts={denomCounts}
+              label="Denomination Allocation"
+            />
+          </div>
           <BankRemittanceTable
             aided={periodSummary.aided}
             unaided={periodSummary.unaided}
