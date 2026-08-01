@@ -2097,7 +2097,7 @@ function DenominationCalculator({
                     value={counts[d] ?? ''}
                     onChange={(e) => handleChange(d, e.target.value)}
                     placeholder="0"
-                    className="w-14 text-right border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]"
+                    className="w-14 text-right border border-gray-200 rounded px-1.5 py-0 text-sm leading-5 focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]"
                   />
                 </td>
                 <td className={`${cell} text-right border-l border-gray-100 font-medium ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
@@ -2109,6 +2109,10 @@ function DenominationCalculator({
           <tr>
             <td className="px-3 py-2" colSpan={2}>Total Cash</td>
             <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(total)}</td>
+          </tr>
+          <tr className="border-t border-gray-200">
+            <td className="px-3 py-2 text-gray-500 font-medium" colSpan={2}>Target</td>
+            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-700">{fmt(targetCash)}</td>
           </tr>
           <tr className="border-t border-gray-200">
             <td
@@ -4684,13 +4688,16 @@ function FeeReg1Tab({
     () => availableDates[availableDates.length - 1] ?? new Date().toISOString().slice(0, 10),
   );
   useEffect(() => {
-    if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
+    // '' is the intentional "All dates" state — never auto-filled back to a date.
+    // Only repair a stale *specific* date (e.g. filters changed and it dropped out).
+    if (selectedDate && availableDates.length > 0 && !availableDates.includes(selectedDate)) {
       setSelectedDate(availableDates[availableDates.length - 1]);
     }
   }, [availableDates, selectedDate]);
   const dateIdx  = availableDates.indexOf(selectedDate);
   const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
   const nextDate = dateIdx !== -1 && dateIdx < availableDates.length - 1 ? availableDates[dateIdx + 1] : null;
+  const isRangeActive = !!(dateFrom || dateTo);
 
   const studentMap = useMemo(
     () => new Map(allStudents.map((s) => [s.id, s])),
@@ -4701,13 +4708,20 @@ function FeeReg1Tab({
     let list = feeRecords;
     if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
     if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
-    if (selectedDate)  list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
+    // The Date From/To range (below) and the single-day pill are two different ways to
+    // narrow by date — a range takes precedence when set; the pill only applies when no
+    // range is active. Leaving the pill on "All" (selectedDate === '') and no range set
+    // shows every date, same as before either control existed.
+    if (dateFrom || dateTo) {
+      if (dateFrom) list = list.filter((r) => r.date.slice(0, 10) >= dateFrom);
+      if (dateTo)   list = list.filter((r) => r.date.slice(0, 10) <= dateTo);
+    } else if (selectedDate) {
+      list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
+    }
     if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
     if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
     if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
     if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
-    if (dateFrom)      list = list.filter((r) => r.date.slice(0, 10) >= dateFrom);
-    if (dateTo)        list = list.filter((r) => r.date.slice(0, 10) <= dateTo);
 
     return list.map((r): Reg1Row => {
       const smpMode = r.smpPaymentMode        ?? r.paymentMode;
@@ -4793,7 +4807,7 @@ function FeeReg1Tab({
       <FilterPanel
         search={<>
           <SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${isRangeActive ? 'opacity-40 pointer-events-none' : ''}`} title={isRangeActive ? 'Clear the date range filter to use the day selector' : undefined}>
             <button
               disabled={!prevDate}
               onClick={() => prevDate && setSelectedDate(prevDate)}
@@ -4805,6 +4819,15 @@ function FeeReg1Tab({
               onClick={() => nextDate && setSelectedDate(nextDate)}
               className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >›</button>
+            <button
+              onClick={() => setSelectedDate(selectedDate ? '' : (availableDates[availableDates.length - 1] ?? ''))}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                selectedDate
+                  ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+              }`}
+              title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
+            >All</button>
           </div>
           <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
             <option value="">Aided &amp; Unaided</option>
