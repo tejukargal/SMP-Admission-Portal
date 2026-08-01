@@ -4442,6 +4442,218 @@ function exportFeeReg1Excel(rows: Reg1Row[], academicYear: string): void {
   XLSX.writeFile(wb, `Fee_Register_1_${academicYear}.xlsx`);
 }
 
+interface Reg1ColDef {
+  header: string;
+  group?: string;
+  halign: 'left' | 'center' | 'right';
+  maxW?: number;
+  get: (r: Reg1Row, i: number) => string | number;
+}
+
+function exportFeeReg1Pdf(rows: Reg1Row[], academicYear: string, dateLabel: string): void {
+  const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const FONT_SIZE   = 8;
+  const CELL_PAD     = { top: 2, right: 2, bottom: 2, left: 2 };   // text columns
+  const CELL_PAD_NUM = { top: 2, right: 2, bottom: 2, left: 1.5 }; // tighter for narrow money columns
+  const PAD_H        = CELL_PAD.left + CELL_PAD.right;
+  const margin       = 10;
+  const LANDSCAPE_W  = 297 - margin * 2;
+  const MIN_NAME_W   = 34;
+
+  const fmtN = (v: number) => v > 0 ? v.toLocaleString('en-IN') : '—';
+
+  // `group` pairs up Cash/Pay columns under one PDF-only two-row header (SMP / SVK / RC / Ins),
+  // which keeps each sub-column's own header text short ("Cash"/"Pay") so its width is driven
+  // by the actual amounts, not a wide label like "SMP Cash".
+  const COLUMNS: Reg1ColDef[] = [
+    { header: 'Sl',     halign: 'center', get: (_r, i) => i + 1 },
+    { header: 'Date',   halign: 'left',   get: (r) => {
+        const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+        return `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
+      } },
+    { header: 'Rpt No', halign: 'left',   get: (r) => r.record.receiptNumber || '—' },
+    { header: 'Name',   halign: 'left',   get: (r) => r.record.studentName },
+    { header: 'Course', halign: 'center', get: (r) => r.record.course },
+    { header: 'Year',   halign: 'left',   get: (r) => r.record.year },
+    { header: 'Cash', group: 'SMP', halign: 'right', get: (r) => fmtN(r.smpCash) },
+    { header: 'Pay',  group: 'SMP', halign: 'right', get: (r) => fmtN(r.smpPay) },
+    { header: 'Cash', group: 'SVK', halign: 'right', get: (r) => fmtN(r.svkCash) },
+    { header: 'Pay',  group: 'SVK', halign: 'right', get: (r) => fmtN(r.svkPay) },
+    { header: 'Cash', group: 'RC',  halign: 'right', get: (r) => fmtN(r.rcCash) },
+    { header: 'Pay',  group: 'RC',  halign: 'right', get: (r) => fmtN(r.rcPay) },
+    { header: 'Cash', group: 'Ins', halign: 'right', get: (r) => fmtN(r.insCash) },
+    { header: 'Pay',  group: 'Ins', halign: 'right', get: (r) => fmtN(r.insPay) },
+    { header: 'Total',   halign: 'right', get: (r) => r.total.toLocaleString('en-IN') },
+    { header: 'Remarks', halign: 'left', maxW: 32, get: (r) => r.record.remarks || '—' },
+  ];
+
+  // Totals are computed up front so the TOTAL row's own text (often wider than
+  // any individual row, e.g. "1,59,074" vs a single payment of "14,520") is
+  // accounted for when sizing columns below — otherwise the total gets clipped.
+  const tot = rows.reduce(
+    (a, r) => ({
+      smpCash: a.smpCash + r.smpCash, smpPay: a.smpPay + r.smpPay,
+      svkCash: a.svkCash + r.svkCash, svkPay: a.svkPay + r.svkPay,
+      rcCash:  a.rcCash  + r.rcCash,  rcPay:  a.rcPay  + r.rcPay,
+      insCash: a.insCash + r.insCash, insPay: a.insPay + r.insPay,
+      total:   a.total   + r.total,
+    }),
+    { smpCash: 0, smpPay: 0, svkCash: 0, svkPay: 0, rcCash: 0, rcPay: 0, insCash: 0, insPay: 0, total: 0 },
+  );
+  const totalRow = [
+    'TOTAL', '', '', `${rows.length} record${rows.length !== 1 ? 's' : ''}`, '', '',
+    fmtN(tot.smpCash), fmtN(tot.smpPay),
+    fmtN(tot.svkCash), fmtN(tot.svkPay),
+    fmtN(tot.rcCash),  fmtN(tot.rcPay),
+    fmtN(tot.insCash), fmtN(tot.insPay),
+    tot.total.toLocaleString('en-IN'), '',
+  ];
+
+  // ── Measure every column except Name from its own header/content/total widths ─
+  // Name is intentionally excluded — it gets whatever page width remains after
+  // every other column has claimed only as much as its content actually needs.
+  const NAME_IDX   = COLUMNS.findIndex((c) => c.header === 'Name');
+  const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  measureDoc.setFontSize(FONT_SIZE);
+
+  let fixedTotal = 0;
+  const colWidths: number[] = COLUMNS.map((col, idx) => {
+    if (idx === NAME_IDX) return 0; // placeholder — filled below
+
+    measureDoc.setFont('helvetica', 'bold');
+    let w = measureDoc.getTextWidth(col.header);
+    let wTot = measureDoc.getTextWidth(String(totalRow[idx]));
+    if (wTot > w) w = wTot;
+    measureDoc.setFont('helvetica', 'normal');
+    for (let i = 0; i < rows.length; i++) {
+      const cw = measureDoc.getTextWidth(String(col.get(rows[i], i)));
+      if (cw > w) w = cw;
+    }
+    let colW = w + PAD_H + 1.5;
+    if (col.maxW) colW = Math.min(colW, col.maxW);
+    fixedTotal += colW;
+    return colW;
+  });
+
+  // If every other column together would already leave Name cramped, shrink
+  // them proportionally rather than letting the table spill past the page edge.
+  const availableForFixed = LANDSCAPE_W - MIN_NAME_W;
+  if (fixedTotal > availableForFixed) {
+    const scale = availableForFixed / fixedTotal;
+    for (let idx = 0; idx < colWidths.length; idx++) {
+      if (idx !== NAME_IDX) colWidths[idx] *= scale;
+    }
+    fixedTotal = availableForFixed;
+  }
+
+  colWidths[NAME_IDX] = LANDSCAPE_W - fixedTotal;
+  const finalWidths = colWidths;
+  const tableWidth  = finalWidths.reduce((s, w) => s + w, 0);
+
+  // ── Create the doc ────────────────────────────────────────────────────────
+  const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  // ── Line 1: bold title ────────────────────────────────────────────────────
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('SMP Admissions — Fee Register 1', margin, 13);
+
+  // ── Line 2: filter context  ·  count  |  date ────────────────────────────
+  const chips = [`AY ${academicYear}`, dateLabel, `${rows.length} record${rows.length !== 1 ? 's' : ''}`];
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(chips.join('  ·  '), margin, 19.5);
+  doc.text(`Generated ${dateStr}`, pageW - margin, 19.5, { align: 'right' });
+  doc.setTextColor(0);
+
+  // Thin separator
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.2);
+  doc.line(margin, 22, pageW - margin, 22);
+
+  // ── Build table data ──────────────────────────────────────────────────────
+  const bodyRows = rows.map((r, i) => COLUMNS.map((c) => c.get(r, i)));
+
+  // Two-row head: ungrouped columns span both rows; grouped Cash/Pay pairs get
+  // a merged group label (SMP / SVK / RC / Ins) on row 1 and their own short
+  // label on row 2 — mirrors the on-screen table's grouped header.
+  const headRow1: (string | { content: string; colSpan?: number; rowSpan?: number; styles?: Record<string, unknown> })[] = [];
+  const headRow2: (string | { content: string; styles?: Record<string, unknown> })[] = [];
+  for (let i = 0; i < COLUMNS.length;) {
+    const col = COLUMNS[i];
+    if (col.group) {
+      let j = i;
+      while (j < COLUMNS.length && COLUMNS[j].group === col.group) j++;
+      headRow1.push({ content: col.group, colSpan: j - i, styles: { halign: 'center' } });
+      for (let k = i; k < j; k++) headRow2.push({ content: COLUMNS[k].header, styles: { halign: 'right' } });
+      i = j;
+    } else {
+      headRow1.push({ content: col.header, rowSpan: 2, styles: { valign: 'middle', halign: col.halign } });
+      i++;
+    }
+  }
+  const headers = [headRow1, headRow2];
+
+  const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right'; cellPadding?: typeof CELL_PAD }> = {};
+  COLUMNS.forEach((col, idx) => {
+    columnStyles[idx] = {
+      cellWidth: finalWidths[idx],
+      halign: col.halign,
+      cellPadding: col.group ? CELL_PAD_NUM : CELL_PAD,
+    };
+  });
+
+  autoTable(doc, {
+    startY: 25,
+    margin: { left: margin, right: margin, top: margin, bottom: 12 },
+    head: headers,
+    body: [...bodyRows, totalRow],
+    tableWidth,
+    styles: {
+      fontSize: FONT_SIZE,
+      cellPadding: CELL_PAD,
+      valign: 'middle',
+      overflow: 'ellipsize',
+      lineColor: [226, 232, 240],
+      lineWidth: 0.15,
+      textColor: [20, 20, 20] as [number, number, number],
+    },
+    headStyles: {
+      fillColor: [30, 64, 175],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: FONT_SIZE,
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    columnStyles,
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === bodyRows.length) {
+        data.cell.styles.fillColor = [30, 64, 175];
+        data.cell.styles.textColor = 255;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+    didDrawPage: (data) => {
+      const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
+        .internal.getNumberOfPages();
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Page ${data.pageNumber} of ${total}`, pageW - margin, pageH - 4, { align: 'right' });
+      doc.setTextColor(0);
+    },
+  });
+
+  doc.save(`Fee_Register_1_${academicYear}.pdf`);
+}
+
 function FeeReg1Tab({
   feeRecords, allStudents, showAllYears, academicYear,
 }: {
@@ -4464,6 +4676,22 @@ function FeeReg1Tab({
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  const availableDates = useMemo(
+    () => [...new Set(feeRecords.map((r) => r.date.slice(0, 10)))].sort(),
+    [feeRecords],
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(
+    () => availableDates[availableDates.length - 1] ?? new Date().toISOString().slice(0, 10),
+  );
+  useEffect(() => {
+    if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
+      setSelectedDate(availableDates[availableDates.length - 1]);
+    }
+  }, [availableDates, selectedDate]);
+  const dateIdx  = availableDates.indexOf(selectedDate);
+  const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
+  const nextDate = dateIdx !== -1 && dateIdx < availableDates.length - 1 ? availableDates[dateIdx + 1] : null;
+
   const studentMap = useMemo(
     () => new Map(allStudents.map((s) => [s.id, s])),
     [allStudents],
@@ -4473,6 +4701,7 @@ function FeeReg1Tab({
     let list = feeRecords;
     if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
     if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
+    if (selectedDate)  list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
     if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
     if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
     if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
@@ -4514,7 +4743,7 @@ function FeeReg1Tab({
       if (d !== 0) return d;
       return a.record.receiptNumber.localeCompare(b.record.receiptNumber);
     });
-  }, [feeRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
+  }, [feeRecords, aidedFilter, selectedDate, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
 
   const rows = useMemo(() => {
     if (!debouncedSearch) return baseRows;
@@ -4555,12 +4784,34 @@ function FeeReg1Tab({
   const td  = 'px-2 py-1.5 text-right text-[11px] tabular-nums';
   const tdL = 'px-2 py-1.5 text-left  text-[11px]';
   const tdC = 'px-2 py-1.5 text-center text-[11px]';
+  const REG1_COL_WIDTHS = ['3%','7%','6%','13%','5%','6%','5.5%','5.5%','5.5%','5.5%','5%','5%','5%','5%','6%','12%'];
+  const Reg1ColGroup = () => <colgroup>{REG1_COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* Filters */}
       <FilterPanel
-        search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />}
+        search={<>
+          <SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />
+          <div className="flex items-center gap-2">
+            <button
+              disabled={!prevDate}
+              onClick={() => prevDate && setSelectedDate(prevDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >‹</button>
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={fs} />
+            <button
+              disabled={!nextDate}
+              onClick={() => nextDate && setSelectedDate(nextDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >›</button>
+          </div>
+          <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+            <option value="">Aided &amp; Unaided</option>
+            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+            <option value="UNAIDED">Unaided (EE)</option>
+          </select>
+        </>}
         right={<>
           {showAllYears && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
@@ -4568,16 +4819,14 @@ function FeeReg1Tab({
             </span>
           )}
           <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
-          <ExportBar onExcel={() => exportFeeReg1Excel(rows, academicYear)} />
+          <ExportBar
+            onExcel={() => exportFeeReg1Excel(rows, academicYear)}
+            onPdf={() => exportFeeReg1Pdf(rows, academicYear, formatDayLabel(selectedDate))}
+          />
         </>}
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       >
-        <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
-          <option value="">Aided &amp; Unaided</option>
-          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-          <option value="UNAIDED">Unaided (EE)</option>
-        </select>
         <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
           <option value="">All Courses</option>
           {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -4601,8 +4850,10 @@ function FeeReg1Tab({
       </FilterPanel>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
-        <table className="w-full text-[11px] border-collapse">
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <table className="w-full table-fixed text-[11px] border-collapse">
+          <Reg1ColGroup />
           <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
@@ -4656,8 +4907,12 @@ function FeeReg1Tab({
               );
             })}
           </tbody>
-          {rows.length > 0 && (
-            <tfoot className={TFOOT}>
+        </table>
+      </div>
+      {rows.length > 0 && (
+        <table className="w-full table-fixed text-[11px] border-collapse shrink-0">
+          <Reg1ColGroup />
+          <tfoot className="bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
@@ -4672,9 +4927,9 @@ function FeeReg1Tab({
                 <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.total)}</td>
                 <td className="px-2 py-2 border-l border-gray-200"></td>
               </tr>
-            </tfoot>
-          )}
+          </tfoot>
         </table>
+      )}
       </div>
     </div>
   );
