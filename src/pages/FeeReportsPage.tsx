@@ -3196,9 +3196,12 @@ function pdfFooter(doc: jsPDF, footerLabel: string, margin: number): void {
 
 // ── PDF: SMP Students Statistics Summary ─────────────────────────────────────
 
-function exportStudentStatsPdf(
+function exportStudentStatsAndDistSummaryPdf(
   studentStats: Record<Course, { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number }>,
   grandStatTotals: { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number },
+  aidedCount: number, aidedTotals: { tot: number; gov: number; svk: number; smp: number },
+  unaidedCount: number, unaidedTotals: { tot: number; gov: number; svk: number; smp: number },
+  totalStudents: number, grandTotals: { tot: number; gov: number; svk: number; smp: number },
   academicYear: string,
 ): void {
   const margin = 12;
@@ -3206,22 +3209,26 @@ function exportStudentStatsPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const usableW = pageW - margin * 2;
 
-  const headers = ['Sl', 'Course', '1st Yr Reg', '1st Yr SNQ', '1st Yr Total', '2nd Yr Reg', '2nd Yr Lat', '2nd Yr SNQ', '2nd Yr Total', '3rd Yr Reg', '3rd Yr SNQ', '3rd Yr Total', 'Grand Total'];
-  const COURSE_IDX = 1;
+  const afterHeader = pdfHeader(doc, 'SMP Students Statistics & Fee Distribution Summary', `AY ${academicYear}`, pageW, margin);
 
-  const body: (string | number)[][] = COURSES.map((c, i) => {
+  // ── Table 1: Student Statistics ──
+  const statsHeaders = ['Sl', 'Course', '1st Yr Reg', '1st Yr SNQ', '1st Yr Total', '2nd Yr Reg', '2nd Yr Lat', '2nd Yr SNQ', '2nd Yr Total', '3rd Yr Reg', '3rd Yr SNQ', '3rd Yr Total', 'Grand Total'];
+  const STATS_COURSE_IDX = 1;
+
+  const statsBody: (string | number)[][] = COURSES.map((c, i) => {
     const st = studentStats[c];
     const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
     return [i + 1, `${c} (${courseType})`, st.yr1.reg || '—', st.yr1.snq || '—', st.yr1.total || '—', st.yr2.reg || '—', st.yr2.lat || '—', st.yr2.snq || '—', st.yr2.total || '—', st.yr3.reg || '—', st.yr3.snq || '—', st.yr3.total || '—', st.grand || '—'];
   });
-  const footRow: (string | number)[] = ['', 'GRAND TOTAL', grandStatTotals.yr1.reg, grandStatTotals.yr1.snq, grandStatTotals.yr1.total, grandStatTotals.yr2.reg, grandStatTotals.yr2.lat, grandStatTotals.yr2.snq, grandStatTotals.yr2.total, grandStatTotals.yr3.reg, grandStatTotals.yr3.snq, grandStatTotals.yr3.total, grandStatTotals.grand];
+  const statsFootRow: (string | number)[] = ['', 'GRAND TOTAL', grandStatTotals.yr1.reg, grandStatTotals.yr1.snq, grandStatTotals.yr1.total, grandStatTotals.yr2.reg, grandStatTotals.yr2.lat, grandStatTotals.yr2.snq, grandStatTotals.yr2.total, grandStatTotals.yr3.reg, grandStatTotals.yr3.snq, grandStatTotals.yr3.total, grandStatTotals.grand];
 
-  const widths = computeAutoWidths(8, headers, [...body, footRow], COURSE_IDX, usableW, 40);
+  const statsWidths = computeAutoWidths(8, statsHeaders, [...statsBody, statsFootRow], STATS_COURSE_IDX, usableW, 40);
 
-  const afterHeader = pdfHeader(doc, 'SMP Students Statistics Summary', `AY ${academicYear}`, pageW, margin);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...PDF_NEAR_BLACK);
+  doc.text('SMP Students Statistics Summary', margin, afterHeader);
 
   autoTable(doc, {
-    startY: afterHeader, margin: { left: margin, right: margin },
+    startY: afterHeader + 3, margin: { left: margin, right: margin },
     head: [[
       { content: 'Sl', rowSpan: 2 }, { content: 'Course', rowSpan: 2 },
       { content: '1st Year', colSpan: 3 }, { content: '2nd Year', colSpan: 4 }, { content: '3rd Year', colSpan: 3 },
@@ -3229,13 +3236,13 @@ function exportStudentStatsPdf(
     ], [
       'Regular', 'SNQ', 'Total', 'Regular', 'Lateral', 'SNQ', 'Total', 'Regular', 'SNQ', 'Total',
     ]],
-    body: [...body, footRow],
+    body: [...statsBody, statsFootRow],
     headStyles: { fillColor: PDF_HEAD, textColor: PDF_WHITE, fontStyle: 'bold', fontSize: 8, halign: 'center', cellPadding: 2, lineWidth: 0 },
     bodyStyles: { fontSize: 8, cellPadding: 2, fillColor: PDF_WHITE, textColor: PDF_NEAR_BLACK, lineColor: PDF_GRID, lineWidth: 0.18, halign: 'center' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: Object.fromEntries(widths.map((w, i) => [i, { cellWidth: w, halign: i === COURSE_IDX ? 'left' : 'center' }])),
+    columnStyles: Object.fromEntries(statsWidths.map((w, i) => [i, { cellWidth: w, halign: i === STATS_COURSE_IDX ? 'left' : 'center' }])),
     didParseCell(data) {
-      if (data.section === 'body' && data.row.index === body.length) {
+      if (data.section === 'body' && data.row.index === statsBody.length) {
         data.cell.styles.fillColor = PDF_HEAD;
         data.cell.styles.textColor = PDF_WHITE;
         data.cell.styles.fontStyle = 'bold';
@@ -3243,46 +3250,32 @@ function exportStudentStatsPdf(
     },
   });
 
-  pdfFooter(doc, `Student Statistics Summary ${academicYear}`, margin);
-  doc.save(`SMP_Student_Statistics_${academicYear}.pdf`);
-}
+  // ── Table 2: Fee Distribution Summary ──
+  const afterStats = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  const distHeaders = ['Course Type', 'Students', 'Total Fee Allotted', 'To Government', 'To SVK Management', 'To SMP'];
+  const DIST_COURSE_TYPE_IDX = 0;
 
-// ── PDF: Fee Distribution Summary ────────────────────────────────────────────
-
-function exportFeeDistSummaryPdf(
-  aidedCount: number, aidedTotals: { tot: number; gov: number; svk: number; smp: number },
-  unaidedCount: number, unaidedTotals: { tot: number; gov: number; svk: number; smp: number },
-  totalStudents: number, grandTotals: { tot: number; gov: number; svk: number; smp: number },
-  academicYear: string,
-): void {
-  const margin = 14;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const usableW = pageW - margin * 2;
-
-  const headers = ['Course Type', 'Students', 'Total Fee Allotted', 'To Government', 'To SVK Management', 'To SMP'];
-  const COURSE_TYPE_IDX = 0;
-
-  const body: (string | number)[][] = [
+  const distBody: (string | number)[][] = [
     ['Aided Courses (CE, ME, EC, CS)', aidedCount, numPdf(aidedTotals.tot), numPdf(aidedTotals.gov), numPdf(aidedTotals.svk), numPdf(aidedTotals.smp)],
     ['Unaided Course (EE)', unaidedCount, numPdf(unaidedTotals.tot), numPdf(unaidedTotals.gov), numPdf(unaidedTotals.svk), numPdf(unaidedTotals.smp)],
   ];
-  const footRow: (string | number)[] = ['GRAND TOTAL', totalStudents, numPdf(grandTotals.tot), numPdf(grandTotals.gov), numPdf(grandTotals.svk), numPdf(grandTotals.smp)];
+  const distFootRow: (string | number)[] = ['GRAND TOTAL', totalStudents, numPdf(grandTotals.tot), numPdf(grandTotals.gov), numPdf(grandTotals.svk), numPdf(grandTotals.smp)];
 
-  const widths = computeAutoWidths(9, headers, [...body, footRow], COURSE_TYPE_IDX, usableW, 55);
+  const distWidths = computeAutoWidths(9, distHeaders, [...distBody, distFootRow], DIST_COURSE_TYPE_IDX, usableW, 55);
 
-  const afterHeader = pdfHeader(doc, 'Fee Distribution Summary', `AY ${academicYear}`, pageW, margin);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...PDF_NEAR_BLACK);
+  doc.text('Fee Distribution Summary', margin, afterStats);
 
   autoTable(doc, {
-    startY: afterHeader, margin: { left: margin, right: margin },
-    head: [headers],
-    body: [...body, footRow],
+    startY: afterStats + 3, margin: { left: margin, right: margin },
+    head: [distHeaders],
+    body: [...distBody, distFootRow],
     headStyles: { fillColor: PDF_HEAD, textColor: PDF_WHITE, fontStyle: 'bold', fontSize: 9, cellPadding: 3, lineWidth: 0 },
     bodyStyles: { fontSize: 9, cellPadding: 3, fillColor: PDF_WHITE, textColor: PDF_NEAR_BLACK, lineColor: PDF_GRID, lineWidth: 0.18 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: Object.fromEntries(widths.map((w, i) => [i, { cellWidth: w, halign: i === COURSE_TYPE_IDX ? 'left' : (i === 1 ? 'center' : 'right') }])),
+    columnStyles: Object.fromEntries(distWidths.map((w, i) => [i, { cellWidth: w, halign: i === DIST_COURSE_TYPE_IDX ? 'left' : (i === 1 ? 'center' : 'right') }])),
     didParseCell(data) {
-      if (data.section === 'body' && data.row.index === body.length) {
+      if (data.section === 'body' && data.row.index === distBody.length) {
         data.cell.styles.fillColor = PDF_HEAD;
         data.cell.styles.textColor = PDF_WHITE;
         data.cell.styles.fontStyle = 'bold';
@@ -3290,8 +3283,8 @@ function exportFeeDistSummaryPdf(
     },
   });
 
-  pdfFooter(doc, `Fee Distribution Summary ${academicYear}`, margin);
-  doc.save(`Fee_Distribution_Summary_${academicYear}.pdf`);
+  pdfFooter(doc, `Student Statistics & Fee Distribution Summary ${academicYear}`, margin);
+  doc.save(`SMP_Student_Stats_Fee_Distribution_Summary_${academicYear}.pdf`);
 }
 
 // ── PDF: Fee Remittance Abstract (Aided / Unaided) ───────────────────────────
@@ -3936,7 +3929,7 @@ function FeeDistributionTab({
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">SMP Students Statistics Summary</h2>
             <button
-              onClick={() => exportStudentStatsPdf(studentStats, grandStatTotals, academicYear)}
+              onClick={() => exportStudentStatsAndDistSummaryPdf(studentStats, grandStatTotals, aidedFiltered.length, aidedTotals, unaidedFiltered.length, unaidedTotals, filteredStudents.length, grandTotals, academicYear)}
               className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
             >
               PDF
@@ -4013,15 +4006,7 @@ function FeeDistributionTab({
       {/* ── Fee Distribution Summary ── */}
       {show('summary') && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
-            <button
-              onClick={() => exportFeeDistSummaryPdf(aidedFiltered.length, aidedTotals, unaidedFiltered.length, unaidedTotals, filteredStudents.length, grandTotals, academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-            >
-              PDF
-            </button>
-          </div>
+          <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
           <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
             <table className="w-full text-[11px]">
               <thead className={`${ACCENT} text-white`}>
