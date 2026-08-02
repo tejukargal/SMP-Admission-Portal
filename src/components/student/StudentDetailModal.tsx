@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getExamResultsByRegNumber } from '../../services/resultService';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import { ResultDetailModal } from '../results/ResultDetailModal';
+import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
 import type {
   Student, FeeRecord, AcademicYear,
   AdmType, AdmCat, DocRecord, ExamResult,
@@ -363,6 +364,7 @@ function FeeTab({
   refundedByYear: Map<string, number>;
 }) {
   const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
+  const [receiptDetailRecord, setReceiptDetailRecord] = useState<FeeRecord | null>(null);
 
   function toggleDues(ay: string) {
     setExpandedDues((prev) => {
@@ -621,16 +623,28 @@ function FeeTab({
                           })()}
                         </td>
                         <td className="px-3 py-1.5 text-gray-400 max-w-[8rem] truncate">{r.remarks || '—'}</td>
-                        <td className="px-3 py-1.5 text-right text-blue-700 whitespace-nowrap bg-blue-50/40">
+                        <td
+                          className="px-3 py-1.5 text-right text-blue-700 whitespace-nowrap bg-blue-50/40 cursor-pointer hover:underline"
+                          onClick={() => setReceiptDetailRecord(r)}
+                        >
                           {rowSmpTotal > 0 ? rowSmpTotal.toLocaleString() : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right text-purple-700 whitespace-nowrap bg-purple-50/40">
+                        <td
+                          className="px-3 py-1.5 text-right text-purple-700 whitespace-nowrap bg-purple-50/40 cursor-pointer hover:underline"
+                          onClick={() => setReceiptDetailRecord(r)}
+                        >
                           {rowSvkBase > 0 ? rowSvkBase.toLocaleString() : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right text-emerald-700 whitespace-nowrap bg-emerald-50/40">
+                        <td
+                          className="px-3 py-1.5 text-right text-emerald-700 whitespace-nowrap bg-emerald-50/40 cursor-pointer hover:underline"
+                          onClick={() => setReceiptDetailRecord(r)}
+                        >
                           {rowAddlTotal > 0 ? rowAddlTotal.toLocaleString() : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right font-bold text-slate-800 whitespace-nowrap bg-slate-50">
+                        <td
+                          className="px-3 py-1.5 text-right font-bold text-slate-800 whitespace-nowrap bg-slate-50 cursor-pointer hover:underline"
+                          onClick={() => setReceiptDetailRecord(r)}
+                        >
                           ₹{rowTotal.toLocaleString()}
                         </td>
                       </tr>
@@ -789,6 +803,14 @@ function FeeTab({
           </div>
         </div>
       </div>
+
+      {receiptDetailRecord && (
+        <FeeReceiptDetailModal
+          record={receiptDetailRecord}
+          isAdmin={false}
+          onClose={() => setReceiptDetailRecord(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1682,16 +1704,18 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
         {/* Gradient header */}
         <div className={`px-5 py-3.5 bg-gradient-to-r ${headerGradient} flex items-start justify-between shrink-0 transition-all duration-500`}>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-white">{student.studentNameSSLC}</h3>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <h3 className="text-base font-bold text-white">{student.studentNameSSLC}</h3>
               {student.regNumber && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/20 border border-white/30 px-2.5 py-0.5 text-[10px] font-semibold text-white">
+                <span className="text-sm font-bold text-white/95">
                   Reg: {student.regNumber}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 border border-white/30 px-2.5 py-0.5 text-[10px] font-semibold text-white">
+              <span className="text-sm font-bold text-white/95">
                 {student.course} · {student.year} · {student.academicYear}
               </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                 student.admissionStatus === 'CONFIRMED'
                   ? 'bg-emerald-400/30 text-white border border-emerald-300/40'
