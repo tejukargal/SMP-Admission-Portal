@@ -2697,14 +2697,30 @@ function exportRemittanceTrackerPdf(
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...NEAR_BLACK);
   doc.text('Payment Log', MARGIN, afterSummary);
 
+  const lastCol = logTable.head.length - 1;
+  const logTotal = logTable.body.reduce((s, row) => {
+    const raw = String(row[lastCol]).replace(/,/g, '');
+    const n = parseFloat(raw);
+    return s + (isNaN(n) ? 0 : n);
+  }, 0);
+  const logFootRow = logTable.head.map((_, i) => (i === lastCol ? numPdf(logTotal) : i === 0 ? 'Total' : ''));
+  const body2 = [...logTable.body, logFootRow];
+
   autoTable(doc, {
     startY: afterSummary + 3, margin: { left: MARGIN, right: MARGIN },
     head: [logTable.head],
-    body: logTable.body,
+    body: body2,
     headStyles,
     bodyStyles,
     alternateRowStyles: { fillColor: WHITE },
-    columnStyles: { [logTable.head.length - 1]: { halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { [lastCol]: { halign: 'right', fontStyle: 'bold' } },
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === body2.length - 1) {
+        data.cell.styles.fillColor = HEAD;
+        data.cell.styles.textColor = WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
   });
 
   const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
