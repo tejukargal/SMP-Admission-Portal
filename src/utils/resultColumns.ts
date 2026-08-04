@@ -22,6 +22,8 @@ export const RESULT_COLUMNS: ResultColumnDef[] = [
   { key: 'year',         label: 'Year',         group: 'Identity', align: 'center' },
   { key: 'academicYear', label: 'Academic Year', group: 'Identity', align: 'center' },
   { key: 'collegeCode',  label: 'College Code', group: 'Identity', align: 'center' },
+  { key: 'institutionName', label: 'Institution', group: 'Identity', align: 'left' },
+  { key: 'admissionType', label: 'Admission Type', group: 'Identity', align: 'center' },
   { key: 'examSession',  label: 'Exam Session', group: 'Identity', align: 'left'   },
 
   // ── Semester Summary ──────────────────────────────────────────────────────

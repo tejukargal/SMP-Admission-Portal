@@ -15,7 +15,9 @@ import { generateGeneralFeeRefundVoucher } from '../../utils/generalFeeRefundVou
 import { generateSnqRefundVoucher } from '../../utils/snqRefundVoucher';
 import { generateSeatCancellationRefundVoucher } from '../../utils/seatCancellationRefundVoucher';
 import { useAuth } from '../../contexts/AuthContext';
-import { getExamResultsByRegNumber } from '../../services/resultService';
+import { getExamResultsByRegNumber, deleteExamResult } from '../../services/resultService';
+import { invalidateResultsCache } from '../../hooks/useResults';
+import { mergeResultsBySession } from '../../utils/resultMerge';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import { ResultDetailModal } from '../results/ResultDetailModal';
 import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
@@ -1375,14 +1377,56 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
 
 // ─── Results tab ────────────────────────────────────────────────────────────────
 
+function groupSubjectsBySem(subjects: ExamResult['subjects']): [number, ExamResult['subjects']][] {
+  const map = new Map<number, ExamResult['subjects']>();
+  for (const s of subjects) {
+    const group = map.get(s.sem);
+    if (group) group.push(s);
+    else map.set(s.sem, [s]);
+  }
+  return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+}
+
 function resultBadgeClass(overallResult: string): string {
-  if (overallResult === 'FAILS') return 'bg-red-50 text-red-700 border-red-200';
+  if (overallResult === 'FAILS' || overallResult === 'FAIL') return 'bg-red-50 text-red-700 border-red-200';
+  if (overallResult === 'AB') return 'bg-amber-50 text-amber-700 border-amber-200';
   if (overallResult === 'Distinction') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
-function ResultsTab({ records, loading }: { records: ExamResult[]; loading: boolean }) {
+function ResultsTab({
+  records,
+  loading,
+  onRecordsChange,
+}: {
+  records: ExamResult[];
+  loading: boolean;
+  onRecordsChange: (records: ExamResult[]) => void;
+}) {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [selected, setSelected] = useState<ExamResult | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const sections = mergeResultsBySession(records);
+
+  async function handleDelete(section: ReturnType<typeof mergeResultsBySession>[number]) {
+    const label = section.sourceCount > 1
+      ? `all ${section.sourceCount} sheets under "${section.examSession}"`
+      : `the "${section.examSession}" result`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    setDeletingKey(section.id);
+    try {
+      await Promise.all(section.sourceIds.map((id) => deleteExamResult(id)));
+      onRecordsChange(records.filter((r) => !section.sourceIds.includes(r.id)));
+      invalidateResultsCache();
+    } catch {
+      window.alert('Failed to delete result. Please try again.');
+    } finally {
+      setDeletingKey(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -1418,48 +1462,98 @@ function ResultsTab({ records, loading }: { records: ExamResult[]; loading: bool
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-sky-50 text-sky-700 border-sky-200">
-          {records.length} result{records.length > 1 ? 's' : ''} found
+          {sections.length} exam session{sections.length > 1 ? 's' : ''} found
         </span>
       </div>
 
-      {/* Record cards */}
+      {/* Session cards — one per distinct exam session, consolidating any
+          sheets (e.g. separate Sem-1/Sem-2 ledgers) printed under it. */}
       <div className="space-y-3">
-        {records.map((r) => (
+        {sections.map((r) => (
           <div
             key={r.id}
             className="rounded-xl border border-sky-200 border-l-4 border-l-sky-400 overflow-hidden shadow-sm"
           >
             {/* Card header */}
             <div className="px-4 py-2.5 flex items-center justify-between bg-sky-50">
-              <span className="text-sm font-bold text-sky-800">{r.examSession}</span>
+              <span className="text-sm font-bold text-sky-800 flex items-center gap-2">
+                {r.examSession}
+                {r.semesterCount > 1 && (
+                  <span className="inline-flex items-center rounded-full bg-white/70 text-sky-600 border border-sky-200 px-1.5 py-0.5 text-[9px] font-semibold">
+                    {r.semesterCount} sems
+                  </span>
+                )}
+              </span>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${resultBadgeClass(r.overallResult)}`}>
                 {r.overallResult}
               </span>
             </div>
 
             {/* Card body */}
-            <div className="px-4 py-3 bg-white grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
-              <div>
-                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">CGPA</dt>
-                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.cgpa ?? (r.cgpaStatus || '—')}</dd>
+            <div className="px-4 py-3 bg-white flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="mr-2">
+                  <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">CGPA</dt>
+                  <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.cgpa ?? (r.cgpaStatus || '—')}</dd>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 text-gray-600 border border-gray-200 px-2.5 py-1 text-[11px] font-semibold">
+                  {r.subjects.length} subject{r.subjects.length === 1 ? '' : 's'}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 text-[11px] font-semibold">
+                  {r.subjects.filter((s) => s.result === 'P').length} passed
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 text-[11px] font-semibold">
+                  {r.subjects.filter((s) => s.result === 'F').length} failed
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 text-[11px] font-semibold">
+                  {r.subjects.filter((s) => s.result === 'AB').length} absent
+                </span>
               </div>
-              <div>
-                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">% Conversion</dt>
-                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.percentageConversion ?? 'Not Applicable'}</dd>
-              </div>
-              <div>
-                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Credits (Cumulative)</dt>
-                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.creditsEarnedCumulative ?? '—'}</dd>
-              </div>
-              <div className="flex items-end">
+
+              <div className="flex items-center gap-4 ml-auto">
                 <button
                   onClick={() => setSelected(r)}
-                  className="text-xs font-semibold text-sky-600 hover:text-sky-800 cursor-pointer"
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-800 cursor-pointer whitespace-nowrap"
                 >
                   View Full Result →
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => void handleDelete(r)}
+                    disabled={deletingKey === r.id}
+                    className="text-xs font-semibold text-red-500 hover:text-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-wait whitespace-nowrap"
+                  >
+                    {deletingKey === r.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Sem-wise breakdown — only useful when the session spans more
+                than one semester (backlog sheets combine several). */}
+            {r.semesterCount > 1 && (
+              <div className="px-4 pb-3 bg-white">
+                <div className="rounded-lg border border-gray-100 divide-y divide-gray-100 overflow-hidden">
+                  {groupSubjectsBySem(r.subjects).map(([sem, subs]) => (
+                    <div key={sem} className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-gray-50/60">
+                      <span className="text-[11px] font-semibold text-gray-500 w-14 shrink-0">Sem {sem}</span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white text-gray-500 border border-gray-200 px-2 py-0.5 text-[10px] font-medium">
+                        {subs.length} subject{subs.length === 1 ? '' : 's'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium">
+                        {subs.filter((s) => s.result === 'P').length} passed
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white text-red-700 border border-red-200 px-2 py-0.5 text-[10px] font-medium">
+                        {subs.filter((s) => s.result === 'F').length} failed
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] font-medium">
+                        {subs.filter((s) => s.result === 'AB').length} absent
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1807,7 +1901,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
             <PcHistoryTab records={pcRecords} loading={pcLoading} />
           )}
           {activeTab === 'results' && (
-            <ResultsTab records={examResults} loading={resultsLoading} />
+            <ResultsTab records={examResults} loading={resultsLoading} onRecordsChange={setExamResults} />
           )}
           {activeTab === 'refund' && (
             <RefundHistoryTab

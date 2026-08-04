@@ -7,6 +7,7 @@ import { ResultColumnPickerDropdown } from '../components/common/ResultColumnPic
 import { ResultDetailModal } from '../components/results/ResultDetailModal';
 import { Button } from '../components/common/Button';
 import { RESULT_COLUMNS, DEFAULT_RESULT_COLUMNS, formatResultColumnValue, type ResultColumnKey } from '../utils/resultColumns';
+import { mergeStudentResults } from '../utils/resultMerge';
 import { PageSpinner } from '../components/common/PageSpinner';
 import type { ExamResult, Course, Year } from '../types';
 
@@ -36,7 +37,8 @@ export function Results() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const { results, loading, error } = useResults();
+  const { results: rawResults, loading, error } = useResults();
+  const results = useMemo(() => mergeStudentResults(rawResults), [rawResults]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -296,6 +298,11 @@ export function Results() {
                         }`}
                       >
                         {formatResultColumnValue(col, r)}
+                        {col.key === 'studentName' && r.semesterCount > 1 && (
+                          <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-50 text-sky-600 border border-sky-200 px-1.5 py-0.5 text-[10px] font-semibold align-middle">
+                            {r.semesterCount} sems
+                          </span>
+                        )}
                       </td>
                     ))}
                     <td className="px-3 py-2 whitespace-nowrap">

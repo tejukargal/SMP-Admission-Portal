@@ -391,8 +391,8 @@ export interface ExamResultSubject {
   sem: number;
   code: string;
   subject: string;
-  iaTrPr: string;      // raw "225/--/80" style string
-  result: 'P' | 'F';
+  iaTrPr: string;      // raw "225/--/80" style string; '' when not provided (e.g. Format B)
+  result: 'P' | 'F' | 'AB';
   credit: number;
   grade: string;
 }
@@ -539,6 +539,8 @@ export interface ExamResult {
   cgpaStatus: string;              // e.g. "Credit(s) Pending" when cgpa is non-numeric
   percentageConversion: number | null;
   overallResult: string;           // First Class / Second Class / Distinction / FAILS / etc.
+  admissionType: string;           // 'Regular' / 'Lateral' etc; '' when not provided (e.g. Format A)
+  institutionName: string;         // full institution name; '' when not provided (e.g. Format A)
   studentId: string;               // '' if no matching student found
   academicYear: string;            // '' if unmatched (AcademicYear string when matched)
   year: string;                    // '' if unmatched (Year string when matched)

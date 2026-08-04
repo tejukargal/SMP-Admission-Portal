@@ -16,6 +16,7 @@ const STUDENTS_COLLECTION = 'students';
 const CHUNK_SIZE = 400;
 
 export interface ImportResultsInput {
+  format: 'A' | 'B';
   course: Course | null;
   collegeCode: string;
   examSession: string;
@@ -41,7 +42,7 @@ export async function importExamResults(
   input: ImportResultsInput,
   onProgress?: (current: number, total: number) => void
 ): Promise<ImportResultsSummary> {
-  const { course, collegeCode, examSession, results } = input;
+  const { format, course, collegeCode, examSession, results } = input;
 
   // Build regNumber → student lookup across all students (reg numbers are
   // unique institution-wide, so no academicYear scoping is needed here).
@@ -74,13 +75,24 @@ export async function importExamResults(
     }
 
     const student = studentMap.get(regNumber);
-    const id = `${regNumber}__${sessionSlug}`;
+
+    // Format A prints a full multi-semester cumulative snapshot per exam
+    // session, so one doc per (student, session) is correct. Format B prints
+    // exactly one semester per PDF — a student can have separate Sem-1/Sem-2
+    // ledgers from the *same* exam session title, which would collide (and
+    // silently overwrite each other) under the session-based id. Keying by
+    // semester instead lets each semester coexist, while re-importing the
+    // same semester still overwrites just that semester's doc.
+    const semester = r.semesterSummary[0]?.semester ?? r.subjects[0]?.sem ?? 0;
+    const id = format === 'B' ? `${regNumber}__SEM${semester}` : `${regNumber}__${sessionSlug}`;
 
     const record: ExamResult = {
       id,
       regNumber,
       studentName: r.studentName,
       parentName: r.parentName,
+      admissionType: r.admissionType,
+      institutionName: r.institutionName,
       course: course ?? 'CE',
       collegeCode,
       examSession,

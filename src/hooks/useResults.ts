@@ -12,6 +12,12 @@ interface UseResultsResult {
 // Module-level cache — survives component unmount/remount (navigation).
 let _resultsCache: ExamResult[] | null = null;
 
+// Invalidate the cache from outside the hook (e.g. after deleting a result
+// doc from a student's profile) so the Results page refetches next visit.
+export function invalidateResultsCache(): void {
+  _resultsCache = null;
+}
+
 export function useResults(): UseResultsResult {
   const [results, setResults] = useState<ExamResult[]>(() => _resultsCache ?? []);
   const [loading, setLoading] = useState(_resultsCache === null);

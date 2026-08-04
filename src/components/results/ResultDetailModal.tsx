@@ -28,7 +28,11 @@ export function ResultDetailModal({ result, onClose }: Props) {
                 {result.year && (<><span className="text-gray-300 mx-1.5">·</span>{result.year}</>)}
                 <span className="text-gray-300 mx-1.5">·</span>
                 {result.examSession}
+                {result.admissionType && (<><span className="text-gray-300 mx-1.5">·</span>{result.admissionType}</>)}
               </p>
+              {result.institutionName && (
+                <p className="text-[11px] text-gray-400 mt-0.5 truncate">{result.institutionName}</p>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -55,8 +59,10 @@ export function ResultDetailModal({ result, onClose }: Props) {
             </span>
             <span
               className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold border ${
-                result.overallResult === 'FAILS'
+                result.overallResult === 'FAILS' || result.overallResult === 'FAIL'
                   ? 'bg-red-50 text-red-700 border-red-200'
+                  : result.overallResult === 'AB'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
                   : result.overallResult === 'Distinction'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : 'bg-blue-50 text-blue-700 border-blue-200'
@@ -90,7 +96,9 @@ export function ResultDetailModal({ result, onClose }: Props) {
                         <td className="px-3 py-1.5 text-gray-700">{s.code}</td>
                         <td className="px-3 py-1.5 text-gray-700">{s.subject}</td>
                         <td className="px-3 py-1.5 text-gray-700">{s.iaTrPr}</td>
-                        <td className={`px-3 py-1.5 font-semibold ${s.result === 'F' ? 'text-red-600' : 'text-emerald-700'}`}>
+                        <td className={`px-3 py-1.5 font-semibold ${
+                          s.result === 'F' ? 'text-red-600' : s.result === 'AB' ? 'text-amber-600' : 'text-emerald-700'
+                        }`}>
                           {s.result}
                         </td>
                         <td className="px-3 py-1.5 text-right text-gray-700">{s.credit}</td>
@@ -140,7 +148,7 @@ export function ResultDetailModal({ result, onClose }: Props) {
                       <td className="px-3 py-1.5 text-gray-500">SGPA (Attempts)</td>
                       {result.semesterSummary.map((sem) => (
                         <td key={sem.semester} className="px-3 py-1.5 text-right text-gray-700">
-                          {sem.sgpa !== null ? `${sem.sgpa} (${sem.attempts})` : '—'}
+                          {sem.sgpa === null ? '—' : sem.attempts === null ? sem.sgpa : `${sem.sgpa} (${sem.attempts})`}
                         </td>
                       ))}
                     </tr>

@@ -1,11 +1,15 @@
 import { useState, useRef, type ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/common/Button';
 import { parseResultPdf, type ParsedResultLedger } from '../utils/resultPdfParser';
 import { importExamResults, type ImportResultsSummary } from '../services/resultService';
+import { useResults } from '../hooks/useResults';
 
 type PageState = 'idle' | 'preview' | 'importing' | 'done';
 
 export function ImportResults() {
+  const navigate = useNavigate();
+  const { refetch } = useResults();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pageState, setPageState] = useState<PageState>('idle');
   const [fileName, setFileName] = useState('');
@@ -43,6 +47,7 @@ export function ImportResults() {
     try {
       const res = await importExamResults(
         {
+          format: ledger.format,
           course: ledger.course,
           collegeCode: ledger.collegeCode,
           examSession: ledger.examSession,
@@ -51,12 +56,17 @@ export function ImportResults() {
         (current, total) => setProgress({ current, total })
       );
       setResult(res);
+      refetch();
+      if (res.failed === 0) {
+        setTimeout(() => navigate('/results'), 1200);
+      }
     } catch (err) {
       setResult({
         success: 0,
         failed: ledger.results.length,
         errors: [{ regNumber: '', message: err instanceof Error ? err.message : 'Import failed' }],
       });
+      refetch();
     } finally {
       setPageState('done');
     }
@@ -236,7 +246,7 @@ export function ImportResults() {
 
           {result.failed === 0 && (
             <p className="text-sm text-green-700 bg-green-50 rounded-md px-4 py-3 mb-4">
-              All {result.success} results imported successfully.
+              All {result.success} results imported successfully. Taking you to Results…
             </p>
           )}
 
@@ -255,9 +265,14 @@ export function ImportResults() {
             </div>
           )}
 
-          <Button variant="secondary" onClick={handleReset}>
-            Import Another File
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate('/results')}>
+              View Results
+            </Button>
+            <Button variant="secondary" onClick={handleReset}>
+              Import Another File
+            </Button>
+          </div>
         </section>
       )}
     </div>
