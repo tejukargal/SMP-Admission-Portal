@@ -427,6 +427,7 @@ export interface Notice {
   archivedAt?: string;      // set when admin unpublishes the notice — hidden from all students, kept for admin review; cleared again on publish
   inactiveAt?: string;      // set when admin marks a notice "finished" — stays visible to students (unlike archivedAt) but labeled Inactive and sorted below Active notices; cleared again on reactivate
   attachments?: StoredAttachment[]; // optional Firebase Storage files — absent on legacy notices
+  pinned?: boolean;         // shown first in the student portal's Notices tab, ahead of date sorting
 }
 
 /** Per-student "which notices have I seen" state (drives the unread badge; students cannot dismiss notices themselves) — one doc per student, keyed by regNumber. */

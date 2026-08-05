@@ -5,7 +5,7 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { subscribeToNotices, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive } from '../services/noticeService';
+import { subscribeToNotices, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive, pinNotice, unpinNotice } from '../services/noticeService';
 import { createNoticeWithAttachments } from '../services/noticeAttachmentService';
 import {
   getAllStudentMessages,
@@ -279,10 +279,23 @@ export function StudentMessages() {
     }
   }
 
-  // Sent list — Active notices first (newest first within each group), Inactive below.
+  // Pin/Unpin toggle — pinned notices show first in the student portal's Notices tab.
+  const [pinningId, setPinningId] = useState<string | null>(null);
+  async function handleTogglePin(n: Notice) {
+    setPinningId(n.id);
+    try {
+      if (n.pinned) await unpinNotice(n.id);
+      else await pinNotice(n.id);
+    } finally {
+      setPinningId(null);
+    }
+  }
+
+  // Sent list — Active notices first (newest first within each group, pinned ahead), Inactive below.
   const sortedNotices = useMemo(
     () => [...notices].sort((a, b) => {
       if (!!a.inactiveAt !== !!b.inactiveAt) return a.inactiveAt ? 1 : -1;
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       return b.createdAt.localeCompare(a.createdAt);
     }),
     [notices],
@@ -551,7 +564,7 @@ export function StudentMessages() {
           ) : sortedNotices.length === 0 ? (
             <div className="text-sm text-gray-400 text-center py-10">No notices posted yet.</div>
           ) : sortedNotices.map((n) => (
-            <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${n.archivedAt || n.inactiveAt ? 'border-gray-100 opacity-60' : 'border-gray-100'}`}>
+            <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'opacity-60' : ''}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5 flex-wrap">
                   {CATEGORY_OPTIONS.find((o) => o.value === n.category)?.label} ·{' '}
@@ -564,9 +577,22 @@ export function StudentMessages() {
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.inactiveAt ? 'bg-gray-200 text-gray-500' : 'bg-sky-100 text-sky-700'}`}>
                     {n.inactiveAt ? 'Inactive' : 'Active'}
                   </span>
+                  {n.pinned && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+                      Pinned
+                    </span>
+                  )}
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => startEditNotice(n)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
+                  <button
+                    onClick={() => void handleTogglePin(n)}
+                    disabled={pinningId === n.id}
+                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${n.pinned ? 'text-amber-600 hover:text-amber-800' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    {n.pinned ? 'Unpin' : 'Pin to Top'}
+                  </button>
                   <button
                     onClick={() => void handleToggleActive(n)}
                     disabled={togglingActiveId === n.id}

@@ -54,3 +54,13 @@ export async function markNoticeInactive(id: string): Promise<void> {
 export async function markNoticeActive(id: string): Promise<void> {
   await updateDoc(doc(db, COL, id), { inactiveAt: deleteField() });
 }
+
+/** Pin — shows this notice first in the student portal's Notices tab, ahead of date sorting. */
+export async function pinNotice(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { pinned: true });
+}
+
+/** Unpin — returns the notice to normal date-based sorting. */
+export async function unpinNotice(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { pinned: deleteField() });
+}

@@ -31,7 +31,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
   }, [notices]);
 
   // Search + category filter applied first, then the existing sort:
-  // Active notices first (newest first within each group), Inactive ("finished") below.
+  // Active notices first (pinned ahead, then newest first within each group), Inactive ("finished") below.
   const sorted = useMemo(() => {
     let rows = notices;
     if (activeCategory !== 'all') rows = rows.filter((n) => n.category === activeCategory);
@@ -41,6 +41,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
     }
     return rows.slice().sort((a, b) => {
       if (!!a.inactiveAt !== !!b.inactiveAt) return a.inactiveAt ? 1 : -1;
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       return b.createdAt.localeCompare(a.createdAt);
     });
   }, [notices, activeCategory, search]);
@@ -119,7 +120,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
               key={n.id}
               onClick={() => setSelected(n)}
               style={{ animation: 'content-enter 0.3s ease-out both', animationDelay: `${Math.min(i, 12) * 0.05}s` }}
-              className={`rounded-2xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer group p-4 ${n.inactiveAt ? 'bg-white opacity-60 border-gray-200' : 'bg-white border-gray-200'}`}
+              className={`rounded-2xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer group p-4 border-l-4 ${n.pinned ? 'border-l-amber-300' : 'border-l-gray-200'} ${n.inactiveAt ? 'bg-white opacity-60 border-gray-200' : 'bg-white border-gray-200'}`}
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <span className="flex items-center gap-1.5 flex-wrap">
@@ -130,6 +131,12 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${n.inactiveAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
                     {n.inactiveAt ? 'Inactive' : 'Active'}
                   </span>
+                  {n.pinned && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+                      Pinned
+                    </span>
+                  )}
                 </span>
                 <span className="text-[10px] text-gray-400">
                   {new Date(n.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}

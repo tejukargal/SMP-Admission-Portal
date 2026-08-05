@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNewNotice = void 0;
+exports.notifyOnStudentNotification = exports.notifyOnNoticeUpdated = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const REGION = 'asia-south1';
@@ -163,6 +163,28 @@ exports.notifyOnCircularUpdated = (0, firestore_1.onDocumentUpdated)({ document:
         title: justPinned ? `📌 Pinned: ${after.title}` : after.title,
         body: justPinned ? 'This circular has been pinned to the top.' : after.subject.slice(0, 150),
     }, { kind: 'circular', id: event.params.circularId });
+});
+// ── Notice pinned or (re)published → push notification ─────────────────────
+// Pin and publish/unpublish are updateDoc calls (see noticeService.ts), so
+// they never hit notifyOnNewNotice above — this trigger covers those edits.
+// Only fires on the specific transition, not every field edit, so routine
+// title/body edits stay silent.
+exports.notifyOnNoticeUpdated = (0, firestore_1.onDocumentUpdated)({ document: 'notices/{noticeId}', region: REGION }, async (event) => {
+    var _a, _b;
+    const before = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before.data();
+    const after = (_b = event.data) === null || _b === void 0 ? void 0 : _b.after.data();
+    if (!before || !after)
+        return;
+    const justPinned = !before.pinned && !!after.pinned;
+    const justPublished = !!before.archivedAt && !after.archivedAt;
+    if (!justPinned && !justPublished)
+        return;
+    const recipients = await resolveNoticeRecipients(after);
+    const tokens = await resolveTokens(recipients);
+    await sendPush(tokens, {
+        title: justPinned ? `📌 Pinned: ${after.title}` : after.title,
+        body: justPinned ? 'This notice has been pinned to the top.' : after.body.slice(0, 150),
+    }, { kind: 'notice', id: event.params.noticeId });
 });
 // ── New Student Notification (fee-paid, status-changed, etc.) → push ───────
 exports.notifyOnStudentNotification = (0, firestore_1.onDocumentCreated)({ document: 'studentNotifications/{notificationId}', region: REGION }, async (event) => {
