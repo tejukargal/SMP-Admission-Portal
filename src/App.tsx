@@ -51,6 +51,9 @@ const StudentReports = lazy(() =>
   import('./pages/StudentReports').then((m) => ({ default: m.StudentReports }))
 );
 const Results = lazy(() => import('./pages/Results').then((m) => ({ default: m.Results })));
+const AnsLetters = lazy(() =>
+  import('./pages/AnsLetters').then((m) => ({ default: m.AnsLetters }))
+);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -99,6 +102,7 @@ function AppRoutes() {
           <Route path="/students" element={<Students />} />
           <Route path="/student-reports" element={<StudentReports />} />
           <Route path="/results" element={<Results />} />
+          <Route path="/ans-letters" element={<AnsLetters />} />
           <Route
             path="/fees"
             element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}

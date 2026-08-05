@@ -37,6 +37,26 @@ export type AcademicYear =
 // List's right-click context menu in StudentReports.tsx.
 export type NotAdmittedStatusTag = 'ANS' | 'LEFTOUT' | 'TRANSFERRED' | 'TC_ISSUED';
 
+// ─── ANS Letters (attendance-shortage Intimation Letter) ──────────────────────
+
+export type AnsLetterStatus = 'sent' | 'visited' | 'resolved';
+
+/** One issuance of the ANS Intimation Letter — appended to the student doc's ansHistory array. */
+export interface AnsLetterRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  regNumber: string;
+  fatherName: string;
+  course: Course;
+  year: Year;
+  academicYear: AcademicYear;
+  issuedAt: string;          // ISO timestamp
+  issuedBy: string;          // uid
+  status: AnsLetterStatus;
+  statusUpdatedAt?: string;  // ISO, set whenever status changes
+}
+
 export interface Student {
   id: string;
   studentNameSSLC: string;
@@ -91,6 +111,7 @@ export interface Student {
   transferOut?: boolean;
   transferOutDate?: string;
   transferOutPolytechnic?: string;
+  ansHistory?: AnsLetterRecord[];
   createdAt: string;
   updatedAt: string;
 }

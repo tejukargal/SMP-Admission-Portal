@@ -432,11 +432,11 @@ export function StudentMessages() {
 
   return (
     <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="flex-shrink-0 flex items-center gap-3">
-        <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Messages</h2>
+      <div className="flex-shrink-0 flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+        <h2 className="text-lg sm:text-xl font-black text-gray-800 leading-tight tracking-tight shrink-0">Student Messages</h2>
         <button
           onClick={() => setShowActiveUsers(true)}
-          className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer shrink-0"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           Active Users
@@ -444,28 +444,28 @@ export function StudentMessages() {
             <span className="rounded-full bg-emerald-100 text-emerald-700 text-[10px] px-1.5">{onlineCount}</span>
           )}
         </button>
-        <div className="flex items-center gap-1.5 ml-auto">
+        <div className="flex items-center gap-1.5 sm:ml-auto overflow-x-auto no-scrollbar w-full sm:w-auto">
           <button
             onClick={() => setTab('compose')}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'compose' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'compose' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             Compose
           </button>
           <button
             onClick={() => setTab('sent')}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'sent' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'sent' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             Sent {notices.length > 0 && <span className="rounded-full bg-gray-200 text-gray-600 text-[10px] px-1.5">{notices.length}</span>}
           </button>
           <button
             onClick={() => setTab('inbox')}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'inbox' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'inbox' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             Inbox {openCount > 0 && <span className="rounded-full bg-red-500 text-white text-[10px] px-1.5">{openCount}</span>}
           </button>
           <button
             onClick={() => setTab('circulars')}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             Circulars
           </button>
@@ -486,9 +486,9 @@ export function StudentMessages() {
                 className="shrink-0 rounded-2xl border border-emerald-100 overflow-hidden mb-2.5"
                 style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
               >
-                <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2">
                   {/* Search — rounded-full with icon + amber clear */}
-                  <div className="relative shrink-0 w-52">
+                  <div className="relative shrink-0 w-full sm:w-52">
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
                     </svg>
@@ -565,7 +565,7 @@ export function StudentMessages() {
             <div className="text-sm text-gray-400 text-center py-10">No notices posted yet.</div>
           ) : sortedNotices.map((n) => (
             <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'opacity-60' : ''}`}>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5 flex-wrap">
                   {CATEGORY_OPTIONS.find((o) => o.value === n.category)?.label} ·{' '}
                   {n.scope === 'selected'
@@ -584,7 +584,7 @@ export function StudentMessages() {
                     </span>
                   )}
                 </span>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto">
                   <button onClick={() => startEditNotice(n)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
                   <button
                     onClick={() => void handleTogglePin(n)}
@@ -684,10 +684,10 @@ export function StudentMessages() {
                   </span>
                   <button onClick={() => void handleDeleteOne(m.id)} className="text-[11px] text-red-500 hover:text-red-700 font-semibold cursor-pointer">Delete</button>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 ml-6">{m.category}</p>
-                <p className="text-sm text-gray-700 mt-1.5 ml-6 whitespace-pre-wrap">{m.message}</p>
+                <p className="text-xs text-gray-400 mt-0.5 ml-2 sm:ml-6">{m.category}</p>
+                <p className="text-sm text-gray-700 mt-1.5 ml-2 sm:ml-6 whitespace-pre-wrap">{m.message}</p>
                 {m.status === 'open' ? (
-                  <div className="mt-2.5 ml-6 flex items-center gap-2">
+                  <div className="mt-2.5 ml-2 sm:ml-6 flex items-center gap-2">
                     <input
                       value={replyDrafts[m.id] ?? ''}
                       onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
@@ -697,7 +697,7 @@ export function StudentMessages() {
                     <Button size="sm" onClick={() => void handleResolve(m.id)}>Mark Resolved</Button>
                   </div>
                 ) : m.adminReply ? (
-                  <div className="mt-2 ml-6 pt-2 border-t border-gray-100">
+                  <div className="mt-2 ml-2 sm:ml-6 pt-2 border-t border-gray-100">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Your Reply</p>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{m.adminReply}</p>
                   </div>

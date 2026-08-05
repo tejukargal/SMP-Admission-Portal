@@ -82,11 +82,11 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2.5">
-      <div className="shrink-0 flex items-center justify-between gap-2">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <p className="text-xs text-gray-500">
           Circulars are visible to <span className="font-semibold text-gray-700">all students</span> in the portal — department is a label/filter only.
         </p>
-        <Button size="sm" onClick={() => setShowForm(true)}>
+        <Button size="sm" onClick={() => setShowForm(true)} className="self-start sm:self-auto">
           <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
@@ -104,7 +104,7 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
           const preview3 = stripHtml(c.body);
           return (
             <div key={c.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'opacity-60' : ''}`}>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5 flex-wrap min-w-0">
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.pill}`}>{c.department}</span>
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -125,7 +125,7 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
                     </span>
                   )}
                 </span>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto">
                   <button onClick={() => setPreview(c)} className="text-xs text-gray-500 hover:text-gray-700 font-semibold cursor-pointer">Preview</button>
                   <button onClick={() => setEditing(c)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
                   <button

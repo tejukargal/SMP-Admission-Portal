@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Student } from '../../types';
 import { buildAnsLetterHTML, generateAnsLetter } from '../../utils/ansLetter';
+import { saveAnsLetterRecord } from '../../services/ansLetterService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Props {
   student: Student;
@@ -8,6 +10,7 @@ interface Props {
 }
 
 export function AnsLetterPreviewModal({ student, onClose }: Props) {
+  const { user } = useAuth();
   const [previewHtml, setPreviewHtml] = useState('');
 
   useEffect(() => {
@@ -23,6 +26,19 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
 
   function handlePrint() {
     generateAnsLetter(student);
+    if (user) {
+      void saveAnsLetterRecord(student.id, {
+        studentId: student.id,
+        studentName: student.studentNameSSLC,
+        regNumber: student.regNumber ?? '',
+        fatherName: student.fatherName,
+        course: student.course,
+        year: student.year,
+        academicYear: student.academicYear,
+        issuedAt: new Date().toISOString(),
+        issuedBy: user.uid,
+      });
+    }
     onClose();
   }
 
