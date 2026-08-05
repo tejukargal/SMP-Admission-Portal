@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment, type ReactNode } from 'react';
+﻿import { useState, useMemo, useEffect, Fragment, type ReactNode } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -26,6 +26,8 @@ import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeReco
 import { SMP_FEE_HEADS } from '../types';
 import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
 import { useFeeRemittances } from '../hooks/useFeeRemittances';
+import { denominationAbstractId, getDenominationAbstract, saveDenominationAbstract } from '../services/denominationAbstractService';
+import { useAuth } from '../contexts/AuthContext';
 
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
@@ -1842,7 +1844,10 @@ function totalAbstractUpi(aided: RemittanceSummary, unaided: RemittanceSummary):
     + unaided.smpPay + unaided.svkPay + unaided.rcPay + unaided.insPay;
 }
 
-function exportRemittanceAbstractPdf(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+function exportRemittanceAbstractPdf(
+  aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string,
+  counts?: Record<number, string>,
+): void {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -1925,6 +1930,46 @@ function exportRemittanceAbstractPdf(aided: RemittanceSummary, unaided: Remittan
   doc.text('Total UPI', MARGIN + boxW + boxGap + 4, afterTable + 7.5);
   doc.text(`₹${numPdf(upiTotal)}`, W - MARGIN - 4, afterTable + 7.5, { align: 'right' });
   doc.setTextColor(...NEAR_BLACK);
+
+  // ── Denomination Calculator — appended below the Abstract, when counts were entered ──
+  const denomTotal = counts ? DENOMINATIONS.reduce((s, d) => s + d * (Number(counts[d]) || 0), 0) : 0;
+  if (counts && denomTotal > 0) {
+    let y = afterTable + 16;
+    if (y > H - 40) { doc.addPage(); y = 16; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...NEAR_BLACK);
+    doc.text('Denomination Calculator', MARGIN, y);
+    y += 3;
+
+    const denomBody = DENOMINATIONS
+      .filter((d) => (Number(counts[d]) || 0) > 0)
+      .map((d) => {
+        const count = Number(counts[d]) || 0;
+        return [`Rs.${d}${d <= 2 ? ' coin' : ''}`, String(count), fmtN(d * count)];
+      });
+    const matched = denomTotal - cashTotal;
+    denomBody.push(['Total Cash', '', fmtN(denomTotal)]);
+    denomBody.push(['Target (Abstract Cash)', '', fmtN(cashTotal)]);
+    denomBody.push([
+      matched === 0 ? 'Exactly Matched' : matched > 0 ? `Excess of ${fmtN(matched)}` : `Shortage of ${fmtN(Math.abs(matched))}`,
+      '', '',
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN },
+      head: [['Denomination', 'Count', 'Amount']],
+      body: denomBody,
+      headStyles,
+      bodyStyles,
+      alternateRowStyles: { fillColor: WHITE },
+      columnStyles: { 0: { cellWidth: 40 }, 1: { halign: 'right' }, 2: { halign: 'right' } },
+      didParseCell(data) {
+        if (data.section === 'body' && data.row.index >= denomBody.length - 3) {
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+  }
 
   doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(160,160,160);
   doc.text(`Fee Remittance Abstract ${academicYear}`, MARGIN, H - 6);
@@ -2042,13 +2087,26 @@ function RemittanceAbstractTable({
 
 const DENOMINATIONS = [500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
 
+function denomStatusText(saving?: boolean, dirty?: boolean, savedAt?: string | null): string {
+  if (saving) return 'Saving...';
+  if (dirty) return 'Unsaved';
+  if (savedAt) return `Saved ${new Date(savedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short' })}`;
+  return '';
+}
+
 function DenominationCalculator({
   counts, onCountsChange, targetCash, label,
+  onSave, saving, dirty, savedAt, error,
 }: {
   counts: Record<number, string>;
   onCountsChange: (next: Record<number, string>) => void;
   targetCash: number;
   label?: string;
+  onSave?: () => void;
+  saving?: boolean;
+  dirty?: boolean;
+  savedAt?: string | null;
+  error?: string;
 }) {
   const total   = DENOMINATIONS.reduce((s, d) => s + d * (Number(counts[d]) || 0), 0);
   const matched = total - targetCash;
@@ -2065,15 +2123,34 @@ function DenominationCalculator({
   return (
     <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
       {label && (
-        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm"
-          >
-            Reset
-          </button>
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider truncate shrink-0">{label}</span>
+          <div className="flex items-center gap-1.5 ml-auto min-w-0">
+            {onSave && (
+              <span className="text-[10px] text-gray-400 truncate max-w-[85px]" title={denomStatusText(saving, dirty, savedAt)}>
+                {denomStatusText(saving, dirty, savedAt)}
+              </span>
+            )}
+            {onSave && (
+              <button
+                onClick={onSave}
+                disabled={saving || !dirty}
+                className="shrink-0 flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition-colors whitespace-nowrap shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            )}
+            <button
+              onClick={handleReset}
+              className="shrink-0 flex items-center gap-1 rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm"
+            >
+              Reset
+            </button>
+          </div>
         </div>
+      )}
+      {error && (
+        <p className="px-3 py-1 text-[10px] text-red-600 bg-red-50 border-b border-red-100">{error}</p>
       )}
       <table className="w-full text-sm">
         <thead className={`${ACCENT} text-white`}>
@@ -2735,7 +2812,14 @@ function exportRemittanceTrackerPdf(
   doc.save(`Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
 }
 
+// Denomination counts are only meaningfully "equal" up to their numeric value —
+// compares by DENOMINATIONS entries rather than raw object identity/key-order.
+function denomCountsEqual(a: Record<number, string>, b: Record<number, string>): boolean {
+  return DENOMINATIONS.every((d) => (Number(a[d]) || 0) === (Number(b[d]) || 0));
+}
+
 function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeRecords: FeeRecord[]; academicYear: string; showAllYears: boolean }) {
+  const { user } = useAuth();
   const availableDates = useMemo(
     () => [...new Set(feeRecords.map((r) => r.date.slice(0, 10)))].sort(),
     [feeRecords],
@@ -2746,6 +2830,10 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
   const [dateFrom,     setDateFrom]     = useState('');
   const [dateTo,       setDateTo]       = useState('');
   const [denomCounts,  setDenomCounts]  = useState<Record<number, string>>({});
+  const [savedCounts,  setSavedCounts]  = useState<Record<number, string>>({});
+  const [denomSavedAt, setDenomSavedAt] = useState<string | null>(null);
+  const [denomSaving,  setDenomSaving]  = useState(false);
+  const [denomError,   setDenomError]   = useState('');
 
   useEffect(() => {
     if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
@@ -2753,9 +2841,53 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
     }
   }, [availableDates, selectedDate]);
 
+  const denomDateKey = viewMode === 'daily' ? selectedDate : `${dateFrom || 'all'}_${dateTo || 'all'}`;
+  const denomId = denominationAbstractId(academicYear, viewMode, denomDateKey);
+
+  // Load previously-saved counts whenever the abstract's date/mode changes.
   useEffect(() => {
+    let cancelled = false;
     setDenomCounts({});
-  }, [viewMode, selectedDate, dateFrom, dateTo]);
+    setSavedCounts({});
+    setDenomSavedAt(null);
+    setDenomError('');
+    getDenominationAbstract(denomId).then((rec) => {
+      if (cancelled) return;
+      setDenomCounts(rec?.counts ?? {});
+      setSavedCounts(rec?.counts ?? {});
+      setDenomSavedAt(rec?.updatedAt ?? null);
+    }).catch((err: unknown) => {
+      if (cancelled) return;
+      setDenomError(err instanceof Error ? err.message : 'Failed to load saved denominations.');
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [denomId]);
+
+  const denomDirty = !denomCountsEqual(denomCounts, savedCounts);
+
+  async function handleSaveDenom() {
+    if (!user) return;
+    setDenomSaving(true);
+    setDenomError('');
+    try {
+      await saveDenominationAbstract(denomId, {
+        academicYear: academicYear as AcademicYear,
+        viewMode,
+        ...(viewMode === 'daily'
+          ? { date: selectedDate }
+          : { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) }),
+        counts: denomCounts,
+        updatedBy: user.uid,
+      });
+      setSavedCounts(denomCounts);
+      setDenomSavedAt(new Date().toISOString());
+    } catch (err: unknown) {
+      setDenomError(err instanceof Error ? err.message : 'Failed to save denominations.');
+    } finally {
+      setDenomSaving(false);
+    }
+  }
 
   const dateIdx  = availableDates.indexOf(selectedDate);
   const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
@@ -2849,14 +2981,18 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
               aided={dailySummary.aided}
               unaided={dailySummary.unaided}
               label={`Abstract — ${formatDayLabel(selectedDate)}`}
-              onPrint={() => exportRemittanceAbstractPdf(dailySummary.aided, dailySummary.unaided, formatDayLabel(selectedDate), academicYear)}
+              onPrint={() => exportRemittanceAbstractPdf(dailySummary.aided, dailySummary.unaided, formatDayLabel(selectedDate), academicYear, denomCounts)}
             />
             <DenominationCalculator
-              key={`daily-${selectedDate}`}
               counts={denomCounts}
               onCountsChange={setDenomCounts}
               targetCash={totalAbstractCash(dailySummary.aided, dailySummary.unaided)}
               label="Denomination Calculator"
+              onSave={handleSaveDenom}
+              saving={denomSaving}
+              dirty={denomDirty}
+              savedAt={denomSavedAt}
+              error={denomError}
             />
             <DenominationAllocationTable
               key={`daily-alloc-${selectedDate}`}
@@ -2880,14 +3016,18 @@ function BankRemittanceTab({ feeRecords, academicYear, showAllYears }: { feeReco
               aided={periodSummary.aided}
               unaided={periodSummary.unaided}
               label={dateFrom || dateTo ? `Abstract — ${dateFrom || '…'} → ${dateTo || '…'}` : 'Abstract — All Records'}
-              onPrint={() => exportRemittanceAbstractPdf(periodSummary.aided, periodSummary.unaided, dateFrom || dateTo ? `${dateFrom || '…'} to ${dateTo || '…'}` : 'All Records', academicYear)}
+              onPrint={() => exportRemittanceAbstractPdf(periodSummary.aided, periodSummary.unaided, dateFrom || dateTo ? `${dateFrom || '…'} to ${dateTo || '…'}` : 'All Records', academicYear, denomCounts)}
             />
             <DenominationCalculator
-              key={`period-${dateFrom}-${dateTo}`}
               counts={denomCounts}
               onCountsChange={setDenomCounts}
               targetCash={totalAbstractCash(periodSummary.aided, periodSummary.unaided)}
               label="Denomination Calculator"
+              onSave={handleSaveDenom}
+              saving={denomSaving}
+              dirty={denomDirty}
+              savedAt={denomSavedAt}
+              error={denomError}
             />
             <DenominationAllocationTable
               key={`period-alloc-${dateFrom}-${dateTo}`}

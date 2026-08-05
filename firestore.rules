@@ -226,6 +226,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Denomination Abstracts (Bank Remittance cash-count verification) ───────
+    match /denominationAbstracts/{docId} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin();
+    }
+
     // ── Exam Results (parsed from Result Ledger PDFs) ─────────────────────
     // Both admin and staff can view; students can view their own (read-only,
     // matched via regNumber — part of the student portal's academic profile).

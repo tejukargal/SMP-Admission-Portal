@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { saveSettings } from '../services/settingsService';
 import { deleteStudentsByAcademicYear, deleteAllStudents, deleteStudent, getStudentsByAcademicYear, getAllStudents, resetAcademicYearCounters } from '../services/studentService';
@@ -62,6 +62,7 @@ const ACADEMIC_YEAR_OPTIONS = [
 
 export function Settings() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabParam = searchParams.get('tab');
   const initialTab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'general';
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -1037,6 +1038,15 @@ export function Settings() {
         {activeTab === 'messaging' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
             <div className="max-w-md space-y-5">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+                <h3 className="text-base font-medium text-gray-800 mb-1">Bulk SMS Composer</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Temporarily moved off the sidebar while it's being finished. Open it here in the meantime.
+                </p>
+                <Button variant="secondary" onClick={() => navigate('/messaging')}>
+                  Open Bulk SMS Composer →
+                </Button>
+              </div>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
                 <h3 className="text-base font-medium text-gray-800 mb-1">Fast2SMS Configuration</h3>
                 <p className="text-sm text-gray-500 mb-4">

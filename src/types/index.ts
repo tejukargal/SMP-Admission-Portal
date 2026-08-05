@@ -406,6 +406,24 @@ export interface GovHeadChallan {
   path: string;
 }
 
+// ─── Denomination Abstract (Bank Remittance cash-count verification) ──────────
+
+/** Saved note/coin counts entered in the Bank Remittance tab's Denomination Calculator,
+ *  keyed to a specific Abstract date (daily) or date range (period) — kept for later
+ *  verification/reference; the Denomination Allocation breakdown is derived from these
+ *  counts + the Abstract's cash totals, so persisting counts alone covers both. */
+export interface DenominationAbstract {
+  id: string;                    // `${academicYear}__${viewMode}__${dateKey}`
+  academicYear: AcademicYear;
+  viewMode: 'daily' | 'period';
+  date?: string;                 // 'YYYY-MM-DD' — present when viewMode === 'daily'
+  dateFrom?: string;              // present when viewMode === 'period'
+  dateTo?: string;                // present when viewMode === 'period'
+  counts: Record<number, string>; // denomination value -> entered count (as typed)
+  updatedAt: string;              // ISO
+  updatedBy: string;              // uid
+}
+
 // ─── Exam Results (parsed from Result Ledger PDFs) ─────────────────────────────
 
 export interface ExamResultSubject {

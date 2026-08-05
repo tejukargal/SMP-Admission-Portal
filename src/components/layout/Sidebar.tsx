@@ -99,14 +99,6 @@ function IconReports() {
     </svg>
   );
 }
-function IconMessaging() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-      <polyline points="22,6 12,13 2,6"/>
-    </svg>
-  );
-}
 function IconStudentMessages() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -145,7 +137,9 @@ const ADMIN_ITEMS = [
   { to: '/fees',           label: 'Collect Fee',    Icon: IconFee          },
   { to: '/fee-register',   label: 'Fee Register',   Icon: IconRegister     },
   { to: '/fee-reports',    label: 'Fee Reports',    Icon: IconReports      },
-  { to: '/messaging',      label: 'Messaging',      Icon: IconMessaging    },
+  // 'Messaging' (Bulk SMS) is temporarily off the sidebar while unfinished —
+  // reachable from Settings → Messaging tab in the meantime. Restore this
+  // entry when asked.
   { to: '/student-messages', label: 'Student Messages', Icon: IconStudentMessages },
   { to: '/settings',       label: 'Settings',       Icon: IconSettings     },
 ];
