@@ -7,9 +7,11 @@ import { useAuth } from '../../contexts/AuthContext';
 interface Props {
   student: Student;
   onClose: () => void;
+  /** View an already-issued letter for reference — reprinting won't add another ansHistory entry. */
+  readOnly?: boolean;
 }
 
-export function AnsLetterPreviewModal({ student, onClose }: Props) {
+export function AnsLetterPreviewModal({ student, onClose, readOnly = false }: Props) {
   const { user } = useAuth();
   const [previewHtml, setPreviewHtml] = useState('');
 
@@ -26,7 +28,7 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
 
   function handlePrint() {
     generateAnsLetter(student);
-    if (user) {
+    if (user && !readOnly) {
       void saveAnsLetterRecord(student.id, {
         studentId: student.id,
         studentName: student.studentNameSSLC,
@@ -65,7 +67,7 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
                   <rect x="6" y="14" width="12" height="8"/>
                 </svg>
               </span>
-              Print Preview — ANS Letter
+              {readOnly ? 'ANS Letter — Reference View' : 'Print Preview — ANS Letter'}
             </h2>
             <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40 truncate max-w-xs">
               {student.studentNameSSLC}
@@ -87,7 +89,9 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <span className="text-xs text-blue-700">
-            Prints on a single A4 sheet — Intimation Letter with tear-off mailing section.
+            {readOnly
+              ? 'Reference copy built from the student\'s current details — reprinting will not add another record to the history.'
+              : 'Prints on a single A4 sheet — Intimation Letter with tear-off mailing section.'}
           </span>
         </div>
 
@@ -110,7 +114,7 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
         {/* ── Footer ── */}
         <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0 flex items-center justify-between">
           <span className="text-[11px] text-gray-400">
-            Verify all details before printing
+            {readOnly ? 'Viewing for reference only' : 'Verify all details before printing'}
           </span>
           <div className="flex gap-2">
             <button
@@ -128,7 +132,7 @@ export function AnsLetterPreviewModal({ student, onClose }: Props) {
                 <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
                 <rect x="6" y="14" width="12" height="8"/>
               </svg>
-              Print
+              {readOnly ? 'Reprint' : 'Print'}
             </button>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
 import { getTcRecordsByStudent, getTcEditRecordsByStudent, type TCRecord, type TCEditRecord } from '../../services/tcService';
 import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
+import { getAnsRecordsByStudent } from '../../services/ansLetterService';
+import { AnsLetterPreviewModal } from './AnsLetterPreviewModal';
 import {
   getRefundRecordsByStudent,
   deleteRefundRecord,
@@ -23,7 +25,7 @@ import { ResultDetailModal } from '../results/ResultDetailModal';
 import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
 import type {
   Student, FeeRecord, AcademicYear,
-  AdmType, AdmCat, DocRecord, ExamResult,
+  AdmType, AdmCat, DocRecord, ExamResult, AnsLetterRecord, AnsLetterStatus,
 } from '../../types';
 import { REQUIRED_DOCS, SMP_FEE_HEADS } from '../../types';
 import {
@@ -1082,6 +1084,133 @@ function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: bool
   );
 }
 
+// ─── ANS Letters tab ────────────────────────────────────────────────────────
+
+const ANS_STATUS_LABEL: Record<AnsLetterStatus, string> = {
+  sent: 'Sent',
+  visited: 'Parent Visited',
+  resolved: 'Resolved',
+};
+
+const ANS_STATUS_BADGE: Record<AnsLetterStatus, string> = {
+  sent: 'bg-amber-100 text-amber-700 border-amber-300',
+  visited: 'bg-sky-100 text-sky-700 border-sky-300',
+  resolved: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+};
+
+function AnsHistoryTab({ student, records, loading }: { student: Student; records: AnsLetterRecord[]; loading: boolean }) {
+  const [previewing, setPreviewing] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="px-6 py-5 space-y-3">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-gray-100 overflow-hidden">
+            <div className="h-10 bg-gray-50 animate-pulse" />
+            <div className="px-4 py-3 grid grid-cols-3 gap-3">
+              {[1,2,3].map((j) => <div key={j} className="h-6 bg-gray-100 rounded animate-pulse" />)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-2xl">
+          ✉️
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-500">No ANS Letters Issued</p>
+          <p className="text-xs text-gray-400 mt-0.5">Attendance-shortage intimation letters will appear here once generated for this student.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+          records.length > 1
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-red-50 text-red-700 border-red-200'
+        }`}>
+          {records.length} ANS letter{records.length > 1 ? 's' : ''} issued
+        </span>
+        <button
+          onClick={() => setPreviewing(true)}
+          className="text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer flex items-center gap-1"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          Preview Letter
+        </button>
+      </div>
+
+      {/* Record cards */}
+      <div className="space-y-3">
+        {records.map((r, idx) => (
+          <div key={r.id} className="rounded-xl border border-red-200 border-l-4 border-l-red-400 overflow-hidden shadow-sm">
+            {/* Card header */}
+            <div className="px-4 py-2.5 flex items-center justify-between bg-red-50">
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm font-bold text-red-800">
+                  {new Date(r.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+                {idx === 0 && records.length > 1 && (
+                  <span className="text-[10px] text-gray-400 font-medium">· Latest</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${ANS_STATUS_BADGE[r.status]}`}>
+                  {ANS_STATUS_LABEL[r.status]}
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  {new Date(r.issuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
+            {/* Card body */}
+            <div className="px-4 py-3 bg-white grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Course</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.course}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Year</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.year}</dd>
+              </div>
+              <div>
+                <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Academic Year</dt>
+                <dd className="text-xs font-medium text-gray-800 mt-0.5">{r.academicYear}</dd>
+              </div>
+              {r.statusUpdatedAt && (
+                <div>
+                  <dt className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Status Updated</dt>
+                  <dd className="text-xs font-medium text-gray-800 mt-0.5">
+                    {new Date(r.statusUpdatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </dd>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {previewing && (
+        <AnsLetterPreviewModal student={student} onClose={() => setPreviewing(false)} readOnly />
+      )}
+    </div>
+  );
+}
+
 // ─── Refund History tab ───────────────────────────────────────────────────────
 
 const REFUND_PAYMENT_LABELS: Record<string, string> = {
@@ -1565,7 +1694,7 @@ function ResultsTab({
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results' | 'refund';
+type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results' | 'refund' | 'ans';
 
 const TAB_COLORS: Record<Tab, string> = {
   profile:   'border-blue-500 text-blue-600',
@@ -1575,6 +1704,7 @@ const TAB_COLORS: Record<Tab, string> = {
   pc:        'border-rose-500 text-rose-600',
   results:   'border-sky-500 text-sky-600',
   refund:    'border-red-500 text-red-600',
+  ans:       'border-orange-500 text-orange-600',
 };
 
 interface Props {
@@ -1608,6 +1738,11 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const [pcRecords, setPcRecords] = useState<PCRecord[]>([]);
   const [pcLoading, setPcLoading] = useState(false);
   const [pcLoaded,  setPcLoaded]  = useState(false);
+
+  // ANS letter history state — lazy-loaded on first visit to ans tab
+  const [ansRecords, setAnsRecords] = useState<AnsLetterRecord[]>([]);
+  const [ansLoading, setAnsLoading] = useState(false);
+  const [ansLoaded,  setAnsLoaded]  = useState(false);
 
   // Exam results state — lazy-loaded on first visit to results tab
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
@@ -1697,6 +1832,17 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, pcLoaded]);
 
+  // Lazy-load ANS letter history when ans tab first activated
+  useEffect(() => {
+    if (activeTab !== 'ans' || ansLoaded) return;
+    setAnsLoading(true);
+    getAnsRecordsByStudent(student.id)
+      .then((records) => setAnsRecords(records))
+      .catch(() => { /* non-fatal */ })
+      .finally(() => { setAnsLoading(false); setAnsLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, ansLoaded]);
+
   // Lazy-load exam results when results tab first activated
   useEffect(() => {
     if (activeTab !== 'results' || resultsLoaded) return;
@@ -1775,6 +1921,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
     { id: 'results',   label: 'Results' },
+    { id: 'ans',       label: 'ANS Letters' },
     ...(student.admCat === 'SNQ' || student.admissionStatus === 'CANCELLED' || refundRecords.length > 0 || role === 'admin'
       ? [{ id: 'refund' as Tab, label: 'Refund' }]
       : []),
@@ -1899,6 +2046,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           )}
           {activeTab === 'pc' && (
             <PcHistoryTab records={pcRecords} loading={pcLoading} />
+          )}
+          {activeTab === 'ans' && (
+            <AnsHistoryTab student={student} records={ansRecords} loading={ansLoading} />
           )}
           {activeTab === 'results' && (
             <ResultsTab records={examResults} loading={resultsLoading} onRecordsChange={setExamResults} />
