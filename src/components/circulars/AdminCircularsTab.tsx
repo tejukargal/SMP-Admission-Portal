@@ -7,7 +7,10 @@ import {
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
 import { stripHtml, formatCircularDate } from '../../utils/htmlContent';
+import { useLongPress } from '../../hooks/useLongPress';
 import { Button } from '../common/Button';
+import { CardContextMenu } from '../common/CardContextMenu';
+import { CardWatermark } from '../common/CardWatermark';
 import { CircularForm, type CircularFormValues } from './CircularForm';
 import { CircularModal } from './CircularModal';
 
@@ -28,6 +31,7 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pinningId, setPinningId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; circular: Circular } | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToCirculars((all) => {
@@ -94,68 +98,49 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
         </Button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 max-w-3xl">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
         ) : circulars.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-10">No circulars posted yet. Click "New Circular" to publish the first one.</div>
-        ) : [...circulars].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((c) => {
-          const meta = departmentMeta(c.department);
-          const preview3 = stripHtml(c.body);
-          return (
-            <div key={c.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'opacity-60' : ''}`}>
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.pill}`}>{c.department}</span>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {c.archivedAt ? 'Unpublished' : 'Published'}
-                  </span>
-                  {c.pinned && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
-                      Pinned
-                    </span>
-                  )}
-                  {(c.attachments?.length ?? 0) > 0 && (
-                    <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                      </svg>
-                      {c.attachments.length}
-                    </span>
-                  )}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto">
-                  <button onClick={() => setPreview(c)} className="text-xs text-gray-500 hover:text-gray-700 font-semibold cursor-pointer">Preview</button>
-                  <button onClick={() => setEditing(c)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
-                  <button
-                    onClick={() => void handleTogglePin(c)}
-                    disabled={pinningId === c.id}
-                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${c.pinned ? 'text-amber-600 hover:text-amber-800' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {c.pinned ? 'Unpin' : 'Pin to Top'}
-                  </button>
-                  <button
-                    onClick={() => void handleTogglePublish(c)}
-                    disabled={togglingId === c.id}
-                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${c.archivedAt ? 'text-emerald-600 hover:text-emerald-800' : 'text-amber-600 hover:text-amber-800'}`}
-                  >
-                    {c.archivedAt ? 'Publish' : 'Unpublish'}
-                  </button>
-                  <button onClick={() => setConfirmDelete(c)} className="text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer">Delete</button>
-                </div>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                {formatCircularDate(c.date)} · posted {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                {c.updatedAt && ' · edited'}
-              </p>
-              <h4 className="text-sm font-bold text-gray-900 mt-1">{c.title}</h4>
-              <p className={`text-xs font-semibold ${meta.text} mt-0.5`}>{c.subject}</p>
-              {preview3 && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{preview3}</p>}
-            </div>
-          );
-        })}
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {[...circulars].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((c) => (
+              <AdminCircularCard
+                key={c.id}
+                circular={c}
+                onContextMenu={(x, y) => setMenu({ x, y, circular: c })}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      {menu && (
+        <CardContextMenu
+          x={menu.x}
+          y={menu.y}
+          header={{ title: menu.circular.title, subtitle: menu.circular.department }}
+          onClose={() => setMenu(null)}
+          actions={[
+            { label: 'Preview', onClick: () => setPreview(menu.circular) },
+            { label: 'Edit', onClick: () => setEditing(menu.circular) },
+            {
+              label: menu.circular.pinned ? 'Unpin' : 'Pin to Top',
+              variant: 'accent',
+              disabled: pinningId === menu.circular.id,
+              onClick: () => void handleTogglePin(menu.circular),
+            },
+            {
+              label: menu.circular.archivedAt ? 'Publish' : 'Unpublish',
+              variant: 'accent',
+              disabled: togglingId === menu.circular.id,
+              onClick: () => void handleTogglePublish(menu.circular),
+            },
+            { label: 'Delete', variant: 'danger', onClick: () => setConfirmDelete(menu.circular) },
+          ]}
+        />
+      )}
 
       {showForm && (
         <CircularForm
@@ -192,6 +177,56 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface AdminCircularCardProps {
+  circular: Circular;
+  onContextMenu: (x: number, y: number) => void;
+}
+
+function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProps) {
+  const meta = departmentMeta(c.department);
+  const preview3 = stripHtml(c.body);
+  const longPress = useLongPress((pt) => onContextMenu(pt.x, pt.y));
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none cursor-context-menu ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
+      {...longPress}
+    >
+      {c.archivedAt && <CardWatermark label="Unpublished" />}
+      <div className="relative z-10">
+        <span className="flex items-center gap-1 flex-wrap min-w-0">
+          <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${meta.pill}`}>{c.department}</span>
+          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
+            {c.archivedAt ? 'Unpublished' : 'Published'}
+          </span>
+          {c.pinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+              Pinned
+            </span>
+          )}
+          {(c.attachments?.length ?? 0) > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
+              {c.attachments.length}
+            </span>
+          )}
+        </span>
+        <p className="text-[10px] text-gray-400 mt-1">
+          {formatCircularDate(c.date)} · posted {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {c.updatedAt && ' · edited'}
+        </p>
+        <h4 className="text-sm font-bold text-gray-900 mt-1 line-clamp-1">{c.title}</h4>
+        <p className={`text-xs font-semibold ${meta.text} mt-0.5 line-clamp-1`}>{c.subject}</p>
+        {preview3 && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{preview3}</p>}
+      </div>
     </div>
   );
 }

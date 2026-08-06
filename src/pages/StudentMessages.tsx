@@ -24,6 +24,9 @@ import type { PickerRow, FeeStatusValue } from '../components/messages/StudentPi
 import { ActiveUsersModal } from '../components/messages/ActiveUsersModal';
 import { AdminCircularsTab } from '../components/circulars/AdminCircularsTab';
 import { AttachmentDropzone } from '../components/circulars/AttachmentDropzone';
+import { CardContextMenu } from '../components/common/CardContextMenu';
+import { CardWatermark } from '../components/common/CardWatermark';
+import { useLongPress } from '../hooks/useLongPress';
 import { SMP_FEE_HEADS } from '../types';
 import type {
   Notice, NoticeCategory, StudentMessage, StudentLoginActivity,
@@ -290,6 +293,8 @@ export function StudentMessages() {
       setPinningId(null);
     }
   }
+
+  const [noticeMenu, setNoticeMenu] = useState<{ x: number; y: number; notice: Notice } | null>(null);
 
   // Sent list — Active notices first (newest first within each group, pinned ahead), Inactive below.
   const sortedNotices = useMemo(
@@ -558,74 +563,57 @@ export function StudentMessages() {
       ) : tab === 'circulars' ? (
         user ? <AdminCircularsTab user={user} /> : null
       ) : tab === 'sent' ? (
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 max-w-3xl">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {noticesLoading ? (
             <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
           ) : sortedNotices.length === 0 ? (
             <div className="text-sm text-gray-400 text-center py-10">No notices posted yet.</div>
-          ) : sortedNotices.map((n) => (
-            <div key={n.id} className={`bg-white rounded-2xl border shadow-sm p-4 border-l-4 ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'opacity-60' : ''}`}>
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5 flex-wrap">
-                  {CATEGORY_OPTIONS.find((o) => o.value === n.category)?.label} ·{' '}
-                  {n.scope === 'selected'
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {sortedNotices.map((n) => (
+                <AdminNoticeCard
+                  key={n.id}
+                  notice={n}
+                  categoryLabel={CATEGORY_OPTIONS.find((o) => o.value === n.category)?.label}
+                  scopeLabel={n.scope === 'selected'
                     ? (n.audienceLabel ?? `${n.targetRegNumbers?.length ?? 0} students`)
                     : `${LEGACY_SCOPE_LABEL[n.scope] ?? n.scope}${n.scopeValue ? `: ${n.scopeValue}` : ''}`}
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {n.archivedAt ? 'Unpublished' : 'Published'}
-                  </span>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.inactiveAt ? 'bg-gray-200 text-gray-500' : 'bg-sky-100 text-sky-700'}`}>
-                    {n.inactiveAt ? 'Inactive' : 'Active'}
-                  </span>
-                  {n.pinned && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
-                      Pinned
-                    </span>
-                  )}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto">
-                  <button onClick={() => startEditNotice(n)} className="text-xs text-blue-500 hover:text-blue-700 font-semibold cursor-pointer">Edit</button>
-                  <button
-                    onClick={() => void handleTogglePin(n)}
-                    disabled={pinningId === n.id}
-                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${n.pinned ? 'text-amber-600 hover:text-amber-800' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {n.pinned ? 'Unpin' : 'Pin to Top'}
-                  </button>
-                  <button
-                    onClick={() => void handleToggleActive(n)}
-                    disabled={togglingActiveId === n.id}
-                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${n.inactiveAt ? 'text-sky-600 hover:text-sky-800' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {n.inactiveAt ? 'Mark as Active' : 'Mark as In-Active'}
-                  </button>
-                  <button
-                    onClick={() => void handleTogglePublish(n)}
-                    disabled={togglingId === n.id}
-                    className={`text-xs font-semibold cursor-pointer disabled:opacity-50 ${n.archivedAt ? 'text-emerald-600 hover:text-emerald-800' : 'text-amber-600 hover:text-amber-800'}`}
-                  >
-                    {n.archivedAt ? 'Publish' : 'Unpublish'}
-                  </button>
-                  <button onClick={() => void deleteNotice(n.id)} className="text-xs text-red-500 hover:text-red-700 font-semibold cursor-pointer">Delete</button>
-                </div>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                {new Date(n.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                {n.updatedAt && ' · edited'}
-              </p>
-              <h4 className="text-sm font-bold text-gray-900 mt-1">{n.title}</h4>
-              <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{n.body}</p>
-              {(n.attachments?.length ?? 0) > 0 && (
-                <p className="flex items-center gap-1 text-[11px] text-gray-400 mt-1.5">
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                  </svg>
-                  {n.attachments!.length} attachment{n.attachments!.length !== 1 ? 's' : ''}
-                </p>
-              )}
+                  onContextMenu={(x, y) => setNoticeMenu({ x, y, notice: n })}
+                />
+              ))}
             </div>
-          ))}
+          )}
+
+          {noticeMenu && (
+            <CardContextMenu
+              x={noticeMenu.x}
+              y={noticeMenu.y}
+              header={{ title: noticeMenu.notice.title }}
+              onClose={() => setNoticeMenu(null)}
+              actions={[
+                { label: 'Edit', onClick: () => startEditNotice(noticeMenu.notice) },
+                {
+                  label: noticeMenu.notice.pinned ? 'Unpin' : 'Pin to Top',
+                  variant: 'accent',
+                  disabled: pinningId === noticeMenu.notice.id,
+                  onClick: () => void handleTogglePin(noticeMenu.notice),
+                },
+                {
+                  label: noticeMenu.notice.inactiveAt ? 'Mark as Active' : 'Mark as In-Active',
+                  variant: 'accent',
+                  disabled: togglingActiveId === noticeMenu.notice.id,
+                  onClick: () => void handleToggleActive(noticeMenu.notice),
+                },
+                {
+                  label: noticeMenu.notice.archivedAt ? 'Publish' : 'Unpublish',
+                  variant: 'accent',
+                  disabled: togglingId === noticeMenu.notice.id,
+                  onClick: () => void handleTogglePublish(noticeMenu.notice),
+                },
+                { label: 'Delete', variant: 'danger', onClick: () => void deleteNotice(noticeMenu.notice.id) },
+              ]}
+            />
+          )}
         </div>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col gap-2.5">
@@ -828,6 +816,59 @@ export function StudentMessages() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface AdminNoticeCardProps {
+  notice: Notice;
+  categoryLabel: string | undefined;
+  scopeLabel: string;
+  onContextMenu: (x: number, y: number) => void;
+}
+
+function AdminNoticeCard({ notice: n, categoryLabel, scopeLabel, onContextMenu }: AdminNoticeCardProps) {
+  const longPress = useLongPress((pt) => onContextMenu(pt.x, pt.y));
+  const watermarkLabel = n.archivedAt ? 'Unpublished' : n.inactiveAt ? 'Inactive' : null;
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none cursor-context-menu ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
+      {...longPress}
+    >
+      {watermarkLabel && <CardWatermark label={watermarkLabel} />}
+      <div className="relative z-10">
+        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1 flex-wrap">
+          <span className="truncate">{categoryLabel} · {scopeLabel}</span>
+          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
+            {n.archivedAt ? 'Unpublished' : 'Published'}
+          </span>
+          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.inactiveAt ? 'bg-gray-200 text-gray-500' : 'bg-sky-100 text-sky-700'}`}>
+            {n.inactiveAt ? 'Inactive' : 'Active'}
+          </span>
+          {n.pinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+              Pinned
+            </span>
+          )}
+        </span>
+        <p className="text-[10px] text-gray-400 mt-1">
+          {new Date(n.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {n.updatedAt && ' · edited'}
+        </p>
+        <h4 className="text-sm font-bold text-gray-900 mt-1 line-clamp-1">{n.title}</h4>
+        <p className="text-xs text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">{n.body}</p>
+        {(n.attachments?.length ?? 0) > 0 && (
+          <p className="flex items-center gap-1 text-[10px] text-gray-400 mt-1">
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            {n.attachments!.length} attachment{n.attachments!.length !== 1 ? 's' : ''}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
