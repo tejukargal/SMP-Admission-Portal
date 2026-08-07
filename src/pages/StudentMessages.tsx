@@ -26,7 +26,6 @@ import { AdminCircularsTab } from '../components/circulars/AdminCircularsTab';
 import { AttachmentDropzone } from '../components/circulars/AttachmentDropzone';
 import { CardContextMenu } from '../components/common/CardContextMenu';
 import { CardWatermark } from '../components/common/CardWatermark';
-import { useLongPress } from '../hooks/useLongPress';
 import { SMP_FEE_HEADS } from '../types';
 import type {
   Notice, NoticeCategory, StudentMessage, StudentLoginActivity,
@@ -828,16 +827,30 @@ interface AdminNoticeCardProps {
 }
 
 function AdminNoticeCard({ notice: n, categoryLabel, scopeLabel, onContextMenu }: AdminNoticeCardProps) {
-  const longPress = useLongPress((pt) => onContextMenu(pt.x, pt.y));
   const watermarkLabel = n.archivedAt ? 'Unpublished' : n.inactiveAt ? 'Inactive' : null;
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none cursor-context-menu ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'bg-gray-100/80' : 'bg-white'}`}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
-      {...longPress}
     >
       {watermarkLabel && <CardWatermark label={watermarkLabel} />}
+      <button
+        type="button"
+        aria-label="Options"
+        className="absolute top-2 right-2 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onContextMenu(rect.right, rect.bottom + 4);
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
       <div className="relative z-10">
         <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1 flex-wrap">
           <span className="truncate">{categoryLabel} · {scopeLabel}</span>

@@ -7,7 +7,6 @@ import {
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
 import { stripHtml, formatCircularDate } from '../../utils/htmlContent';
-import { useLongPress } from '../../hooks/useLongPress';
 import { Button } from '../common/Button';
 import { CardContextMenu } from '../common/CardContextMenu';
 import { CardWatermark } from '../common/CardWatermark';
@@ -189,15 +188,29 @@ interface AdminCircularCardProps {
 function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProps) {
   const meta = departmentMeta(c.department);
   const preview3 = stripHtml(c.body);
-  const longPress = useLongPress((pt) => onContextMenu(pt.x, pt.y));
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none cursor-context-menu ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : 'bg-white'}`}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
-      {...longPress}
     >
       {c.archivedAt && <CardWatermark label="Unpublished" />}
+      <button
+        type="button"
+        aria-label="Options"
+        className="absolute top-2 right-2 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onContextMenu(rect.right, rect.bottom + 4);
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
       <div className="relative z-10">
         <span className="flex items-center gap-1 flex-wrap min-w-0">
           <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${meta.pill}`}>{c.department}</span>
