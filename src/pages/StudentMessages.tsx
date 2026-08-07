@@ -69,7 +69,7 @@ export function StudentMessages() {
   const { user } = useAuth();
   const { settings } = useSettings();
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
-  const [tab, setTab] = useState<'compose' | 'sent' | 'inbox' | 'circulars'>('compose');
+  const [tab, setTab] = useState<'compose' | 'sent' | 'inbox' | 'circulars'>('circulars');
 
   // ── Notices tab: recipient data ─────────────────────────────────────────────
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
@@ -450,6 +450,12 @@ export function StudentMessages() {
         </button>
         <div className="flex items-center gap-1.5 sm:ml-auto overflow-x-auto no-scrollbar w-full sm:w-auto">
           <button
+            onClick={() => setTab('circulars')}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            Circulars
+          </button>
+          <button
             onClick={() => setTab('compose')}
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'compose' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
@@ -466,12 +472,6 @@ export function StudentMessages() {
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'inbox' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             Inbox {openCount > 0 && <span className="rounded-full bg-red-500 text-white text-[10px] px-1.5">{openCount}</span>}
-          </button>
-          <button
-            onClick={() => setTab('circulars')}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            Circulars
           </button>
         </div>
       </div>
