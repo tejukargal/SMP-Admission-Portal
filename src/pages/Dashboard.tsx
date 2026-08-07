@@ -6,6 +6,8 @@ import { useFeeRecords } from '../hooks/useFeeRecords';
 import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getFeeOverridesByYear } from '../services/feeOverrideService';
+import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/refundService';
+import type { RefundRecord } from '../services/refundService';
 import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { useFilters } from '../contexts/FiltersContext';
@@ -24,7 +26,7 @@ import {
   exportDatewiseAdmissionsReport, exportFirstYearSeatsReport,
 } from '../utils/dashboardReportPdf';
 import type { ThemeName } from '../utils/dashboardReportPdf';
-import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
+import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 
@@ -101,6 +103,42 @@ function SlotTicker({ label, value, textColor }: { label: string; value: string 
       >
         <span className={`text-xs font-bold leading-none ${textColor}`}>{state.cur.label}</span>
         <p className={`text-3xl font-black leading-none tabular-nums ${textColor}`}>{state.cur.value}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cycling stat line (slot-machine transition, single row of arbitrary content) ─────
+// Same slot-exit/slot-enter mechanics as SlotTicker above, generalized to any JSX so the
+// search-bar admission/collection label can reuse the exact Boys/Girls card transition.
+function CyclingStatLine({ slideKey, children }: { slideKey: number; children: React.ReactNode }) {
+  const [state, setState] = useState<{ prevKey: number | null; prevContent: React.ReactNode; curKey: number; curContent: React.ReactNode }>({
+    prevKey: null, prevContent: null, curKey: slideKey, curContent: children,
+  });
+
+  useEffect(() => {
+    setState((s) => {
+      if (s.curKey === slideKey) return { ...s, curContent: children };
+      return { prevKey: s.curKey, prevContent: s.curContent, curKey: slideKey, curContent: children };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideKey, children]);
+
+  useEffect(() => {
+    if (state.prevKey === null) return;
+    const t = setTimeout(() => setState((s) => ({ ...s, prevKey: null, prevContent: null })), 820);
+    return () => clearTimeout(t);
+  }, [state.prevKey]);
+
+  return (
+    <div className="relative overflow-hidden">
+      {state.prevKey !== null && (
+        <div className="absolute inset-0" style={{ animation: 'slot-exit 0.38s ease-in forwards' }}>
+          {state.prevContent}
+        </div>
+      )}
+      <div style={{ animation: state.prevKey !== null ? 'slot-enter 0.38s ease-out 0.38s both' : 'none' }}>
+        {state.curContent}
       </div>
     </div>
   );
@@ -304,6 +342,19 @@ export function Dashboard() {
     startTransition(() => setDashboardFilters({ searchTerm: inputValue }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue]);
+
+  // Cycling admission/collection label shown next to the search bar — matches the
+  // Boys/Girls card's gender-breakup cycle exactly: 1.2s initial delay, then every 6s.
+  const [cycleDateIdx, setCycleDateIdx] = useState(0);
+  const [cyclePaused, setCyclePaused] = useState(false);
+  useEffect(() => {
+    if (cyclePaused) return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => setCycleDateIdx((i) => i + 1), 6000);
+    }, 1200);
+    return () => { clearTimeout(delayId); if (intervalId !== null) clearInterval(intervalId); };
+  }, [cyclePaused]);
 
   const chipsScrollRef = useRef<HTMLDivElement>(null);
   function scrollChips(dir: 'left' | 'right') {
@@ -822,6 +873,148 @@ const [barsReady, setBarsReady] = useState(false);
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [feeRecords, filteredStudents, admStatusFilter]);
 
+  // Cycling search-bar label: today + the 2 most recent prior dates that had admission
+  // activity, each with admission count, total fee collected, and SMP Cash/UPI split —
+  // mirrors FeeReportsPage's buildRemittanceSummaries() date-range logic (single date bucket).
+  const cyclingDateStats = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const priorActiveDates = dateTable.filter((d) => d.date < todayIso).slice(0, 2).map((d) => d.date);
+    const dates = [todayIso, ...priorActiveDates];
+    const admissionByDate = new Map(dateTable.map((d) => [d.date, d.total]));
+
+    return dates.map((date) => {
+      let totalCollection = 0;
+      let smpCash = 0;
+      let smpUpi = 0;
+      for (const r of feeRecords) {
+        if (!r.date || r.date.slice(0, 10) !== date) continue;
+        const smpAmt = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
+        const addAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+        totalCollection += smpAmt + r.svk + addAmt;
+
+        const smpMode = r.smpPaymentMode ?? r.paymentMode;
+        if (smpMode === 'CASH') smpCash += smpAmt;
+        else if (smpMode === 'UPI') smpUpi += smpAmt;
+        else if (smpMode === 'SPLIT') {
+          smpCash += r.smpSplit?.cash ?? 0;
+          smpUpi += r.smpSplit?.upi ?? 0;
+        }
+      }
+      return {
+        date,
+        admissionCount: admissionByDate.get(date) ?? 0,
+        totalCollection,
+        smpCash,
+        smpUpi,
+      };
+    });
+  }, [dateTable, feeRecords]);
+
+  // Fee structures, per-student overrides, and fee-netting refunds for the current academic
+  // year — needed to compute SMP/SVK Allotted/Paid totals for the cycling label using the
+  // exact same logic as FeeReportsPage's allStudentRows / "Statistics" tab.
+  const [cycleFeeStructures, setCycleFeeStructures] = useState<FeeStructure[]>([]);
+  const [cycleFeeOverrides, setCycleFeeOverrides] = useState<StudentFeeOverride[]>([]);
+  const [cycleRefunds, setCycleRefunds] = useState<RefundRecord[]>([]);
+  useEffect(() => {
+    if (!feeAcademicYear) { setCycleFeeStructures([]); setCycleFeeOverrides([]); setCycleRefunds([]); return; }
+    let cancelled = false;
+    Promise.all([
+      getFeeStructuresByAcademicYear(feeAcademicYear),
+      getFeeOverridesByYear(feeAcademicYear),
+      getRefundRecordsByAcademicYear(feeAcademicYear),
+    ]).then(([structs, overrides, refunds]) => {
+      if (!cancelled) { setCycleFeeStructures(structs); setCycleFeeOverrides(overrides); setCycleRefunds(refunds); }
+    }).catch(() => { /* leave previous values on error */ });
+    return () => { cancelled = true; };
+  }, [feeAcademicYear]);
+
+  // SMP/SVK Allotted vs Paid vs Dues for the current academic year — mirrors
+  // FeeReportsPage.tsx's allStudentRows construction + StatisticsTab's totals exactly:
+  // override → else structure for allotted (SVK allotted includes additional heads like
+  // Red Cross), fine allotted = max(structure/override fine, fine actually paid) so a fine
+  // payment never creates an artificial negative balance, SMP paid nets SNQ-category
+  // refunds, and only students with admissionStatus === 'CONFIRMED' are counted (matching
+  // "Only CONFIRMED students appear in student-based tabs" there — transferred-out
+  // students are still included, same as the Fee Reports Statistics tab).
+  const smpSvkFeeTotals = useMemo(() => {
+    if (!feeAcademicYear) return null;
+    const cohort = allStudents.filter((s) => s.academicYear === feeAcademicYear && s.admissionStatus?.trim() === 'CONFIRMED');
+    if (cohort.length === 0) return null;
+
+    const smpAllottedNoFineByKey = new Map<string, number>();
+    const structureFineByKey = new Map<string, number>();
+    const svkAllottedByKey = new Map<string, number>();
+    for (const fs of cycleFeeStructures) {
+      const key = `${fs.course}__${fs.year}__${fs.admType}__${fs.admCat}`;
+      const additionalSum = fs.additionalHeads.reduce((t, h) => t + h.amount, 0);
+      smpAllottedNoFineByKey.set(key, SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : fs.smp[k]), 0));
+      structureFineByKey.set(key, fs.smp.fine);
+      svkAllottedByKey.set(key, fs.svk + additionalSum);
+    }
+    const overrideByStudent = new Map(cycleFeeOverrides.map((o) => [o.studentId, o]));
+
+    const smpPaidByStudent = new Map<string, number>();
+    const svkPaidByStudent = new Map<string, number>();
+    const finePaidByStudent = new Map<string, number>();
+    for (const r of feeRecords) {
+      const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + r.smp[key], 0);
+      const svkTotal = r.svk + r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+      smpPaidByStudent.set(r.studentId, (smpPaidByStudent.get(r.studentId) ?? 0) + smpTotal);
+      svkPaidByStudent.set(r.studentId, (svkPaidByStudent.get(r.studentId) ?? 0) + svkTotal);
+      finePaidByStudent.set(r.studentId, (finePaidByStudent.get(r.studentId) ?? 0) + r.smp.fine);
+    }
+
+    const refundedByStudent = new Map<string, number>();
+    for (const r of cycleRefunds.filter(isFeeNettingRefund)) {
+      refundedByStudent.set(r.studentId, (refundedByStudent.get(r.studentId) ?? 0) + r.refundAmount);
+    }
+
+    let smpAllotted = 0, smpPaid = 0, svkAllotted = 0, svkPaid = 0;
+    for (const s of cohort) {
+      const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
+      const override = overrideByStudent.get(s.id);
+      const finePaid = finePaidByStudent.get(s.id) ?? 0;
+
+      let smpA: number;
+      let svkA: number;
+      if (override) {
+        const baseFine  = override.smp.fine;
+        const effFine   = Math.max(baseFine, finePaid);
+        const smpNoFine = SMP_FEE_HEADS.reduce((t, { key: k }) => t + (k === 'fine' ? 0 : override.smp[k]), 0);
+        smpA = smpNoFine + effFine;
+        svkA = override.svk + override.additionalHeads.reduce((t, h) => t + h.amount, 0);
+      } else {
+        const smpNoFine  = smpAllottedNoFineByKey.get(key) ?? 0;
+        const structFine = structureFineByKey.get(key) ?? 0;
+        const effFine    = Math.max(structFine, finePaid);
+        smpA = smpAllottedNoFineByKey.has(key) ? smpNoFine + effFine : 0;
+        svkA = svkAllottedByKey.get(key) ?? 0;
+      }
+
+      const refunded = refundedByStudent.get(s.id) ?? 0;
+      smpAllotted += smpA;
+      svkAllotted += svkA;
+      smpPaid += Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
+      svkPaid += svkPaidByStudent.get(s.id) ?? 0;
+    }
+    return { smpAllotted, smpPaid, smpDues: smpAllotted - smpPaid, svkAllotted, svkPaid, svkDues: svkAllotted - svkPaid };
+  }, [feeAcademicYear, allStudents, cycleFeeStructures, cycleFeeOverrides, cycleRefunds, feeRecords]);
+
+  // Unified cycling slides: per-date admission/collection summaries, then the overall
+  // SMP and SVK Allotted/Paid/Dues summaries — all shown in rotation next to the search bar.
+  const cycleSlides = useMemo(() => {
+    const slides: (
+      | { kind: 'date'; date: string; admissionCount: number; totalCollection: number; smpCash: number; smpUpi: number }
+      | { kind: 'smp' | 'svk'; allotted: number; paid: number; dues: number }
+    )[] = cyclingDateStats.map((d) => ({ kind: 'date' as const, ...d }));
+    if (smpSvkFeeTotals) {
+      slides.push({ kind: 'smp', allotted: smpSvkFeeTotals.smpAllotted, paid: smpSvkFeeTotals.smpPaid, dues: smpSvkFeeTotals.smpDues });
+      slides.push({ kind: 'svk', allotted: smpSvkFeeTotals.svkAllotted, paid: smpSvkFeeTotals.svkPaid, dues: smpSvkFeeTotals.svkDues });
+    }
+    return slides;
+  }, [cyclingDateStats, smpSvkFeeTotals]);
+
   const admissionPendingStats = useMemo(() => {
     const currentYear = settings?.currentAcademicYear;
     if (!currentYear) return null;
@@ -1051,6 +1244,55 @@ const [barsReady, setBarsReady] = useState(false);
               </button>
             </>
           )}
+
+          {!showFilters && cycleSlides.length > 0 && (() => {
+            const slide = cycleSlides[cycleDateIdx % cycleSlides.length];
+            const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+            let content: React.ReactNode;
+            if (slide.kind === 'date') {
+              const isToday = slide.date === new Date().toISOString().slice(0, 10);
+              const dLabel = isToday
+                ? 'TODAY'
+                : new Date(slide.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase();
+              content = (
+                <p className="text-xs font-bold truncate whitespace-nowrap">
+                  <span className="text-emerald-400">{dLabel}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="text-sky-400">{slide.admissionCount} Admission{slide.admissionCount !== 1 ? 's' : ''}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="text-indigo-400">{rupee(slide.totalCollection)}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="text-teal-400">Cash {rupee(slide.smpCash)}</span>
+                  <span className="text-gray-400"> / </span>
+                  <span className="text-fuchsia-400">UPI {rupee(slide.smpUpi)}</span>
+                </p>
+              );
+            } else {
+              const isSmp = slide.kind === 'smp';
+              content = (
+                <p className="text-xs font-bold truncate whitespace-nowrap">
+                  <span className={isSmp ? 'text-fuchsia-400' : 'text-orange-400'}>{isSmp ? 'SMP' : 'SVK'}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="text-sky-400">Allotted {rupee(slide.allotted)}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className="text-emerald-400">Paid {rupee(slide.paid)}</span>
+                  <span className="text-gray-400"> · </span>
+                  <span className={slide.dues > 0 ? 'text-rose-400' : 'text-emerald-400'}>Dues {rupee(slide.dues)}</span>
+                </p>
+              );
+            }
+
+            return (
+              <div
+                onMouseEnter={() => setCyclePaused(true)}
+                onMouseLeave={() => setCyclePaused(false)}
+                className="cursor-pointer min-w-0"
+              >
+                <CyclingStatLine slideKey={cycleDateIdx}>{content}</CyclingStatLine>
+              </div>
+            );
+          })()}
 
           {/* Inline collapsible filter selects — expand between search and right actions */}
           <div className="flex-1 min-w-0">
