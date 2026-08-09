@@ -13,6 +13,7 @@ import {
   saveTcCounter,
   saveTcRecord,
   getTcRecordsByStudent,
+  getTcRecordsByRegNumber,
   type TCRecord,
 } from '../../services/tcService';
 import { getEarliestAdmissionFeeDate } from '../../services/feeRecordService';
@@ -98,16 +99,30 @@ export function TransferCertificateModal({ student: studentProp, onClose }: Prop
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Fetch TC issuance history for this student
+  // Fetch TC issuance history for this student — merged across every academic-year
+  // document sharing this regNumber, since a TC is issued once on the final-year
+  // doc and must still count as "prior" when issuing from a sibling-year doc.
   useEffect(() => {
     let cancelled = false;
     setLoadingHistory(true);
-    getTcRecordsByStudent(student.id)
-      .then((records) => { if (!cancelled) setPriorTcs(records); })
+    Promise.all([
+      getTcRecordsByStudent(student.id),
+      student.regNumber ? getTcRecordsByRegNumber(student.regNumber) : Promise.resolve([] as TCRecord[]),
+    ])
+      .then(([byId, byReg]) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: TCRecord[] = [];
+        for (const r of [...byId, ...byReg]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        merged.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+        setPriorTcs(merged);
+      })
       .catch(() => { /* non-fatal — treat as no history */ })
       .finally(() => { if (!cancelled) setLoadingHistory(false); });
     return () => { cancelled = true; };
-  }, [student.id]);
+  }, [student.id, student.regNumber]);
 
   // Default "Date of Admission" to the receipt date of the student's very first
   // fee installment (earliest academic year), falling back to student.createdAt

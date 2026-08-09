@@ -1,5 +1,6 @@
 import {
   doc, getDoc, setDoc, updateDoc, arrayUnion, deleteField,
+  collection, query, where, getDocs,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -130,6 +131,22 @@ export async function getTcRecordsByStudent(studentId: string): Promise<TCRecord
   const snap    = await getDoc(doc(db, 'students', studentId));
   const history = (snap.data() as { tcHistory?: TCRecord[] } | undefined)?.tcHistory ?? [];
   return [...history].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+/** Read TC history across every academic-year document sharing this regNumber
+ *  (a TC is issued once, on the student's final-year document — sibling-year
+ *  documents for the same physical student need this to see it too), sorted newest-first.
+ */
+export async function getTcRecordsByRegNumber(regNumber: string): Promise<TCRecord[]> {
+  if (!regNumber) return [];
+  const q    = query(collection(db, 'students'), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  const all: TCRecord[] = [];
+  for (const d of snap.docs) {
+    const history = (d.data() as { tcHistory?: TCRecord[] }).tcHistory ?? [];
+    all.push(...history);
+  }
+  return all.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }
 
 // ─── Extra-details edit history (Father/Mother name, DOB, Caste, Category) ────

@@ -8,6 +8,7 @@ import {
 import {
   savePcRecord,
   getPcRecordsByStudent,
+  getPcRecordsByRegNumber,
   type PCRecord,
 } from '../../services/pcService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,16 +56,30 @@ export function ProvisionalCertificateModal({ student, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Fetch PC history for this student
+  // Fetch PC history for this student — merged across every academic-year document
+  // sharing this regNumber, since a PC is issued once on the final-year doc and
+  // must still count as "prior" when issuing from a sibling-year doc.
   useEffect(() => {
     let cancelled = false;
     setLoadingHistory(true);
-    getPcRecordsByStudent(student.id)
-      .then((records) => { if (!cancelled) setPriorPcs(records); })
+    Promise.all([
+      getPcRecordsByStudent(student.id),
+      student.regNumber ? getPcRecordsByRegNumber(student.regNumber) : Promise.resolve([] as PCRecord[]),
+    ])
+      .then(([byId, byReg]) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: PCRecord[] = [];
+        for (const r of [...byId, ...byReg]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        merged.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+        setPriorPcs(merged);
+      })
       .catch(() => { /* non-fatal */ })
       .finally(() => { if (!cancelled) setLoadingHistory(false); });
     return () => { cancelled = true; };
-  }, [student.id]);
+  }, [student.id, student.regNumber]);
 
   const isDuplicate = priorPcs.length > 0;
   const canGenerate = !loadingHistory && dateIssueISO !== '' && examPeriod.trim() !== '' && regNumber.trim() !== '';

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber, removeFeeRecordRemark } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
-import { getTcRecordsByStudent, getTcEditRecordsByStudent, type TCRecord, type TCEditRecord } from '../../services/tcService';
-import { getPcRecordsByStudent, type PCRecord } from '../../services/pcService';
+import { getTcRecordsByStudent, getTcRecordsByRegNumber, getTcEditRecordsByStudent, type TCRecord, type TCEditRecord } from '../../services/tcService';
+import { getPcRecordsByStudent, getPcRecordsByRegNumber, type PCRecord } from '../../services/pcService';
 import { getAnsRecordsByStudent } from '../../services/ansLetterService';
 import { AnsLetterPreviewModal } from './AnsLetterPreviewModal';
 import {
@@ -1807,26 +1807,51 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, feeLoaded]);
 
-  // Lazy-load TC history (and extra-details edit history) when tc tab first activated
+  // Lazy-load TC history (and extra-details edit history) when tc tab first activated.
+  // Merges the current doc's own tcHistory with every sibling academic-year doc's
+  // (same regNumber) tcHistory — a TC is issued once, on the final-year doc, so earlier
+  // years must look across years to see it too.
   useEffect(() => {
     if (activeTab !== 'tc' || tcLoaded) return;
     setTcLoading(true);
     Promise.all([
       getTcRecordsByStudent(student.id),
+      student.regNumber ? getTcRecordsByRegNumber(student.regNumber) : Promise.resolve([] as TCRecord[]),
       getTcEditRecordsByStudent(student.id).catch(() => [] as TCEditRecord[]),
     ])
-      .then(([records, editRecords]) => { setTcRecords(records); setTcEditRecords(editRecords); })
+      .then(([byId, byReg, editRecords]) => {
+        const seen = new Set<string>();
+        const merged: TCRecord[] = [];
+        for (const r of [...byId, ...byReg]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        merged.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+        setTcRecords(merged);
+        setTcEditRecords(editRecords);
+      })
       .catch(() => { /* non-fatal */ })
       .finally(() => { setTcLoading(false); setTcLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, tcLoaded]);
 
-  // Lazy-load PC history when pc tab first activated
+  // Lazy-load PC history when pc tab first activated — merged across sibling
+  // academic-year docs (same regNumber), mirroring the TC history fix above.
   useEffect(() => {
     if (activeTab !== 'pc' || pcLoaded) return;
     setPcLoading(true);
-    getPcRecordsByStudent(student.id)
-      .then((records) => setPcRecords(records))
+    Promise.all([
+      getPcRecordsByStudent(student.id),
+      student.regNumber ? getPcRecordsByRegNumber(student.regNumber) : Promise.resolve([] as PCRecord[]),
+    ])
+      .then(([byId, byReg]) => {
+        const seen = new Set<string>();
+        const merged: PCRecord[] = [];
+        for (const r of [...byId, ...byReg]) {
+          if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+        }
+        merged.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+        setPcRecords(merged);
+      })
       .catch(() => { /* non-fatal */ })
       .finally(() => { setPcLoading(false); setPcLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps

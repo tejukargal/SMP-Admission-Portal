@@ -1,4 +1,7 @@
-import { doc, getDoc, updateDoc, arrayUnion, deleteField } from 'firebase/firestore';
+import {
+  doc, getDoc, updateDoc, arrayUnion, deleteField,
+  collection, query, where, getDocs,
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 export interface PCRecord {
@@ -38,4 +41,20 @@ export async function getPcRecordsByStudent(studentId: string): Promise<PCRecord
   const snap    = await getDoc(doc(db, 'students', studentId));
   const history = (snap.data() as { pcHistory?: PCRecord[] } | undefined)?.pcHistory ?? [];
   return [...history].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+/** Read PC history across every academic-year document sharing this regNumber
+ *  (mirrors getTcRecordsByRegNumber — same-student sibling-year docs need this
+ *  to see a PC issued against a different year's document), sorted newest-first.
+ */
+export async function getPcRecordsByRegNumber(regNumber: string): Promise<PCRecord[]> {
+  if (!regNumber) return [];
+  const q    = query(collection(db, 'students'), where('regNumber', '==', regNumber));
+  const snap = await getDocs(q);
+  const all: PCRecord[] = [];
+  for (const d of snap.docs) {
+    const history = (d.data() as { pcHistory?: PCRecord[] }).pcHistory ?? [];
+    all.push(...history);
+  }
+  return all.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }
