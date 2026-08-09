@@ -1686,15 +1686,13 @@ export function StudentReports() {
           {/* Report type selector */}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap select-none">Report</span>
-            <select
+            <FilterDropdown<ReportType>
               value={reportType}
-              onChange={(e) => setReportType(e.target.value as ReportType)}
-              className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer"
-            >
-              {REPORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              onChange={(v) => setReportType(v as ReportType)}
+              placeholder="Report"
+              hideClear
+              options={REPORT_OPTIONS}
+            />
           </div>
 
           <span className="text-gray-200 text-sm select-none shrink-0">|</span>
@@ -1704,16 +1702,17 @@ export function StudentReports() {
             <>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">TC Year</span>
-                <select
+                <FilterDropdown<string>
                   value={tcYearFilter}
-                  onChange={(e) => setTcYearFilter(e.target.value)}
-                  className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 cursor-pointer"
-                >
-                  <option value="ALL">All Academic Years</option>
-                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setTcYearFilter(v || 'ALL')}
+                  placeholder="TC Year"
+                  hideClear
+                  color="blue"
+                  options={[
+                    { value: 'ALL', label: 'All Academic Years' },
+                    ...[...ACADEMIC_YEARS].reverse().map((yr) => ({ value: yr, label: yr })),
+                  ]}
+                />
               </div>
               <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             </>
@@ -1724,16 +1723,17 @@ export function StudentReports() {
             <>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">PC Year</span>
-                <select
+                <FilterDropdown<string>
                   value={pcYearFilter}
-                  onChange={(e) => setPcYearFilter(e.target.value)}
-                  className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 focus:outline-none focus:ring-1 focus:ring-violet-400 focus:border-violet-400 cursor-pointer"
-                >
-                  <option value="ALL">All Academic Years</option>
-                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setPcYearFilter(v || 'ALL')}
+                  placeholder="PC Year"
+                  hideClear
+                  color="violet"
+                  options={[
+                    { value: 'ALL', label: 'All Academic Years' },
+                    ...[...ACADEMIC_YEARS].reverse().map((yr) => ({ value: yr, label: yr })),
+                  ]}
+                />
               </div>
               <span className="text-gray-200 text-sm select-none shrink-0">|</span>
             </>
@@ -1744,16 +1744,17 @@ export function StudentReports() {
             <>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">Refund Year</span>
-                <select
+                <FilterDropdown<string>
                   value={refundYearFilter}
-                  onChange={(e) => setRefundYearFilter(e.target.value)}
-                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 focus:outline-none focus:ring-1 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
-                >
-                  <option value="ALL">All Academic Years</option>
-                  {[...ACADEMIC_YEARS].reverse().map((yr) => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setRefundYearFilter(v || 'ALL')}
+                  placeholder="Refund Year"
+                  hideClear
+                  color="rose"
+                  options={[
+                    { value: 'ALL', label: 'All Academic Years' },
+                    ...[...ACADEMIC_YEARS].reverse().map((yr) => ({ value: yr, label: yr })),
+                  ]}
+                />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <select
