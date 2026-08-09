@@ -126,18 +126,18 @@ function CyclingStatLine({ slideKey, children }: { slideKey: number; children: R
 
   useEffect(() => {
     if (state.prevKey === null) return;
-    const t = setTimeout(() => setState((s) => ({ ...s, prevKey: null, prevContent: null })), 820);
+    const t = setTimeout(() => setState((s) => ({ ...s, prevKey: null, prevContent: null })), 440);
     return () => clearTimeout(t);
   }, [state.prevKey]);
 
   return (
     <div className="relative overflow-hidden">
       {state.prevKey !== null && (
-        <div className="absolute inset-0" style={{ animation: 'slot-exit 0.38s ease-in forwards' }}>
+        <div className="absolute inset-0" style={{ animation: 'slot-exit 0.2s ease-in forwards' }}>
           {state.prevContent}
         </div>
       )}
-      <div style={{ animation: state.prevKey !== null ? 'slot-enter 0.38s ease-out 0.38s both' : 'none' }}>
+      <div style={{ animation: state.prevKey !== null ? 'slot-enter 0.2s ease-out 0.2s both' : 'none' }}>
         {state.curContent}
       </div>
     </div>
@@ -1137,7 +1137,7 @@ const [barsReady, setBarsReady] = useState(false);
   const admTypeCardTheme: Record<'LATERAL' | 'REPEATER' | 'SNQ', { bodyBg: string; headerBg: string; headerText: string; numColor: string; trackColor: string; barColor: string }> = {
     LATERAL:  { bodyBg: '#D8BFD8', headerBg: '#563C5C', headerText: '#D8BFD8', numColor: '#563C5C', trackColor: '#C7A8C7', barColor: '#8C5F8C' },
     REPEATER: { bodyBg: '#F8F4EF', headerBg: '#40434E', headerText: '#F8F4EF', numColor: '#40434E', trackColor: '#ECE5D8', barColor: '#7B7F8C' },
-    SNQ:      { bodyBg: '#FBEEDC', headerBg: '#8A5A22', headerText: '#FBEEDC', numColor: '#8A5A22', trackColor: '#F0DDBB', barColor: '#B9812E' },
+    SNQ:      { bodyBg: '#C0CAFF', headerBg: '#1A3054', headerText: '#C0CAFF', numColor: '#1A3054', trackColor: '#A9B5F5', barColor: '#3D4E8C' },
   };
 
   // Shared adm-type key/label maps for the hero tiles + their detail modal (LATERAL/REPEATER match
@@ -1249,6 +1249,10 @@ const [barsReady, setBarsReady] = useState(false);
             const slide = cycleSlides[cycleDateIdx % cycleSlides.length];
             const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
+            // Space Cadet / Lavender Blue 2-colour palette: label vs. value.
+            const LABEL = 'text-[#7A85C9]';
+            const VALUE = 'text-[#1A3054]';
+
             let content: React.ReactNode;
             if (slide.kind === 'date') {
               const isToday = slide.date === new Date().toISOString().slice(0, 10);
@@ -1257,28 +1261,34 @@ const [barsReady, setBarsReady] = useState(false);
                 : new Date(slide.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase();
               content = (
                 <p className="text-xs font-bold truncate whitespace-nowrap">
-                  <span className="text-emerald-400">{dLabel}</span>
+                  <span className={LABEL}>{dLabel}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className="text-sky-400">{slide.admissionCount} Admission{slide.admissionCount !== 1 ? 's' : ''}</span>
+                  <span className={VALUE}>{slide.admissionCount}</span>
+                  <span className={LABEL}> Admission{slide.admissionCount !== 1 ? 's' : ''}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className="text-indigo-400">{rupee(slide.totalCollection)}</span>
+                  <span className={VALUE}>{rupee(slide.totalCollection)}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className="text-teal-400">Cash {rupee(slide.smpCash)}</span>
+                  <span className={LABEL}>Cash </span>
+                  <span className={VALUE}>{rupee(slide.smpCash)}</span>
                   <span className="text-gray-400"> / </span>
-                  <span className="text-fuchsia-400">UPI {rupee(slide.smpUpi)}</span>
+                  <span className={LABEL}>UPI </span>
+                  <span className={VALUE}>{rupee(slide.smpUpi)}</span>
                 </p>
               );
             } else {
               const isSmp = slide.kind === 'smp';
               content = (
                 <p className="text-xs font-bold truncate whitespace-nowrap">
-                  <span className={isSmp ? 'text-fuchsia-400' : 'text-orange-400'}>{isSmp ? 'SMP' : 'SVK'}</span>
+                  <span className={LABEL}>{isSmp ? 'SMP' : 'SVK'}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className="text-sky-400">Allotted {rupee(slide.allotted)}</span>
+                  <span className={LABEL}>Allotted </span>
+                  <span className={VALUE}>{rupee(slide.allotted)}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className="text-emerald-400">Paid {rupee(slide.paid)}</span>
+                  <span className={LABEL}>Paid </span>
+                  <span className={VALUE}>{rupee(slide.paid)}</span>
                   <span className="text-gray-400"> · </span>
-                  <span className={slide.dues > 0 ? 'text-rose-400' : 'text-emerald-400'}>Dues {rupee(slide.dues)}</span>
+                  <span className={LABEL}>Dues </span>
+                  <span className={VALUE}>{rupee(slide.dues)}</span>
                 </p>
               );
             }
