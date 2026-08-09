@@ -15,6 +15,7 @@ import {
   getTcRecordsByStudent,
   type TCRecord,
 } from '../../services/tcService';
+import { getEarliestAdmissionFeeDate } from '../../services/feeRecordService';
 import { ExtraDetailsEditModal } from './ExtraDetailsEditModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { createStudentNotification } from '../../services/studentNotificationService';
@@ -107,6 +108,17 @@ export function TransferCertificateModal({ student: studentProp, onClose }: Prop
       .finally(() => { if (!cancelled) setLoadingHistory(false); });
     return () => { cancelled = true; };
   }, [student.id]);
+
+  // Default "Date of Admission" to the receipt date of the student's very first
+  // fee installment (earliest academic year), falling back to student.createdAt
+  // when no fee records exist.
+  useEffect(() => {
+    let cancelled = false;
+    getEarliestAdmissionFeeDate(student.id, student.regNumber)
+      .then((date) => { if (!cancelled && date) setDateAdmISO(date); })
+      .catch(() => { /* non-fatal — keep createdAt-based fallback */ });
+    return () => { cancelled = true; };
+  }, [student.id, student.regNumber]);
 
   // Auto-generate TC number whenever the leaving date changes
   useEffect(() => {

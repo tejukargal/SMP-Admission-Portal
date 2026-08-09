@@ -79,6 +79,36 @@ export async function getAllFeeRecordsByStudent(studentId: string): Promise<FeeR
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord));
 }
 
+/**
+ * Date of the student's very first fee installment receipt, in their earliest
+ * academic year. Repeat/re-admitted students get a new studentId each year, so
+ * records are gathered by both studentId and regNumber (deduped by record id).
+ * Returns null when no fee records exist for the student.
+ */
+export async function getEarliestAdmissionFeeDate(
+  studentId: string,
+  regNumber: string
+): Promise<string | null> {
+  const [byId, byReg] = await Promise.all([
+    getAllFeeRecordsByStudent(studentId),
+    regNumber ? getAllFeeRecordsByRegNumber(regNumber) : Promise.resolve([] as FeeRecord[]),
+  ]);
+  const merged = new Map<string, FeeRecord>();
+  for (const r of [...byId, ...byReg]) merged.set(r.id, r);
+  const records = [...merged.values()];
+  if (records.length === 0) return null;
+
+  const earliestAcademicYear = records.reduce(
+    (min, r) => (r.academicYear < min ? r.academicYear : min),
+    records[0].academicYear
+  );
+  const firstInstallment = records
+    .filter((r) => r.academicYear === earliestAcademicYear)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+
+  return firstInstallment.date.split('T')[0];
+}
+
 /** Delete all fee records for a given academic year. Returns count deleted. */
 export async function deleteFeeRecordsByAcademicYear(
   academicYear: AcademicYear
