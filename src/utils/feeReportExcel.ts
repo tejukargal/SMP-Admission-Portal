@@ -5,9 +5,9 @@ import type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportPdf';
 
 const FEE_DETAIL_HEADER = [
   'Sl', 'Name', 'Reg No', 'Course', 'Year',
-  'SMP Allotted', 'SVK Allotted', 'Total Allotted',
-  'SMP Paid', 'SVK Paid', 'Total Paid',
-  'SMP Balance', 'SVK Balance', 'Total Balance',
+  'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
+  'SMP Paid', 'SVK Base Paid', 'Additional Paid', 'Total Paid',
+  'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance',
 ];
 
 function feeDetailRow(r: StudentFeeRow, i: number): (string | number | null)[] {
@@ -17,14 +17,17 @@ function feeDetailRow(r: StudentFeeRow, i: number): (string | number | null)[] {
     r.student.regNumber || '',
     r.student.course,
     r.student.year,
-    r.smpAllotted ?? null,
-    r.svkAllotted ?? null,
-    r.allotted    ?? null,
+    r.smpAllotted        ?? null,
+    r.svkBaseAllotted    ?? null,
+    r.additionalAllotted ?? null,
+    r.allotted            ?? null,
     r.smpPaid || null,
-    r.svkPaid || null,
+    r.svkBasePaid || null,
+    r.additionalPaid || null,
     r.paid    || null,
-    r.smpBalance ?? null,
-    r.svkBalance ?? null,
+    r.smpBalance         ?? null,
+    r.svkBaseBalance      ?? null,
+    r.additionalBalance   ?? null,
     r.balance    ?? null,
   ];
 }
@@ -40,10 +43,15 @@ export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): v
   const totSvkAllt  = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const totSmpPaid  = rows.reduce((s, r) => s + r.smpPaid, 0);
   const totSvkPaid  = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const totSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const totAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const totSvkBasePaid = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const totAddPaid     = rows.reduce((s, r) => s + r.additionalPaid, 0);
 
   const breakdown = new Map<string, {
     course: string; year: string; total: number; paid: number;
     smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
+    svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
   }>();
   for (const r of rows) {
     const key = `${r.student.course}__${r.student.year}`;
@@ -51,6 +59,7 @@ export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): v
       breakdown.set(key, {
         course: r.student.course, year: r.student.year,
         total: 0, paid: 0, smpAllt: 0, svkAllt: 0, smpColl: 0, svkColl: 0,
+        svkBaseAllt: 0, addAllt: 0, svkBaseColl: 0, addColl: 0,
       });
     }
     const e = breakdown.get(key)!;
@@ -60,6 +69,10 @@ export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): v
     e.svkAllt += r.svkAllotted ?? 0;
     e.smpColl += r.smpPaid;
     e.svkColl += r.svkPaid;
+    e.svkBaseAllt += r.svkBaseAllotted ?? 0;
+    e.addAllt += r.additionalAllotted ?? 0;
+    e.svkBaseColl += r.svkBasePaid;
+    e.addColl += r.additionalPaid;
   }
   const bRows = Array.from(breakdown.values()).sort((a, b) => {
     const c = a.course.localeCompare(b.course);
@@ -70,34 +83,34 @@ export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): v
     [`SMP Admissions — Fee Statistics`],
     [`Academic Year: ${academicYear}`],
     [],
-    ['Metric', 'SMP', 'SVK', 'Total'],
-    ['Total Students', total, null, null],
-    ['Paid',           paidCount, null, null],
-    ['Not Paid',       notPaid, null, null],
-    ['Fee Dues',       duesCount, null, null],
-    ['No Fee Dues',    noDuesCount, null, null],
-    ['Allotted',       totSmpAllt, totSvkAllt, totSmpAllt + totSvkAllt],
-    ['Collected',      totSmpPaid, totSvkPaid, totSmpPaid + totSvkPaid],
-    ['Balance',        totSmpAllt - totSmpPaid, totSvkAllt - totSvkPaid,
+    ['Metric', 'SMP', 'SVK Base', 'Additional', 'Total'],
+    ['Total Students', total, null, null, null],
+    ['Paid',           paidCount, null, null, null],
+    ['Not Paid',       notPaid, null, null, null],
+    ['Fee Dues',       duesCount, null, null, null],
+    ['No Fee Dues',    noDuesCount, null, null, null],
+    ['Allotted',       totSmpAllt, totSvkBaseAllt, totAddAllt, totSmpAllt + totSvkAllt],
+    ['Collected',      totSmpPaid, totSvkBasePaid, totAddPaid, totSmpPaid + totSvkPaid],
+    ['Balance',        totSmpAllt - totSmpPaid, totSvkBaseAllt - totSvkBasePaid, totAddAllt - totAddPaid,
                        (totSmpAllt + totSvkAllt) - (totSmpPaid + totSvkPaid)],
     [],
     ['Course & Year Breakdown'],
     ['Course', 'Year', 'Students', 'Paid',
-     'SMP Allotted', 'SVK Allotted', 'Total Allotted',
-     'SMP Collected', 'SVK Collected', 'Total Collected',
-     'SMP Balance', 'SVK Balance', 'Total Balance'],
+     'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
+     'SMP Collected', 'SVK Base Collected', 'Additional Collected', 'Total Collected',
+     'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance'],
     ...bRows.map((b) => [
       b.course, b.year, b.total, b.paid,
-      b.smpAllt, b.svkAllt, b.smpAllt + b.svkAllt,
-      b.smpColl, b.svkColl, b.smpColl + b.svkColl,
-      b.smpAllt - b.smpColl, b.svkAllt - b.svkColl,
+      b.smpAllt, b.svkBaseAllt, b.addAllt, b.smpAllt + b.svkAllt,
+      b.smpColl, b.svkBaseColl, b.addColl, b.smpColl + b.svkColl,
+      b.smpAllt - b.smpColl, b.svkBaseAllt - b.svkBaseColl, b.addAllt - b.addColl,
       (b.smpAllt + b.svkAllt) - (b.smpColl + b.svkColl),
     ]),
     [
       'TOTAL', '', rows.length, paidCount,
-      totSmpAllt, totSvkAllt, totSmpAllt + totSvkAllt,
-      totSmpPaid, totSvkPaid, totSmpPaid + totSvkPaid,
-      totSmpAllt - totSmpPaid, totSvkAllt - totSvkPaid,
+      totSmpAllt, totSvkBaseAllt, totAddAllt, totSmpAllt + totSvkAllt,
+      totSmpPaid, totSvkBasePaid, totAddPaid, totSmpPaid + totSvkPaid,
+      totSmpAllt - totSmpPaid, totSvkBaseAllt - totSvkBasePaid, totAddAllt - totAddPaid,
       (totSmpAllt + totSvkAllt) - (totSmpPaid + totSvkPaid),
     ],
   ];
@@ -114,6 +127,10 @@ export function exportFeeListExcel(rows: StudentFeeRow[], academicYear: string):
   const tSvkA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const tSmpP = rows.reduce((s, r) => s + r.smpPaid, 0);
   const tSvkP = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const tVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const tAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const tVBaseP = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const tAddP   = rows.reduce((s, r) => s + r.additionalPaid, 0);
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Fee List`],
     [`Academic Year: ${academicYear}`],
@@ -122,9 +139,9 @@ export function exportFeeListExcel(rows: StudentFeeRow[], academicYear: string):
     ...rows.map(feeDetailRow),
     [
       'TOTAL', '', '', '', '',
-      tSmpA, tSvkA, tSmpA + tSvkA,
-      tSmpP, tSvkP, tSmpP + tSvkP,
-      tSmpA - tSmpP, tSvkA - tSvkP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
+      tSmpA, tVBaseA, tAddA, tSmpA + tSvkA,
+      tSmpP, tVBaseP, tAddP, tSmpP + tSvkP,
+      tSmpA - tSmpP, tVBaseA - tVBaseP, tAddA - tAddP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
     ],
   ];
 
@@ -141,6 +158,10 @@ export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): vo
   const tSvkA = dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const tSmpP = dueRows.reduce((s, r) => s + r.smpPaid, 0);
   const tSvkP = dueRows.reduce((s, r) => s + r.svkPaid, 0);
+  const tVBaseA = dueRows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const tAddA   = dueRows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const tVBaseP = dueRows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const tAddP   = dueRows.reduce((s, r) => s + r.additionalPaid, 0);
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Dues Report`],
     [`Academic Year: ${academicYear}  |  ${dueRows.length} students with outstanding balance`],
@@ -149,9 +170,9 @@ export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): vo
     ...dueRows.map(feeDetailRow),
     [
       'TOTAL', '', '', '', '',
-      tSmpA, tSvkA, tSmpA + tSvkA,
-      tSmpP, tSvkP, tSmpP + tSvkP,
-      tSmpA - tSmpP, tSvkA - tSvkP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
+      tSmpA, tVBaseA, tAddA, tSmpA + tSvkA,
+      tSmpP, tVBaseP, tAddP, tSmpP + tSvkP,
+      tSmpA - tSmpP, tVBaseA - tVBaseP, tAddA - tAddP, (tSmpA + tSvkA) - (tSmpP + tSvkP),
     ],
   ];
 
@@ -177,11 +198,15 @@ export function exportCourseYearExcel(rows: StudentFeeRow[], academicYear: strin
     const svkAllt = g.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
     const smpColl = g.reduce((s, r) => s + r.smpPaid, 0);
     const svkColl = g.reduce((s, r) => s + r.svkPaid, 0);
+    const svkBaseAllt = g.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+    const addAllt     = g.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+    const svkBaseColl = g.reduce((s, r) => s + r.svkBasePaid, 0);
+    const addColl     = g.reduce((s, r) => s + r.additionalPaid, 0);
     return [
       g[0].student.course, g[0].student.year, g.length, g.filter((r) => r.paid > 0).length,
-      smpAllt, svkAllt, smpAllt + svkAllt,
-      smpColl, svkColl, smpColl + svkColl,
-      smpAllt - smpColl, svkAllt - svkColl, (smpAllt + svkAllt) - (smpColl + svkColl),
+      smpAllt, svkBaseAllt, addAllt, smpAllt + svkAllt,
+      smpColl, svkBaseColl, addColl, smpColl + svkColl,
+      smpAllt - smpColl, svkBaseAllt - svkBaseColl, addAllt - addColl, (smpAllt + svkAllt) - (smpColl + svkColl),
     ];
   });
 
@@ -189,20 +214,24 @@ export function exportCourseYearExcel(rows: StudentFeeRow[], academicYear: strin
   const gSvkAllt = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const gSmpColl = rows.reduce((s, r) => s + r.smpPaid, 0);
   const gSvkColl = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const gSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const gAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const gSvkBaseColl = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const gAddColl     = rows.reduce((s, r) => s + r.additionalPaid, 0);
 
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Course & Year Wise Report`],
     [`Academic Year: ${academicYear}`],
     [],
     ['Course', 'Year', 'Students', 'Paid',
-     'SMP Allotted', 'SVK Allotted', 'Total Allotted',
-     'SMP Collected', 'SVK Collected', 'Total Collected',
-     'SMP Balance', 'SVK Balance', 'Total Balance'],
+     'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
+     'SMP Collected', 'SVK Base Collected', 'Additional Collected', 'Total Collected',
+     'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance'],
     ...tableRows,
     ['TOTAL', '', rows.length, rows.filter((r) => r.paid > 0).length,
-     gSmpAllt, gSvkAllt, gSmpAllt + gSvkAllt,
-     gSmpColl, gSvkColl, gSmpColl + gSvkColl,
-     gSmpAllt - gSmpColl, gSvkAllt - gSvkColl, (gSmpAllt + gSvkAllt) - (gSmpColl + gSvkColl)],
+     gSmpAllt, gSvkBaseAllt, gAddAllt, gSmpAllt + gSvkAllt,
+     gSmpColl, gSvkBaseColl, gAddColl, gSmpColl + gSvkColl,
+     gSmpAllt - gSmpColl, gSvkBaseAllt - gSvkBaseColl, gAddAllt - gAddColl, (gSmpAllt + gSvkAllt) - (gSmpColl + gSvkColl)],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(data);

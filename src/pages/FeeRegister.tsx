@@ -228,6 +228,12 @@ export function FeeRegister() {
     return [...dates].sort((a, b) => b.localeCompare(a));
   }, [sortedRecords]);
 
+  // uniqueDates is sorted newest-first, so "prev" (chronologically earlier)
+  // is the next array index and "next" (later) is the previous index.
+  const dateIdx  = dateFilter ? uniqueDates.indexOf(dateFilter) : -1;
+  const prevDate = dateIdx !== -1 && dateIdx < uniqueDates.length - 1 ? uniqueDates[dateIdx + 1] : null;
+  const nextDate = dateIdx > 0 ? uniqueDates[dateIdx - 1] : null;
+
   // Default to the most recent date once records for the academic year have loaded.
   // Only fires once per academic-year selection so the user can freely pick "All Dates" afterward.
   useEffect(() => {
@@ -438,6 +444,52 @@ export function FeeRegister() {
             </span>
           )}
 
+          {/* Date navigator — prev/next arrows walk chronologically through dates with records */}
+          <div
+            className={`flex items-center gap-2 shrink-0 ${debouncedSearch ? 'opacity-40 pointer-events-none' : ''}`}
+            title={debouncedSearch ? 'Clear search to use the day selector' : undefined}
+          >
+            <button
+              type="button"
+              disabled={!prevDate}
+              onClick={() => prevDate && setDateFilter(prevDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-full border border-[#3B5B8A]/25 bg-white text-[#3B5B8A]/70 hover:bg-[#D0E2F2]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >‹</button>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className={fs}
+            />
+            <button
+              type="button"
+              disabled={!nextDate}
+              onClick={() => nextDate && setDateFilter(nextDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-full border border-[#3B5B8A]/25 bg-white text-[#3B5B8A]/70 hover:bg-[#D0E2F2]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >›</button>
+            <button
+              type="button"
+              onClick={() => setDateFilter(dateFilter ? '' : (uniqueDates[0] ?? ''))}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                dateFilter
+                  ? 'border-[#3B5B8A]/25 bg-white text-gray-500 hover:bg-[#D0E2F2]/40'
+                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+              }`}
+              title={dateFilter ? 'Show all dates' : 'Jump back to the latest date'}
+            >All</button>
+          </div>
+
+          {/* Aided / Unaided filter */}
+          <select
+            className={fs}
+            value={aidedFilter}
+            onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')}
+          >
+            <option value="">Aided &amp; Unaided</option>
+            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+            <option value="UNAIDED">Unaided (EE)</option>
+          </select>
+
           <div className="flex-1" />
 
           {/* Clear — only when filters active */}
@@ -497,11 +549,6 @@ export function FeeRegister() {
 
               <span className="text-[#3B5B8A]/20 text-sm select-none shrink-0">|</span>
 
-              <select className={fs} value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')}>
-                <option value="">Aided &amp; Unaided</option>
-                <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-                <option value="UNAIDED">Unaided (EE)</option>
-              </select>
               <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
                 <option value="">All Courses</option>
                 {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -521,12 +568,6 @@ export function FeeRegister() {
               <select className={fs} value={paymentModeFilter} onChange={(e) => setPaymentModeFilter(e.target.value as PaymentMode | '')}>
                 <option value="">All Modes</option>
                 {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-              <select className={fs} value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-                <option value="">All Dates</option>
-                {uniqueDates.map((d) => (
-                  <option key={d} value={d}>{formatDate(d)}</option>
-                ))}
               </select>
 
               <span className="text-[#3B5B8A]/20 text-sm select-none shrink-0">|</span>

@@ -20,6 +20,11 @@ export interface StudentFeeRow {
   // dashboard cards for a true 3-way SMP/SVK/Additional allotment breakdown.
   svkBaseAllotted: number | null;
   additionalAllotted: number | null;
+  // Paid-side / balance-side split, mirrors the allotted-side split above.
+  svkBasePaid: number;
+  additionalPaid: number;
+  svkBaseBalance: number | null;
+  additionalBalance: number | null;
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -73,6 +78,35 @@ function head(fillRgb: [number, number, number]): object {
 // No alternating row colour — plain white rows
 const NO_BAND: object = { fillColor: [255, 255, 255] };
 
+// ── Fee-detail table styles (tighter font/padding — 17 columns need the room) ──
+const FEE_FONT = 6.5;
+const FEE_PAD  = { top: 1.5, right: 2, bottom: 1.5, left: 2 };
+
+const FEE_BASE: object = {
+  font: 'helvetica',
+  fontStyle: 'normal',
+  fontSize: FEE_FONT,
+  cellPadding: FEE_PAD,
+  lineColor: [200, 205, 210],
+  lineWidth: 0.18,
+  textColor: [20, 20, 20],
+  overflow: 'ellipsize',
+};
+
+function feeHead(fillRgb: [number, number, number]): object {
+  return {
+    font: 'helvetica',
+    fontStyle: 'bold',
+    fontSize: FEE_FONT,
+    cellPadding: FEE_PAD,
+    fillColor: fillRgb,
+    textColor: [255, 255, 255],
+    lineColor: fillRgb,
+    lineWidth: 0,
+    overflow: 'ellipsize',
+  };
+}
+
 // ── Page helpers ──────────────────────────────────────────────────────────────
 function buildDoc(title: string, subtitle: string): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -108,42 +142,45 @@ function footer(doc: jsPDF, pageNumber: number): void {
   doc.setTextColor(20, 20, 20);
 }
 
-// ── Fee-detail table definition (14 cols, 277 mm) ─────────────────────────────
+// ── Fee-detail table definition (17 cols, 277 mm, tighter FEE_FONT/FEE_PAD) ───
 //
-//  Sl(6) + Name(46) + Reg(15) + Course(12) + Year(18) = 97 mm
-//  + 3 × [ SMP(18) + SVK(18) + Total(21) ]            = 171 mm  → 268 mm total
-//  (9 mm breathing room to edge)
+//  Sl(8) + Name(40) + Reg(22) + Course(12) + Year(18) = 100 mm
+//  + 3 × [ SMP(15) + SVK Base(15) + Addl(12) + Total(17) ] = 177 mm → 277 mm total
+//  (uses the full A4-landscape usable width)
 //
 //  Amounts are plain en-IN numbers; currency shown in header as "(Rs.)"
 //
 const FEE_HEAD1 = [
   'Sl', 'Name', 'Reg No', 'Course', 'Year',
-  'Allotted (Rs.)', '', '',
-  'Paid (Rs.)',     '', '',
-  'Balance (Rs.)',  '', '',
+  'Allotted (Rs.)', '', '', '',
+  'Paid (Rs.)',     '', '', '',
+  'Balance (Rs.)',  '', '', '',
 ];
 const FEE_HEAD2 = [
   '', '', '', '', '',
-  'SMP', 'SVK', 'Total',
-  'SMP', 'SVK', 'Total',
-  'SMP', 'SVK', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
 ];
 
 const FEE_COLS: Record<number, object> = {
   0:  { cellWidth: 8,  halign: 'center' },
-  1:  { cellWidth: 42 },
+  1:  { cellWidth: 40 },
   2:  { cellWidth: 22 },
-  3:  { cellWidth: 14, halign: 'center' },
+  3:  { cellWidth: 12, halign: 'center' },
   4:  { cellWidth: 18 },
-  5:  { cellWidth: 18, halign: 'right' },
-  6:  { cellWidth: 18, halign: 'right' },
-  7:  { cellWidth: 21, halign: 'right' },
-  8:  { cellWidth: 18, halign: 'right' },
-  9:  { cellWidth: 18, halign: 'right' },
-  10: { cellWidth: 21, halign: 'right' },
-  11: { cellWidth: 18, halign: 'right' },
-  12: { cellWidth: 18, halign: 'right' },
-  13: { cellWidth: 21, halign: 'right' },
+  5:  { cellWidth: 15, halign: 'right' },
+  6:  { cellWidth: 15, halign: 'right' },
+  7:  { cellWidth: 12, halign: 'right' },
+  8:  { cellWidth: 17, halign: 'right' },
+  9:  { cellWidth: 15, halign: 'right' },
+  10: { cellWidth: 15, halign: 'right' },
+  11: { cellWidth: 12, halign: 'right' },
+  12: { cellWidth: 17, halign: 'right' },
+  13: { cellWidth: 15, halign: 'right' },
+  14: { cellWidth: 15, halign: 'right' },
+  15: { cellWidth: 12, halign: 'right' },
+  16: { cellWidth: 17, halign: 'right' },
 };
 
 function feeRow(r: StudentFeeRow, i: number): (string | number)[] {
@@ -153,15 +190,18 @@ function feeRow(r: StudentFeeRow, i: number): (string | number)[] {
     r.student.regNumber || '\u2014',
     r.student.course,
     r.student.year,
-    r.smpAllotted !== null ? num(r.smpAllotted) : '\u2014',
-    r.svkAllotted !== null ? num(r.svkAllotted) : '\u2014',
-    r.allotted    !== null ? num(r.allotted)    : '\u2014',
-    r.smpPaid > 0          ? num(r.smpPaid)     : '\u2014',
-    r.svkPaid > 0          ? num(r.svkPaid)     : '\u2014',
-    r.paid    > 0          ? num(r.paid)         : '\u2014',
-    r.smpBalance !== null  ? num(r.smpBalance)  : '\u2014',
-    r.svkBalance !== null  ? num(r.svkBalance)  : '\u2014',
-    r.balance    !== null  ? num(r.balance)     : '\u2014',
+    r.smpAllotted        !== null ? num(r.smpAllotted)        : '\u2014',
+    r.svkBaseAllotted    !== null ? num(r.svkBaseAllotted)    : '\u2014',
+    r.additionalAllotted !== null ? num(r.additionalAllotted) : '\u2014',
+    r.allotted           !== null ? num(r.allotted)           : '\u2014',
+    r.smpPaid > 0                 ? num(r.smpPaid)             : '\u2014',
+    r.svkBasePaid > 0             ? num(r.svkBasePaid)         : '\u2014',
+    r.additionalPaid > 0          ? num(r.additionalPaid)      : '\u2014',
+    r.paid    > 0                 ? num(r.paid)                : '\u2014',
+    r.smpBalance         !== null ? num(r.smpBalance)          : '\u2014',
+    r.svkBaseBalance     !== null ? num(r.svkBaseBalance)      : '\u2014',
+    r.additionalBalance  !== null ? num(r.additionalBalance)   : '\u2014',
+    r.balance    !== null         ? num(r.balance)             : '\u2014',
   ];
 }
 
@@ -172,15 +212,15 @@ function feeRow(r: StudentFeeRow, i: number): (string | number)[] {
 //
 const GRP_HEAD1 = [
   'Course', 'Year', 'Count', 'Paid',
-  'Allotted (Rs.)', '', '',
-  'Collected (Rs.)', '', '',
-  'Balance (Rs.)', '', '',
+  'Allotted (Rs.)', '', '', '',
+  'Collected (Rs.)', '', '', '',
+  'Balance (Rs.)', '', '', '',
 ];
 const GRP_HEAD2 = [
   '', '', '', '',
-  'SMP', 'SVK', 'Total',
-  'SMP', 'SVK', 'Total',
-  'SMP', 'SVK', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
+  'SMP', 'SVK Base', 'Addl.', 'Total',
 ];
 
 const GRP_COLS: Record<number, object> = {
@@ -188,27 +228,33 @@ const GRP_COLS: Record<number, object> = {
   1:  { cellWidth: 20 },
   2:  { cellWidth: 15, halign: 'center' },
   3:  { cellWidth: 15, halign: 'center' },
-  4:  { cellWidth: 22, halign: 'right' },
-  5:  { cellWidth: 22, halign: 'right' },
-  6:  { cellWidth: 26, halign: 'right' },
+  4:  { cellWidth: 17, halign: 'right' },
+  5:  { cellWidth: 17, halign: 'right' },
+  6:  { cellWidth: 14, halign: 'right' },
   7:  { cellWidth: 22, halign: 'right' },
-  8:  { cellWidth: 22, halign: 'right' },
-  9:  { cellWidth: 26, halign: 'right' },
-  10: { cellWidth: 22, halign: 'right' },
+  8:  { cellWidth: 17, halign: 'right' },
+  9:  { cellWidth: 17, halign: 'right' },
+  10: { cellWidth: 14, halign: 'right' },
   11: { cellWidth: 22, halign: 'right' },
-  12: { cellWidth: 26, halign: 'right' },
+  12: { cellWidth: 17, halign: 'right' },
+  13: { cellWidth: 17, halign: 'right' },
+  14: { cellWidth: 14, halign: 'right' },
+  15: { cellWidth: 22, halign: 'right' },
 };
 
 function grpRow(
   c1: string, c2: string | number,
   total: number, paid: number,
-  sA: number, vA: number, sC: number, vC: number,
+  sA: number, vBaseA: number, addA: number,
+  sC: number, vBaseC: number, addC: number,
 ): (string | number)[] {
+  const vA = vBaseA + addA;
+  const vC = vBaseC + addC;
   return [
     c1, c2, total, paid,
-    num(sA), num(vA), num(sA + vA),
-    num(sC), num(vC), num(sC + vC),
-    num(sA - sC), num(vA - vC), num((sA + vA) - (sC + vC)),
+    num(sA), num(vBaseA), num(addA), num(sA + vA),
+    num(sC), num(vBaseC), num(addC), num(sC + vC),
+    num(sA - sC), num(vBaseA - vBaseC), num(addA - addC), num((sA + vA) - (sC + vC)),
   ];
 }
 
@@ -216,12 +262,14 @@ function buildBreakdown(rows: StudentFeeRow[]) {
   const map = new Map<string, {
     course: string; year: string; total: number; paid: number;
     sA: number; vA: number; sC: number; vC: number;
+    sBaseA: number; addA: number; sBaseC: number; addC: number;
   }>();
   for (const r of rows) {
     const k = `${r.student.course}__${r.student.year}`;
     if (!map.has(k)) map.set(k, {
       course: r.student.course, year: r.student.year,
       total: 0, paid: 0, sA: 0, vA: 0, sC: 0, vC: 0,
+      sBaseA: 0, addA: 0, sBaseC: 0, addC: 0,
     });
     const e = map.get(k)!;
     e.total++;
@@ -230,6 +278,10 @@ function buildBreakdown(rows: StudentFeeRow[]) {
     e.vA += r.svkAllotted ?? 0;
     e.sC += r.smpPaid;
     e.vC += r.svkPaid;
+    e.sBaseA += r.svkBaseAllotted ?? 0;
+    e.addA += r.additionalAllotted ?? 0;
+    e.sBaseC += r.svkBasePaid;
+    e.addC += r.additionalPaid;
   }
   return Array.from(map.values()).sort((a, b) => {
     const c = a.course.localeCompare(b.course);
@@ -247,6 +299,10 @@ export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): voi
   const tVA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const tSC = rows.reduce((s, r) => s + r.smpPaid, 0);
   const tVC = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const tVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const tAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const tVBaseC = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const tAddC   = rows.reduce((s, r) => s + r.additionalPaid, 0);
 
   const BLUE: [number, number, number] = [30, 64, 175];
   const doc = buildDoc(
@@ -258,17 +314,17 @@ export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): voi
   autoTable(doc, {
     startY: 23,
     margin: { left: MARGIN, right: MARGIN },
-    tableWidth: 165,
-    head: [['Metric', 'SMP (Rs.)', 'SVK (Rs.)', 'Total (Rs.)']],
+    tableWidth: 205,
+    head: [['Metric', 'SMP (Rs.)', 'SVK Base (Rs.)', 'Additional (Rs.)', 'Total (Rs.)']],
     body: [
-      ['Total',      String(total),          '', ''],
-      ['Paid',       String(paidCount),       '', ''],
-      ['Not Paid',   String(total-paidCount), '', ''],
-      ['Fee Dues',   String(duesCount),       '', ''],
-      ['No Dues',    String(noDuesCount),     '', ''],
-      ['Allotted',       num(tSA),                num(tVA),             num(tSA + tVA)                ],
-      ['Collected',      num(tSC),                num(tVC),             num(tSC + tVC)                ],
-      ['Balance',        num(tSA - tSC),          num(tVA - tVC),       num((tSA+tVA) - (tSC+tVC))   ],
+      ['Total',      String(total),          '', '', ''],
+      ['Paid',       String(paidCount),       '', '', ''],
+      ['Not Paid',   String(total-paidCount), '', '', ''],
+      ['Fee Dues',   String(duesCount),       '', '', ''],
+      ['No Dues',    String(noDuesCount),     '', '', ''],
+      ['Allotted',       num(tSA),                num(tVBaseA),               num(tAddA),               num(tSA + tVA)                ],
+      ['Collected',      num(tSC),                num(tVBaseC),               num(tAddC),               num(tSC + tVC)                ],
+      ['Balance',        num(tSA - tSC),          num(tVBaseA - tVBaseC),     num(tAddA - tAddC),       num((tSA+tVA) - (tSC+tVC))   ],
     ],
     styles: BASE,
     headStyles: head(BLUE),
@@ -278,6 +334,7 @@ export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): voi
       1: { cellWidth: 40, halign: 'right' },
       2: { cellWidth: 40, halign: 'right' },
       3: { cellWidth: 40, halign: 'right' },
+      4: { cellWidth: 40, halign: 'right' },
     },
     didParseCell: (data) => {
       if (data.section === 'body' && data.row.index >= 5) {
@@ -295,8 +352,8 @@ export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): voi
     margin: { left: MARGIN, right: MARGIN },
     head: [GRP_HEAD1, GRP_HEAD2],
     body: [
-      ...bRows.map((b) => grpRow(b.course, b.year, b.total, b.paid, b.sA, b.vA, b.sC, b.vC)),
-      grpRow('TOTAL', '', total, paidCount, tSA, tVA, tSC, tVC),
+      ...bRows.map((b) => grpRow(b.course, b.year, b.total, b.paid, b.sA, b.sBaseA, b.addA, b.sC, b.sBaseC, b.addC)),
+      grpRow('TOTAL', '', total, paidCount, tSA, tVBaseA, tAddA, tSC, tVBaseC, tAddC),
     ],
     styles: BASE,
     headStyles: head(BLUE),
@@ -320,11 +377,15 @@ export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): v
   const tSvkA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const tSmpP = rows.reduce((s, r) => s + r.smpPaid, 0);
   const tSvkP = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const tVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const tAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const tVBaseP = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const tAddP   = rows.reduce((s, r) => s + r.additionalPaid, 0);
   const totalRow: (string | number)[] = [
     '', 'TOTAL', '', '', '',
-    num(tSmpA), num(tSvkA), num(tSmpA + tSvkA),
-    num(tSmpP), num(tSvkP), num(tSmpP + tSvkP),
-    num(tSmpA - tSmpP), num(tSvkA - tSvkP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
+    num(tSmpA), num(tVBaseA), num(tAddA), num(tSmpA + tSvkA),
+    num(tSmpP), num(tVBaseP), num(tAddP), num(tSmpP + tSvkP),
+    num(tSmpA - tSmpP), num(tVBaseA - tVBaseP), num(tAddA - tAddP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
   ];
   const doc = buildDoc(
     'SMP Admissions \u2014 Fee List',
@@ -336,8 +397,8 @@ export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): v
     margin: { left: MARGIN, right: MARGIN },
     head: [FEE_HEAD1, FEE_HEAD2],
     body: [...rows.map(feeRow), totalRow],
-    styles: BASE,
-    headStyles: head(BLUE),
+    styles: FEE_BASE,
+    headStyles: feeHead(BLUE),
     alternateRowStyles: NO_BAND,
     columnStyles: FEE_COLS,
     didParseCell: (data) => {
@@ -368,11 +429,15 @@ export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void
   const tSvkA = dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const tSmpP = dueRows.reduce((s, r) => s + r.smpPaid, 0);
   const tSvkP = dueRows.reduce((s, r) => s + r.svkPaid, 0);
+  const tVBaseA = dueRows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const tAddA   = dueRows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const tVBaseP = dueRows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const tAddP   = dueRows.reduce((s, r) => s + r.additionalPaid, 0);
   const totalRow: (string | number)[] = [
     '', 'TOTAL', '', '', '',
-    num(tSmpA), num(tSvkA), num(tSmpA + tSvkA),
-    num(tSmpP), num(tSvkP), num(tSmpP + tSvkP),
-    num(tSmpA - tSmpP), num(tSvkA - tSvkP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
+    num(tSmpA), num(tVBaseA), num(tAddA), num(tSmpA + tSvkA),
+    num(tSmpP), num(tVBaseP), num(tAddP), num(tSmpP + tSvkP),
+    num(tSmpA - tSmpP), num(tVBaseA - tVBaseP), num(tAddA - tAddP), num((tSmpA + tSvkA) - (tSmpP + tSvkP)),
   ];
   const doc = buildDoc(
     'SMP Admissions \u2014 Dues Report',
@@ -384,8 +449,8 @@ export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void
     margin: { left: MARGIN, right: MARGIN },
     head: [FEE_HEAD1, FEE_HEAD2],
     body: [...dueRows.map(feeRow), totalRow],
-    styles: BASE,
-    headStyles: head(RED),
+    styles: FEE_BASE,
+    headStyles: feeHead(RED),
     alternateRowStyles: NO_BAND,
     columnStyles: FEE_COLS,
     didParseCell: (data) => {
@@ -416,17 +481,21 @@ export function exportCourseYearPdf(rows: StudentFeeRow[], academicYear: string)
       g[0].student.course, g[0].student.year,
       g.length, g.filter((r) => r.paid > 0).length,
       g.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
-      g.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
+      g.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
+      g.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
       g.reduce((s, r) => s + r.smpPaid, 0),
-      g.reduce((s, r) => s + r.svkPaid, 0),
+      g.reduce((s, r) => s + r.svkBasePaid, 0),
+      g.reduce((s, r) => s + r.additionalPaid, 0),
     );
   });
 
   const gSA = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const gVA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
+  const gVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const gAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
   const gSC = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const gVC = rows.reduce((s, r) => s + r.svkPaid, 0);
-  body.push(grpRow('TOTAL', '', rows.length, rows.filter((r) => r.paid > 0).length, gSA, gVA, gSC, gVC));
+  const gVBaseC = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const gAddC   = rows.reduce((s, r) => s + r.additionalPaid, 0);
+  body.push(grpRow('TOTAL', '', rows.length, rows.filter((r) => r.paid > 0).length, gSA, gVBaseA, gAddA, gSC, gVBaseC, gAddC));
 
   const doc = buildDoc(
     'SMP Admissions \u2014 Course & Year Wise Report',

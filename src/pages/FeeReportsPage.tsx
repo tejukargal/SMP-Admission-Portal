@@ -484,13 +484,13 @@ function FeeTableHead({ headerColor }: { headerColor: string }) {
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Reg No</th>
         <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Course</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Year</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Allotted</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Paid</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Balance</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Allotted</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Paid</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Balance</th>
       </tr>
       <tr>
-        {(['SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total'] as const).map((h, i) => (
-          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''} ${i % 3 === 2 ? ACCENT_DARK : ''}`}>{h}</th>
+        {(['SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total'] as const).map((h, i) => (
+          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-white/30' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
         ))}
       </tr>
     </thead>
@@ -508,15 +508,18 @@ function FeeDetailRow({ r, i, stripe }: { r: StudentFeeRow; i: number; stripe: b
       <td className="px-2 py-1.5 text-[11px]">{r.student.year}</td>
       {/* Allotted */}
       <td className="px-2 py-1.5 text-right text-[11px] border-l border-gray-100">{r.smpAllotted !== null ? fmt(r.smpAllotted) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[11px]">{r.svkAllotted !== null ? fmt(r.svkAllotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px]">{r.svkBaseAllotted !== null ? fmt(r.svkBaseAllotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px]">{r.additionalAllotted !== null ? fmt(r.additionalAllotted) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] font-semibold">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
       {/* Paid */}
       <td className="px-2 py-1.5 text-right text-[11px] text-green-700 border-l border-gray-100">{r.smpPaid > 0 ? fmt(r.smpPaid) : '—'}</td>
-      <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.svkPaid > 0 ? fmt(r.svkPaid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.svkBasePaid > 0 ? fmt(r.svkBasePaid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.additionalPaid > 0 ? fmt(r.additionalPaid) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] text-green-700 font-semibold">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
       {/* Balance */}
       <td className={`px-2 py-1.5 text-right text-[11px] border-l border-gray-100 ${r.smpBalance !== null && r.smpBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.smpBalance !== null ? fmt(r.smpBalance) : '—'}</td>
-      <td className={`px-2 py-1.5 text-right text-[11px] ${r.svkBalance !== null && r.svkBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.svkBalance !== null ? fmt(r.svkBalance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] ${r.svkBaseBalance !== null && r.svkBaseBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.svkBaseBalance !== null ? fmt(r.svkBaseBalance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] ${r.additionalBalance !== null && r.additionalBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.additionalBalance !== null ? fmt(r.additionalBalance) : '—'}</td>
       <td className={`px-2 py-1.5 text-right text-[11px] font-semibold ${r.balance !== null && r.balance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance !== null ? fmt(r.balance) : '—'}</td>
     </tr>
   );
@@ -536,6 +539,7 @@ function searchStudentRows(rows: StudentFeeRow[], query: string): StudentFeeRow[
 interface BreakdownEntry {
   course: string; year: string; total: number; paid: number;
   smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
+  svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
 }
 
 function buildBreakdown(rows: StudentFeeRow[]): BreakdownEntry[] {
@@ -543,7 +547,10 @@ function buildBreakdown(rows: StudentFeeRow[]): BreakdownEntry[] {
   for (const r of rows) {
     const key = `${r.student.course}__${r.student.year}`;
     if (!map.has(key)) {
-      map.set(key, { course: r.student.course, year: r.student.year, total: 0, paid: 0, smpAllt: 0, svkAllt: 0, smpColl: 0, svkColl: 0 });
+      map.set(key, {
+        course: r.student.course, year: r.student.year, total: 0, paid: 0, smpAllt: 0, svkAllt: 0, smpColl: 0, svkColl: 0,
+        svkBaseAllt: 0, addAllt: 0, svkBaseColl: 0, addColl: 0,
+      });
     }
     const e = map.get(key)!;
     e.total++;
@@ -552,6 +559,10 @@ function buildBreakdown(rows: StudentFeeRow[]): BreakdownEntry[] {
     e.svkAllt += r.svkAllotted ?? 0;
     e.smpColl += r.smpPaid;
     e.svkColl += r.svkPaid;
+    e.svkBaseAllt += r.svkBaseAllotted ?? 0;
+    e.addAllt += r.additionalAllotted ?? 0;
+    e.svkBaseColl += r.svkBasePaid;
+    e.addColl += r.additionalPaid;
   }
   return Array.from(map.values()).sort((a, b) => {
     const c = a.course.localeCompare(b.course);
@@ -562,7 +573,10 @@ function buildBreakdown(rows: StudentFeeRow[]): BreakdownEntry[] {
 // ── Shared: group summary table ───────────────────────────────────────────────
 function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
   breakdown: BreakdownEntry[];
-  totals: { students: number; paid: number; smpAllt: number; svkAllt: number; smpColl: number; svkColl: number };
+  totals: {
+    students: number; paid: number; smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
+    svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
+  };
   colSpanLabel?: number;
 }) {
   return (
@@ -573,16 +587,16 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             <th className="px-2 py-1.5 text-center font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}>Course / Year</th>
             <th className="px-2 py-1.5 text-center font-semibold">Students</th>
             <th className="px-2 py-1.5 text-center font-semibold">Paid</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Allotted</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Collected</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Balance</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Allotted</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Collected</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Balance</th>
           </tr>
           <tr>
             <th className="px-2 py-1 font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}></th>
             <th className="px-2 py-1 font-semibold"></th>
             <th className="px-2 py-1 font-semibold"></th>
-            {(['SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total', 'SMP', 'SVK', 'Total'] as const).map((h, i) => (
-              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 3 === 0 ? 'border-l border-white/30' : ''} ${i % 3 === 2 ? ACCENT_DARK : ''}`}>{h}</th>
+            {(['SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total'] as const).map((h, i) => (
+              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-white/30' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -597,13 +611,16 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
                 <td className="px-2 py-1.5 text-center">{b.total}</td>
                 <td className="px-2 py-1.5 text-center text-green-700">{b.paid}</td>
                 <td className="px-2 py-1.5 text-right border-l border-gray-100">{fmt(b.smpAllt)}</td>
-                <td className="px-2 py-1.5 text-right">{fmt(b.svkAllt)}</td>
+                <td className="px-2 py-1.5 text-right">{fmt(b.svkBaseAllt)}</td>
+                <td className="px-2 py-1.5 text-right">{fmt(b.addAllt)}</td>
                 <td className="px-2 py-1.5 text-right font-semibold">{fmt(bAllt)}</td>
                 <td className="px-2 py-1.5 text-right text-green-700 border-l border-gray-100">{fmt(b.smpColl)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.svkColl)}</td>
+                <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.svkBaseColl)}</td>
+                <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.addColl)}</td>
                 <td className="px-2 py-1.5 text-right text-green-700 font-semibold">{fmt(bColl)}</td>
                 <td className="px-2 py-1.5 text-right text-red-600 border-l border-gray-100">{fmt(b.smpAllt - b.smpColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.svkAllt - b.svkColl)}</td>
+                <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.svkBaseAllt - b.svkBaseColl)}</td>
+                <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.addAllt - b.addColl)}</td>
                 <td className="px-2 py-1.5 text-right text-red-600 font-semibold">{fmt(bAllt - bColl)}</td>
               </tr>
             );
@@ -615,13 +632,16 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             <td className="px-2 py-2 text-center">{totals.students}</td>
             <td className="px-2 py-2 text-center text-green-700">{totals.paid}</td>
             <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpAllt)}</td>
-            <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
+            <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
+            <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
             <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
             <td className="px-2 py-2 text-right text-green-700 border-l border-gray-200">{fmt(totals.smpColl)}</td>
-            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkColl)}</td>
+            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBaseColl)}</td>
+            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addColl)}</td>
             <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpColl + totals.svkColl)}</td>
             <td className="px-2 py-2 text-right text-red-600 border-l border-gray-200">{fmt(totals.smpAllt - totals.smpColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkColl)}</td>
+            <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBaseColl)}</td>
+            <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addColl)}</td>
             <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpColl + totals.svkColl))}</td>
           </tr>
         </tfoot>
@@ -641,6 +661,10 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
   const totSvkAllt  = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
   const totSmpPaid  = rows.reduce((s, r) => s + r.smpPaid, 0);
   const totSvkPaid  = rows.reduce((s, r) => s + r.svkPaid, 0);
+  const totSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
+  const totAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
+  const totSvkBasePaid = rows.reduce((s, r) => s + r.svkBasePaid, 0);
+  const totAddPaid     = rows.reduce((s, r) => s + r.additionalPaid, 0);
   const breakdown   = useMemo(() => buildBreakdown(rows), [rows]);
 
   return (
@@ -658,28 +682,30 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
         { label: 'No Dues',  value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
       ]} />
 
-      {/* SMP / SVK / Total amount table */}
+      {/* SMP / SVK Base / Additional / Total amount table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
         <table className="w-full text-sm">
           <thead className={`${ACCENT} text-white`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Metric</th>
               <th className="px-3 py-2 text-right font-semibold">SMP</th>
-              <th className="px-3 py-2 text-right font-semibold">SVK</th>
+              <th className="px-3 py-2 text-right font-semibold">SVK Base</th>
+              <th className="px-3 py-2 text-right font-semibold">Additional</th>
               <th className="px-3 py-2 text-right font-semibold">Total</th>
             </tr>
           </thead>
           <tbody>
             {[
-              { label: 'Allotted',  smp: totSmpAllt,                   svk: totSvkAllt },
-              { label: 'Collected', smp: totSmpPaid,                   svk: totSvkPaid },
-              { label: 'Balance',   smp: totSmpAllt - totSmpPaid,      svk: totSvkAllt - totSvkPaid },
+              { label: 'Allotted',  smp: totSmpAllt,              svkBase: totSvkBaseAllt,     add: totAddAllt },
+              { label: 'Collected', smp: totSmpPaid,              svkBase: totSvkBasePaid,     add: totAddPaid },
+              { label: 'Balance',   smp: totSmpAllt - totSmpPaid, svkBase: totSvkBaseAllt - totSvkBasePaid, add: totAddAllt - totAddPaid },
             ].map((row, i) => (
               <tr key={row.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className="px-3 py-2 font-semibold">{row.label}</td>
                 <td className="px-3 py-2 text-right">{fmt(row.smp)}</td>
-                <td className="px-3 py-2 text-right">{fmt(row.svk)}</td>
-                <td className="px-3 py-2 text-right font-bold">{fmt(row.smp + row.svk)}</td>
+                <td className="px-3 py-2 text-right">{fmt(row.svkBase)}</td>
+                <td className="px-3 py-2 text-right">{fmt(row.add)}</td>
+                <td className="px-3 py-2 text-right font-bold">{fmt(row.smp + row.svkBase + row.add)}</td>
               </tr>
             ))}
           </tbody>
@@ -689,7 +715,10 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
       {/* Course / Year breakdown */}
       <GroupTable
         breakdown={breakdown}
-        totals={{ students: total, paid: paidCount, smpAllt: totSmpAllt, svkAllt: totSvkAllt, smpColl: totSmpPaid, svkColl: totSvkPaid }}
+        totals={{
+          students: total, paid: paidCount, smpAllt: totSmpAllt, svkAllt: totSvkAllt, smpColl: totSmpPaid, svkColl: totSvkPaid,
+          svkBaseAllt: totSvkBaseAllt, addAllt: totAddAllt, svkBaseColl: totSvkBasePaid, addColl: totAddPaid,
+        }}
       />
     </div>
   );
@@ -711,6 +740,10 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
     svkAllt: rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
     smpPaid: rows.reduce((s, r) => s + r.smpPaid, 0),
     svkPaid: rows.reduce((s, r) => s + r.svkPaid, 0),
+    svkBaseAllt: rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
+    addAllt:     rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
+    svkBasePaid: rows.reduce((s, r) => s + r.svkBasePaid, 0),
+    addPaid:     rows.reduce((s, r) => s + r.additionalPaid, 0),
   }), [rows]);
 
   const fpWithSearch: CommonFilterProps = {
@@ -739,7 +772,7 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
           <tbody>
             {rows.map((r, i) => <FeeDetailRow key={r.student.id} r={r} i={i} stripe={i % 2 !== 0} />)}
             {rows.length === 0 && (
-              <tr><td colSpan={14} className="px-3 py-6 text-center text-xs text-gray-400">No students match the current filters.</td></tr>
+              <tr><td colSpan={17} className="px-3 py-6 text-center text-xs text-gray-400">No students match the current filters.</td></tr>
             )}
           </tbody>
           {rows.length > 0 && (
@@ -748,13 +781,16 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {rows.length} student{rows.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpAllt)}</td>
-                <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
                 <td className="px-2 py-2 text-right text-green-700 border-l border-gray-200">{fmt(totals.smpPaid)}</td>
-                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBasePaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600 border-l border-gray-200">{fmt(totals.smpAllt - totals.smpPaid)}</td>
-                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBasePaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
               </tr>
             </tfoot>
@@ -781,6 +817,10 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
     svkAllt: dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
     smpPaid: dueRows.reduce((s, r) => s + r.smpPaid, 0),
     svkPaid: dueRows.reduce((s, r) => s + r.svkPaid, 0),
+    svkBaseAllt: dueRows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
+    addAllt:     dueRows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
+    svkBasePaid: dueRows.reduce((s, r) => s + r.svkBasePaid, 0),
+    addPaid:     dueRows.reduce((s, r) => s + r.additionalPaid, 0),
   }), [dueRows]);
 
   const fpWithSearch: CommonFilterProps = {
@@ -809,7 +849,7 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
           <tbody>
             {dueRows.map((r, i) => <FeeDetailRow key={r.student.id} r={r} i={i} stripe={i % 2 !== 0} />)}
             {dueRows.length === 0 && (
-              <tr><td colSpan={14} className="px-3 py-6 text-center text-xs text-gray-400">No students with outstanding balance.</td></tr>
+              <tr><td colSpan={17} className="px-3 py-6 text-center text-xs text-gray-400">No students with outstanding balance.</td></tr>
             )}
           </tbody>
           {dueRows.length > 0 && (
@@ -818,13 +858,16 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-right border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt)}</td>
-                <td className="px-2 py-2 text-right">{fmt(totals.svkAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
+                <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
                 <td className="px-2 py-2 text-right text-green-700 border-l border-[#3B5B8A]/20">{fmt(totals.smpPaid)}</td>
-                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBasePaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600 border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt - totals.smpPaid)}</td>
-                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkAllt - totals.svkPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBasePaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
               </tr>
             </tfoot>
@@ -845,6 +888,10 @@ function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
     svkAllt:  rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
     smpColl:  rows.reduce((s, r) => s + r.smpPaid, 0),
     svkColl:  rows.reduce((s, r) => s + r.svkPaid, 0),
+    svkBaseAllt: rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
+    addAllt:     rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
+    svkBaseColl: rows.reduce((s, r) => s + r.svkBasePaid, 0),
+    addColl:     rows.reduce((s, r) => s + r.additionalPaid, 0),
   }), [rows]);
 
   return (
@@ -5497,18 +5544,26 @@ export function FeeReportsPage() {
   }, [feeStructures]);
 
   // ── Paid maps (split SMP / SVK) + fine paid per student ──────────────────
-  const { smpPaidByStudent, svkPaidByStudent, finePaidByStudent } = useMemo(() => {
-    const smpMap  = new Map<string, number>();
-    const svkMap  = new Map<string, number>();
-    const fineMap = new Map<string, number>();
+  const { smpPaidByStudent, svkPaidByStudent, svkBasePaidByStudent, additionalPaidByStudent, finePaidByStudent } = useMemo(() => {
+    const smpMap        = new Map<string, number>();
+    const svkMap        = new Map<string, number>();
+    const svkBaseMap    = new Map<string, number>();
+    const additionalMap = new Map<string, number>();
+    const fineMap       = new Map<string, number>();
     for (const r of feeRecords) {
       const smpTotal = SMP_FEE_HEADS.reduce((t, { key }) => t + r.smp[key], 0);
-      const svkTotal = r.svk + r.additionalPaid.reduce((t, h) => t + h.amount, 0);
-      smpMap.set(r.studentId,  (smpMap.get(r.studentId)  ?? 0) + smpTotal);
-      svkMap.set(r.studentId,  (svkMap.get(r.studentId)  ?? 0) + svkTotal);
+      const addlTotal = r.additionalPaid.reduce((t, h) => t + h.amount, 0);
+      const svkTotal = r.svk + addlTotal;
+      smpMap.set(r.studentId,        (smpMap.get(r.studentId)        ?? 0) + smpTotal);
+      svkMap.set(r.studentId,        (svkMap.get(r.studentId)        ?? 0) + svkTotal);
+      svkBaseMap.set(r.studentId,    (svkBaseMap.get(r.studentId)    ?? 0) + r.svk);
+      additionalMap.set(r.studentId, (additionalMap.get(r.studentId) ?? 0) + addlTotal);
       fineMap.set(r.studentId, (fineMap.get(r.studentId) ?? 0) + r.smp.fine);
     }
-    return { smpPaidByStudent: smpMap, svkPaidByStudent: svkMap, finePaidByStudent: fineMap };
+    return {
+      smpPaidByStudent: smpMap, svkPaidByStudent: svkMap,
+      svkBasePaidByStudent: svkBaseMap, additionalPaidByStudent: additionalMap, finePaidByStudent: fineMap,
+    };
   }, [feeRecords]);
 
   // ── All students as fee rows ──────────────────────────────────────────────
@@ -5554,6 +5609,8 @@ export function FeeReportsPage() {
       const refunded   = refundedByStudent.get(s.id) ?? 0;
       const smpPaid    = Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
       const svkPaid    = svkPaidByStudent.get(s.id) ?? 0;
+      const svkBasePaid = svkBasePaidByStudent.get(s.id) ?? 0;
+      const additionalPaidAmt = additionalPaidByStudent.get(s.id) ?? 0;
       const paid       = smpPaid + svkPaid;
       // Balances still clamped at 0 as a safety net: a student who paid more than currently
       // allotted (e.g. a concession granted but not yet refunded) is fully settled, not
@@ -5561,14 +5618,18 @@ export function FeeReportsPage() {
       const smpBalance = smpAllotted !== null ? Math.max(0, smpAllotted - smpPaid) : null;
       const svkBalance = svkAllotted !== null ? Math.max(0, svkAllotted - svkPaid) : null;
       const balance    = allotted    !== null ? Math.max(0, allotted    - paid)    : null;
+      const svkBaseBalance    = svkBaseAllotted    !== null ? Math.max(0, svkBaseAllotted    - svkBasePaid)       : null;
+      const additionalBalance = additionalAllotted !== null ? Math.max(0, additionalAllotted - additionalPaidAmt) : null;
       return {
         student: s, smpAllotted, svkAllotted, allotted, smpPaid, svkPaid, paid, smpBalance, svkBalance, balance,
         svkBaseAllotted, additionalAllotted,
+        svkBasePaid, additionalPaid: additionalPaidAmt, svkBaseBalance, additionalBalance,
       };
     }),
   [
     allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey,
-    svkBaseAllottedByKey, additionalAllottedByKey, smpPaidByStudent, svkPaidByStudent, finePaidByStudent, refundedByStudent,
+    svkBaseAllottedByKey, additionalAllottedByKey, smpPaidByStudent, svkPaidByStudent,
+    svkBasePaidByStudent, additionalPaidByStudent, finePaidByStudent, refundedByStudent,
   ]);
 
   // ── Stats for chips ───────────────────────────────────────────────────────
