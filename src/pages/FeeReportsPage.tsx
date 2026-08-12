@@ -5415,6 +5415,7 @@ function FeeReg1Tab({
 interface BlueRegRow {
   record: FeeRecord;
   smp: Record<SMPFeeHead, number>;
+  svk: number;
   additional: Record<string, number>; // key = trimmed upper-case label
   smpTotal: number;
   addTotal: number;
@@ -5440,18 +5441,19 @@ interface BlueRegColDef {
 }
 
 function exportBlueRegisterExcel(
-  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, academicYear: string,
+  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string,
 ): void {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const header = [
     'Sl','Date','Rpt No','Course','Name',
     ...SMP_FEE_HEADS.map((h) => h.label),
+    ...(showSvk ? ['SVK'] : []),
     ...(showAdditional ? addCols.map((c) => blueRegShortLabel(c.label)) : []),
     'Total',
   ];
   const dataRows = rows.map((r, i) => {
     const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
-    const total = r.smpTotal + (showAdditional ? r.addTotal : 0);
+    const total = r.smpTotal + (showSvk ? r.svk : 0) + (showAdditional ? r.addTotal : 0);
     return [
       i + 1,
       `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`,
@@ -5459,16 +5461,19 @@ function exportBlueRegisterExcel(
       r.record.course,
       r.record.studentName,
       ...SMP_FEE_HEADS.map((h) => r.smp[h.key] || null),
+      ...(showSvk ? [r.svk || null] : []),
       ...(showAdditional ? addCols.map((c) => r.additional[c.key] || null) : []),
       total,
     ];
   });
   const smpTotals = SMP_FEE_HEADS.map((h) => rows.reduce((s, r) => s + r.smp[h.key], 0));
-  const addTotals = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
-  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showAdditional ? r.addTotal : 0), 0);
+  const svkTotal   = rows.reduce((s, r) => s + r.svk, 0);
+  const addTotals  = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
+  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showSvk ? r.svk : 0) + (showAdditional ? r.addTotal : 0), 0);
   const totRow = [
     'TOTAL','','','','',
     ...smpTotals.map((v) => v || null),
+    ...(showSvk ? [svkTotal || null] : []),
     ...(showAdditional ? addTotals.map((v) => v || null) : []),
     grandTotal,
   ];
@@ -5479,12 +5484,11 @@ function exportBlueRegisterExcel(
 }
 
 function exportBlueRegisterPdf(
-  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, academicYear: string, dateLabel: string,
+  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string, dateLabel: string,
 ): void {
   const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const FONT_SIZE    = 8;
   const CELL_PAD     = { top: 2, right: 2, bottom: 2, left: 2 };
-  const CELL_PAD_NUM = { top: 2, right: 2, bottom: 2, left: 1.5 };
   const PAD_H        = CELL_PAD.left + CELL_PAD.right;
   const margin       = 10;
   const LANDSCAPE_W  = 297 - margin * 2;
@@ -5502,16 +5506,19 @@ function exportBlueRegisterPdf(
     { header: 'Course', halign: 'center', get: (r) => r.record.course },
     { header: 'Name',   halign: 'left',   get: (r) => r.record.studentName },
     ...SMP_FEE_HEADS.map((h): BlueRegColDef => ({ header: h.label, halign: 'right', get: (r) => fmtN(r.smp[h.key]) })),
+    ...(showSvk ? [{ header: 'SVK', halign: 'right', get: (r) => fmtN(r.svk) } as BlueRegColDef] : []),
     ...(showAdditional ? addCols.map((c): BlueRegColDef => ({ header: blueRegShortLabel(c.label), halign: 'right', get: (r) => fmtN(r.additional[c.key] || 0) })) : []),
-    { header: 'Total', halign: 'right', get: (r) => (r.smpTotal + (showAdditional ? r.addTotal : 0)).toLocaleString('en-IN') },
+    { header: 'Total', halign: 'right', get: (r) => (r.smpTotal + (showSvk ? r.svk : 0) + (showAdditional ? r.addTotal : 0)).toLocaleString('en-IN') },
   ];
 
   const smpTotals = SMP_FEE_HEADS.map((h) => rows.reduce((s, r) => s + r.smp[h.key], 0));
-  const addTotals = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
-  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showAdditional ? r.addTotal : 0), 0);
+  const svkTotal   = rows.reduce((s, r) => s + r.svk, 0);
+  const addTotals  = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
+  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showSvk ? r.svk : 0) + (showAdditional ? r.addTotal : 0), 0);
   const totalRow = [
     'TOTAL', '', '', '', `${rows.length} record${rows.length !== 1 ? 's' : ''}`,
     ...smpTotals.map(fmtN),
+    ...(showSvk ? [fmtN(svkTotal)] : []),
     ...(showAdditional ? addTotals.map(fmtN) : []),
     grandTotal.toLocaleString('en-IN'),
   ];
@@ -5538,9 +5545,16 @@ function exportBlueRegisterPdf(
     return colW;
   });
 
+  // When there are many columns (e.g. all 14 SMP heads plus SVK/additional-fee
+  // toggles on), the ideal widths measured above can exceed the page — shrinking
+  // just the column *boxes* while keeping text at full size is what caused the
+  // widest cells (the TOTAL row's large sums) to get ellipsized/cut off. So the
+  // font size and cell padding are scaled down by the same factor as the columns,
+  // keeping content proportional to the box it renders in.
   const availableForFixed = LANDSCAPE_W - MIN_NAME_W;
+  let scale = 1;
   if (fixedTotal > availableForFixed) {
-    const scale = availableForFixed / fixedTotal;
+    scale = availableForFixed / fixedTotal;
     for (let idx = 0; idx < colWidths.length; idx++) {
       if (idx !== NAME_IDX) colWidths[idx] *= scale;
     }
@@ -5550,6 +5564,11 @@ function exportBlueRegisterPdf(
   colWidths[NAME_IDX] = LANDSCAPE_W - fixedTotal;
   const finalWidths = colWidths;
   const tableWidth  = finalWidths.reduce((s, w) => s + w, 0);
+
+  const renderFontSize = scale < 1 ? Math.max(5.5, FONT_SIZE * scale) : FONT_SIZE;
+  const padScale      = renderFontSize / FONT_SIZE;
+  const renderPad     = { top: 2 * padScale, right: 2 * padScale, bottom: 2 * padScale, left: 2 * padScale };
+  const renderPadNum  = { top: 2 * padScale, right: 2 * padScale, bottom: 2 * padScale, left: 1.5 * padScale };
 
   const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -5582,7 +5601,7 @@ function exportBlueRegisterPdf(
     columnStyles[idx] = {
       cellWidth: finalWidths[idx],
       halign: col.halign,
-      cellPadding: idx > NAME_IDX ? CELL_PAD_NUM : CELL_PAD,
+      cellPadding: idx > NAME_IDX ? renderPadNum : renderPad,
     };
   });
 
@@ -5593,8 +5612,8 @@ function exportBlueRegisterPdf(
     body: [...bodyRows, totalRow],
     tableWidth,
     styles: {
-      fontSize: FONT_SIZE,
-      cellPadding: CELL_PAD,
+      fontSize: renderFontSize,
+      cellPadding: renderPad,
       valign: 'middle',
       overflow: 'ellipsize',
       lineColor: [226, 232, 240],
@@ -5605,7 +5624,7 @@ function exportBlueRegisterPdf(
       fillColor: [30, 64, 175],
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: FONT_SIZE,
+      fontSize: renderFontSize,
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252],
@@ -5649,6 +5668,7 @@ function BlueRegisterTab({
   const [searchTerm,      setSearchTerm]      = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAdditional,  setShowAdditional]  = useState(false);
+  const [showSvk,         setShowSvk]         = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
     return () => clearTimeout(t);
@@ -5706,7 +5726,7 @@ function BlueRegisterTab({
         additional[key] = (additional[key] ?? 0) + head.amount;
         addTotal += head.amount;
       }
-      return { record: r, smp, additional, smpTotal, addTotal };
+      return { record: r, smp, svk: r.svk, additional, smpTotal, addTotal };
     }).sort((a, b) => {
       const d = a.record.date.localeCompare(b.record.date);
       if (d !== 0) return d;
@@ -5748,14 +5768,16 @@ function BlueRegisterTab({
     for (const { key } of SMP_FEE_HEADS) smp[key] = 0;
     const additional: Record<string, number> = {};
     let smpTotal = 0;
+    let svkTotal = 0;
     let addTotal = 0;
     for (const r of rows) {
       for (const { key } of SMP_FEE_HEADS) smp[key] += r.smp[key];
       for (const key of Object.keys(r.additional)) additional[key] = (additional[key] ?? 0) + r.additional[key];
       smpTotal += r.smpTotal;
+      svkTotal += r.svk;
       addTotal += r.addTotal;
     }
-    return { smp, additional, smpTotal, addTotal };
+    return { smp, additional, smpTotal, svkTotal, addTotal };
   }, [rows]);
 
   const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
@@ -5771,7 +5793,7 @@ function BlueRegisterTab({
 
   const visibleAddCols = showAdditional ? additionalCols : [];
   const FIXED_PCT = 3 + 7 + 6 + 5 + 15 + 6; // Sl, Date, Rcpt No, Course, Name, Total
-  const varCount  = SMP_FEE_HEADS.length + visibleAddCols.length;
+  const varCount  = SMP_FEE_HEADS.length + (showSvk ? 1 : 0) + visibleAddCols.length;
   const varPct    = (100 - FIXED_PCT) / varCount;
   const colWidths = ['3%','7%','6%','5%','15%', ...Array(varCount).fill(`${varPct}%`), '6%'];
   const BlueRegColGroup = () => <colgroup>{colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
@@ -5818,6 +5840,18 @@ function BlueRegisterTab({
           )}
           <button
             type="button"
+            onClick={() => setShowSvk((v) => !v)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              showSvk
+                ? 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                : 'border-gray-200 bg-white text-gray-500 hover:border-[#3B5B8A]/40'
+            }`}
+            title="Toggle the SVK fee column"
+          >
+            SVK Fee
+          </button>
+          <button
+            type="button"
             onClick={() => setShowAdditional((v) => !v)}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               showAdditional
@@ -5830,8 +5864,8 @@ function BlueRegisterTab({
           </button>
           <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
           <ExportBar
-            onExcel={() => exportBlueRegisterExcel(rows, additionalCols, showAdditional, academicYear)}
-            onPdf={() => exportBlueRegisterPdf(rows, additionalCols, showAdditional, academicYear, formatDayLabel(selectedDate))}
+            onExcel={() => exportBlueRegisterExcel(rows, additionalCols, showAdditional, showSvk, academicYear)}
+            onPdf={() => exportBlueRegisterPdf(rows, additionalCols, showAdditional, showSvk, academicYear, formatDayLabel(selectedDate))}
           />
         </>}
         hasActiveFilters={hasActiveFilters}
@@ -5874,6 +5908,9 @@ function BlueRegisterTab({
               {SMP_FEE_HEADS.map((h) => (
                 <th key={h.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">{h.label}</th>
               ))}
+              {showSvk && (
+                <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">SVK</th>
+              )}
               {visibleAddCols.map((c) => (
                 <th key={c.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap" title={c.label}>{blueRegShortLabel(c.label)}</th>
               ))}
@@ -5883,14 +5920,14 @@ function BlueRegisterTab({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5 + SMP_FEE_HEADS.length + visibleAddCols.length + 1} className="px-4 py-8 text-center text-gray-400 text-xs">No records match the current filters.</td>
+                <td colSpan={5 + SMP_FEE_HEADS.length + (showSvk ? 1 : 0) + visibleAddCols.length + 1} className="px-4 py-8 text-center text-gray-400 text-xs">No records match the current filters.</td>
               </tr>
             ) : rows.map((r, i) => {
               const student = studentMap.get(r.record.studentId);
               const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
               const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
               const dateStr = `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
-              const rowTotal = r.smpTotal + (showAdditional ? r.addTotal : 0);
+              const rowTotal = r.smpTotal + (showSvk ? r.svk : 0) + (showAdditional ? r.addTotal : 0);
               return (
                 <tr key={r.record.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className={`${tdC} text-gray-400`}>{i + 1}</td>
@@ -5901,6 +5938,9 @@ function BlueRegisterTab({
                   {SMP_FEE_HEADS.map((h) => (
                     <td key={h.key} className={`${td} border-l border-gray-100 ${r.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smp[h.key] > 0 ? fmt(r.smp[h.key]) : '—'}</td>
                   ))}
+                  {showSvk && (
+                    <td className={`${td} border-l border-gray-100 ${r.svk > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{r.svk > 0 ? fmt(r.svk) : '—'}</td>
+                  )}
                   {visibleAddCols.map((c) => (
                     <td key={c.key} className={`${td} border-l border-gray-100 ${(r.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(r.additional[c.key] ?? 0) > 0 ? fmt(r.additional[c.key]) : '—'}</td>
                   ))}
@@ -5921,10 +5961,13 @@ function BlueRegisterTab({
                 {SMP_FEE_HEADS.map((h) => (
                   <td key={h.key} className={`px-2 py-2 text-right border-l border-gray-200 ${totals.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smp[h.key] > 0 ? fmt(totals.smp[h.key]) : '—'}</td>
                 ))}
+                {showSvk && (
+                  <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.svkTotal > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{totals.svkTotal > 0 ? fmt(totals.svkTotal) : '—'}</td>
+                )}
                 {visibleAddCols.map((c) => (
                   <td key={c.key} className={`px-2 py-2 text-right border-l border-gray-200 ${(totals.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(totals.additional[c.key] ?? 0) > 0 ? fmt(totals.additional[c.key]) : '—'}</td>
                 ))}
-                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpTotal + (showAdditional ? totals.addTotal : 0))}</td>
+                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpTotal + (showSvk ? totals.svkTotal : 0) + (showAdditional ? totals.addTotal : 0))}</td>
               </tr>
           </tfoot>
         </table>
