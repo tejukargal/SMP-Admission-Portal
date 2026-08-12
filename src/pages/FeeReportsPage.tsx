@@ -29,7 +29,7 @@ import { useFeeRemittances } from '../hooks/useFeeRemittances';
 import { denominationAbstractId, getDenominationAbstract, saveDenominationAbstract } from '../services/denominationAbstractService';
 import { useAuth } from '../contexts/AuthContext';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -118,6 +118,9 @@ const TAB_ICONS: Record<TabId, ReactNode> = {
   'fee-reg-1': (
     <svg {...ICON_PROPS}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="15" y2="17" /></svg>
   ),
+  'blue-register': (
+    <svg {...ICON_PROPS}><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" /><line x1="9" y1="7" x2="15" y2="7" /><line x1="9" y1="11" x2="15" y2="11" /></svg>
+  ),
   'fee-structure': (
     <svg {...ICON_PROPS}><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
   ),
@@ -129,6 +132,7 @@ const TAB_META: TabMeta[] = [
   { id: 'dues',               label: 'Dues Report',          group: 'Student Reports',         icon: TAB_ICONS.dues },
   { id: 'course-year',        label: 'Course & Year Wise',   group: 'Student Reports',         icon: TAB_ICONS['course-year'] },
   { id: 'consolidated',       label: 'Consolidated',         group: 'Student Reports',         icon: TAB_ICONS.consolidated },
+  { id: 'blue-register',      label: 'Blue Register',        group: 'Student Reports',         icon: TAB_ICONS['blue-register'] },
   { id: 'daily-collections',  label: 'Daily Collections',    group: 'Collections',             icon: TAB_ICONS['daily-collections'] },
   { id: 'day-summary',        label: 'Day Summary',          group: 'Collections',             icon: TAB_ICONS['day-summary'] },
   { id: 'datewise-headwise',  label: 'Datewise Headwise',    group: 'Collections',             icon: TAB_ICONS['datewise-headwise'] },
@@ -5402,6 +5406,534 @@ function FeeReg1Tab({
   );
 }
 
+// ── Tab: Blue Register ──────────────────────────────────────────────────────
+// One row per receipt: individual SMP fee-head breakup (Adm…Fine, single amount
+// per head — no cash/pay split), a Total, and an optional set of dynamic columns
+// (one per distinct additionalPaid label — Red Cross, Insurance, etc.) toggled
+// on/off as a group.
+
+interface BlueRegRow {
+  record: FeeRecord;
+  smp: Record<SMPFeeHead, number>;
+  additional: Record<string, number>; // key = trimmed upper-case label
+  smpTotal: number;
+  addTotal: number;
+}
+
+interface BlueRegAddCol { key: string; label: string }
+
+// Short column headers for common additional-fee labels (e.g. "Student Insurance" →
+// "Ins", "Youth Red Cross" → "RC") so the toggled-on columns stay narrow and don't
+// overlap; anything else falls back to its own label as-is.
+function blueRegShortLabel(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes('insur')) return 'Ins';
+  if (l.includes('red cross') || l.includes('redcross')) return 'RC';
+  return label;
+}
+
+interface BlueRegColDef {
+  header: string;
+  halign: 'left' | 'center' | 'right';
+  maxW?: number;
+  get: (r: BlueRegRow, i: number) => string | number;
+}
+
+function exportBlueRegisterExcel(
+  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, academicYear: string,
+): void {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const header = [
+    'Sl','Date','Rpt No','Course','Name',
+    ...SMP_FEE_HEADS.map((h) => h.label),
+    ...(showAdditional ? addCols.map((c) => blueRegShortLabel(c.label)) : []),
+    'Total',
+  ];
+  const dataRows = rows.map((r, i) => {
+    const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+    const total = r.smpTotal + (showAdditional ? r.addTotal : 0);
+    return [
+      i + 1,
+      `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`,
+      r.record.receiptNumber || '',
+      r.record.course,
+      r.record.studentName,
+      ...SMP_FEE_HEADS.map((h) => r.smp[h.key] || null),
+      ...(showAdditional ? addCols.map((c) => r.additional[c.key] || null) : []),
+      total,
+    ];
+  });
+  const smpTotals = SMP_FEE_HEADS.map((h) => rows.reduce((s, r) => s + r.smp[h.key], 0));
+  const addTotals = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
+  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showAdditional ? r.addTotal : 0), 0);
+  const totRow = [
+    'TOTAL','','','','',
+    ...smpTotals.map((v) => v || null),
+    ...(showAdditional ? addTotals.map((v) => v || null) : []),
+    grandTotal,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Blue Register');
+  XLSX.writeFile(wb, `Blue_Register_${academicYear}.xlsx`);
+}
+
+function exportBlueRegisterPdf(
+  rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, academicYear: string, dateLabel: string,
+): void {
+  const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const FONT_SIZE    = 8;
+  const CELL_PAD     = { top: 2, right: 2, bottom: 2, left: 2 };
+  const CELL_PAD_NUM = { top: 2, right: 2, bottom: 2, left: 1.5 };
+  const PAD_H        = CELL_PAD.left + CELL_PAD.right;
+  const margin       = 10;
+  const LANDSCAPE_W  = 297 - margin * 2;
+  const MIN_NAME_W   = 30;
+
+  const fmtN = (v: number) => v > 0 ? v.toLocaleString('en-IN') : '—';
+
+  const COLUMNS: BlueRegColDef[] = [
+    { header: 'Sl',     halign: 'center', get: (_r, i) => i + 1 },
+    { header: 'Date',   halign: 'left',   get: (r) => {
+        const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+        return `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
+      } },
+    { header: 'Rpt No', halign: 'left',   get: (r) => r.record.receiptNumber || '—' },
+    { header: 'Course', halign: 'center', get: (r) => r.record.course },
+    { header: 'Name',   halign: 'left',   get: (r) => r.record.studentName },
+    ...SMP_FEE_HEADS.map((h): BlueRegColDef => ({ header: h.label, halign: 'right', get: (r) => fmtN(r.smp[h.key]) })),
+    ...(showAdditional ? addCols.map((c): BlueRegColDef => ({ header: blueRegShortLabel(c.label), halign: 'right', get: (r) => fmtN(r.additional[c.key] || 0) })) : []),
+    { header: 'Total', halign: 'right', get: (r) => (r.smpTotal + (showAdditional ? r.addTotal : 0)).toLocaleString('en-IN') },
+  ];
+
+  const smpTotals = SMP_FEE_HEADS.map((h) => rows.reduce((s, r) => s + r.smp[h.key], 0));
+  const addTotals = addCols.map((c) => rows.reduce((s, r) => s + (r.additional[c.key] || 0), 0));
+  const grandTotal = rows.reduce((s, r) => s + r.smpTotal + (showAdditional ? r.addTotal : 0), 0);
+  const totalRow = [
+    'TOTAL', '', '', '', `${rows.length} record${rows.length !== 1 ? 's' : ''}`,
+    ...smpTotals.map(fmtN),
+    ...(showAdditional ? addTotals.map(fmtN) : []),
+    grandTotal.toLocaleString('en-IN'),
+  ];
+
+  const NAME_IDX   = COLUMNS.findIndex((c) => c.header === 'Name');
+  const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  measureDoc.setFontSize(FONT_SIZE);
+
+  let fixedTotal = 0;
+  const colWidths: number[] = COLUMNS.map((col, idx) => {
+    if (idx === NAME_IDX) return 0;
+    measureDoc.setFont('helvetica', 'bold');
+    let w = measureDoc.getTextWidth(col.header);
+    const wTot = measureDoc.getTextWidth(String(totalRow[idx]));
+    if (wTot > w) w = wTot;
+    measureDoc.setFont('helvetica', 'normal');
+    for (let i = 0; i < rows.length; i++) {
+      const cw = measureDoc.getTextWidth(String(col.get(rows[i], i)));
+      if (cw > w) w = cw;
+    }
+    let colW = w + PAD_H + 1.5;
+    if (col.maxW) colW = Math.min(colW, col.maxW);
+    fixedTotal += colW;
+    return colW;
+  });
+
+  const availableForFixed = LANDSCAPE_W - MIN_NAME_W;
+  if (fixedTotal > availableForFixed) {
+    const scale = availableForFixed / fixedTotal;
+    for (let idx = 0; idx < colWidths.length; idx++) {
+      if (idx !== NAME_IDX) colWidths[idx] *= scale;
+    }
+    fixedTotal = availableForFixed;
+  }
+
+  colWidths[NAME_IDX] = LANDSCAPE_W - fixedTotal;
+  const finalWidths = colWidths;
+  const tableWidth  = finalWidths.reduce((s, w) => s + w, 0);
+
+  const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('SMP Admissions — Blue Register', margin, 13);
+
+  const chips = [`AY ${academicYear}`, dateLabel, `${rows.length} record${rows.length !== 1 ? 's' : ''}`];
+  const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(chips.join('  ·  '), margin, 19.5);
+  doc.text(`Generated ${dateStr}`, pageW - margin, 19.5, { align: 'right' });
+  doc.setTextColor(0);
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.2);
+  doc.line(margin, 22, pageW - margin, 22);
+
+  const bodyRows = rows.map((r, i) => COLUMNS.map((c) => c.get(r, i)));
+  const headers  = [COLUMNS.map((c) => ({ content: c.header, styles: { halign: c.halign as 'left' | 'center' | 'right' } }))];
+
+  const columnStyles: Record<number, { cellWidth: number; halign: 'left' | 'center' | 'right'; cellPadding?: typeof CELL_PAD }> = {};
+  COLUMNS.forEach((col, idx) => {
+    columnStyles[idx] = {
+      cellWidth: finalWidths[idx],
+      halign: col.halign,
+      cellPadding: idx > NAME_IDX ? CELL_PAD_NUM : CELL_PAD,
+    };
+  });
+
+  autoTable(doc, {
+    startY: 25,
+    margin: { left: margin, right: margin, top: margin, bottom: 12 },
+    head: headers,
+    body: [...bodyRows, totalRow],
+    tableWidth,
+    styles: {
+      fontSize: FONT_SIZE,
+      cellPadding: CELL_PAD,
+      valign: 'middle',
+      overflow: 'ellipsize',
+      lineColor: [226, 232, 240],
+      lineWidth: 0.15,
+      textColor: [20, 20, 20] as [number, number, number],
+    },
+    headStyles: {
+      fillColor: [30, 64, 175],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: FONT_SIZE,
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    columnStyles,
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === bodyRows.length) {
+        data.cell.styles.fillColor = [30, 64, 175];
+        data.cell.styles.textColor = 255;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+    didDrawPage: (data) => {
+      const total = (doc as unknown as { internal: { getNumberOfPages(): number } })
+        .internal.getNumberOfPages();
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Page ${data.pageNumber} of ${total}`, pageW - margin, pageH - 4, { align: 'right' });
+      doc.setTextColor(0);
+    },
+  });
+
+  doc.save(`Blue_Register_${academicYear}.pdf`);
+}
+
+function BlueRegisterTab({
+  feeRecords, allStudents, showAllYears, academicYear,
+}: {
+  feeRecords: FeeRecord[];
+  allStudents: Student[];
+  showAllYears: boolean;
+  academicYear: string;
+}) {
+  const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
+  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [dateFrom,      setDateFrom]      = useState('');
+  const [dateTo,        setDateTo]        = useState('');
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showAdditional,  setShowAdditional]  = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const availableDates = useMemo(
+    () => [...new Set(feeRecords.map((r) => r.date.slice(0, 10)))].sort(),
+    [feeRecords],
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(
+    () => availableDates[availableDates.length - 1] ?? new Date().toISOString().slice(0, 10),
+  );
+  useEffect(() => {
+    if (selectedDate && availableDates.length > 0 && !availableDates.includes(selectedDate)) {
+      setSelectedDate(availableDates[availableDates.length - 1]);
+    }
+  }, [availableDates, selectedDate]);
+  const dateIdx  = availableDates.indexOf(selectedDate);
+  const prevDate = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
+  const nextDate = dateIdx !== -1 && dateIdx < availableDates.length - 1 ? availableDates[dateIdx + 1] : null;
+  const isRangeActive = !!(dateFrom || dateTo);
+
+  const studentMap = useMemo(
+    () => new Map(allStudents.map((s) => [s.id, s])),
+    [allStudents],
+  );
+
+  const baseRows = useMemo((): BlueRegRow[] => {
+    let list = feeRecords;
+    if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
+    if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
+    if (dateFrom || dateTo) {
+      if (dateFrom) list = list.filter((r) => r.date.slice(0, 10) >= dateFrom);
+      if (dateTo)   list = list.filter((r) => r.date.slice(0, 10) <= dateTo);
+    } else if (selectedDate) {
+      list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
+    }
+    if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
+    if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
+    if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
+    if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
+
+    return list.map((r): BlueRegRow => {
+      const smp = {} as Record<SMPFeeHead, number>;
+      let smpTotal = 0;
+      for (const { key } of SMP_FEE_HEADS) {
+        smp[key] = r.smp[key];
+        smpTotal += r.smp[key];
+      }
+      const additional: Record<string, number> = {};
+      let addTotal = 0;
+      for (const head of r.additionalPaid) {
+        const key = head.label.trim().toUpperCase();
+        if (!key) continue;
+        additional[key] = (additional[key] ?? 0) + head.amount;
+        addTotal += head.amount;
+      }
+      return { record: r, smp, additional, smpTotal, addTotal };
+    }).sort((a, b) => {
+      const d = a.record.date.localeCompare(b.record.date);
+      if (d !== 0) return d;
+      return a.record.receiptNumber.localeCompare(b.record.receiptNumber);
+    });
+  }, [feeRecords, aidedFilter, selectedDate, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
+
+  // Dynamic additional-fee columns — labels are free text on FeeRecord.additionalPaid,
+  // so the column set is the union of distinct (trimmed, upper-cased) labels seen in
+  // the filtered rows, scoped to baseRows (not the text-searched `rows`) so the column
+  // set doesn't flicker as the user types a search.
+  const additionalCols = useMemo(() => {
+    const labelByKey = new Map<string, string>();
+    for (const r of baseRows) {
+      for (const head of r.record.additionalPaid) {
+        const key = head.label.trim().toUpperCase();
+        if (key && !labelByKey.has(key)) labelByKey.set(key, head.label.trim());
+      }
+    }
+    return [...labelByKey.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([key, label]) => ({ key, label }));
+  }, [baseRows]);
+
+  const rows = useMemo(() => {
+    if (!debouncedSearch) return baseRows;
+    const q = debouncedSearch.trim().toUpperCase();
+    return baseRows.filter((r) => {
+      const rec = r.record;
+      const name = (studentMap.get(rec.studentId)?.studentNameSSLC ?? rec.studentName).toUpperCase();
+      return (
+        name.includes(q) ||
+        (rec.regNumber ?? '').toUpperCase().includes(q) ||
+        (rec.receiptNumber ?? '').includes(q)
+      );
+    });
+  }, [baseRows, debouncedSearch, studentMap]);
+
+  const totals = useMemo(() => {
+    const smp = {} as Record<SMPFeeHead, number>;
+    for (const { key } of SMP_FEE_HEADS) smp[key] = 0;
+    const additional: Record<string, number> = {};
+    let smpTotal = 0;
+    let addTotal = 0;
+    for (const r of rows) {
+      for (const { key } of SMP_FEE_HEADS) smp[key] += r.smp[key];
+      for (const key of Object.keys(r.additional)) additional[key] = (additional[key] ?? 0) + r.additional[key];
+      smpTotal += r.smpTotal;
+      addTotal += r.addTotal;
+    }
+    return { smp, additional, smpTotal, addTotal };
+  }, [rows]);
+
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  function clearFilters() {
+    setSearchTerm('');
+    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
+    setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
+  }
+
+  const td  = 'px-2 py-1.5 text-right text-[11px] tabular-nums';
+  const tdL = 'px-2 py-1.5 text-left  text-[11px]';
+  const tdC = 'px-2 py-1.5 text-center text-[11px]';
+
+  const visibleAddCols = showAdditional ? additionalCols : [];
+  const FIXED_PCT = 3 + 7 + 6 + 5 + 15 + 6; // Sl, Date, Rcpt No, Course, Name, Total
+  const varCount  = SMP_FEE_HEADS.length + visibleAddCols.length;
+  const varPct    = (100 - FIXED_PCT) / varCount;
+  const colWidths = ['3%','7%','6%','5%','15%', ...Array(varCount).fill(`${varPct}%`), '6%'];
+  const BlueRegColGroup = () => <colgroup>{colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
+
+  return (
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      {/* Filters */}
+      <FilterPanel
+        search={<>
+          <SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />
+          <div className={`flex items-center gap-2 ${isRangeActive ? 'opacity-40 pointer-events-none' : ''}`} title={isRangeActive ? 'Clear the date range filter to use the day selector' : undefined}>
+            <button
+              disabled={!prevDate}
+              onClick={() => prevDate && setSelectedDate(prevDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >‹</button>
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={fs} />
+            <button
+              disabled={!nextDate}
+              onClick={() => nextDate && setSelectedDate(nextDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >›</button>
+            <button
+              onClick={() => setSelectedDate(selectedDate ? '' : (availableDates[availableDates.length - 1] ?? ''))}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                selectedDate
+                  ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+              }`}
+              title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
+            >All</button>
+          </div>
+          <select value={aidedFilter}   onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+            <option value="">Aided &amp; Unaided</option>
+            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+            <option value="UNAIDED">Unaided (EE)</option>
+          </select>
+        </>}
+        right={<>
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAdditional((v) => !v)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              showAdditional
+                ? 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                : 'border-gray-200 bg-white text-gray-500 hover:border-[#3B5B8A]/40'
+            }`}
+            title="Toggle additional fee columns (Red Cross, Insurance, etc.)"
+          >
+            Additional Fees
+          </button>
+          <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
+          <ExportBar
+            onExcel={() => exportBlueRegisterExcel(rows, additionalCols, showAdditional, academicYear)}
+            onPdf={() => exportBlueRegisterPdf(rows, additionalCols, showAdditional, academicYear, formatDayLabel(selectedDate))}
+          />
+        </>}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      >
+        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
+          <option value="">All Courses</option>
+          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={yearFilter}    onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
+          <option value="">All Years</option>
+          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
+          <option value="">All Adm Types</option>
+          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={admCatFilter}  onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
+          <option value="">All Adm Cats</option>
+          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+          className={fs} title="From date" />
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
+          className={fs} title="To date" />
+      </FilterPanel>
+
+      {/* Table */}
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto">
+        <table className="w-full table-fixed text-[11px] border-collapse">
+          <BlueRegColGroup />
+          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+            <tr>
+              <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
+              <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Date</th>
+              <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Rcpt No</th>
+              <th className="px-2 py-1.5 text-center font-semibold">Course</th>
+              <th className="px-2 py-1.5 font-semibold">Name of the Student</th>
+              {SMP_FEE_HEADS.map((h) => (
+                <th key={h.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">{h.label}</th>
+              ))}
+              {visibleAddCols.map((c) => (
+                <th key={c.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap" title={c.label}>{blueRegShortLabel(c.label)}</th>
+              ))}
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5 + SMP_FEE_HEADS.length + visibleAddCols.length + 1} className="px-4 py-8 text-center text-gray-400 text-xs">No records match the current filters.</td>
+              </tr>
+            ) : rows.map((r, i) => {
+              const student = studentMap.get(r.record.studentId);
+              const [ry, rm, rd] = r.record.date.slice(0, 10).split('-');
+              const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              const dateStr = `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
+              const rowTotal = r.smpTotal + (showAdditional ? r.addTotal : 0);
+              return (
+                <tr key={r.record.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className={`${tdC} text-gray-400`}>{i + 1}</td>
+                  <td className={`${tdL} text-gray-500 whitespace-nowrap`}>{dateStr}</td>
+                  <td className={`${tdL} text-gray-600 whitespace-nowrap`}>{r.record.receiptNumber || '—'}</td>
+                  <td className={`${tdC} font-semibold`}>{r.record.course}</td>
+                  <td className={`${tdL} font-medium max-w-[160px] truncate`}>{student?.studentNameSSLC ?? r.record.studentName}</td>
+                  {SMP_FEE_HEADS.map((h) => (
+                    <td key={h.key} className={`${td} border-l border-gray-100 ${r.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smp[h.key] > 0 ? fmt(r.smp[h.key]) : '—'}</td>
+                  ))}
+                  {visibleAddCols.map((c) => (
+                    <td key={c.key} className={`${td} border-l border-gray-100 ${(r.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(r.additional[c.key] ?? 0) > 0 ? fmt(r.additional[c.key]) : '—'}</td>
+                  ))}
+                  <td className={`${td} border-l border-gray-100 font-semibold text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > 0 && (
+        <table className="w-full table-fixed text-[11px] border-collapse shrink-0">
+          <BlueRegColGroup />
+          <tfoot className="bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]">
+              <tr>
+                <td className="px-2 py-2 text-center text-gray-400">—</td>
+                <td className="px-2 py-2 whitespace-nowrap" colSpan={4}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
+                {SMP_FEE_HEADS.map((h) => (
+                  <td key={h.key} className={`px-2 py-2 text-right border-l border-gray-200 ${totals.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smp[h.key] > 0 ? fmt(totals.smp[h.key]) : '—'}</td>
+                ))}
+                {visibleAddCols.map((c) => (
+                  <td key={c.key} className={`px-2 py-2 text-right border-l border-gray-200 ${(totals.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(totals.additional[c.key] ?? 0) > 0 ? fmt(totals.additional[c.key]) : '—'}</td>
+                ))}
+                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpTotal + (showAdditional ? totals.addTotal : 0))}</td>
+              </tr>
+          </tfoot>
+        </table>
+      )}
+      </div>
+    </div>
+  );
+}
+
 // ── Shared filter props + component ───────────────────────────────────────────
 interface CommonFilterProps {
   aidedFilter: 'AIDED' | 'UNAIDED' | '';
@@ -5481,7 +6013,7 @@ export function FeeReportsPage() {
   const [activeTab,       setActiveTab]       = useState<TabId | null>(null);
   const [showAllYears,    setShowAllYears]    = useState(false);
 
-  const DATE_TAB_IDS = new Set<TabId>(['daily-collections', 'day-summary', 'datewise-headwise', 'bank-remittance', 'fee-reg-1']);
+  const DATE_TAB_IDS = new Set<TabId>(['daily-collections', 'day-summary', 'datewise-headwise', 'bank-remittance', 'fee-reg-1', 'blue-register']);
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords,   loading: feeLoading       } = useFeeRecords(academicYear);
@@ -5925,6 +6457,7 @@ export function FeeReportsPage() {
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
             {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
+            {activeTab === 'blue-register'     && <BlueRegisterTab     feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'fee-structure'     && <FeeStructureView />}
           </div>
         )}
