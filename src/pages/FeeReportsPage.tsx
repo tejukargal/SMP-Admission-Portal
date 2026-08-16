@@ -5301,8 +5301,11 @@ function BudgetTab({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+    <div className="flex flex-col gap-4 flex-1 min-h-0">
+      {/* shrink-0 + a separate scrollable body below (not page-level scroll) keeps this bar
+          always visible without fighting the page's own sticky "Back to Reports" bar —
+          same toolbar-above-scroll-region pattern used by the other report tabs. */}
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-wrap gap-8 text-sm">
           <div><div className="text-gray-400 text-xs">Total Allotted</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandAllotted)}</div></div>
           <div><div className="text-gray-400 text-xs">Total Spent</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandSpent)}</div></div>
@@ -5316,6 +5319,7 @@ function BudgetTab({
         </div>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-auto space-y-4">
       <div className="space-y-3">
         {heads.map((h, idx) => {
           const spent   = h.expenses.reduce((a, e) => a + e.amount, 0);
@@ -5441,6 +5445,7 @@ function BudgetTab({
             </tfoot>
           )}
         </table>
+      </div>
       </div>
     </div>
   );
