@@ -22,14 +22,15 @@ import {
   exportCourseYearExcel, exportConsolidatedExcel,
   exportDatewiseHeadwiseExcel,
 } from '../utils/feeReportExcel';
-import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts, GovHeadRefs, FeeRemittance } from '../types';
+import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts, GovHeadRefs, FeeRemittance, BudgetHeadEntry, BudgetHeadKey, BudgetExpenseItem } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
 import { useFeeRemittances } from '../hooks/useFeeRemittances';
 import { denominationAbstractId, getDenominationAbstract, saveDenominationAbstract } from '../services/denominationAbstractService';
+import { getSMPBudget, saveSMPBudget } from '../services/smpBudgetService';
 import { useAuth } from '../contexts/AuthContext';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'fee-reg-1' | 'fee-structure';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'budget' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -124,6 +125,9 @@ const TAB_ICONS: Record<TabId, ReactNode> = {
   'fee-structure': (
     <svg {...ICON_PROPS}><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>
   ),
+  budget: (
+    <svg {...ICON_PROPS}><rect x="2" y="6" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></svg>
+  ),
 };
 
 const TAB_META: TabMeta[] = [
@@ -138,6 +142,7 @@ const TAB_META: TabMeta[] = [
   { id: 'datewise-headwise',  label: 'Datewise Headwise',    group: 'Collections',             icon: TAB_ICONS['datewise-headwise'] },
   { id: 'bank-remittance',    label: 'Bank Remittance',      group: 'Remittance & Structure',  icon: TAB_ICONS['bank-remittance'] },
   { id: 'fee-distribution',   label: 'Fee Distribution',     group: 'Remittance & Structure',  icon: TAB_ICONS['fee-distribution'] },
+  { id: 'budget',             label: 'Budget',                group: 'Remittance & Structure',  icon: TAB_ICONS.budget },
   { id: 'fee-reg-1',          label: 'Fee Reg_1',            group: 'Remittance & Structure',  icon: TAB_ICONS['fee-reg-1'] },
   { id: 'fee-structure',      label: 'Fee Structure',        group: 'Remittance & Structure',  icon: TAB_ICONS['fee-structure'] },
 ];
@@ -5106,6 +5111,443 @@ function exportFeeReg1Pdf(rows: Reg1Row[], academicYear: string, dateLabel: stri
   doc.save(`Fee_Register_1_${academicYear}.pdf`);
 }
 
+// ── Tab: Budget ────────────────────────────────────────────────────────────
+// Reads the same `calcDistribution()` output the Fee Distribution tab already computes,
+// summing each head's `toSMP` as an auto-suggested "Allotted" starting value. Does not
+// touch calcDistribution/FeeDistRow/RemittanceTable or the remittance tracker in any way —
+// the suggestion is a one-way read used only to pre-fill a separate, persisted budget doc.
+
+const STANDARD_BUDGET_HEADS: { key: BudgetHeadKey; label: string; matchFeeType: string }[] = [
+  { key: 'lab',    label: 'Lab Fee',         matchFeeType: 'LAB' },
+  { key: 'rr',     label: 'RR Fee',          matchFeeType: 'RR' },
+  { key: 'mag',    label: 'Magazine Fee',    matchFeeType: 'MAGAZINE' },
+  { key: 'idCard', label: 'ID Fee',          matchFeeType: 'ID CARD' },
+  { key: 'sports', label: 'Sports Fee',      matchFeeType: 'SPORTS' },
+  { key: 'ass',    label: 'Association Fee', matchFeeType: 'ASSOCIATION' },
+  { key: 'lib',    label: 'Library Fee',     matchFeeType: 'LIBRARY' },
+  { key: 'swf',    label: 'SWF',             matchFeeType: 'SWF' },
+  { key: 'twf',    label: 'TWF',             matchFeeType: 'TWF' },
+  { key: 'nss',    label: 'NSS Fee',         matchFeeType: 'NSS' },
+];
+
+function newExpenseId(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function BudgetTab({
+  students,
+  feeStructures,
+  feeRecords,
+  academicYear,
+}: {
+  students: Student[];
+  feeStructures: FeeStructure[];
+  feeRecords: FeeRecord[];
+  academicYear: string;
+}) {
+  const structMap = useMemo(() => {
+    const m = new Map<string, FeeStructure>();
+    for (const s of feeStructures) m.set(`${s.course}__${s.year}__${s.admType}__${s.admCat}`, s);
+    return m;
+  }, [feeStructures]);
+
+  const finePaidMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of feeRecords) m.set(r.studentId, (m.get(r.studentId) ?? 0) + r.smp.fine);
+    return m;
+  }, [feeRecords]);
+
+  const confirmedStudents = useMemo(() => students.filter(isConfirmedActive), [students]);
+  const aidedStudents   = useMemo(() => confirmedStudents.filter(s => (AIDED_COURSES as Course[]).includes(s.course)),   [confirmedStudents]);
+  const unaidedStudents = useMemo(() => confirmedStudents.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course)), [confirmedStudents]);
+
+  const aidedDist   = useMemo(() => calcDistribution(aidedStudents,   true,  structMap, finePaidMap), [aidedStudents,   structMap, finePaidMap]);
+  const unaidedDist = useMemo(() => calcDistribution(unaidedStudents, false, structMap, finePaidMap), [unaidedStudents, structMap, finePaidMap]);
+
+  const smpBreakupByHead = useMemo(() => {
+    const m = new Map<string, { aided: number; unaided: number }>();
+    for (const h of STANDARD_BUDGET_HEADS) {
+      const aided   = aidedDist.filter(r => r.feeType === h.matchFeeType).reduce((s, r) => s + r.toSMP, 0);
+      const unaided = unaidedDist.filter(r => r.feeType === h.matchFeeType).reduce((s, r) => s + r.toSMP, 0);
+      m.set(h.key, { aided, unaided });
+    }
+    return m;
+  }, [aidedDist, unaidedDist]);
+
+  const smpAllottedByHead = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [key, { aided, unaided }] of smpBreakupByHead) m.set(key, aided + unaided);
+    return m;
+  }, [smpBreakupByHead]);
+
+  const [heads, setHeads]     = useState<BudgetHeadEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [dirty, setDirty]     = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [newHeadLabel, setNewHeadLabel] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const budget = await getSMPBudget(academicYear as AcademicYear);
+      if (cancelled) return;
+      if (budget && budget.heads.length > 0) {
+        // Backfill any standard SMP-shared heads (e.g. newly tracked RR/Magazine/ID Fee)
+        // that aren't in a previously-saved budget yet, while preserving saved data untouched.
+        const existingByKey = new Map(budget.heads.filter(h => h.head !== 'other').map(h => [h.head, h]));
+        const customHeads = budget.heads.filter(h => h.head === 'other');
+        let backfilled = false;
+        const merged = STANDARD_BUDGET_HEADS.map(std => {
+          const existing = existingByKey.get(std.key);
+          if (existing) return existing;
+          backfilled = true;
+          return { head: std.key, label: std.label, allotted: smpAllottedByHead.get(std.key) ?? 0, expenses: [] };
+        });
+        setHeads([...merged, ...customHeads]);
+        setSavedAt(budget.updatedAt);
+        setDirty(backfilled);
+      } else {
+        setHeads(STANDARD_BUDGET_HEADS.map(h => ({
+          head: h.key,
+          label: h.label,
+          allotted: smpAllottedByHead.get(h.key) ?? 0,
+          expenses: [],
+        })));
+        setSavedAt(null);
+        setDirty(false);
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [academicYear]);
+
+  function updateAllotted(idx: number, val: string) {
+    setHeads(prev => prev.map((h, i) => i === idx ? { ...h, allotted: parseFloat(val) || 0 } : h));
+    setDirty(true);
+  }
+
+  function refreshSuggestion(idx: number) {
+    setHeads(prev => prev.map((h, i) => {
+      if (i !== idx) return h;
+      const suggestion = smpAllottedByHead.get(h.head);
+      return suggestion === undefined ? h : { ...h, allotted: suggestion };
+    }));
+    setDirty(true);
+  }
+
+  function addExpense(idx: number) {
+    setHeads(prev => prev.map((h, i) => i === idx
+      ? { ...h, expenses: [...h.expenses, { id: newExpenseId(), description: '', amount: 0, date: new Date().toISOString().split('T')[0] }] }
+      : h));
+    setDirty(true);
+  }
+
+  function updateExpense(idx: number, expId: string, field: keyof BudgetExpenseItem, val: string) {
+    setHeads(prev => prev.map((h, i) => {
+      if (i !== idx) return h;
+      return {
+        ...h,
+        expenses: h.expenses.map(e => e.id === expId
+          ? { ...e, [field]: field === 'amount' ? (parseFloat(val) || 0) : val }
+          : e),
+      };
+    }));
+    setDirty(true);
+  }
+
+  function removeExpense(idx: number, expId: string) {
+    setHeads(prev => prev.map((h, i) => i === idx ? { ...h, expenses: h.expenses.filter(e => e.id !== expId) } : h));
+    setDirty(true);
+  }
+
+  function addCustomHead() {
+    const label = newHeadLabel.trim();
+    if (!label) return;
+    setHeads(prev => [...prev, { head: 'other', label, allotted: 0, expenses: [] }]);
+    setNewHeadLabel('');
+    setDirty(true);
+  }
+
+  function removeHead(idx: number) {
+    setHeads(prev => prev.filter((_, i) => i !== idx));
+    setDirty(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await saveSMPBudget(academicYear as AcademicYear, heads);
+      setSavedAt(new Date().toISOString());
+      setDirty(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const grandAllotted = heads.reduce((s, h) => s + h.allotted, 0);
+  const grandSpent     = heads.reduce((s, h) => s + h.expenses.reduce((a, e) => a + e.amount, 0), 0);
+  const grandBalance   = grandAllotted - grandSpent;
+  const grandAided     = heads.reduce((s, h) => s + (smpBreakupByHead.get(h.head)?.aided ?? 0), 0);
+  const grandUnaided   = heads.reduce((s, h) => s + (smpBreakupByHead.get(h.head)?.unaided ?? 0), 0);
+
+  const inp = 'w-full rounded border border-gray-300 px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]/50 focus:border-[#3B5B8A]';
+  const amtInp = inp + ' text-right tabular-nums';
+
+  if (loading) {
+    return <div className="px-3 py-10 text-center text-sm text-gray-400">Loading budget…</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap gap-8 text-sm">
+          <div><div className="text-gray-400 text-xs">Total Allotted</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandAllotted)}</div></div>
+          <div><div className="text-gray-400 text-xs">Total Spent</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandSpent)}</div></div>
+          <div><div className="text-gray-400 text-xs">Balance</div><div className={`font-bold text-lg tabular-nums ${grandBalance < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(grandBalance)}</div></div>
+        </div>
+        <div className="flex items-center gap-3">
+          {savedAt && !dirty && <span className="text-[11px] text-gray-400">Saved {new Date(savedAt).toLocaleString('en-IN')}</span>}
+          {dirty && <span className="text-[11px] text-amber-600">Unsaved changes</span>}
+          <ExportBar onPdf={() => exportBudgetPdf(heads, smpBreakupByHead, academicYear)} onExcel={() => exportBudgetExcel(heads, smpBreakupByHead, academicYear)} />
+          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Budget'}</Button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {heads.map((h, idx) => {
+          const spent   = h.expenses.reduce((a, e) => a + e.amount, 0);
+          const balance = h.allotted - spent;
+          const suggestion = smpAllottedByHead.get(h.head);
+          const breakup    = smpBreakupByHead.get(h.head);
+          return (
+            <div key={`${h.head}-${idx}`} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+              <div className={`${ACCENT} flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-white`}>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-semibold text-sm">{h.label}</span>
+                  {breakup && (
+                    <span className="text-[11px] text-white/75 whitespace-nowrap">
+                      (Aided: {fmt(breakup.aided)} &nbsp;·&nbsp; Unaided: {fmt(breakup.unaided)})
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <label className="flex items-center gap-1.5">
+                    Allotted (₹)
+                    <input type="number" className={amtInp + ' w-32 text-gray-900 text-base font-bold py-1.5'} value={h.allotted || ''} onChange={e => updateAllotted(idx, e.target.value)} />
+                  </label>
+                  {suggestion !== undefined && (
+                    <button type="button" title={`Refresh suggestion (₹${fmt(suggestion)})`} onClick={() => refreshSuggestion(idx)} className="rounded-full bg-white/15 px-2 py-1 hover:bg-white/25 transition-colors">↻</button>
+                  )}
+                  {h.head === 'other' && (
+                    <button type="button" onClick={() => removeHead(idx)} className="rounded-full bg-white/15 px-2 py-1 hover:bg-white/25 transition-colors">Remove</button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-auto">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-gray-50 text-gray-500">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-semibold">Description</th>
+                      <th className="px-2 py-1.5 text-left font-semibold w-32">Date</th>
+                      <th className="px-2 py-1.5 text-right font-semibold w-28">Amount (₹)</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Remarks</th>
+                      <th className="px-2 py-1.5 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h.expenses.map(e => (
+                      <tr key={e.id} className="border-t border-gray-100">
+                        <td className="px-2 py-1"><input className={inp} value={e.description} onChange={ev => updateExpense(idx, e.id, 'description', ev.target.value)} placeholder="Expense description" /></td>
+                        <td className="px-2 py-1"><input type="date" className={inp} value={e.date} onChange={ev => updateExpense(idx, e.id, 'date', ev.target.value)} /></td>
+                        <td className="px-2 py-1"><input type="number" className={amtInp + ' font-semibold text-gray-900'} value={e.amount || ''} onChange={ev => updateExpense(idx, e.id, 'amount', ev.target.value)} /></td>
+                        <td className="px-2 py-1"><input className={inp} value={e.remarks ?? ''} onChange={ev => updateExpense(idx, e.id, 'remarks', ev.target.value)} placeholder="Optional" /></td>
+                        <td className="px-2 py-1 text-center">
+                          <button type="button" onClick={() => removeExpense(idx, e.id)} className="text-red-500 hover:text-red-700">✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {h.expenses.length === 0 && (
+                      <tr><td colSpan={5} className="px-2 py-3 text-center text-gray-400">No expenses recorded yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-3 py-2">
+                <button type="button" onClick={() => addExpense(idx)} className="text-xs font-medium text-[#3B5B8A] hover:underline">+ Add Expense</button>
+                <div className="flex gap-5 text-xs items-baseline">
+                  <span className="text-gray-500">Spent: <span className="font-bold text-sm text-gray-800 tabular-nums">{fmt(spent)}</span></span>
+                  <span className="text-gray-500">Balance: <span className={`font-bold text-sm tabular-nums ${balance < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(balance)}</span></span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2">
+        <input className={inp + ' max-w-xs'} placeholder="Custom head name (e.g. Cultural Fee)" value={newHeadLabel} onChange={e => setNewHeadLabel(e.target.value)} />
+        <button type="button" onClick={addCustomHead} className="text-xs font-medium text-[#3B5B8A] hover:underline whitespace-nowrap">+ Add Custom Head</button>
+      </div>
+
+      {/* ── Detailed summary table ── */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <div className={`${ACCENT} px-3 py-2 text-white font-semibold text-sm`}>Budget Summary</div>
+        <table className="w-full text-[12px]">
+          <thead className="bg-gray-50 text-gray-500">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold">Fee Head</th>
+              <th className="px-3 py-2 text-right font-semibold">Aided (₹)</th>
+              <th className="px-3 py-2 text-right font-semibold">Unaided (₹)</th>
+              <th className="px-3 py-2 text-right font-semibold">Allotted (₹)</th>
+              <th className="px-3 py-2 text-right font-semibold">Spent (₹)</th>
+              <th className="px-3 py-2 text-right font-semibold">Balance (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {heads.map((h, i) => {
+              const spent   = h.expenses.reduce((a, e) => a + e.amount, 0);
+              const balance = h.allotted - spent;
+              const breakup = smpBreakupByHead.get(h.head);
+              return (
+                <tr key={`${h.head}-${i}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-3 py-1.5 font-medium">{h.label}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{breakup ? fmt(breakup.aided) : '—'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{breakup ? fmt(breakup.unaided) : '—'}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{fmt(h.allotted)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(spent)}</td>
+                  <td className={`px-3 py-1.5 text-right font-semibold tabular-nums ${balance < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(balance)}</td>
+                </tr>
+              );
+            })}
+            {heads.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-400">No budget heads yet.</td></tr>
+            )}
+          </tbody>
+          {heads.length > 0 && (
+            <tfoot className={TFOOT}>
+              <tr>
+                <td className="px-3 py-2">GRAND TOTAL</td>
+                <td className="px-3 py-2 text-right">{fmt(grandAided)}</td>
+                <td className="px-3 py-2 text-right">{fmt(grandUnaided)}</td>
+                <td className="px-3 py-2 text-right">{fmt(grandAllotted)}</td>
+                <td className="px-3 py-2 text-right">{fmt(grandSpent)}</td>
+                <td className="px-3 py-2 text-right">{fmt(grandBalance)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Budget: Excel export ──────────────────────────────────────────────────
+
+function exportBudgetExcel(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): void {
+  const wb = XLSX.utils.book_new();
+
+  const summaryRows: (string | number)[][] = [['Fee Head', 'Aided', 'Unaided', 'Allotted', 'Spent', 'Balance']];
+  let gAided = 0, gUnaided = 0, gAllotted = 0, gSpent = 0;
+  for (const h of heads) {
+    const spent = h.expenses.reduce((a, e) => a + e.amount, 0);
+    const b = breakupByHead.get(h.head);
+    gAided += b?.aided ?? 0; gUnaided += b?.unaided ?? 0; gAllotted += h.allotted; gSpent += spent;
+    summaryRows.push([h.label, b?.aided ?? '', b?.unaided ?? '', h.allotted, spent, h.allotted - spent]);
+  }
+  summaryRows.push(['GRAND TOTAL', gAided, gUnaided, gAllotted, gSpent, gAllotted - gSpent]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Budget Summary');
+
+  const expenseRows: (string | number)[][] = [['Fee Head', 'Description', 'Date', 'Amount', 'Remarks']];
+  for (const h of heads) {
+    for (const e of h.expenses) {
+      expenseRows.push([h.label, e.description, e.date, e.amount, e.remarks ?? '']);
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expenseRows), 'Expense Details');
+
+  XLSX.writeFile(wb, `SMP_Budget_${academicYear}.xlsx`);
+}
+
+// ── Budget: PDF export ────────────────────────────────────────────────────
+
+function exportBudgetPdf(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): void {
+  const margin = 14;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const usableW = pageW - margin * 2;
+
+  const afterHeader = pdfHeader(doc, 'SMP Budget Report', `AY ${academicYear}`, pageW, margin);
+
+  const summaryHeaders = ['Fee Head', 'Aided (Rs)', 'Unaided (Rs)', 'Allotted (Rs)', 'Spent (Rs)', 'Balance (Rs)'];
+  const HEAD_IDX = 0;
+
+  let gAided = 0, gUnaided = 0, gAllotted = 0, gSpent = 0;
+  const summaryBody: (string | number)[][] = heads.map(h => {
+    const spent = h.expenses.reduce((a, e) => a + e.amount, 0);
+    const b = breakupByHead.get(h.head);
+    gAided += b?.aided ?? 0; gUnaided += b?.unaided ?? 0; gAllotted += h.allotted; gSpent += spent;
+    return [h.label, b ? numPdf(b.aided) : '—', b ? numPdf(b.unaided) : '—', numPdf(h.allotted), numPdf(spent), numPdf(h.allotted - spent)];
+  });
+  const summaryFoot: (string | number)[] = ['GRAND TOTAL', numPdf(gAided), numPdf(gUnaided), numPdf(gAllotted), numPdf(gSpent), numPdf(gAllotted - gSpent)];
+
+  const summaryWidths = computeAutoWidths(9, summaryHeaders, [...summaryBody, summaryFoot], HEAD_IDX, usableW, 55);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...PDF_NEAR_BLACK);
+  doc.text('Budget Summary', margin, afterHeader);
+
+  autoTable(doc, {
+    startY: afterHeader + 3, margin: { left: margin, right: margin },
+    head: [summaryHeaders],
+    body: [...summaryBody, summaryFoot],
+    headStyles: { fillColor: PDF_HEAD, textColor: PDF_WHITE, fontStyle: 'bold', fontSize: 9, cellPadding: 3, lineWidth: 0 },
+    bodyStyles: { fontSize: 9, cellPadding: 3, fillColor: PDF_WHITE, textColor: PDF_NEAR_BLACK, lineColor: PDF_GRID, lineWidth: 0.18 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: Object.fromEntries(summaryWidths.map((w, i) => [i, { cellWidth: w, halign: i === HEAD_IDX ? 'left' : 'right' }])),
+    didParseCell(data) {
+      if (data.section === 'body' && data.row.index === summaryBody.length) {
+        data.cell.styles.fillColor = PDF_HEAD;
+        data.cell.styles.textColor = PDF_WHITE;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  const expenseHeaders = ['Fee Head', 'Description', 'Date', 'Amount (Rs)', 'Remarks'];
+  const EXP_DESC_IDX = 1;
+  const expenseBody: (string | number)[][] = [];
+  for (const h of heads) {
+    for (const e of h.expenses) {
+      expenseBody.push([h.label, e.description || '—', e.date, numPdf(e.amount), e.remarks || '—']);
+    }
+  }
+
+  if (expenseBody.length > 0) {
+    const afterSummary = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    const expenseWidths = computeAutoWidths(8, expenseHeaders, expenseBody, EXP_DESC_IDX, usableW, 55);
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...PDF_NEAR_BLACK);
+    doc.text('Expense Details', margin, afterSummary);
+
+    autoTable(doc, {
+      startY: afterSummary + 3, margin: { left: margin, right: margin },
+      head: [expenseHeaders],
+      body: expenseBody,
+      headStyles: { fillColor: PDF_HEAD, textColor: PDF_WHITE, fontStyle: 'bold', fontSize: 8, cellPadding: 2.5, lineWidth: 0 },
+      bodyStyles: { fontSize: 8, cellPadding: 2.5, fillColor: PDF_WHITE, textColor: PDF_NEAR_BLACK, lineColor: PDF_GRID, lineWidth: 0.18 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: Object.fromEntries(expenseWidths.map((w, i) => [i, { cellWidth: w, halign: i === 3 ? 'right' : 'left' }])),
+    });
+  }
+
+  pdfFooter(doc, `SMP Budget Report ${academicYear}`, margin);
+  doc.save(`SMP_Budget_${academicYear}.pdf`);
+}
+
 function FeeReg1Tab({
   feeRecords, allStudents, showAllYears, academicYear,
 }: {
@@ -6499,6 +6941,7 @@ export function FeeReportsPage() {
             {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={dateTabFilteredRecords}  academicYear={academicYear} fp={fp} showAllYears={showAllYears} />}
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
+            {activeTab === 'budget'            && <BudgetTab           students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
             {activeTab === 'fee-reg-1'         && <FeeReg1Tab          feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'blue-register'     && <BlueRegisterTab     feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'fee-structure'     && <FeeStructureView />}

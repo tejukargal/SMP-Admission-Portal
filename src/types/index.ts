@@ -177,6 +177,33 @@ export interface FeeStructure {
 
 export type FeeStructureFormData = Omit<FeeStructure, 'id' | 'createdAt' | 'updatedAt'>;
 
+/** SMP Budget — planned vs actual spend per SMP fee head, one document per academic year */
+export type BudgetHeadKey =
+  | 'lab' | 'sports' | 'ass' | 'lib' | 'swf' | 'twf' | 'nss'
+  | 'dvp' | 'adm' | 'rr' | 'mag' | 'idCard' | 'tuition' | 'fine' | 'other';
+
+export interface BudgetExpenseItem {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+  remarks?: string;
+}
+
+export interface BudgetHeadEntry {
+  head: BudgetHeadKey;
+  label: string;             // display label; free text when head === 'other'
+  allotted: number;          // editable; auto-suggested from Fee Distribution's toSMP total
+  expenses: BudgetExpenseItem[];
+}
+
+export interface SMPBudget {
+  id: string;                // academicYear
+  academicYear: AcademicYear;
+  heads: BudgetHeadEntry[];
+  updatedAt: string;
+}
+
 /** Fee record — amounts collected per student per academic year */
 export interface FeeRecord {
   id: string;               // composite: `${studentId}__${academicYear}`

@@ -226,6 +226,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── SMP Budget (planned vs actual spend per SMP fee head) ──────────────────
+    match /smpBudgets/{yearId} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin();
+    }
+
     // ── Denomination Abstracts (Bank Remittance cash-count verification) ───────
     match /denominationAbstracts/{docId} {
       allow read:  if isActiveUser();
