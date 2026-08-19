@@ -44,7 +44,7 @@ export function buildAnsLetterHTML(student: Student): string {
 <meta charset="UTF-8">
 <title>ANS Letter - ${studentName}</title>
 <style>
-  @page { size: A4; margin: 12mm 8mm; }
+  @page { size: A4; margin: 6mm 8mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Times New Roman', Times, serif;
@@ -61,38 +61,44 @@ export function buildAnsLetterHTML(student: Student): string {
   }
   .mono {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 10pt;
+    font-size: 8pt;
   }
 
-  /* ── Outer letter box ── */
+  /* ── Half-page wrapper: caps the letter box + tear-off slip together to
+       the top half of an A4 page (≈148.5mm) so the bottom half stays blank
+       for a second letter to be printed on the same sheet later. ── */
+  .half-page {
+    max-height: 142mm;
+    overflow: hidden;
+  }
   .letter-box {
     border: 1.5pt solid #000;
-    padding: 12pt 18pt 50pt;
+    padding: 8pt 14pt 10pt;
   }
 
   /* ── Header ── */
   .header {
     text-align: center;
     border-bottom: 1pt solid #000;
-    padding-bottom: 8pt;
-    margin-bottom: 8pt;
+    padding-bottom: 5pt;
+    margin-bottom: 5pt;
   }
   .college-name {
-    font-size: 18pt;
+    font-size: 13pt;
     font-weight: bold;
     letter-spacing: 0.5pt;
   }
   .college-tagline {
-    font-size: 8.5pt;
-    margin: 3pt 0 2pt;
+    font-size: 7pt;
+    margin: 2pt 0 1pt;
   }
   .college-address {
-    font-size: 10pt;
+    font-size: 8pt;
     font-weight: bold;
-    margin: 2pt 0;
+    margin: 1pt 0;
   }
   .college-phone {
-    font-size: 10pt;
+    font-size: 8pt;
     font-weight: bold;
   }
 
@@ -101,11 +107,11 @@ export function buildAnsLetterHTML(student: Student): string {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin: 7pt 0 12pt;
-    font-size: 10pt;
+    margin: 4pt 0 6pt;
+    font-size: 8pt;
   }
   .letter-title {
-    font-size: 12pt;
+    font-size: 10pt;
     font-weight: bold;
     text-decoration: underline;
   }
@@ -114,30 +120,30 @@ export function buildAnsLetterHTML(student: Student): string {
   .details-row {
     display: flex;
     gap: 10pt;
-    margin-bottom: 18pt;
+    margin-bottom: 8pt;
   }
   .to-block {
     flex: 1.1;
-    line-height: 1.7;
+    line-height: 1.5;
   }
-  .to-block .label { margin-bottom: 2pt; }
+  .to-block .label { margin-bottom: 1pt; }
   .to-block .father { font-weight: bold; }
-  .to-block .addr   { white-space: pre-wrap; margin-top: 2pt; }
+  .to-block .addr   { white-space: pre-wrap; margin-top: 1pt; }
 
   .student-block {
     flex: 1;
-    line-height: 1.75;
+    line-height: 1.55;
   }
 
   /* ── Kannada body ── */
   .body-para {
-    font-size: 12pt;
-    line-height: 1.9;
+    font-size: 10.5pt;
+    line-height: 1.5;
     text-align: justify;
-    margin-bottom: 8pt;
+    margin-bottom: 6pt;
   }
   .body-para2 {
-    font-size: 12pt;
+    font-size: 10.5pt;
     margin-bottom: 0;
   }
 
@@ -145,27 +151,30 @@ export function buildAnsLetterHTML(student: Student): string {
   .sigs {
     display: flex;
     justify-content: space-between;
-    margin-top: 50pt;
-    font-size: 11pt;
+    margin-top: 34pt;
+    font-size: 10pt;
   }
 
-  /* ── Tear-off section ── */
+  /* ── Tear-off section: enlarged and bolder so it reads clearly as a
+       stand-alone mailing slip once cut/folded off the letter. ── */
   .tearoff {
     border: 1.5pt solid #000;
     margin-top: 14pt;
-    padding: 12pt 18pt;
+    padding: 14pt 18pt;
   }
   .tearoff-row {
     display: flex;
     gap: 18pt;
     align-items: flex-start;
+    font-size: 13pt;
+    font-weight: bold;
   }
   .tearoff-to {
     white-space: nowrap;
     padding-top: 2pt;
   }
   .tearoff-name { font-weight: bold; }
-  .tearoff-addr { white-space: pre-wrap; margin-top: 3pt; }
+  .tearoff-addr { white-space: pre-wrap; margin-top: 4pt; line-height: 1.45; }
 
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -173,6 +182,8 @@ export function buildAnsLetterHTML(student: Student): string {
 </style>
 </head>
 <body>
+
+  <div class="half-page">
 
   <!-- ── Main letter box ── -->
   <div class="letter-box">
@@ -237,6 +248,8 @@ export function buildAnsLetterHTML(student: Student): string {
         <div class="tearoff-addr">${address}</div>
       </div>
     </div>
+  </div>
+
   </div>
 
 </body>
