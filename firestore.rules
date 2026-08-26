@@ -199,6 +199,16 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ── App Config (Play Store release version info) ──────────────────────
+    // Read by the student mobile app (subscribeToAppConfig) to show the
+    // update pill/notification; written by admins via Settings → App Version
+    // (or the checkPlayStoreRelease Cloud Function via the Admin SDK, which
+    // bypasses rules entirely).
+    match /appConfig/{docId} {
+      allow read: if isActiveUser() || isStudentClaim();
+      allow write: if isAdmin();
+    }
+
     // ── App Config (CCC counter, etc.) ────────────────────────────────────
     // Active users need read+write so certificate number transactions work.
     match /config/{docId} {

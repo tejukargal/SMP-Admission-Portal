@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -36,6 +36,8 @@ Object.defineProperty(exports, "notifyOnNoticeUpdated", { enumerable: true, get:
 Object.defineProperty(exports, "notifyOnNewCircular", { enumerable: true, get: function () { return pushNotifications_1.notifyOnNewCircular; } });
 Object.defineProperty(exports, "notifyOnCircularUpdated", { enumerable: true, get: function () { return pushNotifications_1.notifyOnCircularUpdated; } });
 Object.defineProperty(exports, "notifyOnStudentNotification", { enumerable: true, get: function () { return pushNotifications_1.notifyOnStudentNotification; } });
+var playStoreVersionCheck_1 = require("./playStoreVersionCheck");
+Object.defineProperty(exports, "checkPlayStoreRelease", { enumerable: true, get: function () { return playStoreVersionCheck_1.checkPlayStoreRelease; } });
 // ── Sync Firestore role/active onto the Auth custom claim `admin` ──────────
 // Storage Security Rules can't read Firestore documents, so admin-only Storage
 // writes (e.g. remittance challan uploads) are gated on this claim instead.
