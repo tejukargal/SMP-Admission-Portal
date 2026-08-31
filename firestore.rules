@@ -266,6 +266,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── AI Summary Cooldown (generateStudentAISummary throttling) ─────────
+    // Written only by the generateStudentAISummary Cloud Function via the Admin
+    // SDK, which bypasses rules entirely — this rule blocks any direct client access.
+    match /aiSummaryCooldown/{regNumber} {
+      allow read, write: if false;
+    }
+
     // ── Student Portal Login Activity ("active users") ─────────────────────
     // Docs are created only by the studentLogin Cloud Function via the Admin SDK
     // (bypasses rules). The signed-in student may flip their own online/offline
