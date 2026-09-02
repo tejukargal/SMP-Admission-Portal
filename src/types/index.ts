@@ -204,6 +204,28 @@ export interface SMPBudget {
   updatedAt: string;
 }
 
+/** Working Professional (evening college) fee distribution — manually entered admission
+ *  counts per course/year/category, since WP students aren't tracked as distinct Student
+ *  records (they are entered like Lateral admissions). One document per academic year. */
+export interface WPCourseYearCounts {
+  reg: number;
+  lat: number;
+  snq: number;
+}
+
+export type WPStudentCounts = Record<Course, {
+  yr1: WPCourseYearCounts;
+  yr2: WPCourseYearCounts;
+  yr3: WPCourseYearCounts;
+}>;
+
+export interface WPFeeDistribution {
+  id: string;                // academicYear
+  academicYear: AcademicYear;
+  counts: WPStudentCounts;
+  updatedAt: string;
+}
+
 /** Fee record — amounts collected per student per academic year */
 export interface FeeRecord {
   id: string;               // composite: `${studentId}__${academicYear}`

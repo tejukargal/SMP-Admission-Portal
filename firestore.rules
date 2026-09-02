@@ -242,6 +242,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── WP (Working Professional / Evening College) Fee Distribution ──────────
+    // Manually entered admission counts per academic year, separate from smpBudgets.
+    match /wpFeeDistribution/{yearId} {
+      allow read:  if isActiveUser();
+      allow write: if isAdmin();
+    }
+
     // ── Denomination Abstracts (Bank Remittance cash-count verification) ───────
     match /denominationAbstracts/{docId} {
       allow read:  if isActiveUser();
@@ -266,10 +273,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ── AI Summary Cooldown (generateStudentAISummary throttling) ─────────
+    // ── AI Summary cache (generateStudentAISummary, one entry per student per day) ──
     // Written only by the generateStudentAISummary Cloud Function via the Admin
     // SDK, which bypasses rules entirely — this rule blocks any direct client access.
-    match /aiSummaryCooldown/{regNumber} {
+    match /aiSummaryCache/{regNumber} {
+      allow read, write: if false;
+    }
+
+    // ── Daily Motivation cache (generateDailyMotivation) ────────────────────
+    // Written only by the generateDailyMotivation Cloud Function via the Admin
+    // SDK, which bypasses rules entirely — this rule blocks any direct client access.
+    match /dailyMotivation/{regNumber} {
       allow read, write: if false;
     }
 

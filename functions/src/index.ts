@@ -705,10 +705,12 @@ export const generateAdmissionSummary = onCall(
 // this file). Deliberately excludes sensitive PII (Aadhaar, APAAR ID, DOB,
 // parent names) from what's sent to Claude — only what's needed for a useful
 // summary is included.
-
-// Minimum time between two AI-summary generations for the same student — protects the
-// Anthropic API budget from Refresh spam (see the cooldown check in generateStudentAISummary).
-const AI_SUMMARY_COOLDOWN_MS = 2 * 60 * 1000;
+//
+// Cached in Firestore per student per calendar day (Asia/Kolkata) — same
+// day-window cache pattern as generateDailyMotivation below — so the screen
+// has no manual refresh and repeated opens within the same day never re-hit
+// Claude or re-read the student's circulars/fees/certificates; only the
+// first call of the day for a given student costs anything.
 
 interface StudentDoc {
   id?: string;
@@ -914,15 +916,14 @@ export const generateStudentAISummary = onCall(
       throw new HttpsError('failed-precondition', 'No registration number on this account yet.');
     }
 
-    // Cost guardrail: cap how often one student can trigger a paid Claude call (e.g. via
-    // Refresh), independent of the client's own on-device cache — checked before any
-    // Firestore reads or the Claude call itself, so a spammed request is cheap to reject.
-    const cooldownRef = db.collection('aiSummaryCooldown').doc(regNumber);
-    const cooldownSnap = await cooldownRef.get();
-    const lastGeneratedAt = (cooldownSnap.data() as { lastGeneratedAt?: number } | undefined)?.lastGeneratedAt;
-    if (lastGeneratedAt && Date.now() - lastGeneratedAt < AI_SUMMARY_COOLDOWN_MS) {
-      const waitSec = Math.ceil((AI_SUMMARY_COOLDOWN_MS - (Date.now() - lastGeneratedAt)) / 1000);
-      throw new HttpsError('resource-exhausted', `Please wait ${waitSec}s before generating another summary.`);
+    // Day-window cache: if today's summary was already generated for this student, return
+    // it directly — no Firestore reads of their circulars/fees/certificates, no Claude call.
+    const today = todayIST();
+    const cacheRef = db.collection('aiSummaryCache').doc(regNumber);
+    const cacheSnap = await cacheRef.get();
+    const cached = cacheSnap.data() as { date?: string; points?: string[]; generatedAt?: string } | undefined;
+    if (cached?.date === today && Array.isArray(cached.points) && cached.points.length > 0) {
+      return { points: cached.points, generatedAt: cached.generatedAt ?? new Date().toISOString() };
     }
 
     const configSnap = await db.doc('adminConfig/aiSettings').get();
@@ -1034,8 +1035,218 @@ export const generateStudentAISummary = onCall(
 
     try {
       const points = await callClaudeForStudent(anthropicApiKey.trim(), dataBlock);
-      await cooldownRef.set({ lastGeneratedAt: Date.now() });
-      return { points, generatedAt: new Date().toISOString() };
+      const generatedAt = new Date().toISOString();
+      await cacheRef.set({ date: today, points, generatedAt });
+      return { points, generatedAt };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI generation failed: ${msg}`);
+    }
+  },
+);
+
+// ── Student daily motivation ────────────────────────────────────────────────
+// Generates one short, warm, mentor-voiced note + motivational quote per
+// student per calendar day (Asia/Kolkata), in both English and Kannada —
+// shown on the student portal app's "Daily Motivation" screen. Cached in
+// Firestore per student per day (collection `dailyMotivation`, doc id =
+// regNumber) so repeated calls within the same day — app reopen, a second
+// device, a client cache miss — never re-hit Claude; only the first call of
+// the day for a given student costs anything. No separate cooldown needed
+// (unlike generateStudentAISummary's manual-refresh cooldown) since this
+// screen has no refresh button and the day-keyed cache already caps cost to
+// once per student per day.
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Shifts the current instant by IST's fixed +5:30 offset, then reads calendar
+// fields off that shifted instant using UTC getters — a small,
+// dependency-free way to get "today" in Asia/Kolkata without a timezone
+// library (no DST in India, so a fixed offset is safe).
+function todayIST(): string {
+  return new Date(Date.now() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function todayLabelsIST(): { dayLabel: string; dateLabel: string } {
+  const shifted = new Date(Date.now() + IST_OFFSET_MS);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return {
+    dayLabel: days[shifted.getUTCDay()],
+    dateLabel: shifted.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }),
+  };
+}
+
+interface DailyMotivationDoc {
+  date?: string;
+  greeting?: string;
+  messageEn?: string;
+  messageKn?: string;
+  quoteEn?: string;
+  quoteKn?: string;
+  quoteAuthor?: string | null;
+}
+
+function callClaudeForMotivation(apiKey: string, firstName: string, dayLabel: string, dateLabel: string): Promise<DailyMotivationDoc> {
+  return new Promise((resolve, reject) => {
+    const SYSTEM = `You are a warm, wise mentor inside the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka — like a favorite teacher and a close friend rolled into one, with a philosopher's calm and warmth. You write a short daily motivational note for one student, addressing them by their first name.
+
+## WRITING STYLE
+- Warm, personal, sincere — never generic corporate positivity, never preachy, and phrased differently each time rather than a fixed template.
+- messageEn: 2-4 sentences in English, in a mentor/friend/philosopher voice. Grounded and thoughtful, genuinely encouraging, naturally acknowledging that today is a fresh day. Address the student by first name at least once, woven naturally into a sentence (not just in the greeting).
+- quoteEn: one short motivational quote in English — either a well-known quote with its real, accurate author, OR (roughly half the time) an original short aphorism written in your own philosopher voice, in which case quoteAuthor must be null. Vary which you pick and vary the theme (effort, patience, curiosity, resilience, self-belief, small daily progress, etc.) so it doesn't feel repetitive day to day.
+- messageKn and quoteKn: accurate, natural Kannada translations of messageEn and quoteEn — phrased the way a fluent Kannada speaker would naturally write it, not a stiff literal translation. Use proper Kannada script.
+- greeting: a short warm opening addressing the student by first name, e.g. "Dear Aditi," — vary the phrasing day to day rather than always using "Dear".
+
+## OUTPUT FORMAT — STRICT
+Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "quoteEn": string, "quoteKn": string, "quoteAuthor": string | null}. No markdown fences, no explanation, no trailing text.`;
+
+    const userMsg = `STUDENT FIRST NAME: ${firstName}\nTODAY: ${dayLabel}, ${dateLabel}`;
+
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      // Kannada script tokenizes far less efficiently than English (roughly 3-4x more
+      // tokens per word), and this response packs an English + Kannada message and quote
+      // into one JSON object — 700 wasn't enough and truncated mid-response, breaking the
+      // JSON parse. 1600 gives comfortable headroom for both languages plus JSON overhead.
+      max_tokens: 1600,
+      // Cached: this system prompt is identical for every student/day, so caching it (1h
+      // TTL) cuts most of its cost on every call after the first within that window — same
+      // pattern callClaudeForStudent above uses.
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+      messages: [{ role: 'user', content: userMsg }],
+    });
+
+    const req = https.request(
+      {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              let apiMsg = `HTTP ${res.statusCode}`;
+              try {
+                const errBody = JSON.parse(raw) as { error?: { message?: string } };
+                if (errBody.error?.message) apiMsg += `: ${errBody.error.message}`;
+              } catch { /* raw may not be JSON */ }
+              reject(new Error(apiMsg));
+              return;
+            }
+
+            const parsed = JSON.parse(raw) as AnthropicResponse;
+            const rawText = parsed.content?.[0]?.text?.trim() ?? '';
+            const stripped = rawText
+              .replace(/^```(?:json)?\s*/i, '')
+              .replace(/\s*```\s*$/i, '')
+              .trim();
+
+            const match = stripped.match(/\{[\s\S]*\}/);
+            if (!match) {
+              reject(new Error(`No JSON object in response. Got: ${stripped.slice(0, 200)}`));
+              return;
+            }
+            const parsedBody = JSON.parse(match[0]) as {
+              greeting?: unknown; messageEn?: unknown; messageKn?: unknown; quoteEn?: unknown; quoteKn?: unknown; quoteAuthor?: unknown;
+            };
+            if (
+              typeof parsedBody.greeting !== 'string' ||
+              typeof parsedBody.messageEn !== 'string' ||
+              typeof parsedBody.messageKn !== 'string' ||
+              typeof parsedBody.quoteEn !== 'string' ||
+              typeof parsedBody.quoteKn !== 'string'
+            ) {
+              reject(new Error('Missing required fields in response'));
+              return;
+            }
+            resolve({
+              greeting: parsedBody.greeting,
+              messageEn: parsedBody.messageEn,
+              messageKn: parsedBody.messageKn,
+              quoteEn: parsedBody.quoteEn,
+              quoteKn: parsedBody.quoteKn,
+              quoteAuthor: typeof parsedBody.quoteAuthor === 'string' ? parsedBody.quoteAuthor : null,
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+export const generateDailyMotivation = onCall(
+  { region: 'asia-south1', timeoutSeconds: 60 },
+  async (request) => {
+    const claims = request.auth?.token as { student?: boolean; regNumber?: string; studentDocId?: string } | undefined;
+    if (!claims?.student) {
+      throw new HttpsError('unauthenticated', 'Student sign-in required.');
+    }
+
+    let regNumber = claims.regNumber;
+    if (!regNumber && claims.studentDocId) {
+      const doc = await db.collection('students').doc(claims.studentDocId).get();
+      regNumber = (doc.data() as StudentDoc | undefined)?.regNumber;
+    }
+    if (!regNumber) {
+      throw new HttpsError('failed-precondition', 'No registration number on this account yet.');
+    }
+
+    const today = todayIST();
+    const cacheRef = db.collection('dailyMotivation').doc(regNumber);
+    const cacheSnap = await cacheRef.get();
+    const cached = cacheSnap.data() as DailyMotivationDoc | undefined;
+    if (cached?.date === today && cached.greeting && cached.messageEn && cached.quoteEn) {
+      return {
+        date: today,
+        greeting: cached.greeting,
+        messageEn: cached.messageEn,
+        messageKn: cached.messageKn ?? '',
+        quoteEn: cached.quoteEn,
+        quoteKn: cached.quoteKn ?? '',
+        quoteAuthor: cached.quoteAuthor ?? undefined,
+      };
+    }
+
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'AI not configured. Add anthropicApiKey to adminConfig/aiSettings in Firestore.',
+      );
+    }
+    const { anthropicApiKey } = configSnap.data() as { anthropicApiKey: string };
+    if (!anthropicApiKey?.trim()) {
+      throw new HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    }
+
+    const studentsSnap = await db.collection('students').where('regNumber', '==', regNumber).get();
+    const studentDocs = studentsSnap.docs.map((d) => d.data() as StudentDoc);
+    const primary = studentDocs.find((s) => !!s.course) ?? studentDocs[0];
+    const fullName = primary?.studentNameSSLC?.trim();
+    const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
+
+    const { dayLabel, dateLabel } = todayLabelsIST();
+
+    try {
+      const result = await callClaudeForMotivation(anthropicApiKey.trim(), firstName, dayLabel, dateLabel);
+      const toStore: DailyMotivationDoc = { date: today, ...result };
+      await cacheRef.set(toStore);
+      return { ...toStore, quoteAuthor: toStore.quoteAuthor ?? undefined };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `AI generation failed: ${msg}`);
