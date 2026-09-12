@@ -37,5 +37,17 @@ service firebase.storage {
         && request.resource.contentType.matches('application/pdf|image/jpeg|image/png|text/csv');
       allow delete: if isAdmin();
     }
+
+    // ── AI-generated circular background images (PNG/JPEG, 3MB) ────────────
+    // Generated via the generateCircularBackground Cloud Function, then
+    // uploaded here by the admin client once accepted; the resulting download
+    // URL is stored on the Firestore circular doc as backgroundImageUrl.
+    match /circularBackgrounds/{circularId}/{fileName} {
+      allow read: if request.auth != null;
+      allow create, update: if isAdmin()
+        && request.resource.size < 3 * 1024 * 1024
+        && request.resource.contentType.matches('image/png|image/jpeg');
+      allow delete: if isAdmin();
+    }
   }
 }

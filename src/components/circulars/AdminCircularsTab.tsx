@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { User } from 'firebase/auth';
 import type { Circular, StoredAttachment } from '../../types';
 import {
   subscribeToCirculars, createCircular, updateCircular, deleteCircular,
   publishCircular, unpublishCircular, pinCircular, unpinCircular,
+  generateCircularBackground, setCircularBackground, type PendingBackground,
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
 import { stripHtml, formatCircularDate } from '../../utils/htmlContent';
@@ -31,6 +33,7 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pinningId, setPinningId] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; circular: Circular } | null>(null);
+  const [bgTarget, setBgTarget] = useState<Circular | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToCirculars((all) => {
@@ -40,16 +43,17 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
     return unsubscribe;
   }, []);
 
-  async function handleCreate(values: CircularFormValues, files: File[]) {
-    await createCircular({ ...values, createdBy: user.uid }, files);
+  async function handleCreate(values: CircularFormValues, files: File[], pendingBackground?: PendingBackground) {
+    await createCircular({ ...values, createdBy: user.uid }, files, pendingBackground);
   }
 
   async function handleUpdate(
     values: CircularFormValues, newFiles: File[],
     kept: StoredAttachment[], removedPaths: string[],
+    pendingBackground?: PendingBackground,
   ) {
     if (!editing) return;
-    await updateCircular(editing.id, values, kept, newFiles, removedPaths);
+    await updateCircular(editing.id, values, kept, newFiles, removedPaths, pendingBackground);
   }
 
   async function handleTogglePublish(c: Circular) {
@@ -136,6 +140,11 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
               disabled: togglingId === menu.circular.id,
               onClick: () => void handleTogglePublish(menu.circular),
             },
+            {
+              label: menu.circular.backgroundImageUrl ? 'Regenerate Background' : 'Generate Background',
+              variant: 'accent',
+              onClick: () => setBgTarget(menu.circular),
+            },
             { label: 'Delete', variant: 'danger', onClick: () => setConfirmDelete(menu.circular) },
           ]}
         />
@@ -143,7 +152,9 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
 
       {showForm && (
         <CircularForm
-          onSubmit={async (values, files) => { await handleCreate(values, files); }}
+          onSubmit={async (values, files, _kept, _removedPaths, pendingBackground) => {
+            await handleCreate(values, files, pendingBackground);
+          }}
           onClose={() => setShowForm(false)}
         />
       )}
@@ -157,6 +168,10 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
       )}
 
       {preview && <CircularModal circular={preview} onClose={() => setPreview(null)} />}
+
+      {bgTarget && (
+        <BackgroundGenerateModal circular={bgTarget} onClose={() => setBgTarget(null)} />
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -194,6 +209,12 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
       className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : 'bg-white'}`}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
     >
+      {c.backgroundImageUrl && (
+        <>
+          <img src={c.backgroundImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-white/80" />
+        </>
+      )}
       {c.archivedAt && <CardWatermark label="Unpublished" />}
       <button
         type="button"
@@ -241,5 +262,96 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
         {preview3 && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{preview3}</p>}
       </div>
     </div>
+  );
+}
+
+interface BackgroundGenerateModalProps {
+  circular: Circular;
+  onClose: () => void;
+}
+
+/** Generate/Regenerate Background action from the admin list's context menu —
+ *  generates immediately on open, previews the result, and only writes to
+ *  Storage/Firestore (via setCircularBackground) once the admin accepts it. */
+function BackgroundGenerateModal({ circular, onClose }: BackgroundGenerateModalProps) {
+  const [generating, setGenerating] = useState(true);
+  const [pending, setPending] = useState<PendingBackground | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    setError(null);
+    setGenerating(true);
+    try {
+      const result = await generateCircularBackground({
+        title: circular.title,
+        subject: circular.subject,
+        department: circular.department,
+        bodySnippet: stripHtml(circular.body).trim().slice(0, 400),
+      });
+      setPending(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not generate a background. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void generate(); }, []);
+
+  async function handleAccept() {
+    if (!pending) return;
+    setSaving(true);
+    try {
+      await setCircularBackground(circular.id, pending);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the background. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
+        <h3 className="text-sm font-bold text-gray-900">AI Background — {circular.title}</h3>
+
+        <div className="w-full aspect-video rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+          {generating ? (
+            <span className="text-xs text-gray-400">Generating…</span>
+          ) : pending ? (
+            <img
+              src={`data:${pending.mimeType};base64,${pending.base64}`}
+              alt="Generated background preview"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-xs text-gray-400">No preview yet.</span>
+          )}
+        </div>
+
+        {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button onClick={onClose} disabled={saving} className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+            Cancel
+          </button>
+          <button
+            onClick={() => void generate()}
+            disabled={generating || saving}
+            className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+          >
+            {generating ? 'Generating…' : 'Regenerate'}
+          </button>
+          <Button size="sm" loading={saving} disabled={!pending || generating} onClick={() => void handleAccept()}>
+            Use this Background
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

@@ -7,12 +7,77 @@ import {
   collection, doc, deleteDoc, deleteField, onSnapshot, orderBy, query, setDoc, updateDoc,
 } from 'firebase/firestore';
 import {
-  ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
+  ref as storageRef, uploadBytes, uploadString, getDownloadURL, deleteObject,
 } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, storage, app } from '../config/firebase';
 import type { Circular, StoredAttachment } from '../types';
 
 const COL = 'circulars';
+const functions = getFunctions(app, 'asia-south1');
+
+/** An AI-generated background image held in memory, not yet uploaded to Storage. */
+export interface PendingBackground {
+  base64: string;
+  mimeType: string;
+}
+
+export interface GenerateBackgroundInput {
+  title: string;
+  subject: string;
+  department: string;
+  bodySnippet: string;
+}
+
+/** Calls the generateCircularBackground Cloud Function — returns image bytes only, nothing is persisted yet. */
+export async function generateCircularBackground(input: GenerateBackgroundInput): Promise<PendingBackground> {
+  const fn = httpsCallable<GenerateBackgroundInput, { imageBase64: string; mimeType: string }>(
+    functions,
+    'generateCircularBackground',
+  );
+  const result = await fn(input);
+  return { base64: result.data.imageBase64, mimeType: result.data.mimeType };
+}
+
+/** Uploads an accepted AI-generated background and returns its download URL. */
+export async function uploadCircularBackground(circularId: string, background: PendingBackground): Promise<string> {
+  const ext = background.mimeType === 'image/jpeg' ? 'jpg' : 'png';
+  const path = `circularBackgrounds/${circularId}/background.${ext}`;
+  const sref = storageRef(storage, path);
+  await uploadString(sref, background.base64, 'base64', { contentType: background.mimeType });
+  return getDownloadURL(sref);
+}
+
+/** Generates-and-saves a background for an already-existing circular (the admin list's "Generate/Regenerate Background" action). */
+export async function setCircularBackground(id: string, background: PendingBackground): Promise<string> {
+  const url = await uploadCircularBackground(id, background);
+  await updateDoc(doc(db, COL, id), { backgroundImageUrl: url, updatedAt: new Date().toISOString() });
+  return url;
+}
+
+export type CircularAiProvider = 'claude' | 'gemini';
+export type CircularAiLanguage = 'english' | 'kannada' | 'both';
+
+export interface GenerateCircularDraftInput {
+  brief: string;
+  keyDates?: string;
+  provider: CircularAiProvider;
+  language: CircularAiLanguage;
+}
+
+export interface CircularDraft {
+  title: string;
+  subject: string;
+  department?: string;
+  bodyHtml: string;
+}
+
+/** Calls the generateCircularDraft Cloud Function — returns a draft only, nothing is saved until the admin reviews it in the form. */
+export async function generateCircularDraft(input: GenerateCircularDraftInput): Promise<CircularDraft> {
+  const fn = httpsCallable<GenerateCircularDraftInput, CircularDraft>(functions, 'generateCircularDraft');
+  const result = await fn(input);
+  return result.data;
+}
 
 // Shared with the attachment UI — keep in sync with storage.rules.
 export const ATTACHMENT_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'text/csv'];
@@ -45,15 +110,23 @@ export function subscribeToCirculars(onChange: (circulars: Circular[]) => void):
 }
 
 export async function createCircular(
-  data: Omit<Circular, 'id' | 'createdAt' | 'attachments'>,
+  data: Omit<Circular, 'id' | 'createdAt' | 'attachments' | 'backgroundImageUrl'>,
   files: File[],
-): Promise<void> {
+  pendingBackground?: PendingBackground,
+): Promise<string> {
   const ref = doc(collection(db, COL));
   const attachments: StoredAttachment[] = [];
   for (const file of files) {
     attachments.push(await uploadAttachment(`circulars/${ref.id}`, file));
   }
-  await setDoc(ref, { ...data, attachments, createdAt: new Date().toISOString() });
+  const backgroundImageUrl = pendingBackground ? await uploadCircularBackground(ref.id, pendingBackground) : undefined;
+  await setDoc(ref, {
+    ...data,
+    attachments,
+    createdAt: new Date().toISOString(),
+    ...(backgroundImageUrl ? { backgroundImageUrl } : {}),
+  });
+  return ref.id;
 }
 
 export async function updateCircular(
@@ -62,12 +135,19 @@ export async function updateCircular(
   keptAttachments: StoredAttachment[],
   newFiles: File[],
   removedPaths: string[],
+  pendingBackground?: PendingBackground,
 ): Promise<void> {
   const attachments = [...keptAttachments];
   for (const file of newFiles) {
     attachments.push(await uploadAttachment(`circulars/${id}`, file));
   }
-  await updateDoc(doc(db, COL, id), { ...data, attachments, updatedAt: new Date().toISOString() });
+  const backgroundImageUrl = pendingBackground ? await uploadCircularBackground(id, pendingBackground) : undefined;
+  await updateDoc(doc(db, COL, id), {
+    ...data,
+    attachments,
+    updatedAt: new Date().toISOString(),
+    ...(backgroundImageUrl ? { backgroundImageUrl } : {}),
+  });
   for (const path of removedPaths) await deleteAttachmentFile(path);
 }
 

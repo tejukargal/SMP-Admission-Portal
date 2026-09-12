@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateDailyMotivation = exports.generateStudentAISummary = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyMotivation = exports.generateStudentAISummary = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -1000,6 +1000,343 @@ exports.generateDailyMotivation = (0, https_1.onCall)({ region: 'asia-south1', t
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
+    }
+});
+// ── Circular AI drafting ("Compose with AI") ────────────────────────────────
+// Lets an admin turn a short brief into a drafted Title/Subject/Body (+ a
+// suggested Department) for a circular, using either Claude or Gemini
+// (admin's choice). Deliberately stateless, same as
+// generateCircularBackground — it only returns the draft; nothing is saved
+// until the admin reviews/edits it and clicks Save on the circular form.
+// Mirrors the client's utils/departments.ts DEPARTMENT_ORDER — kept as a
+// literal copy here since it only backs the prompt + a soft validation check
+// (an unrecognized suggestion just means Department is left for the admin to
+// pick, never a hard failure).
+const CIRCULAR_DEPARTMENTS = [
+    { code: 'All', name: 'All Departments' },
+    { code: 'CE', name: 'Civil Engineering' },
+    { code: 'ME', name: 'Mechanical Engineering' },
+    { code: 'CS', name: 'Computer Science' },
+    { code: 'EC', name: 'Electronics & Communication' },
+    { code: 'EE', name: 'Electrical & Electronics' },
+    { code: 'Office', name: 'Office' },
+    { code: 'Results', name: 'Results' },
+    { code: 'Fee Dues', name: 'Fee Dues' },
+    { code: 'Exams', name: 'Exams' },
+    { code: 'Scholarships', name: 'Scholarships' },
+    { code: 'Internship', name: 'Internship' },
+    { code: 'Annual Day', name: 'Annual Day' },
+    { code: 'Functions', name: 'Functions' },
+    { code: 'Admission Ticket', name: 'Admission Ticket' },
+    { code: 'Admissions', name: 'Admissions' },
+    { code: 'Red Cross', name: 'Red Cross' },
+    { code: 'NSS', name: 'NSS' },
+];
+// Explicit script name + a concrete anchor phrase, because some models (Claude
+// in particular, observed generating Hindi/Devanagari instead) will otherwise
+// conflate "Kannada" with a generic "Indian regional language" request.
+const KANNADA_ANCHOR = 'KANNADA (ಕನ್ನಡ) — the official language of Karnataka state, written ONLY in the Kannada script. ' +
+    'Do NOT use Hindi, Devanagari script, or any other Indian language under any circumstances. ' +
+    'For reference, a natural Kannada notice opening reads like "ಎಲ್ಲಾ ವಿದ್ಯಾರ್ಥಿಗಳಿಗೆ ಈ ಮೂಲಕ ತಿಳಿಸಲಾಗಿದೆ..." — match that script and register.';
+function circularLanguageInstruction(language) {
+    if (language === 'kannada') {
+        return `Write entirely in fluent, natural, grammatically correct ${KANNADA_ANCHOR} Compose it the way a native Kannada speaker drafting an official college notice would, with correct sentence structure and natural phrasing. Do NOT produce a literal or word-by-word translation from English. Numbers, dates, and proper nouns may stay in their normal form.`;
+    }
+    if (language === 'both') {
+        return `Produce the content in BOTH languages, clearly separated (never interleaved sentence-by-sentence): for "title" and "subject", a single line formatted as "<English> — <Kannada>"; for "bodyHtml", the complete English version first, followed by the complete Kannada version below it as its own block (e.g. a second <p> or list after the English one). The Kannada portion must be written in ${KANNADA_ANCHOR} It must be genuinely composed in fluent, natural Kannada by understanding the context — not a literal or word-by-word translation of the English text.`;
+    }
+    return 'Write entirely in formal, clear English.';
+}
+function buildCircularDraftSystemPrompt(language) {
+    const deptList = CIRCULAR_DEPARTMENTS.map((d) => `${d.code} (${d.name})`).join(', ');
+    return [
+        'You are an assistant that drafts short official circulars/notices for Sanjay Memorial Polytechnic, a college, to be posted on its student portal.',
+        'Produce ONLY a JSON object (no prose, no markdown fences) with this exact shape: { "title": string, "subject": string, "department": string, "bodyHtml": string }',
+        `"department" must be exactly one of these codes (pick the single best match, or "All" if it applies to everyone or none fit well): ${deptList}.`,
+        '"title" is a short headline (max ~12 words). "subject" is a one-line subject (max ~15 words), distinct from the title, summarizing the specific action or date.',
+        '"bodyHtml" must use ONLY these HTML tags: <p> <strong> <em> <u> <ul> <ol> <li> <br>. No other tags, no attributes, no inline styles, no links, no scripts, no images.',
+        'Keep it concise: 1-3 short paragraphs, and/or a short bullet or numbered list for multiple points — this is a notice, not a formal letter.',
+        'Tone: formal, direct, and clear, as if written by the college office to students.',
+        'Wrap the key date(s)/deadline(s) — and any other single most critical detail, like a fine amount — in <strong> tags so they stand out visually. Use this sparingly: only the 1-2 truly essential details per notice, not every sentence.',
+        circularLanguageInstruction(language),
+        'Never invent specific facts (dates, amounts, fees, order numbers) that are not present in the brief or the optional key-dates hint — if a specific detail is needed but not given, use a bracket placeholder like [DATE] instead of guessing.',
+        'Stay strictly on the topic given in the brief and key-dates hint — never add unrelated facts, filler, generic boilerplate, or off-topic content of any kind.',
+        'The final output must read as clean, neat, refined, and straight to the point — meaningful and genuinely appealing to read, not padded, robotic, or generic.',
+        'Output valid JSON only.',
+    ].join(' ');
+}
+function buildCircularDraftUserMessage(brief, keyDates) {
+    const lines = [`BRIEF: ${brief}`];
+    if (keyDates === null || keyDates === void 0 ? void 0 : keyDates.trim())
+        lines.push(`KEY DATES/DEADLINES: ${keyDates.trim()}`);
+    return lines.join('\n');
+}
+function extractJsonObject(text) {
+    const trimmed = text.trim();
+    const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/.exec(trimmed);
+    if (fenced)
+        return fenced[1];
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start)
+        return trimmed.slice(start, end + 1);
+    return trimmed;
+}
+function isCircularDraft(value) {
+    if (!value || typeof value !== 'object')
+        return false;
+    const v = value;
+    return (typeof v.title === 'string' && v.title.trim() !== '' &&
+        typeof v.subject === 'string' && v.subject.trim() !== '' &&
+        typeof v.bodyHtml === 'string' && v.bodyHtml.trim() !== '' &&
+        (v.department === undefined || typeof v.department === 'string'));
+}
+// Allowlist-strip anything outside the small tag set the prompt asks for, and
+// drop all attributes even on allowed tags. RichTextEditor seeds its
+// contentEditable innerHTML directly and unsanitized (sanitizeHtmlContent on
+// the client only runs at render time, not at editor-seed time), so AI output
+// must already be safe before it reaches the client.
+const ALLOWED_BODY_TAGS = new Set(['p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'br']);
+function sanitizeCircularBodyHtml(html) {
+    return html.replace(/<\/?([a-zA-Z0-9]+)[^>]*>/g, (match, tag) => {
+        const lower = tag.toLowerCase();
+        if (!ALLOWED_BODY_TAGS.has(lower))
+            return '';
+        return match.startsWith('</') ? `</${lower}>` : `<${lower}>`;
+    });
+}
+function callClaudeForCircular(apiKey, systemPrompt, userMessage, maxTokens) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+        });
+        const req = https.request({
+            hostname: 'api.anthropic.com',
+            path: '/v1/messages',
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(body),
+            },
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                var _a, _b, _c, _d, _e;
+                try {
+                    if (res.statusCode !== 200) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
+                                apiMsg += `: ${errBody.error.message}`;
+                        }
+                        catch ( /* raw may not be JSON */_f) { /* raw may not be JSON */ }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    const parsed = JSON.parse(raw);
+                    resolve((_e = (_d = (_c = (_b = parsed.content) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) === null || _d === void 0 ? void 0 : _d.trim()) !== null && _e !== void 0 ? _e : '');
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+function callGeminiTextForCircular(apiKey, model, systemPrompt, userMessage, maxTokens) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            contents: [{ parts: [{ text: userMessage }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { maxOutputTokens: maxTokens },
+        });
+        const req = https.request({
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                var _a, _b, _c, _d, _e, _f;
+                try {
+                    if (res.statusCode !== 200) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
+                                apiMsg += `: ${errBody.error.message}`;
+                        }
+                        catch ( /* raw may not be JSON */_g) { /* raw may not be JSON */ }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    const parsed = JSON.parse(raw);
+                    const text = (_f = (_e = (_d = (_c = (_b = parsed.candidates) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.content) === null || _d === void 0 ? void 0 : _d.parts) === null || _e === void 0 ? void 0 : _e.map((p) => { var _a; return (_a = p.text) !== null && _a !== void 0 ? _a : ''; }).join('')) !== null && _f !== void 0 ? _f : '';
+                    resolve(text.trim());
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+exports.generateCircularDraft = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
+    var _a, _b, _c;
+    if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+    const { brief, keyDates, provider, language } = ((_c = request.data) !== null && _c !== void 0 ? _c : {});
+    if (!(brief === null || brief === void 0 ? void 0 : brief.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'brief is required.');
+    }
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add anthropicApiKey/geminiApiKey to adminConfig/aiSettings in Firestore.');
+    }
+    const { anthropicApiKey, geminiApiKey, geminiTextModel } = configSnap.data();
+    const useGemini = provider === 'gemini';
+    if (useGemini && !(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+    if (!useGemini && !(anthropicApiKey === null || anthropicApiKey === void 0 ? void 0 : anthropicApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    }
+    const systemPrompt = buildCircularDraftSystemPrompt(language !== null && language !== void 0 ? language : 'english');
+    const userMessage = buildCircularDraftUserMessage(brief.trim(), keyDates);
+    // "both" roughly doubles output length (full English + full Kannada blocks).
+    const maxTokens = language === 'both' ? 2500 : 1500;
+    let rawText;
+    try {
+        rawText = useGemini
+            ? await callGeminiTextForCircular(geminiApiKey.trim(), (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.6-flash', systemPrompt, userMessage, maxTokens)
+            : await callClaudeForCircular(anthropicApiKey.trim(), systemPrompt, userMessage, maxTokens);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new https_1.HttpsError('internal', `Draft generation failed: ${msg}`);
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(extractJsonObject(rawText));
+    }
+    catch (_d) {
+        throw new https_1.HttpsError('internal', 'The AI returned malformed JSON. Please retry.');
+    }
+    if (!isCircularDraft(parsed)) {
+        throw new https_1.HttpsError('internal', 'The AI response was missing required fields. Please retry.');
+    }
+    const draft = parsed;
+    const validDepartment = CIRCULAR_DEPARTMENTS.some((d) => d.code === draft.department)
+        ? draft.department
+        : undefined;
+    return {
+        title: draft.title.trim(),
+        subject: draft.subject.trim(),
+        department: validDepartment,
+        bodyHtml: sanitizeCircularBodyHtml(draft.bodyHtml.trim()),
+    };
+});
+function callGeminiImage(apiKey, model, prompt) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseModalities: ['IMAGE'],
+                imageConfig: { aspectRatio: '16:9' },
+            },
+        });
+        const req = https.request({
+            hostname: 'generativelanguage.googleapis.com',
+            path: `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(body),
+            },
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                var _a, _b, _c, _d, _e, _f, _g;
+                try {
+                    if (res.statusCode !== 200) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
+                                apiMsg += `: ${errBody.error.message}`;
+                        }
+                        catch ( /* raw may not be JSON */_h) { /* raw may not be JSON */ }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    const parsed = JSON.parse(raw);
+                    const inlineData = (_f = (_e = (_d = (_c = (_b = parsed.candidates) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.content) === null || _d === void 0 ? void 0 : _d.parts) === null || _e === void 0 ? void 0 : _e.find((p) => { var _a; return (_a = p.inlineData) === null || _a === void 0 ? void 0 : _a.data; })) === null || _f === void 0 ? void 0 : _f.inlineData;
+                    if (!(inlineData === null || inlineData === void 0 ? void 0 : inlineData.data)) {
+                        reject(new Error(`No image returned. Got: ${raw.slice(0, 200)}`));
+                        return;
+                    }
+                    resolve({ imageBase64: inlineData.data, mimeType: (_g = inlineData.mimeType) !== null && _g !== void 0 ? _g : 'image/png' });
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+function buildCircularImagePrompt(title, subject, department, bodySnippet) {
+    return [
+        'Flat vector illustration for a college notice-board banner card, wide 16:9 landscape composition.',
+        `Context: a "${department}" circular titled "${title}"${subject ? `, subject: "${subject}"` : ''}.`,
+        bodySnippet ? `Additional context: ${bodySnippet}` : '',
+        'Depict a friendly, relevant scene for this context — for example, a Scholarships circular should show students in school/college uniform with books or documents; an Exams circular should show an exam hall or desk with papers; a Fee Dues circular should show a receipt or an office counter; a Sports/Annual Day/Functions circular should show students on a playground or a celebratory stage.',
+        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and friendly college-brochure color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+    ].filter(Boolean).join(' ');
+}
+exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
+    var _a, _b, _c, _d;
+    if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+    const { title, subject, department, bodySnippet } = ((_c = request.data) !== null && _c !== void 0 ? _c : {});
+    if (!(title === null || title === void 0 ? void 0 : title.trim()) || !(department === null || department === void 0 ? void 0 : department.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'title and department are required.');
+    }
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
+    }
+    const { geminiApiKey, geminiImageModel } = configSnap.data();
+    if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+    const prompt = buildCircularImagePrompt(title.trim(), (_d = subject === null || subject === void 0 ? void 0 : subject.trim()) !== null && _d !== void 0 ? _d : '', department.trim(), (bodySnippet !== null && bodySnippet !== void 0 ? bodySnippet : '').trim().slice(0, 400));
+    try {
+        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image', prompt);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new https_1.HttpsError('internal', `Image generation failed: ${msg}`);
     }
 });
 //# sourceMappingURL=index.js.map

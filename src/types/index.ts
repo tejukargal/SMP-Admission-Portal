@@ -556,6 +556,7 @@ export interface Circular {
   updatedAt?: string;
   archivedAt?: string;   // unpublished — hidden from students, kept for admin
   pinned?: boolean;      // shown first in the student portal's Circulars tab, ahead of date sorting
+  backgroundImageUrl?: string; // AI-generated (Gemini) flat-vector illustration shown as the card's full-bleed background
 }
 
 /** Per-student seen-circular ids (unread badge) — one doc per student, keyed by regNumber. */
