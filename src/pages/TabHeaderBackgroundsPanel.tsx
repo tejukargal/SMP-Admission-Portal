@@ -110,7 +110,7 @@ export function TabHeaderBackgroundsPanel() {
           <div className="px-6 py-4 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Tab Header Backgrounds</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              AI-generated (Gemini) illustration shown behind the student portal's header for each tab.
+              AI-generated illustration shown behind the student portal's header for each tab.
               Generate a preview, then Save to publish it — students see the update the next time they open the app.
             </p>
           </div>

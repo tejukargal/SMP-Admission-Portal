@@ -626,11 +626,11 @@ function dayOfYearIST(dateStr) {
     const current = Date.UTC(y, m - 1, d);
     return Math.floor((current - start) / (24 * 60 * 60 * 1000));
 }
-function buildDailyQuoteImagePrompt(scene) {
+function buildDailyQuoteImagePrompt(scene, provider) {
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
         `Depict ${scene}.`,
-        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and inspiring color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+        imageStyleDirective(provider, 'warm and inspiring color palette'),
     ].join(' ');
 }
 /** Uploads a generated daily-quote background image via the Admin SDK (this
@@ -654,7 +654,7 @@ async function uploadDailyQuoteImage(date, imageBase64, mimeType) {
  *  student that day, not regenerated per student; a small chance of two
  *  near-simultaneous first-requests both generating once is accepted as
  *  harmless (last write wins), same as every other day-cache in this file. */
-async function getOrCreateDailyQuote(today, geminiApiKey, geminiImageModel) {
+async function getOrCreateDailyQuote(today, aiSettings) {
     const ref = db.collection('dailyQuote').doc(today);
     const snap = await ref.get();
     const cached = snap.data();
@@ -662,7 +662,7 @@ async function getOrCreateDailyQuote(today, geminiApiKey, geminiImageModel) {
         return cached;
     }
     const quote = indianQuotes_1.INDIAN_QUOTES[dayOfYearIST(today) % indianQuotes_1.INDIAN_QUOTES.length];
-    const image = await callGeminiImage(geminiApiKey, geminiImageModel, buildDailyQuoteImagePrompt(quote.scene));
+    const image = await generateAiImage(aiSettings, buildDailyQuoteImagePrompt(quote.scene, aiSettings.imageProvider));
     const backgroundImageUrl = await uploadDailyQuoteImage(today, image.imageBase64, image.mimeType);
     const toStore = {
         date: today,
@@ -714,17 +714,38 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
     }
     const configSnap = await db.doc('adminConfig/aiSettings').get();
     if (!configSnap.exists) {
-        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.');
     }
-    const { geminiApiKey, geminiTextModel, geminiImageModel } = configSnap.data();
+    const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data();
+    // geminiApiKey is required unconditionally — it's also used for the text
+    // briefing below regardless of which provider generates the image.
     if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
-    const textModel = (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.6-flash';
+    if (imageProvider === 'openai' && !(openaiApiKey === null || openaiApiKey === void 0 ? void 0 : openaiApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'OpenAI API key is empty.');
+    }
+    if (imageProvider === 'replicate' && !(replicateApiKey === null || replicateApiKey === void 0 ? void 0 : replicateApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Replicate API key is empty.');
+    }
+    if (imageProvider === 'budgetpixel' && !(budgetpixelApiKey === null || budgetpixelApiKey === void 0 ? void 0 : budgetpixelApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
+    }
+    const textModel = (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.5-flash-lite';
     const imageModel = (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image';
     const today = todayIST();
     const [quote, cachedBriefingSnap] = await Promise.all([
-        getOrCreateDailyQuote(today, geminiApiKey.trim(), imageModel),
+        getOrCreateDailyQuote(today, {
+            imageProvider,
+            geminiApiKey: geminiApiKey.trim(),
+            geminiImageModel: imageModel,
+            openaiApiKey: openaiApiKey === null || openaiApiKey === void 0 ? void 0 : openaiApiKey.trim(),
+            openaiImageModel: openaiImageModel === null || openaiImageModel === void 0 ? void 0 : openaiImageModel.trim(),
+            replicateApiKey: replicateApiKey === null || replicateApiKey === void 0 ? void 0 : replicateApiKey.trim(),
+            replicateImageModel: replicateImageModel === null || replicateImageModel === void 0 ? void 0 : replicateImageModel.trim(),
+            budgetpixelApiKey: budgetpixelApiKey === null || budgetpixelApiKey === void 0 ? void 0 : budgetpixelApiKey.trim(),
+            budgetpixelImageModel: budgetpixelImageModel === null || budgetpixelImageModel === void 0 ? void 0 : budgetpixelImageModel.trim(),
+        }),
         db.collection('dailyBriefing').doc(regNumber).get(),
     ]);
     const cachedBriefing = cachedBriefingSnap.data();
@@ -1082,7 +1103,7 @@ exports.generateCircularDraft = (0, https_1.onCall)({ region: 'asia-south1', tim
     let rawText;
     try {
         rawText = useGemini
-            ? await callGeminiTextForCircular(geminiApiKey.trim(), (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.6-flash', systemPrompt, userMessage, maxTokens)
+            ? await callGeminiTextForCircular(geminiApiKey.trim(), (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.5-flash-lite', systemPrompt, userMessage, maxTokens)
             : await callClaudeForCircular(anthropicApiKey.trim(), systemPrompt, userMessage, maxTokens);
     }
     catch (err) {
@@ -1162,17 +1183,252 @@ function callGeminiImage(apiKey, model, prompt) {
         req.end();
     });
 }
-function buildCircularImagePrompt(title, subject, department, bodySnippet) {
+/** OpenAI's gpt-image-1 family always returns base64 PNG data (no url/response_format
+ *  option like the older dall-e models), so mimeType is always 'image/png' here. */
+function callOpenAiImage(apiKey, model, prompt) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            model,
+            prompt,
+            size: '1536x1024',
+            quality: 'high',
+            n: 1,
+        });
+        const req = https.request({
+            hostname: 'api.openai.com',
+            path: '/v1/images/generations',
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(body),
+                authorization: `Bearer ${apiKey}`,
+            },
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                var _a, _b, _c;
+                try {
+                    if (res.statusCode !== 200) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
+                                apiMsg += `: ${errBody.error.message}`;
+                        }
+                        catch ( /* raw may not be JSON */_d) { /* raw may not be JSON */ }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    const parsed = JSON.parse(raw);
+                    const b64 = (_c = (_b = parsed.data) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.b64_json;
+                    if (!b64) {
+                        reject(new Error(`No image returned. Got: ${raw.slice(0, 200)}`));
+                        return;
+                    }
+                    resolve({ imageBase64: b64, mimeType: 'image/png' });
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+function downloadAsBase64(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            if (res.statusCode !== 200) {
+                reject(new Error(`Failed to download generated image: HTTP ${res.statusCode}`));
+                return;
+            }
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+        }).on('error', reject);
+    });
+}
+function replicateRequest(method, url, apiKey, body) {
+    return new Promise((resolve, reject) => {
+        const payload = body !== undefined ? JSON.stringify(body) : undefined;
+        const parsed = new URL(url);
+        const req = https.request({
+            hostname: parsed.hostname,
+            path: `${parsed.pathname}${parsed.search}`,
+            method,
+            headers: Object.assign(Object.assign({ authorization: `Bearer ${apiKey}` }, (method === 'POST' ? { 'content-type': 'application/json', prefer: 'wait=60' } : {})), (payload ? { 'content-length': Buffer.byteLength(payload) } : {})),
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                try {
+                    if (res.statusCode !== 200 && res.statusCode !== 201) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            if (errBody.detail)
+                                apiMsg += `: ${errBody.detail}`;
+                            else if (raw)
+                                apiMsg += `: ${raw.slice(0, 300)}`;
+                        }
+                        catch (_a) {
+                            if (raw)
+                                apiMsg += `: ${raw.slice(0, 300)}`;
+                        }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    resolve(JSON.parse(raw));
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        if (payload)
+            req.write(payload);
+        req.end();
+    });
+}
+/** Replicate's `Prefer: wait=60` header makes the create-prediction call block until
+ *  done (or 60s elapses), which comfortably covers flux-2-klein-4b's ~4-step, few-second
+ *  generation time — so a poll loop is only needed as a fallback for the rare case the
+ *  model is still 'starting'/'processing' when the initial response returns. Output is
+ *  a hosted image URL (string or array), downloaded and re-encoded to match the other
+ *  providers' { imageBase64, mimeType } shape. */
+async function callReplicateImage(apiKey, model, prompt) {
+    var _a;
+    let prediction = await replicateRequest('POST', `https://api.replicate.com/v1/models/${model}/predictions`, apiKey, { input: { prompt, aspect_ratio: '16:9', output_format: 'png' } });
+    const maxAttempts = 20;
+    const pollIntervalMs = 2000;
+    for (let attempt = 0; attempt < maxAttempts && prediction.status !== 'succeeded' && prediction.status !== 'failed' && prediction.status !== 'canceled'; attempt++) {
+        if (!((_a = prediction.urls) === null || _a === void 0 ? void 0 : _a.get))
+            break;
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        prediction = await replicateRequest('GET', prediction.urls.get, apiKey);
+    }
+    if (prediction.status !== 'succeeded') {
+        throw new Error(prediction.error || `Replicate prediction ended with status: ${prediction.status}`);
+    }
+    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    if (!outputUrl) {
+        throw new Error('Replicate reported success but returned no output URL.');
+    }
+    const bytes = await downloadAsBase64(outputUrl);
+    return { imageBase64: bytes.toString('base64'), mimeType: 'image/png' };
+}
+function budgetPixelRequest(method, path, apiKey, body) {
+    return new Promise((resolve, reject) => {
+        const payload = body !== undefined ? JSON.stringify(body) : undefined;
+        const req = https.request({
+            hostname: 'api.budgetpixel.com',
+            path,
+            method,
+            headers: Object.assign({ authorization: `Bearer ${apiKey}` }, (payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {})),
+        }, (res) => {
+            let raw = '';
+            res.on('data', (chunk) => { raw += chunk.toString(); });
+            res.on('end', () => {
+                try {
+                    if (res.statusCode !== 200 && res.statusCode !== 201) {
+                        let apiMsg = `HTTP ${res.statusCode}`;
+                        try {
+                            const errBody = JSON.parse(raw);
+                            const detailMsg = errBody.message || errBody.error;
+                            apiMsg += `: ${detailMsg || raw.slice(0, 300)}`;
+                        }
+                        catch (_a) {
+                            if (raw)
+                                apiMsg += `: ${raw.slice(0, 300)}`;
+                        }
+                        reject(new Error(apiMsg));
+                        return;
+                    }
+                    resolve(JSON.parse(raw));
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+        if (payload)
+            req.write(payload);
+        req.end();
+    });
+}
+/** BudgetPixel is a multi-model aggregator (Flux, Seedream, GPT-Image, etc. behind one
+ *  key) — image generation is an async job: POST creates it (path keyed by model slug),
+ *  GET polls it (path keyed by job id) until status is 'succeeded'/'failed'/'timeout'. */
+async function callBudgetPixelImage(apiKey, model, prompt) {
+    var _a, _b;
+    let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9', size: '1K' });
+    if (!job.id) {
+        throw new Error('BudgetPixel did not return a job id.');
+    }
+    const maxAttempts = 30;
+    const pollIntervalMs = 2000;
+    for (let attempt = 0; attempt < maxAttempts && job.status !== 'succeeded' && job.status !== 'failed' && job.status !== 'timeout'; attempt++) {
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        job = await budgetPixelRequest('GET', `/v1/images/${job.id}`, apiKey);
+    }
+    if (job.status !== 'succeeded') {
+        throw new Error(job.message || `BudgetPixel job ended with status: ${job.status}`);
+    }
+    const outputUrl = (_b = (_a = job.images) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.url;
+    if (!outputUrl) {
+        throw new Error('BudgetPixel reported success but returned no image URL.');
+    }
+    const bytes = await downloadAsBase64(outputUrl);
+    return { imageBase64: bytes.toString('base64'), mimeType: 'image/png' };
+}
+function generateAiImage(settings, prompt) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    if (settings.imageProvider === 'openai') {
+        return callOpenAiImage(((_a = settings.openaiApiKey) !== null && _a !== void 0 ? _a : '').trim(), ((_b = settings.openaiImageModel) === null || _b === void 0 ? void 0 : _b.trim()) || 'gpt-image-1-mini', prompt);
+    }
+    if (settings.imageProvider === 'replicate') {
+        return callReplicateImage(((_c = settings.replicateApiKey) !== null && _c !== void 0 ? _c : '').trim(), ((_d = settings.replicateImageModel) === null || _d === void 0 ? void 0 : _d.trim()) || 'black-forest-labs/flux-2-klein-4b', prompt);
+    }
+    if (settings.imageProvider === 'budgetpixel') {
+        return callBudgetPixelImage(((_e = settings.budgetpixelApiKey) !== null && _e !== void 0 ? _e : '').trim(), ((_f = settings.budgetpixelImageModel) === null || _f === void 0 ? void 0 : _f.trim()) || 'nano-banana-2', prompt);
+    }
+    return callGeminiImage(((_g = settings.geminiApiKey) !== null && _g !== void 0 ? _g : '').trim(), ((_h = settings.geminiImageModel) === null || _h === void 0 ? void 0 : _h.trim()) || 'gemini-3.1-flash-lite-image', prompt);
+}
+/** Gemini's Nano Banana models already follow "flat vector illustration" prompts
+ *  reliably, but GPT-Image models (gpt-image-1 family) tend to default toward busier,
+ *  more photoreal/painterly renders and are prone to adding unwanted text/labels (text
+ *  rendering is one of their strengths, so it needs to be explicitly, firmly refused)
+ *  unless the negative-space and flatness constraints are spelled out more forcefully.
+ *  Kept provider-aware here so switching providers doesn't require retuning prompts. */
+function imageStyleDirective(provider, palette) {
+    if (provider === 'openai') {
+        return [
+            'Style: 2D flat vector illustration, in the style of modern flat-design app/brochure graphics.',
+            'Solid flat colors with soft cel-shading only — no gradients, no realistic lighting, no shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.',
+            `Color palette: ${palette}.`,
+            'The illustration fills the entire 16:9 frame edge-to-edge with no white margins, borders, or empty background space.',
+            'Absolutely no text, letters, numbers, words, captions, signage, or logos anywhere in the image — illustrate the scene only, nothing written.',
+        ].join(' ');
+    }
+    return `Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, ${palette}, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.`;
+}
+function buildCircularImagePrompt(title, subject, department, bodySnippet, provider) {
     return [
         'Flat vector illustration for a college notice-board banner card, wide 16:9 landscape composition.',
         `Context: a "${department}" circular titled "${title}"${subject ? `, subject: "${subject}"` : ''}.`,
         bodySnippet ? `Additional context: ${bodySnippet}` : '',
         'Depict a friendly, relevant scene for this context — for example, a Scholarships circular should show students in school/college uniform with books or documents; an Exams circular should show an exam hall or desk with papers; a Fee Dues circular should show a receipt or an office counter; a Sports/Annual Day/Functions circular should show students on a playground or a celebratory stage.',
-        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and friendly college-brochure color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+        imageStyleDirective(provider, 'warm and friendly college-brochure color palette'),
     ].filter(Boolean).join(' ');
 }
-exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
-    var _a, _b, _c, _d;
+exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
         throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
     }
@@ -1182,15 +1438,30 @@ exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1'
     }
     const configSnap = await db.doc('adminConfig/aiSettings').get();
     if (!configSnap.exists) {
-        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.');
     }
-    const { geminiApiKey, geminiImageModel } = configSnap.data();
-    if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+    const settings = configSnap.data();
+    if (settings.imageProvider === 'openai') {
+        if (!((_d = settings.openaiApiKey) === null || _d === void 0 ? void 0 : _d.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'OpenAI API key is empty.');
+        }
+    }
+    else if (settings.imageProvider === 'replicate') {
+        if (!((_e = settings.replicateApiKey) === null || _e === void 0 ? void 0 : _e.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'Replicate API key is empty.');
+        }
+    }
+    else if (settings.imageProvider === 'budgetpixel') {
+        if (!((_f = settings.budgetpixelApiKey) === null || _f === void 0 ? void 0 : _f.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
+        }
+    }
+    else if (!((_g = settings.geminiApiKey) === null || _g === void 0 ? void 0 : _g.trim())) {
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
-    const prompt = buildCircularImagePrompt(title.trim(), (_d = subject === null || subject === void 0 ? void 0 : subject.trim()) !== null && _d !== void 0 ? _d : '', department.trim(), (bodySnippet !== null && bodySnippet !== void 0 ? bodySnippet : '').trim().slice(0, 400));
+    const prompt = buildCircularImagePrompt(title.trim(), (_h = subject === null || subject === void 0 ? void 0 : subject.trim()) !== null && _h !== void 0 ? _h : '', department.trim(), (bodySnippet !== null && bodySnippet !== void 0 ? bodySnippet : '').trim().slice(0, 400), settings.imageProvider);
     try {
-        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image', prompt);
+        return await generateAiImage(settings, prompt);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1213,15 +1484,15 @@ const TAB_HEADER_SCENES = {
     certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
     notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
 };
-function buildTabHeaderPrompt(tabKey) {
+function buildTabHeaderPrompt(tabKey, provider) {
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
         `Depict ${TAB_HEADER_SCENES[tabKey]}.`,
-        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and friendly college-brochure color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+        imageStyleDirective(provider, 'warm and friendly college-brochure color palette'),
     ].join(' ');
 }
-exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
-    var _a, _b, _c;
+exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g;
     if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
         throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
     }
@@ -1231,15 +1502,30 @@ exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1
     }
     const configSnap = await db.doc('adminConfig/aiSettings').get();
     if (!configSnap.exists) {
-        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.');
     }
-    const { geminiApiKey, geminiImageModel } = configSnap.data();
-    if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+    const settings = configSnap.data();
+    if (settings.imageProvider === 'openai') {
+        if (!((_d = settings.openaiApiKey) === null || _d === void 0 ? void 0 : _d.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'OpenAI API key is empty.');
+        }
+    }
+    else if (settings.imageProvider === 'replicate') {
+        if (!((_e = settings.replicateApiKey) === null || _e === void 0 ? void 0 : _e.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'Replicate API key is empty.');
+        }
+    }
+    else if (settings.imageProvider === 'budgetpixel') {
+        if (!((_f = settings.budgetpixelApiKey) === null || _f === void 0 ? void 0 : _f.trim())) {
+            throw new https_1.HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
+        }
+    }
+    else if (!((_g = settings.geminiApiKey) === null || _g === void 0 ? void 0 : _g.trim())) {
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
-    const prompt = buildTabHeaderPrompt(tabKey);
+    const prompt = buildTabHeaderPrompt(tabKey, settings.imageProvider);
     try {
-        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image', prompt);
+        return await generateAiImage(settings, prompt);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
