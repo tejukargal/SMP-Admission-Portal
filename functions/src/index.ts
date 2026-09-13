@@ -1690,3 +1690,69 @@ export const generateCircularBackground = onCall(
     }
   },
 );
+
+// ── Tab header AI background generation ─────────────────────────────────────
+// Generates one fixed illustrated background per student-portal tab (Home,
+// Circulars, Profile, Fee History, Certificates, Notices), shown behind the
+// portal header instead of the old static hex-pattern watermark. Same
+// stateless generate → preview → client-side upload flow as
+// generateCircularBackground above, just keyed by a fixed tab identity
+// instead of a per-circular one.
+
+const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates', 'notices'] as const;
+type TabHeaderKey = (typeof TAB_HEADER_KEYS)[number];
+
+const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
+  home: 'a welcoming college building exterior with a clear sky, front lawn, and entrance steps',
+  circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
+  profile: 'a friendly student in college uniform, portrait-style, holding a notebook',
+  fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
+  certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
+  notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
+};
+
+function buildTabHeaderPrompt(tabKey: TabHeaderKey): string {
+  return [
+    'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
+    `Depict ${TAB_HEADER_SCENES[tabKey]}.`,
+    'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and friendly college-brochure color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+  ].join(' ');
+}
+
+export const generateTabHeaderBackground = onCall(
+  { region: 'asia-south1', timeoutSeconds: 60 },
+  async (request) => {
+    if (request.auth?.token?.admin !== true) {
+      throw new HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+
+    const { tabKey } = (request.data ?? {}) as { tabKey?: string };
+    if (!tabKey || !(TAB_HEADER_KEYS as readonly string[]).includes(tabKey)) {
+      throw new HttpsError('invalid-argument', `tabKey must be one of: ${TAB_HEADER_KEYS.join(', ')}`);
+    }
+
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.',
+      );
+    }
+    const { geminiApiKey, geminiImageModel } = configSnap.data() as {
+      geminiApiKey?: string;
+      geminiImageModel?: string;
+    };
+    if (!geminiApiKey?.trim()) {
+      throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+
+    const prompt = buildTabHeaderPrompt(tabKey as TabHeaderKey);
+
+    try {
+      return await callGeminiImage(geminiApiKey.trim(), geminiImageModel?.trim() || 'gemini-3.1-flash-image', prompt);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `Image generation failed: ${msg}`);
+    }
+  },
+);

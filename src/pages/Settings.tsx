@@ -22,9 +22,10 @@ import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
 import { ImportResults } from './ImportResults';
 import { BackupRestore } from './BackupRestore';
+import { TabHeaderBackgroundsPanel } from './TabHeaderBackgroundsPanel';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'app-version' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'app-version' | 'tab-headers' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -37,6 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'staff', label: 'Staff Accounts' },
   { id: 'messaging', label: 'Messaging' },
   { id: 'app-version', label: 'App Version' },
+  { id: 'tab-headers', label: 'Tab Header Backgrounds' },
   { id: 'backup', label: 'Backup & Restore' },
 ];
 
@@ -1393,6 +1395,11 @@ export function Settings() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── Tab Header Backgrounds ── */}
+        {activeTab === 'tab-headers' && (
+          <TabHeaderBackgroundsPanel />
         )}
 
         {/* ── Backup & Restore ── */}

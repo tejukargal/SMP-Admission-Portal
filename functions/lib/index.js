@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyMotivation = exports.generateStudentAISummary = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyMotivation = exports.generateStudentAISummary = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -1331,6 +1331,55 @@ exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1'
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
     const prompt = buildCircularImagePrompt(title.trim(), (_d = subject === null || subject === void 0 ? void 0 : subject.trim()) !== null && _d !== void 0 ? _d : '', department.trim(), (bodySnippet !== null && bodySnippet !== void 0 ? bodySnippet : '').trim().slice(0, 400));
+    try {
+        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image', prompt);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new https_1.HttpsError('internal', `Image generation failed: ${msg}`);
+    }
+});
+// ── Tab header AI background generation ─────────────────────────────────────
+// Generates one fixed illustrated background per student-portal tab (Home,
+// Circulars, Profile, Fee History, Certificates, Notices), shown behind the
+// portal header instead of the old static hex-pattern watermark. Same
+// stateless generate → preview → client-side upload flow as
+// generateCircularBackground above, just keyed by a fixed tab identity
+// instead of a per-circular one.
+const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates', 'notices'];
+const TAB_HEADER_SCENES = {
+    home: 'a welcoming college building exterior with a clear sky, front lawn, and entrance steps',
+    circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
+    profile: 'a friendly student in college uniform, portrait-style, holding a notebook',
+    fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
+    certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
+    notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
+};
+function buildTabHeaderPrompt(tabKey) {
+    return [
+        'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
+        `Depict ${TAB_HEADER_SCENES[tabKey]}.`,
+        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and friendly college-brochure color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+    ].join(' ');
+}
+exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
+    var _a, _b, _c;
+    if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+    const { tabKey } = ((_c = request.data) !== null && _c !== void 0 ? _c : {});
+    if (!tabKey || !TAB_HEADER_KEYS.includes(tabKey)) {
+        throw new https_1.HttpsError('invalid-argument', `tabKey must be one of: ${TAB_HEADER_KEYS.join(', ')}`);
+    }
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
+    }
+    const { geminiApiKey, geminiImageModel } = configSnap.data();
+    if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+    const prompt = buildTabHeaderPrompt(tabKey);
     try {
         return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image', prompt);
     }
