@@ -23,11 +23,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyMotivation = exports.generateStudentAISummary = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyBriefing = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https = __importStar(require("https"));
+const indianQuotes_1 = require("./indianQuotes");
 admin.initializeApp();
 const db = admin.firestore();
 var pushNotifications_1 = require("./pushNotifications");
@@ -619,90 +620,86 @@ function calcAllottedForYear(effSmp, effSvk, effAdditional, yearRecords) {
     const additionalTotal = effAdditional.reduce((s, h) => { var _a; return s + ((_a = h.amount) !== null && _a !== void 0 ? _a : 0); }, 0);
     return smpTotal + effSvk + additionalTotal;
 }
-function callClaudeForStudent(apiKey, dataBlock) {
-    return new Promise((resolve, reject) => {
-        const SYSTEM = `You are a friendly assistant inside the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka. You write a short personal summary for one student, based only on the data given to you.
+function dayOfYearIST(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const start = Date.UTC(y, 0, 1);
+    const current = Date.UTC(y, m - 1, d);
+    return Math.floor((current - start) / (24 * 60 * 60 * 1000));
+}
+function buildDailyQuoteImagePrompt(scene) {
+    return [
+        'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
+        `Depict ${scene}.`,
+        'Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, warm and inspiring color palette, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.',
+    ].join(' ');
+}
+/** Uploads a generated daily-quote background image via the Admin SDK (this
+ *  flow is triggered by a student's device, not the admin web client, so
+ *  there's no admin Storage session to upload with client-side) and returns
+ *  a public download URL — storage.rules allows public read on this path
+ *  since it's generic daily-inspiration art, nothing sensitive. */
+async function uploadDailyQuoteImage(date, imageBase64, mimeType) {
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+    const path = `dailyQuoteBackgrounds/${date}.${ext}`;
+    const bucket = admin.storage().bucket();
+    await bucket.file(path).save(Buffer.from(imageBase64, 'base64'), {
+        metadata: { contentType: mimeType },
+        resumable: false,
+    });
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+}
+/** Reads (or, on the first request of the day across all students, generates)
+ *  the shared "quote of the day" — one curated Indian-personality quote,
+ *  paired with a matching AI-generated background image. Shared across every
+ *  student that day, not regenerated per student; a small chance of two
+ *  near-simultaneous first-requests both generating once is accepted as
+ *  harmless (last write wins), same as every other day-cache in this file. */
+async function getOrCreateDailyQuote(today, geminiApiKey, geminiImageModel) {
+    const ref = db.collection('dailyQuote').doc(today);
+    const snap = await ref.get();
+    const cached = snap.data();
+    if ((cached === null || cached === void 0 ? void 0 : cached.date) === today && cached.quoteEn && cached.backgroundImageUrl) {
+        return cached;
+    }
+    const quote = indianQuotes_1.INDIAN_QUOTES[dayOfYearIST(today) % indianQuotes_1.INDIAN_QUOTES.length];
+    const image = await callGeminiImage(geminiApiKey, geminiImageModel, buildDailyQuoteImagePrompt(quote.scene));
+    const backgroundImageUrl = await uploadDailyQuoteImage(today, image.imageBase64, image.mimeType);
+    const toStore = {
+        date: today,
+        quoteEn: quote.textEn,
+        quoteAuthor: quote.author,
+        theme: quote.theme,
+        backgroundImageUrl,
+    };
+    await ref.set(toStore);
+    return toStore;
+}
+const BRIEFING_SYSTEM = `You are a warm, thoughtful mentor inside the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka — like a favorite teacher and a close friend rolled into one. You write a short personal note and a short highlights digest for one student, based only on the data given to you.
 
-## WRITING STYLE
-- Plain, warm, direct English — like a helpful note, not a dashboard.
-- Each point is one short sentence (12–24 words), using exact numbers/titles/dates from the data.
-- Always include, as separate points:
-  1. Fee due status, stated clearly as either "no pending dues" or the exact amount due.
-  2. The total circulars count, for context on how much has been published.
-  3. One point per pinned circular, using its subject to say something specific — not just repeating the title. If there are more than 3 pinned circulars, combine the rest into one point rather than listing every one.
-- Also cover any recent/notable non-pinned circulars or notices relevant to them, and certificate/document status (TC/PC/refunds) if any exist.
-- If a category has nothing to report (e.g. no certificates issued, no pinned circulars), skip it rather than inventing filler.
+## PERSONAL NOTE
+- greeting: a short warm opening addressing the student by first name, e.g. "Dear Aditi," — vary the phrasing day to day rather than always using "Dear".
+- messageEn: 2-3 sentences in English, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence.
+- messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script.
+
+## HIGHLIGHTS
+- 3 to 7 short bullet points (each one sentence, using exact numbers/titles/dates from the data), prioritized by what's actually most relevant to this student right now — lead with anything time-sensitive (a pending fee due, a new pinned circular, an upcoming deadline) rather than a fixed checklist order.
+- Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
 - Never mention data you were not given. Never invent numbers.
+- If a category has nothing to report, skip it rather than inventing filler.
 
 ## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON object: {"points": string[]}. 6 to 10 short bullet strings. No markdown fences, no explanation, no trailing text.`;
-        const body = JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 600,
-            // Cached: this system prompt is identical for every student, so caching it (1h TTL)
-            // cuts ~90% off its cost on every call after the first within that window — the same
-            // pattern generateAdmissionSummary/callClaude above uses.
-            system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-            messages: [{ role: 'user', content: dataBlock }],
-        });
-        const req = https.request({
-            hostname: 'api.anthropic.com',
-            path: '/v1/messages',
-            method: 'POST',
-            headers: {
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'prompt-caching-2024-07-31',
-                'content-type': 'application/json',
-                'content-length': Buffer.byteLength(body),
-            },
-        }, (res) => {
-            let raw = '';
-            res.on('data', (chunk) => { raw += chunk.toString(); });
-            res.on('end', () => {
-                var _a, _b, _c, _d, _e;
-                try {
-                    if (res.statusCode !== 200) {
-                        let apiMsg = `HTTP ${res.statusCode}`;
-                        try {
-                            const errBody = JSON.parse(raw);
-                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
-                                apiMsg += `: ${errBody.error.message}`;
-                        }
-                        catch ( /* raw may not be JSON */_f) { /* raw may not be JSON */ }
-                        reject(new Error(apiMsg));
-                        return;
-                    }
-                    const parsed = JSON.parse(raw);
-                    const rawText = (_e = (_d = (_c = (_b = parsed.content) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) === null || _d === void 0 ? void 0 : _d.trim()) !== null && _e !== void 0 ? _e : '';
-                    const stripped = rawText
-                        .replace(/^```(?:json)?\s*/i, '')
-                        .replace(/\s*```\s*$/i, '')
-                        .trim();
-                    const match = stripped.match(/\{[\s\S]*\}/);
-                    if (!match) {
-                        reject(new Error(`No JSON object in response. Got: ${stripped.slice(0, 200)}`));
-                        return;
-                    }
-                    const parsedBody = JSON.parse(match[0]);
-                    if (!Array.isArray(parsedBody.points) || parsedBody.points.length === 0) {
-                        reject(new Error('Empty points array'));
-                        return;
-                    }
-                    resolve(parsedBody.points.filter((p) => typeof p === 'string'));
-                }
-                catch (err) {
-                    reject(err);
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(body);
-        req.end();
-    });
+Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "points": string[]}. No markdown fences, no explanation, no trailing text.`;
+function isBriefingResult(value) {
+    if (!value || typeof value !== 'object')
+        return false;
+    const v = value;
+    return (typeof v.greeting === 'string' &&
+        typeof v.messageEn === 'string' &&
+        typeof v.messageKn === 'string' &&
+        Array.isArray(v.points) && v.points.length > 0 && v.points.every((p) => typeof p === 'string'));
 }
-exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const claims = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token;
     if (!(claims === null || claims === void 0 ? void 0 : claims.student)) {
         throw new https_1.HttpsError('unauthenticated', 'Student sign-in required.');
@@ -715,22 +712,26 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
     if (!regNumber) {
         throw new https_1.HttpsError('failed-precondition', 'No registration number on this account yet.');
     }
-    // Day-window cache: if today's summary was already generated for this student, return
-    // it directly — no Firestore reads of their circulars/fees/certificates, no Claude call.
-    const today = todayIST();
-    const cacheRef = db.collection('aiSummaryCache').doc(regNumber);
-    const cacheSnap = await cacheRef.get();
-    const cached = cacheSnap.data();
-    if ((cached === null || cached === void 0 ? void 0 : cached.date) === today && Array.isArray(cached.points) && cached.points.length > 0) {
-        return { points: cached.points, generatedAt: (_c = cached.generatedAt) !== null && _c !== void 0 ? _c : new Date().toISOString() };
-    }
     const configSnap = await db.doc('adminConfig/aiSettings').get();
     if (!configSnap.exists) {
-        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add anthropicApiKey to adminConfig/aiSettings in Firestore.');
+        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add geminiApiKey to adminConfig/aiSettings in Firestore.');
     }
-    const { anthropicApiKey } = configSnap.data();
-    if (!(anthropicApiKey === null || anthropicApiKey === void 0 ? void 0 : anthropicApiKey.trim())) {
-        throw new https_1.HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    const { geminiApiKey, geminiTextModel, geminiImageModel } = configSnap.data();
+    if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
+        throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+    const textModel = (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.6-flash';
+    const imageModel = (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image';
+    const today = todayIST();
+    const [quote, cachedBriefingSnap] = await Promise.all([
+        getOrCreateDailyQuote(today, geminiApiKey.trim(), imageModel),
+        db.collection('dailyBriefing').doc(regNumber).get(),
+    ]);
+    const cachedBriefing = cachedBriefingSnap.data();
+    const cachedGeneratedAt = cachedBriefing === null || cachedBriefing === void 0 ? void 0 : cachedBriefing.generatedAt;
+    if ((cachedBriefing === null || cachedBriefing === void 0 ? void 0 : cachedBriefing.date) === today && isBriefingResult(cachedBriefing)) {
+        const { greeting, messageEn, messageKn, points } = cachedBriefing;
+        return { quote, greeting, messageEn, messageKn, points, generatedAt: cachedGeneratedAt !== null && cachedGeneratedAt !== void 0 ? cachedGeneratedAt : new Date().toISOString() };
     }
     const [studentsSnap, feeSnap, refundsSnap, circularsSnap, noticesSnap, circularsCountSnap, pinnedSnap] = await Promise.all([
         db.collection('students').where('regNumber', '==', regNumber).get(),
@@ -748,7 +749,7 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
     // Prefer the doc for the current-looking enrollment (has admissionStatus/course); fall
     // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
     // across all of a student's year-by-year docs on the client.
-    const primary = (_d = studentDocs.find((s) => !!s.course)) !== null && _d !== void 0 ? _d : studentDocs[0];
+    const primary = (_c = studentDocs.find((s) => !!s.course)) !== null && _c !== void 0 ? _c : studentDocs[0];
     const tcCount = studentDocs.reduce((s, d) => { var _a, _b; return s + ((_b = (_a = d.tcHistory) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0); }, 0);
     const pcCount = studentDocs.reduce((s, d) => { var _a, _b; return s + ((_b = (_a = d.pcHistory) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0); }, 0);
     const refundCount = refundsSnap.size;
@@ -760,7 +761,7 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
     for (const r of feeRecords) {
         if (!r.academicYear)
             continue;
-        const list = (_e = recordsByYear.get(r.academicYear)) !== null && _e !== void 0 ? _e : [];
+        const list = (_d = recordsByYear.get(r.academicYear)) !== null && _d !== void 0 ? _d : [];
         list.push(r);
         recordsByYear.set(r.academicYear, list);
     }
@@ -793,10 +794,15 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
     const notices = noticesSnap.docs
         .map((d) => d.data())
         .filter((n) => noticeAppliesToStudent(n, primary))
-        .slice(0, 5);
+        .slice(0, 8);
+    const fullName = (_e = primary.studentNameSSLC) === null || _e === void 0 ? void 0 : _e.trim();
+    const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
+    const { dayLabel, dateLabel } = todayLabelsIST();
     const dataBlock = [
-        `STUDENT: ${(_f = primary.studentNameSSLC) !== null && _f !== void 0 ? _f : 'Student'}, ${(_g = primary.course) !== null && _g !== void 0 ? _g : ''} ${(_h = primary.year) !== null && _h !== void 0 ? _h : ''} (${(_j = primary.academicYear) !== null && _j !== void 0 ? _j : ''})`,
-        `Admission status: ${(_k = primary.admissionStatus) !== null && _k !== void 0 ? _k : 'unknown'}`,
+        `STUDENT FIRST NAME: ${firstName}`,
+        `TODAY: ${dayLabel}, ${dateLabel}`,
+        `STUDENT: ${fullName !== null && fullName !== void 0 ? fullName : 'Student'}, ${(_f = primary.course) !== null && _f !== void 0 ? _f : ''} ${(_g = primary.year) !== null && _g !== void 0 ? _g : ''} (${(_h = primary.academicYear) !== null && _h !== void 0 ? _h : ''})`,
+        `Admission status: ${(_j = primary.admissionStatus) !== null && _j !== void 0 ? _j : 'unknown'}`,
         totalDue > 0
             ? `Fee dues: Rs.${totalDue} pending across academic years (Rs.${totalPaid} paid so far)`
             : `Fee dues: none — fully paid (Rs.${totalPaid} paid so far)`,
@@ -809,7 +815,7 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
             : ['(none)']),
         '',
         `RECENT CIRCULARS (title | department | date):`,
-        ...circulars.slice(0, 5).map((c) => { var _a, _b, _c; return `- ${(_a = c.title) !== null && _a !== void 0 ? _a : ''} | ${(_b = c.department) !== null && _b !== void 0 ? _b : ''} | ${(_c = c.date) !== null && _c !== void 0 ? _c : ''}`; }),
+        ...circulars.slice(0, 10).map((c) => { var _a, _b, _c; return `- ${(_a = c.title) !== null && _a !== void 0 ? _a : ''} | ${(_b = c.department) !== null && _b !== void 0 ? _b : ''} | ${(_c = c.date) !== null && _c !== void 0 ? _c : ''}`; }),
         '',
         `NOTICES RELEVANT TO THIS STUDENT (title | category | date):`,
         ...(notices.length > 0
@@ -817,27 +823,20 @@ exports.generateStudentAISummary = (0, https_1.onCall)({ region: 'asia-south1', 
             : ['(none)']),
     ].join('\n');
     try {
-        const points = await callClaudeForStudent(anthropicApiKey.trim(), dataBlock);
+        const rawText = await callGeminiTextForCircular(geminiApiKey.trim(), textModel, BRIEFING_SYSTEM, dataBlock, 1600, 'application/json');
+        const parsedJson = JSON.parse(extractJsonObject(rawText));
+        if (!isBriefingResult(parsedJson)) {
+            throw new Error('The AI response was missing required fields.');
+        }
         const generatedAt = new Date().toISOString();
-        await cacheRef.set({ date: today, points, generatedAt });
-        return { points, generatedAt };
+        await db.collection('dailyBriefing').doc(regNumber).set(Object.assign(Object.assign({ date: today }, parsedJson), { generatedAt }));
+        return Object.assign(Object.assign({ quote }, parsedJson), { generatedAt });
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
     }
 });
-// ── Student daily motivation ────────────────────────────────────────────────
-// Generates one short, warm, mentor-voiced note + motivational quote per
-// student per calendar day (Asia/Kolkata), in both English and Kannada —
-// shown on the student portal app's "Daily Motivation" screen. Cached in
-// Firestore per student per day (collection `dailyMotivation`, doc id =
-// regNumber) so repeated calls within the same day — app reopen, a second
-// device, a client cache miss — never re-hit Claude; only the first call of
-// the day for a given student costs anything. No separate cooldown needed
-// (unlike generateStudentAISummary's manual-refresh cooldown) since this
-// screen has no refresh button and the day-keyed cache already caps cost to
-// once per student per day.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 // Shifts the current instant by IST's fixed +5:30 offset, then reads calendar
 // fields off that shifted instant using UTC getters — a small,
@@ -854,154 +853,6 @@ function todayLabelsIST() {
         dateLabel: shifted.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }),
     };
 }
-function callClaudeForMotivation(apiKey, firstName, dayLabel, dateLabel) {
-    return new Promise((resolve, reject) => {
-        const SYSTEM = `You are a warm, wise mentor inside the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka — like a favorite teacher and a close friend rolled into one, with a philosopher's calm and warmth. You write a short daily motivational note for one student, addressing them by their first name.
-
-## WRITING STYLE
-- Warm, personal, sincere — never generic corporate positivity, never preachy, and phrased differently each time rather than a fixed template.
-- messageEn: 2-4 sentences in English, in a mentor/friend/philosopher voice. Grounded and thoughtful, genuinely encouraging, naturally acknowledging that today is a fresh day. Address the student by first name at least once, woven naturally into a sentence (not just in the greeting).
-- quoteEn: one short motivational quote in English — either a well-known quote with its real, accurate author, OR (roughly half the time) an original short aphorism written in your own philosopher voice, in which case quoteAuthor must be null. Vary which you pick and vary the theme (effort, patience, curiosity, resilience, self-belief, small daily progress, etc.) so it doesn't feel repetitive day to day.
-- messageKn and quoteKn: accurate, natural Kannada translations of messageEn and quoteEn — phrased the way a fluent Kannada speaker would naturally write it, not a stiff literal translation. Use proper Kannada script.
-- greeting: a short warm opening addressing the student by first name, e.g. "Dear Aditi," — vary the phrasing day to day rather than always using "Dear".
-
-## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "quoteEn": string, "quoteKn": string, "quoteAuthor": string | null}. No markdown fences, no explanation, no trailing text.`;
-        const userMsg = `STUDENT FIRST NAME: ${firstName}\nTODAY: ${dayLabel}, ${dateLabel}`;
-        const body = JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            // Kannada script tokenizes far less efficiently than English (roughly 3-4x more
-            // tokens per word), and this response packs an English + Kannada message and quote
-            // into one JSON object — 700 wasn't enough and truncated mid-response, breaking the
-            // JSON parse. 1600 gives comfortable headroom for both languages plus JSON overhead.
-            max_tokens: 1600,
-            // Cached: this system prompt is identical for every student/day, so caching it (1h
-            // TTL) cuts most of its cost on every call after the first within that window — same
-            // pattern callClaudeForStudent above uses.
-            system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-            messages: [{ role: 'user', content: userMsg }],
-        });
-        const req = https.request({
-            hostname: 'api.anthropic.com',
-            path: '/v1/messages',
-            method: 'POST',
-            headers: {
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'prompt-caching-2024-07-31',
-                'content-type': 'application/json',
-                'content-length': Buffer.byteLength(body),
-            },
-        }, (res) => {
-            let raw = '';
-            res.on('data', (chunk) => { raw += chunk.toString(); });
-            res.on('end', () => {
-                var _a, _b, _c, _d, _e;
-                try {
-                    if (res.statusCode !== 200) {
-                        let apiMsg = `HTTP ${res.statusCode}`;
-                        try {
-                            const errBody = JSON.parse(raw);
-                            if ((_a = errBody.error) === null || _a === void 0 ? void 0 : _a.message)
-                                apiMsg += `: ${errBody.error.message}`;
-                        }
-                        catch ( /* raw may not be JSON */_f) { /* raw may not be JSON */ }
-                        reject(new Error(apiMsg));
-                        return;
-                    }
-                    const parsed = JSON.parse(raw);
-                    const rawText = (_e = (_d = (_c = (_b = parsed.content) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) === null || _d === void 0 ? void 0 : _d.trim()) !== null && _e !== void 0 ? _e : '';
-                    const stripped = rawText
-                        .replace(/^```(?:json)?\s*/i, '')
-                        .replace(/\s*```\s*$/i, '')
-                        .trim();
-                    const match = stripped.match(/\{[\s\S]*\}/);
-                    if (!match) {
-                        reject(new Error(`No JSON object in response. Got: ${stripped.slice(0, 200)}`));
-                        return;
-                    }
-                    const parsedBody = JSON.parse(match[0]);
-                    if (typeof parsedBody.greeting !== 'string' ||
-                        typeof parsedBody.messageEn !== 'string' ||
-                        typeof parsedBody.messageKn !== 'string' ||
-                        typeof parsedBody.quoteEn !== 'string' ||
-                        typeof parsedBody.quoteKn !== 'string') {
-                        reject(new Error('Missing required fields in response'));
-                        return;
-                    }
-                    resolve({
-                        greeting: parsedBody.greeting,
-                        messageEn: parsedBody.messageEn,
-                        messageKn: parsedBody.messageKn,
-                        quoteEn: parsedBody.quoteEn,
-                        quoteKn: parsedBody.quoteKn,
-                        quoteAuthor: typeof parsedBody.quoteAuthor === 'string' ? parsedBody.quoteAuthor : null,
-                    });
-                }
-                catch (err) {
-                    reject(err);
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(body);
-        req.end();
-    });
-}
-exports.generateDailyMotivation = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 60 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
-    const claims = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token;
-    if (!(claims === null || claims === void 0 ? void 0 : claims.student)) {
-        throw new https_1.HttpsError('unauthenticated', 'Student sign-in required.');
-    }
-    let regNumber = claims.regNumber;
-    if (!regNumber && claims.studentDocId) {
-        const doc = await db.collection('students').doc(claims.studentDocId).get();
-        regNumber = (_b = doc.data()) === null || _b === void 0 ? void 0 : _b.regNumber;
-    }
-    if (!regNumber) {
-        throw new https_1.HttpsError('failed-precondition', 'No registration number on this account yet.');
-    }
-    const today = todayIST();
-    const cacheRef = db.collection('dailyMotivation').doc(regNumber);
-    const cacheSnap = await cacheRef.get();
-    const cached = cacheSnap.data();
-    if ((cached === null || cached === void 0 ? void 0 : cached.date) === today && cached.greeting && cached.messageEn && cached.quoteEn) {
-        return {
-            date: today,
-            greeting: cached.greeting,
-            messageEn: cached.messageEn,
-            messageKn: (_c = cached.messageKn) !== null && _c !== void 0 ? _c : '',
-            quoteEn: cached.quoteEn,
-            quoteKn: (_d = cached.quoteKn) !== null && _d !== void 0 ? _d : '',
-            quoteAuthor: (_e = cached.quoteAuthor) !== null && _e !== void 0 ? _e : undefined,
-        };
-    }
-    const configSnap = await db.doc('adminConfig/aiSettings').get();
-    if (!configSnap.exists) {
-        throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add anthropicApiKey to adminConfig/aiSettings in Firestore.');
-    }
-    const { anthropicApiKey } = configSnap.data();
-    if (!(anthropicApiKey === null || anthropicApiKey === void 0 ? void 0 : anthropicApiKey.trim())) {
-        throw new https_1.HttpsError('failed-precondition', 'Anthropic API key is empty.');
-    }
-    const studentsSnap = await db.collection('students').where('regNumber', '==', regNumber).get();
-    const studentDocs = studentsSnap.docs.map((d) => d.data());
-    const primary = (_f = studentDocs.find((s) => !!s.course)) !== null && _f !== void 0 ? _f : studentDocs[0];
-    const fullName = (_g = primary === null || primary === void 0 ? void 0 : primary.studentNameSSLC) === null || _g === void 0 ? void 0 : _g.trim();
-    const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
-    const { dayLabel, dateLabel } = todayLabelsIST();
-    try {
-        const result = await callClaudeForMotivation(anthropicApiKey.trim(), firstName, dayLabel, dateLabel);
-        const toStore = Object.assign({ date: today }, result);
-        await cacheRef.set(toStore);
-        return Object.assign(Object.assign({}, toStore), { quoteAuthor: (_h = toStore.quoteAuthor) !== null && _h !== void 0 ? _h : undefined });
-    }
-    catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new https_1.HttpsError('internal', `AI generation failed: ${msg}`);
-    }
-});
 // ── Circular AI drafting ("Compose with AI") ────────────────────────────────
 // Lets an admin turn a short brief into a drafted Title/Subject/Body (+ a
 // suggested Department) for a circular, using either Claude or Gemini
@@ -1153,12 +1004,19 @@ function callClaudeForCircular(apiKey, systemPrompt, userMessage, maxTokens) {
         req.end();
     });
 }
-function callGeminiTextForCircular(apiKey, model, systemPrompt, userMessage, maxTokens) {
+function callGeminiTextForCircular(apiKey, model, systemPrompt, userMessage, maxTokens, responseMimeType, 
+// Some Gemini models spend part of maxOutputTokens on an internal "thinking"
+// phase before writing the visible answer — if that phase eats the whole
+// budget, the real output gets cut off almost immediately (seen as JSON
+// truncated a few hundred characters in). Passing 0 here disables thinking
+// so the full token budget goes to the actual answer; omit to leave the
+// model's default thinking behavior untouched (existing callers unaffected).
+thinkingBudget) {
     return new Promise((resolve, reject) => {
         const body = JSON.stringify({
             contents: [{ parts: [{ text: userMessage }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] },
-            generationConfig: { maxOutputTokens: maxTokens },
+            generationConfig: Object.assign(Object.assign({ maxOutputTokens: maxTokens }, (responseMimeType ? { responseMimeType } : {})), (thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {})),
         });
         const req = https.request({
             hostname: 'generativelanguage.googleapis.com',

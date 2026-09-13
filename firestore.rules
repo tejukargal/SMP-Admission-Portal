@@ -273,17 +273,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ── AI Summary cache (generateStudentAISummary, one entry per student per day) ──
-    // Written only by the generateStudentAISummary Cloud Function via the Admin
-    // SDK, which bypasses rules entirely — this rule blocks any direct client access.
-    match /aiSummaryCache/{regNumber} {
+    // ── Daily Briefing caches (generateDailyBriefing) ───────────────────────
+    // `dailyQuote/{date}` is the shared quote-of-the-day (one doc per calendar
+    // day, reused by every student); `dailyBriefing/{regNumber}` is each
+    // student's personalized note+highlights. Both are written only by the
+    // generateDailyBriefing Cloud Function via the Admin SDK, which bypasses
+    // rules entirely — these rules just block any direct client access.
+    match /dailyQuote/{date} {
       allow read, write: if false;
     }
-
-    // ── Daily Motivation cache (generateDailyMotivation) ────────────────────
-    // Written only by the generateDailyMotivation Cloud Function via the Admin
-    // SDK, which bypasses rules entirely — this rule blocks any direct client access.
-    match /dailyMotivation/{regNumber} {
+    match /dailyBriefing/{regNumber} {
       allow read, write: if false;
     }
 

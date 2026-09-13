@@ -61,5 +61,17 @@ service firebase.storage {
         && request.resource.contentType.matches('image/png|image/jpeg');
       allow delete: if isAdmin();
     }
+
+    // ── AI-generated Daily Briefing quote background (PNG/JPEG) ────────────
+    // One shared file per calendar day (dailyQuoteBackgrounds/{date}.png),
+    // written only by the generateDailyBriefing Cloud Function via the Admin
+    // SDK (bypasses these rules entirely — this call originates from a
+    // student's device, not the admin web client, so there's no client-side
+    // upload path here). Public read: generic daily-inspiration art, nothing
+    // sensitive, and it's the student app (not the admin client) reading it.
+    match /dailyQuoteBackgrounds/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }
