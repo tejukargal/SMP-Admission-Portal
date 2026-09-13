@@ -946,7 +946,7 @@ export const generateDailyBriefing = onCall(
       throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
     const textModel = geminiTextModel?.trim() || 'gemini-3.6-flash';
-    const imageModel = geminiImageModel?.trim() || 'gemini-3.1-flash-image';
+    const imageModel = geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image';
 
     const today = todayIST();
 
@@ -1540,7 +1540,7 @@ export const generateCircularBackground = onCall(
     );
 
     try {
-      return await callGeminiImage(geminiApiKey.trim(), geminiImageModel?.trim() || 'gemini-3.1-flash-image', prompt);
+      return await callGeminiImage(geminiApiKey.trim(), geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image', prompt);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
@@ -1606,7 +1606,7 @@ export const generateTabHeaderBackground = onCall(
     const prompt = buildTabHeaderPrompt(tabKey as TabHeaderKey);
 
     try {
-      return await callGeminiImage(geminiApiKey.trim(), geminiImageModel?.trim() || 'gemini-3.1-flash-image', prompt);
+      return await callGeminiImage(geminiApiKey.trim(), geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image', prompt);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);

@@ -721,7 +721,7 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
     const textModel = (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.6-flash';
-    const imageModel = (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image';
+    const imageModel = (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image';
     const today = todayIST();
     const [quote, cachedBriefingSnap] = await Promise.all([
         getOrCreateDailyQuote(today, geminiApiKey.trim(), imageModel),
@@ -1190,7 +1190,7 @@ exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1'
     }
     const prompt = buildCircularImagePrompt(title.trim(), (_d = subject === null || subject === void 0 ? void 0 : subject.trim()) !== null && _d !== void 0 ? _d : '', department.trim(), (bodySnippet !== null && bodySnippet !== void 0 ? bodySnippet : '').trim().slice(0, 400));
     try {
-        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image', prompt);
+        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image', prompt);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1239,7 +1239,7 @@ exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1
     }
     const prompt = buildTabHeaderPrompt(tabKey);
     try {
-        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-image', prompt);
+        return await callGeminiImage(geminiApiKey.trim(), (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image', prompt);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
