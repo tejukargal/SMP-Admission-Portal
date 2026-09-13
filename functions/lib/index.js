@@ -1396,7 +1396,7 @@ function generateAiImage(settings, prompt) {
         return callReplicateImage(((_c = settings.replicateApiKey) !== null && _c !== void 0 ? _c : '').trim(), ((_d = settings.replicateImageModel) === null || _d === void 0 ? void 0 : _d.trim()) || 'black-forest-labs/flux-2-klein-4b', prompt);
     }
     if (settings.imageProvider === 'budgetpixel') {
-        return callBudgetPixelImage(((_e = settings.budgetpixelApiKey) !== null && _e !== void 0 ? _e : '').trim(), ((_f = settings.budgetpixelImageModel) === null || _f === void 0 ? void 0 : _f.trim()) || 'nano-banana-2', prompt);
+        return callBudgetPixelImage(((_e = settings.budgetpixelApiKey) !== null && _e !== void 0 ? _e : '').trim(), ((_f = settings.budgetpixelImageModel) === null || _f === void 0 ? void 0 : _f.trim()) || 'nano-banana-2-lite', prompt);
     }
     return callGeminiImage(((_g = settings.geminiApiKey) !== null && _g !== void 0 ? _g : '').trim(), ((_h = settings.geminiImageModel) === null || _h === void 0 ? void 0 : _h.trim()) || 'gemini-3.1-flash-lite-image', prompt);
 }

@@ -1274,7 +1274,7 @@ export function Settings() {
                         { value: 'gemini', label: 'Google Gemini' },
                         { value: 'openai', label: 'OpenAI (GPT Image 1 Mini)' },
                         { value: 'replicate', label: 'Replicate (FLUX.2 Klein 4B)' },
-                        { value: 'budgetpixel', label: 'BudgetPixel (Nano Banana 2 / Gemini 3.1 Flash Image)' },
+                        { value: 'budgetpixel', label: 'BudgetPixel (Nano Banana 2 Lite / Gemini 3.1 Flash Lite Image)' },
                       ]}
                     />
                     <div>

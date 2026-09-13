@@ -1805,7 +1805,7 @@ function generateAiImage(
   if (settings.imageProvider === 'budgetpixel') {
     return callBudgetPixelImage(
       (settings.budgetpixelApiKey ?? '').trim(),
-      settings.budgetpixelImageModel?.trim() || 'nano-banana-2',
+      settings.budgetpixelImageModel?.trim() || 'nano-banana-2-lite',
       prompt,
     );
   }
