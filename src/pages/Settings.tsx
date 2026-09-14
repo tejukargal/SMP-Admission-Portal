@@ -23,9 +23,10 @@ import { ImportAddress } from './ImportAddress';
 import { ImportResults } from './ImportResults';
 import { BackupRestore } from './BackupRestore';
 import { TabHeaderBackgroundsPanel } from './TabHeaderBackgroundsPanel';
+import { CategoryIconsPanel } from './CategoryIconsPanel';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'ai-settings' | 'app-version' | 'tab-headers' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'ai-settings' | 'app-version' | 'tab-headers' | 'category-icons' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -40,6 +41,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'ai-settings', label: 'AI Settings' },
   { id: 'app-version', label: 'App Version' },
   { id: 'tab-headers', label: 'Tab Header Backgrounds' },
+  { id: 'category-icons', label: 'Category Icons' },
   { id: 'backup', label: 'Backup & Restore' },
 ];
 
@@ -1556,6 +1558,11 @@ export function Settings() {
         {/* ── Tab Header Backgrounds ── */}
         {activeTab === 'tab-headers' && (
           <TabHeaderBackgroundsPanel />
+        )}
+
+        {/* ── Category Icons ── */}
+        {activeTab === 'category-icons' && (
+          <CategoryIconsPanel />
         )}
 
         {/* ── Backup & Restore ── */}

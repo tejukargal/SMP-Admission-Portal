@@ -1506,17 +1506,25 @@ interface GeminiImageResponse {
   }[];
 }
 
+/** '16:9' for the wide banner use cases (circular backgrounds, tab headers); '1:1'
+ *  for category icons, which render inside a near-square Overview tile — asking
+ *  for the wrong aspect here doesn't just look off, it's what caused a landscape
+ *  image to get aggressively cover-cropped down to a near-square tile client-side,
+ *  cutting off most of the composition. */
+type ImageAspectRatio = '16:9' | '1:1';
+
 function callGeminiImage(
   apiKey: string,
   model: string,
   prompt: string,
+  aspectRatio: ImageAspectRatio,
 ): Promise<{ imageBase64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseModalities: ['IMAGE'],
-        imageConfig: { aspectRatio: '16:9' },
+        imageConfig: { aspectRatio },
       },
     });
 
@@ -1574,12 +1582,15 @@ function callOpenAiImage(
   apiKey: string,
   model: string,
   prompt: string,
+  aspectRatio: ImageAspectRatio,
 ): Promise<{ imageBase64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
+    // gpt-image-1 models only accept these exact size strings (no arbitrary aspect ratio).
+    const size = aspectRatio === '1:1' ? '1024x1024' : '1536x1024';
     const body = JSON.stringify({
       model,
       prompt,
-      size: '1536x1024',
+      size,
       quality: 'high',
       n: 1,
     });
@@ -1707,12 +1718,13 @@ async function callReplicateImage(
   apiKey: string,
   model: string,
   prompt: string,
+  aspectRatio: ImageAspectRatio,
 ): Promise<{ imageBase64: string; mimeType: string }> {
   let prediction = await replicateRequest(
     'POST',
     `https://api.replicate.com/v1/models/${model}/predictions`,
     apiKey,
-    { input: { prompt, aspect_ratio: '16:9', output_format: 'png' } },
+    { input: { prompt, aspect_ratio: aspectRatio, output_format: 'png' } },
   );
 
   const maxAttempts = 20;
@@ -1792,8 +1804,9 @@ async function callBudgetPixelImage(
   apiKey: string,
   model: string,
   prompt: string,
+  aspectRatio: ImageAspectRatio,
 ): Promise<{ imageBase64: string; mimeType: string }> {
-  let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9' });
+  let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: aspectRatio });
   if (!job.id) {
     throw new Error('BudgetPixel did not return a job id.');
   }
@@ -1835,12 +1848,14 @@ interface AiImageSettings {
 function generateAiImage(
   settings: AiImageSettings,
   prompt: string,
+  aspectRatio: ImageAspectRatio = '16:9',
 ): Promise<{ imageBase64: string; mimeType: string }> {
   if (settings.imageProvider === 'openai') {
     return callOpenAiImage(
       (settings.openaiApiKey ?? '').trim(),
       settings.openaiImageModel?.trim() || 'gpt-image-1-mini',
       prompt,
+      aspectRatio,
     );
   }
   if (settings.imageProvider === 'replicate') {
@@ -1848,6 +1863,7 @@ function generateAiImage(
       (settings.replicateApiKey ?? '').trim(),
       settings.replicateImageModel?.trim() || 'black-forest-labs/flux-2-klein-4b',
       prompt,
+      aspectRatio,
     );
   }
   if (settings.imageProvider === 'budgetpixel') {
@@ -1855,12 +1871,14 @@ function generateAiImage(
       (settings.budgetpixelApiKey ?? '').trim(),
       settings.budgetpixelImageModel?.trim() || 'nano-banana-2-lite',
       prompt,
+      aspectRatio,
     );
   }
   return callGeminiImage(
     (settings.geminiApiKey ?? '').trim(),
     settings.geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image',
     prompt,
+    aspectRatio,
   );
 }
 
@@ -2025,6 +2043,90 @@ export const generateTabHeaderBackground = onCall(
 
     try {
       return await generateAiImage(settings, prompt);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `Image generation failed: ${msg}`);
+    }
+  },
+);
+
+// ── Category icon AI generation ─────────────────────────────────────────────
+// Generates one full-bleed illustrated stat-card background per student-portal
+// Overview category (Circulars, Notices, Fees, Certificates) — the whole tile
+// becomes this image (character scene + colored background filling the frame),
+// not a small icon inset over the app's own gradient. Same stateless generate →
+// preview → client-side upload flow as generateCircularBackground/
+// generateTabHeaderBackground above, just keyed by a fixed category identity.
+
+const CATEGORY_ICON_KEYS = ['circulars', 'notices', 'fees', 'certificates'] as const;
+type CategoryIconKey = (typeof CATEGORY_ICON_KEYS)[number];
+
+const CATEGORY_ICON_SCENES: Record<CategoryIconKey, string> = {
+  circulars: 'a student pinning a paper notice or flyer onto a campus bulletin board',
+  notices: 'a student looking up, alert and attentive, at a large ringing bell or megaphone above a notice board',
+  fees: 'a student happily paying with a card at a counter, holding a receipt',
+  certificates: 'a student proudly holding up a rolled certificate scroll with a ribbon seal',
+};
+
+// Flat-vector "app illustration" style image models default toward blue/purple
+// without an explicit hue — an explicit, distinct color family per category is
+// what actually produces visual variety across the 4 tiles instead of every one
+// landing on the same default palette.
+const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
+  circulars: 'warm coral-orange',
+  notices: 'sunny golden-yellow',
+  fees: 'fresh emerald-green',
+  certificates: 'warm rose-pink',
+};
+
+function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
+  return [
+    'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge with a solid or softly-blended colored background — no white margins or empty canvas anywhere.',
+    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right half of the frame, with the left half kept visually simple (uncluttered background only, no important detail) so text can be legibly overlaid there.`,
+    imageStyleDirective(provider, `${CATEGORY_ICON_COLORS[key]} as the dominant background hue — not blue, not purple`),
+  ].join(' ');
+}
+
+export const generateCategoryIcon = onCall(
+  { region: 'asia-south1', timeoutSeconds: 120 },
+  async (request) => {
+    if (request.auth?.token?.admin !== true) {
+      throw new HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+
+    const { key } = (request.data ?? {}) as { key?: string };
+    if (!key || !(CATEGORY_ICON_KEYS as readonly string[]).includes(key)) {
+      throw new HttpsError('invalid-argument', `key must be one of: ${CATEGORY_ICON_KEYS.join(', ')}`);
+    }
+
+    const configSnap = await db.doc('adminConfig/aiSettings').get();
+    if (!configSnap.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
+      );
+    }
+    const settings = configSnap.data() as AiImageSettings;
+    if (settings.imageProvider === 'openai') {
+      if (!settings.openaiApiKey?.trim()) {
+        throw new HttpsError('failed-precondition', 'OpenAI API key is empty.');
+      }
+    } else if (settings.imageProvider === 'replicate') {
+      if (!settings.replicateApiKey?.trim()) {
+        throw new HttpsError('failed-precondition', 'Replicate API key is empty.');
+      }
+    } else if (settings.imageProvider === 'budgetpixel') {
+      if (!settings.budgetpixelApiKey?.trim()) {
+        throw new HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
+      }
+    } else if (!settings.geminiApiKey?.trim()) {
+      throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
+    }
+
+    const prompt = buildCategoryIconPrompt(key as CategoryIconKey, settings.imageProvider);
+
+    try {
+      return await generateAiImage(settings, prompt, '1:1');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
