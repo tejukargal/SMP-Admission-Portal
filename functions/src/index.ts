@@ -706,6 +706,31 @@ export const generateAdmissionSummary = onCall(
 // Deliberately excludes sensitive PII (Aadhaar, APAAR ID, DOB, parent names)
 // from what's sent to Gemini — only what's needed for a useful digest.
 
+// Mirrors the TCRecord/PCRecord shapes embedded on a student doc's tcHistory/
+// pcHistory arrays in src/types/index.ts on the student app — duplicated here
+// (only the fields the daily briefing digest actually cites) for the same
+// reason as SMP_FEE_HEAD_KEYS below: Cloud Functions can't import from that repo.
+interface TcHistoryEntry {
+  tcNumber?: string;
+  course?: string;
+  semester?: string;
+  issuedAt?: string;
+}
+
+interface PcHistoryEntry {
+  examPeriod?: string;
+  resultClass?: string;
+  issuedAt?: string;
+}
+
+// Mirrors the Refund shape (collection `refunds`) from src/types/index.ts on
+// the student app, same reason as above.
+interface RefundRecord {
+  refundAmount?: number;
+  refundCategory?: string;
+  paymentDate?: string;
+}
+
 interface StudentDoc {
   id?: string;
   regNumber?: string;
@@ -714,8 +739,8 @@ interface StudentDoc {
   year?: string;
   academicYear?: string;
   admissionStatus?: string;
-  tcHistory?: unknown[];
-  pcHistory?: unknown[];
+  tcHistory?: TcHistoryEntry[];
+  pcHistory?: PcHistoryEntry[];
 }
 
 type SMPHeadsDoc = Record<string, number | undefined>;
@@ -882,14 +907,16 @@ const BRIEFING_SYSTEM = `You are a warm, thoughtful mentor inside the student po
 
 ## PERSONAL NOTE
 - greeting: a short warm opening addressing the student by first name, e.g. "Dear Aditi," — vary the phrasing day to day rather than always using "Dear".
-- messageEn: 2-3 sentences in English, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence.
-- messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script.
+- messageEn: exactly 1-2 short sentences in English, no more than ~25 words total, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence. Be concise — every word should earn its place.
+- messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script. Just as concise as messageEn.
 
 ## HIGHLIGHTS
-- 3 to 7 short bullet points (each one sentence, using exact numbers/titles/dates from the data), prioritized by what's actually most relevant to this student right now — lead with anything time-sensitive (a pending fee due, a new pinned circular, an upcoming deadline) rather than a fixed checklist order.
-- Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
-- Never mention data you were not given. Never invent numbers.
-- If a category has nothing to report, skip it rather than inventing filler.
+Produce up to 10 short bullet points total (each one sentence, using exact numbers/titles/dates from the data — never invent one, never mention data you were not given), in two groups, in this order:
+
+1. PINNED CIRCULARS (up to 3 points): one point per circular listed under PINNED CIRCULARS, naming it and telling the student plainly that it's important and they should read it / act on it soon. If there are more than 3, pick the 3 most time-sensitive or recent. If there are fewer than 3 (including none), write only that many points — never invent a pinned circular to fill the group, and skip the group entirely if there are none.
+2. FEE DUES, REFUNDS & CERTIFICATES (up to 7 points): one point per genuinely distinct, real fact drawn only from the fee-due figure and the individual entries under CERTIFICATES & REFUNDS — e.g. the pending due amount, one specific refund with its amount, one specific TC or PC with its date. Never state the same fact twice across two points. If there are fewer than 7 real, distinct facts available, write only that many — do not pad, repeat, or invent to reach 7.
+
+Across both groups: accuracy always wins over hitting the count of 10 — a shorter, fully honest list beats a padded or repetitive one. Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
 
 ## OUTPUT FORMAT — STRICT
 Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "points": string[]}. No markdown fences, no explanation, no trailing text.`;
@@ -1007,9 +1034,24 @@ export const generateDailyBriefing = onCall(
     // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
     // across all of a student's year-by-year docs on the client.
     const primary = studentDocs.find((s) => !!s.course) ?? studentDocs[0];
-    const tcCount = studentDocs.reduce((s, d) => s + (d.tcHistory?.length ?? 0), 0);
-    const pcCount = studentDocs.reduce((s, d) => s + (d.pcHistory?.length ?? 0), 0);
-    const refundCount = refundsSnap.size;
+    const tcRecords = studentDocs.flatMap((d) => d.tcHistory ?? []);
+    const pcRecords = studentDocs.flatMap((d) => d.pcHistory ?? []);
+    const refundRecords = refundsSnap.docs.map((d) => d.data() as RefundRecord);
+    const tcCount = tcRecords.length;
+    const pcCount = pcRecords.length;
+    const refundCount = refundRecords.length;
+
+    // One combined, most-recent-first, capped line list for the HIGHLIGHTS prompt's
+    // "FEE DUES, REFUNDS & CERTIFICATES" group — real per-record facts (not just
+    // counts) so the model can cite specifics instead of a bare aggregate.
+    const certificateAndRefundLines = [
+      ...tcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `TC #${r.tcNumber ?? '?'} | ${r.course ?? ''} ${r.semester ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
+      ...pcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `PC | ${r.examPeriod ?? ''}, ${r.resultClass ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
+      ...refundRecords.map((r) => ({ date: r.paymentDate ?? '', line: `Refund | Rs.${r.refundAmount ?? '?'} (${r.refundCategory ?? 'GENERAL'}) | ${r.paymentDate ?? 'unknown date'}` })),
+    ]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 8)
+      .map((e) => e.line);
 
     const feeRecords = feeSnap.docs.map((d) => d.data() as FeeRecordDoc);
     const totalPaid = feeRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
@@ -1080,6 +1122,11 @@ export const generateDailyBriefing = onCall(
       ...(pinnedCirculars.length > 0
         ? pinnedCirculars.map((c) => `- ${c.title ?? ''} | ${c.department ?? ''} | ${c.date ?? ''} | ${c.subject ?? ''}`)
         : ['(none)']),
+      '',
+      // Per-record detail (not just the aggregate line above) so the HIGHLIGHTS
+      // prompt's fee/refund/certificate group can cite specific, real facts.
+      `CERTIFICATES & REFUNDS (most recent first):`,
+      ...(certificateAndRefundLines.length > 0 ? certificateAndRefundLines.map((l) => `- ${l}`) : ['(none)']),
       '',
       `RECENT CIRCULARS (title | department | date):`,
       ...circulars.slice(0, 10).map((c) => `- ${c.title ?? ''} | ${c.department ?? ''} | ${c.date ?? ''}`),
@@ -1715,8 +1762,9 @@ function budgetPixelRequest(method: 'GET' | 'POST', path: string, apiKey: string
             if (res.statusCode !== 200 && res.statusCode !== 201) {
               let apiMsg = `HTTP ${res.statusCode}`;
               try {
-                const errBody = JSON.parse(raw) as { message?: string; error?: string };
-                const detailMsg = errBody.message || errBody.error;
+                const errBody = JSON.parse(raw) as { message?: unknown; error?: unknown };
+                const detail = errBody.message ?? errBody.error;
+                const detailMsg = typeof detail === 'string' ? detail : undefined;
                 apiMsg += `: ${detailMsg || raw.slice(0, 300)}`;
               } catch {
                 if (raw) apiMsg += `: ${raw.slice(0, 300)}`;
@@ -1745,7 +1793,7 @@ async function callBudgetPixelImage(
   model: string,
   prompt: string,
 ): Promise<{ imageBase64: string; mimeType: string }> {
-  let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9', size: '1K' });
+  let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9' });
   if (!job.id) {
     throw new Error('BudgetPixel did not return a job id.');
   }

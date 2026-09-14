@@ -678,14 +678,16 @@ const BRIEFING_SYSTEM = `You are a warm, thoughtful mentor inside the student po
 
 ## PERSONAL NOTE
 - greeting: a short warm opening addressing the student by first name, e.g. "Dear Aditi," — vary the phrasing day to day rather than always using "Dear".
-- messageEn: 2-3 sentences in English, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence.
-- messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script.
+- messageEn: exactly 1-2 short sentences in English, no more than ~25 words total, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence. Be concise — every word should earn its place.
+- messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script. Just as concise as messageEn.
 
 ## HIGHLIGHTS
-- 3 to 7 short bullet points (each one sentence, using exact numbers/titles/dates from the data), prioritized by what's actually most relevant to this student right now — lead with anything time-sensitive (a pending fee due, a new pinned circular, an upcoming deadline) rather than a fixed checklist order.
-- Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
-- Never mention data you were not given. Never invent numbers.
-- If a category has nothing to report, skip it rather than inventing filler.
+Produce up to 10 short bullet points total (each one sentence, using exact numbers/titles/dates from the data — never invent one, never mention data you were not given), in two groups, in this order:
+
+1. PINNED CIRCULARS (up to 3 points): one point per circular listed under PINNED CIRCULARS, naming it and telling the student plainly that it's important and they should read it / act on it soon. If there are more than 3, pick the 3 most time-sensitive or recent. If there are fewer than 3 (including none), write only that many points — never invent a pinned circular to fill the group, and skip the group entirely if there are none.
+2. FEE DUES, REFUNDS & CERTIFICATES (up to 7 points): one point per genuinely distinct, real fact drawn only from the fee-due figure and the individual entries under CERTIFICATES & REFUNDS — e.g. the pending due amount, one specific refund with its amount, one specific TC or PC with its date. Never state the same fact twice across two points. If there are fewer than 7 real, distinct facts available, write only that many — do not pad, repeat, or invent to reach 7.
+
+Across both groups: accuracy always wins over hitting the count of 10 — a shorter, fully honest list beats a padded or repetitive one. Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
 
 ## OUTPUT FORMAT — STRICT
 Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "points": string[]}. No markdown fences, no explanation, no trailing text.`;
@@ -771,9 +773,23 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
     // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
     // across all of a student's year-by-year docs on the client.
     const primary = (_c = studentDocs.find((s) => !!s.course)) !== null && _c !== void 0 ? _c : studentDocs[0];
-    const tcCount = studentDocs.reduce((s, d) => { var _a, _b; return s + ((_b = (_a = d.tcHistory) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0); }, 0);
-    const pcCount = studentDocs.reduce((s, d) => { var _a, _b; return s + ((_b = (_a = d.pcHistory) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0); }, 0);
-    const refundCount = refundsSnap.size;
+    const tcRecords = studentDocs.flatMap((d) => { var _a; return (_a = d.tcHistory) !== null && _a !== void 0 ? _a : []; });
+    const pcRecords = studentDocs.flatMap((d) => { var _a; return (_a = d.pcHistory) !== null && _a !== void 0 ? _a : []; });
+    const refundRecords = refundsSnap.docs.map((d) => d.data());
+    const tcCount = tcRecords.length;
+    const pcCount = pcRecords.length;
+    const refundCount = refundRecords.length;
+    // One combined, most-recent-first, capped line list for the HIGHLIGHTS prompt's
+    // "FEE DUES, REFUNDS & CERTIFICATES" group — real per-record facts (not just
+    // counts) so the model can cite specifics instead of a bare aggregate.
+    const certificateAndRefundLines = [
+        ...tcRecords.map((r) => { var _a, _b, _c, _d, _e; return ({ date: (_a = r.issuedAt) !== null && _a !== void 0 ? _a : '', line: `TC #${(_b = r.tcNumber) !== null && _b !== void 0 ? _b : '?'} | ${(_c = r.course) !== null && _c !== void 0 ? _c : ''} ${(_d = r.semester) !== null && _d !== void 0 ? _d : ''} | issued ${(_e = r.issuedAt) !== null && _e !== void 0 ? _e : 'unknown date'}` }); }),
+        ...pcRecords.map((r) => { var _a, _b, _c, _d; return ({ date: (_a = r.issuedAt) !== null && _a !== void 0 ? _a : '', line: `PC | ${(_b = r.examPeriod) !== null && _b !== void 0 ? _b : ''}, ${(_c = r.resultClass) !== null && _c !== void 0 ? _c : ''} | issued ${(_d = r.issuedAt) !== null && _d !== void 0 ? _d : 'unknown date'}` }); }),
+        ...refundRecords.map((r) => { var _a, _b, _c, _d; return ({ date: (_a = r.paymentDate) !== null && _a !== void 0 ? _a : '', line: `Refund | Rs.${(_b = r.refundAmount) !== null && _b !== void 0 ? _b : '?'} (${(_c = r.refundCategory) !== null && _c !== void 0 ? _c : 'GENERAL'}) | ${(_d = r.paymentDate) !== null && _d !== void 0 ? _d : 'unknown date'}` }); }),
+    ]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 8)
+        .map((e) => e.line);
     const feeRecords = feeSnap.docs.map((d) => d.data());
     const totalPaid = feeRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
     // Precise due (allotted − paid) per academic year, mirroring fetchMyTotalDue in
@@ -834,6 +850,11 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
         ...(pinnedCirculars.length > 0
             ? pinnedCirculars.map((c) => { var _a, _b, _c, _d; return `- ${(_a = c.title) !== null && _a !== void 0 ? _a : ''} | ${(_b = c.department) !== null && _b !== void 0 ? _b : ''} | ${(_c = c.date) !== null && _c !== void 0 ? _c : ''} | ${(_d = c.subject) !== null && _d !== void 0 ? _d : ''}`; })
             : ['(none)']),
+        '',
+        // Per-record detail (not just the aggregate line above) so the HIGHLIGHTS
+        // prompt's fee/refund/certificate group can cite specific, real facts.
+        `CERTIFICATES & REFUNDS (most recent first):`,
+        ...(certificateAndRefundLines.length > 0 ? certificateAndRefundLines.map((l) => `- ${l}`) : ['(none)']),
         '',
         `RECENT CIRCULARS (title | department | date):`,
         ...circulars.slice(0, 10).map((c) => { var _a, _b, _c; return `- ${(_a = c.title) !== null && _a !== void 0 ? _a : ''} | ${(_b = c.department) !== null && _b !== void 0 ? _b : ''} | ${(_c = c.date) !== null && _c !== void 0 ? _c : ''}`; }),
@@ -1334,15 +1355,17 @@ function budgetPixelRequest(method, path, apiKey, body) {
             let raw = '';
             res.on('data', (chunk) => { raw += chunk.toString(); });
             res.on('end', () => {
+                var _a;
                 try {
                     if (res.statusCode !== 200 && res.statusCode !== 201) {
                         let apiMsg = `HTTP ${res.statusCode}`;
                         try {
                             const errBody = JSON.parse(raw);
-                            const detailMsg = errBody.message || errBody.error;
+                            const detail = (_a = errBody.message) !== null && _a !== void 0 ? _a : errBody.error;
+                            const detailMsg = typeof detail === 'string' ? detail : undefined;
                             apiMsg += `: ${detailMsg || raw.slice(0, 300)}`;
                         }
-                        catch (_a) {
+                        catch (_b) {
                             if (raw)
                                 apiMsg += `: ${raw.slice(0, 300)}`;
                         }
@@ -1367,7 +1390,7 @@ function budgetPixelRequest(method, path, apiKey, body) {
  *  GET polls it (path keyed by job id) until status is 'succeeded'/'failed'/'timeout'. */
 async function callBudgetPixelImage(apiKey, model, prompt) {
     var _a, _b;
-    let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9', size: '1K' });
+    let job = await budgetPixelRequest('POST', `/v1/images/${model}`, apiKey, { prompt, aspect_ratio: '16:9' });
     if (!job.id) {
         throw new Error('BudgetPixel did not return a job id.');
     }
