@@ -1502,17 +1502,17 @@ exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1'
 // instead of a per-circular one.
 const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates', 'notices'];
 const TAB_HEADER_SCENES = {
-    home: 'a welcoming college building exterior with a clear sky, front lawn, and entrance steps',
+    home: 'a welcoming student standing and waving cheerfully at the college entrance steps',
     circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
-    profile: 'a friendly student in college uniform, portrait-style, holding a notebook',
+    profile: 'a friendly student in college uniform, standing, holding a notebook',
     fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
     certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
     notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
 };
 function buildTabHeaderPrompt(tabKey, provider) {
     return [
-        'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
-        `Depict ${TAB_HEADER_SCENES[tabKey]}.`,
+        'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
+        `Depict ${TAB_HEADER_SCENES[tabKey]}, centered mainly in the right half of the frame. Let the scene extend slightly past the center and gently fade — through a soft gradient, never a hard edge — into a lighter, pastel-toned version of the same background color as it reaches the left side, so the left portion ends up a plain, softly pastel wash with no strong shapes, lines, or objects, calm enough for text to sit clearly on top.`,
         imageStyleDirective(provider, 'warm and friendly college-brochure color palette'),
     ].join(' ');
 }
@@ -1576,16 +1576,16 @@ const CATEGORY_ICON_SCENES = {
 // what actually produces visual variety across the 4 tiles instead of every one
 // landing on the same default palette.
 const CATEGORY_ICON_COLORS = {
-    circulars: 'warm coral-orange',
-    notices: 'sunny golden-yellow',
-    fees: 'fresh emerald-green',
-    certificates: 'warm rose-pink',
+    circulars: 'soft coral-orange',
+    notices: 'warm butter-yellow',
+    fees: 'fresh mint-green',
+    certificates: 'soft blush-pink',
 };
 function buildCategoryIconPrompt(key, provider) {
     return [
-        'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge with a solid or softly-blended colored background — no white margins or empty canvas anywhere.',
-        `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right half of the frame, with the left half kept visually simple (uncluttered background only, no important detail) so text can be legibly overlaid there.`,
-        imageStyleDirective(provider, `${CATEGORY_ICON_COLORS[key]} as the dominant background hue — not blue, not purple`),
+        'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge with a single solid, light and airy, softly saturated flat color background — no soft gradients, no dark or deeply saturated tones, no gray, dull, or washed-out colors anywhere in the frame.',
+        `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right half of the frame. The left half must stay the exact same solid color as the rest of the background (no gradient or separate shade) and simply free of characters or objects, so text can be legibly overlaid there.`,
+        imageStyleDirective(provider, `a single solid, light and softly saturated ${CATEGORY_ICON_COLORS[key]} as the dominant background color — bright and cheerful but light, not dark, not blue, not purple, not gray/dull/muted`),
     ].join(' ');
 }
 exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
