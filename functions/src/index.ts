@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as https from 'https';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
@@ -946,6 +947,78 @@ function isBriefingResult(value: unknown): value is BriefingResult {
   );
 }
 
+/** Reads adminConfig/aiSettings and validates the keys the daily briefing
+ *  needs — shared by the on-demand callable below and the scheduled
+ *  pre-generation job. Gemini's key is required unconditionally (it drives
+ *  the text briefing whichever provider draws the image). */
+async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSettings: AiImageSettings }> {
+  const configSnap = await db.doc('adminConfig/aiSettings').get();
+  if (!configSnap.exists) {
+    throw new HttpsError(
+      'failed-precondition',
+      'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
+    );
+  }
+  const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data() as {
+    geminiApiKey?: string;
+    geminiTextModel?: string;
+    geminiImageModel?: string;
+    imageProvider?: 'gemini' | 'openai' | 'replicate' | 'budgetpixel';
+    openaiApiKey?: string;
+    openaiImageModel?: string;
+    replicateApiKey?: string;
+    replicateImageModel?: string;
+    budgetpixelApiKey?: string;
+    budgetpixelImageModel?: string;
+  };
+  if (!geminiApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
+  }
+  if (imageProvider === 'openai' && !openaiApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'OpenAI API key is empty.');
+  }
+  if (imageProvider === 'replicate' && !replicateApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'Replicate API key is empty.');
+  }
+  if (imageProvider === 'budgetpixel' && !budgetpixelApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
+  }
+  return {
+    textModel: geminiTextModel?.trim() || 'gemini-3.5-flash-lite',
+    imageSettings: {
+      imageProvider,
+      geminiApiKey: geminiApiKey.trim(),
+      geminiImageModel: geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image',
+      openaiApiKey: openaiApiKey?.trim(),
+      openaiImageModel: openaiImageModel?.trim(),
+      replicateApiKey: replicateApiKey?.trim(),
+      replicateImageModel: replicateImageModel?.trim(),
+      budgetpixelApiKey: budgetpixelApiKey?.trim(),
+      budgetpixelImageModel: budgetpixelImageModel?.trim(),
+    },
+  };
+}
+
+/** Generates the shared quote-of-the-day (text + AI background image) ahead
+ *  of demand, so the first student to open their Daily Briefing each morning
+ *  doesn't sit through 10-30 s of image generation inside the callable.
+ *  Runs at 00:10 IST, with a 06:00 IST re-run as a safety net (the provider
+ *  can be flaky at midnight); getOrCreateDailyQuote is idempotent, so the
+ *  second run is a no-op when the first succeeded. */
+export const pregenerateDailyQuote = onSchedule(
+  { schedule: '10 0,6 * * *', timeZone: 'Asia/Kolkata', region: 'asia-south1', timeoutSeconds: 300 },
+  async () => {
+    const today = todayIST();
+    try {
+      const { imageSettings } = await loadBriefingAiSettings();
+      const quote = await getOrCreateDailyQuote(today, imageSettings);
+      console.log(`pregenerateDailyQuote: ${today} ready (${quote.quoteAuthor}) → ${quote.backgroundImageUrl}`);
+    } catch (err) {
+      console.error(`pregenerateDailyQuote: failed for ${today}`, err);
+    }
+  },
+);
+
 export const generateDailyBriefing = onCall(
   { region: 'asia-south1', timeoutSeconds: 120 },
   async (request) => {
@@ -963,56 +1036,13 @@ export const generateDailyBriefing = onCall(
       throw new HttpsError('failed-precondition', 'No registration number on this account yet.');
     }
 
-    const configSnap = await db.doc('adminConfig/aiSettings').get();
-    if (!configSnap.exists) {
-      throw new HttpsError(
-        'failed-precondition',
-        'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
-      );
-    }
-    const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data() as {
-      geminiApiKey?: string;
-      geminiTextModel?: string;
-      geminiImageModel?: string;
-      imageProvider?: 'gemini' | 'openai' | 'replicate' | 'budgetpixel';
-      openaiApiKey?: string;
-      openaiImageModel?: string;
-      replicateApiKey?: string;
-      replicateImageModel?: string;
-      budgetpixelApiKey?: string;
-      budgetpixelImageModel?: string;
-    };
-    // geminiApiKey is required unconditionally — it's also used for the text
-    // briefing below regardless of which provider generates the image.
-    if (!geminiApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
-    }
-    if (imageProvider === 'openai' && !openaiApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'OpenAI API key is empty.');
-    }
-    if (imageProvider === 'replicate' && !replicateApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'Replicate API key is empty.');
-    }
-    if (imageProvider === 'budgetpixel' && !budgetpixelApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
-    }
-    const textModel = geminiTextModel?.trim() || 'gemini-3.5-flash-lite';
-    const imageModel = geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image';
+    const { textModel, imageSettings } = await loadBriefingAiSettings();
+    const geminiApiKey = imageSettings.geminiApiKey ?? '';
 
     const today = todayIST();
 
     const [quote, cachedBriefingSnap] = await Promise.all([
-      getOrCreateDailyQuote(today, {
-        imageProvider,
-        geminiApiKey: geminiApiKey.trim(),
-        geminiImageModel: imageModel,
-        openaiApiKey: openaiApiKey?.trim(),
-        openaiImageModel: openaiImageModel?.trim(),
-        replicateApiKey: replicateApiKey?.trim(),
-        replicateImageModel: replicateImageModel?.trim(),
-        budgetpixelApiKey: budgetpixelApiKey?.trim(),
-        budgetpixelImageModel: budgetpixelImageModel?.trim(),
-      }),
+      getOrCreateDailyQuote(today, imageSettings),
       db.collection('dailyBriefing').doc(regNumber).get(),
     ]);
 

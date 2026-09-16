@@ -37,10 +37,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.optimizeStoredImages = exports.generateCategoryIcon = exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyBriefing = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.optimizeStoredImages = exports.generateCategoryIcon = exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyBriefing = exports.pregenerateDailyQuote = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https = __importStar(require("https"));
 const crypto = __importStar(require("crypto"));
 const sharp_1 = __importDefault(require("sharp"));
@@ -722,27 +723,16 @@ function isBriefingResult(value) {
         typeof v.messageKn === 'string' &&
         Array.isArray(v.points) && v.points.length > 0 && v.points.every((p) => typeof p === 'string'));
 }
-exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
-    const claims = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token;
-    if (!(claims === null || claims === void 0 ? void 0 : claims.student)) {
-        throw new https_1.HttpsError('unauthenticated', 'Student sign-in required.');
-    }
-    let regNumber = claims.regNumber;
-    if (!regNumber && claims.studentDocId) {
-        const doc = await db.collection('students').doc(claims.studentDocId).get();
-        regNumber = (_b = doc.data()) === null || _b === void 0 ? void 0 : _b.regNumber;
-    }
-    if (!regNumber) {
-        throw new https_1.HttpsError('failed-precondition', 'No registration number on this account yet.');
-    }
+/** Reads adminConfig/aiSettings and validates the keys the daily briefing
+ *  needs — shared by the on-demand callable below and the scheduled
+ *  pre-generation job. Gemini's key is required unconditionally (it drives
+ *  the text briefing whichever provider draws the image). */
+async function loadBriefingAiSettings() {
     const configSnap = await db.doc('adminConfig/aiSettings').get();
     if (!configSnap.exists) {
         throw new https_1.HttpsError('failed-precondition', 'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.');
     }
     const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data();
-    // geminiApiKey is required unconditionally — it's also used for the text
-    // briefing below regardless of which provider generates the image.
     if (!(geminiApiKey === null || geminiApiKey === void 0 ? void 0 : geminiApiKey.trim())) {
         throw new https_1.HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
@@ -755,21 +745,57 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
     if (imageProvider === 'budgetpixel' && !(budgetpixelApiKey === null || budgetpixelApiKey === void 0 ? void 0 : budgetpixelApiKey.trim())) {
         throw new https_1.HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
     }
-    const textModel = (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.5-flash-lite';
-    const imageModel = (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image';
-    const today = todayIST();
-    const [quote, cachedBriefingSnap] = await Promise.all([
-        getOrCreateDailyQuote(today, {
+    return {
+        textModel: (geminiTextModel === null || geminiTextModel === void 0 ? void 0 : geminiTextModel.trim()) || 'gemini-3.5-flash-lite',
+        imageSettings: {
             imageProvider,
             geminiApiKey: geminiApiKey.trim(),
-            geminiImageModel: imageModel,
+            geminiImageModel: (geminiImageModel === null || geminiImageModel === void 0 ? void 0 : geminiImageModel.trim()) || 'gemini-3.1-flash-lite-image',
             openaiApiKey: openaiApiKey === null || openaiApiKey === void 0 ? void 0 : openaiApiKey.trim(),
             openaiImageModel: openaiImageModel === null || openaiImageModel === void 0 ? void 0 : openaiImageModel.trim(),
             replicateApiKey: replicateApiKey === null || replicateApiKey === void 0 ? void 0 : replicateApiKey.trim(),
             replicateImageModel: replicateImageModel === null || replicateImageModel === void 0 ? void 0 : replicateImageModel.trim(),
             budgetpixelApiKey: budgetpixelApiKey === null || budgetpixelApiKey === void 0 ? void 0 : budgetpixelApiKey.trim(),
             budgetpixelImageModel: budgetpixelImageModel === null || budgetpixelImageModel === void 0 ? void 0 : budgetpixelImageModel.trim(),
-        }),
+        },
+    };
+}
+/** Generates the shared quote-of-the-day (text + AI background image) ahead
+ *  of demand, so the first student to open their Daily Briefing each morning
+ *  doesn't sit through 10-30 s of image generation inside the callable.
+ *  Runs at 00:10 IST, with a 06:00 IST re-run as a safety net (the provider
+ *  can be flaky at midnight); getOrCreateDailyQuote is idempotent, so the
+ *  second run is a no-op when the first succeeded. */
+exports.pregenerateDailyQuote = (0, scheduler_1.onSchedule)({ schedule: '10 0,6 * * *', timeZone: 'Asia/Kolkata', region: 'asia-south1', timeoutSeconds: 300 }, async () => {
+    const today = todayIST();
+    try {
+        const { imageSettings } = await loadBriefingAiSettings();
+        const quote = await getOrCreateDailyQuote(today, imageSettings);
+        console.log(`pregenerateDailyQuote: ${today} ready (${quote.quoteAuthor}) → ${quote.backgroundImageUrl}`);
+    }
+    catch (err) {
+        console.error(`pregenerateDailyQuote: failed for ${today}`, err);
+    }
+});
+exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    const claims = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token;
+    if (!(claims === null || claims === void 0 ? void 0 : claims.student)) {
+        throw new https_1.HttpsError('unauthenticated', 'Student sign-in required.');
+    }
+    let regNumber = claims.regNumber;
+    if (!regNumber && claims.studentDocId) {
+        const doc = await db.collection('students').doc(claims.studentDocId).get();
+        regNumber = (_b = doc.data()) === null || _b === void 0 ? void 0 : _b.regNumber;
+    }
+    if (!regNumber) {
+        throw new https_1.HttpsError('failed-precondition', 'No registration number on this account yet.');
+    }
+    const { textModel, imageSettings } = await loadBriefingAiSettings();
+    const geminiApiKey = (_c = imageSettings.geminiApiKey) !== null && _c !== void 0 ? _c : '';
+    const today = todayIST();
+    const [quote, cachedBriefingSnap] = await Promise.all([
+        getOrCreateDailyQuote(today, imageSettings),
         db.collection('dailyBriefing').doc(regNumber).get(),
     ]);
     const cachedBriefing = cachedBriefingSnap.data();
@@ -794,7 +820,7 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
     // Prefer the doc for the current-looking enrollment (has admissionStatus/course); fall
     // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
     // across all of a student's year-by-year docs on the client.
-    const primary = (_c = studentDocs.find((s) => !!s.course)) !== null && _c !== void 0 ? _c : studentDocs[0];
+    const primary = (_d = studentDocs.find((s) => !!s.course)) !== null && _d !== void 0 ? _d : studentDocs[0];
     const tcRecords = studentDocs.flatMap((d) => { var _a; return (_a = d.tcHistory) !== null && _a !== void 0 ? _a : []; });
     const pcRecords = studentDocs.flatMap((d) => { var _a; return (_a = d.pcHistory) !== null && _a !== void 0 ? _a : []; });
     const refundRecords = refundsSnap.docs.map((d) => d.data());
@@ -820,7 +846,7 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
     for (const r of feeRecords) {
         if (!r.academicYear)
             continue;
-        const list = (_d = recordsByYear.get(r.academicYear)) !== null && _d !== void 0 ? _d : [];
+        const list = (_e = recordsByYear.get(r.academicYear)) !== null && _e !== void 0 ? _e : [];
         list.push(r);
         recordsByYear.set(r.academicYear, list);
     }
@@ -854,14 +880,14 @@ exports.generateDailyBriefing = (0, https_1.onCall)({ region: 'asia-south1', tim
         .map((d) => d.data())
         .filter((n) => noticeAppliesToStudent(n, primary))
         .slice(0, 8);
-    const fullName = (_e = primary.studentNameSSLC) === null || _e === void 0 ? void 0 : _e.trim();
+    const fullName = (_f = primary.studentNameSSLC) === null || _f === void 0 ? void 0 : _f.trim();
     const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
     const { dayLabel, dateLabel } = todayLabelsIST();
     const dataBlock = [
         `STUDENT FIRST NAME: ${firstName}`,
         `TODAY: ${dayLabel}, ${dateLabel}`,
-        `STUDENT: ${fullName !== null && fullName !== void 0 ? fullName : 'Student'}, ${(_f = primary.course) !== null && _f !== void 0 ? _f : ''} ${(_g = primary.year) !== null && _g !== void 0 ? _g : ''} (${(_h = primary.academicYear) !== null && _h !== void 0 ? _h : ''})`,
-        `Admission status: ${(_j = primary.admissionStatus) !== null && _j !== void 0 ? _j : 'unknown'}`,
+        `STUDENT: ${fullName !== null && fullName !== void 0 ? fullName : 'Student'}, ${(_g = primary.course) !== null && _g !== void 0 ? _g : ''} ${(_h = primary.year) !== null && _h !== void 0 ? _h : ''} (${(_j = primary.academicYear) !== null && _j !== void 0 ? _j : ''})`,
+        `Admission status: ${(_k = primary.admissionStatus) !== null && _k !== void 0 ? _k : 'unknown'}`,
         totalDue > 0
             ? `Fee dues: Rs.${totalDue} pending across academic years (Rs.${totalPaid} paid so far)`
             : `Fee dues: none — fully paid (Rs.${totalPaid} paid so far)`,
