@@ -11,6 +11,7 @@ import {
 } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage, app } from '../config/firebase';
+import { imageExtensionFor, imageUploadMetadata } from './imageUpload';
 import type { Circular, StoredAttachment } from '../types';
 
 const COL = 'circulars';
@@ -41,10 +42,12 @@ export async function generateCircularBackground(input: GenerateBackgroundInput)
 
 /** Uploads an accepted AI-generated background and returns its download URL. */
 export async function uploadCircularBackground(circularId: string, background: PendingBackground): Promise<string> {
-  const ext = background.mimeType === 'image/jpeg' ? 'jpg' : 'png';
-  const path = `circularBackgrounds/${circularId}/background.${ext}`;
+  // Timestamped so a regenerated background lands at a new path (and so a
+  // new download URL) — the student app caches images by URL, and an
+  // overwritten object keeps its old token, which would serve the stale image.
+  const path = `circularBackgrounds/${circularId}/background-${Date.now()}.${imageExtensionFor(background.mimeType)}`;
   const sref = storageRef(storage, path);
-  await uploadString(sref, background.base64, 'base64', { contentType: background.mimeType });
+  await uploadString(sref, background.base64, 'base64', imageUploadMetadata(background.mimeType));
   return getDownloadURL(sref);
 }
 

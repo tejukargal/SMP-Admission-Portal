@@ -12,6 +12,7 @@ import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUse
 import { auth } from '../config/firebase';
 import { getMessagingConfig, saveMessagingConfig, getAiSettingsConfig, saveAiSettingsConfig, type AiSettingsConfig } from '../services/adminConfigService';
 import { getPublishedVersion, getPendingRelease, savePendingRelease, publishVersionNow, type PublishedVersion, type PendingRelease } from '../services/appVersionService';
+import { optimizeStoredImages, type OptimizeStoredImagesResult } from '../services/imageOptimizationService';
 import { RESET_PASSKEY } from '../config/constants';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
@@ -161,6 +162,9 @@ export function Settings() {
   const [aiSaving, setAiSaving] = useState(false);
   const [aiSaveMsg, setAiSaveMsg] = useState('');
   const [aiSaveError, setAiSaveError] = useState('');
+  const [imgOptRunning, setImgOptRunning] = useState(false);
+  const [imgOptResult, setImgOptResult] = useState<OptimizeStoredImagesResult | null>(null);
+  const [imgOptError, setImgOptError] = useState('');
 
   // App version state
   const [publishedVersion, setPublishedVersion] = useState<PublishedVersion | null>(null);
@@ -684,6 +688,19 @@ export function Settings() {
       setAiSaveError(err instanceof Error ? err.message : 'Failed to save.');
     } finally {
       setAiSaving(false);
+    }
+  }
+
+  async function handleOptimizeStoredImages() {
+    setImgOptRunning(true);
+    setImgOptResult(null);
+    setImgOptError('');
+    try {
+      setImgOptResult(await optimizeStoredImages());
+    } catch (err: unknown) {
+      setImgOptError(err instanceof Error ? err.message : 'Optimisation failed.');
+    } finally {
+      setImgOptRunning(false);
     }
   }
 
@@ -1337,6 +1354,42 @@ export function Settings() {
                       Save AI Settings
                     </Button>
                   </form>
+                )}
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+                <h3 className="text-base font-medium text-gray-800 mb-1">Image Optimisation</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Newly generated images are automatically downscaled and saved as WebP. Run this once
+                  to convert the images that were stored before that (tab headers, category icons and
+                  every circular background) — they are multi-megabyte PNGs that make the student app
+                  show blank backdrops for several seconds after login. Safe to run again; images that
+                  are already WebP are skipped.
+                </p>
+                <Button type="button" loading={imgOptRunning} onClick={() => { void handleOptimizeStoredImages(); }}>
+                  {imgOptRunning ? 'Optimising… (this can take a few minutes)' : 'Optimise stored images'}
+                </Button>
+                {imgOptError && (
+                  <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{imgOptError}</p>
+                )}
+                {imgOptResult && (
+                  <div className="mt-3 space-y-2 text-sm">
+                    <p className="text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
+                      Converted {imgOptResult.converted.length}, skipped {imgOptResult.skipped.length}, failed {imgOptResult.failed.length}.
+                      {imgOptResult.converted.length > 0 && (() => {
+                        const before = imgOptResult.converted.reduce((n, c) => n + c.bytesBefore, 0);
+                        const after = imgOptResult.converted.reduce((n, c) => n + c.bytesAfter, 0);
+                        return ` ${(before / 1048576).toFixed(1)} MB → ${(after / 1048576).toFixed(1)} MB.`;
+                      })()}
+                    </p>
+                    {imgOptResult.failed.length > 0 && (
+                      <ul className="text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 space-y-1">
+                        {imgOptResult.failed.map((f) => (
+                          <li key={f.label}><span className="font-medium">{f.label}</span>: {f.error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

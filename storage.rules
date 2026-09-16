@@ -38,7 +38,7 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
-    // ── AI-generated circular background images (PNG/JPEG, 10MB) ───────────
+    // ── AI-generated circular background images (WebP/PNG/JPEG, 10MB) ──────
     // Generated via the generateCircularBackground Cloud Function, then
     // uploaded here by the admin client once accepted; the resulting download
     // URL is stored on the Firestore circular doc as backgroundImageUrl.
@@ -49,11 +49,11 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow create, update: if isAdmin()
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/png|image/jpeg');
+        && request.resource.contentType.matches('image/png|image/jpeg|image/webp');
       allow delete: if isAdmin();
     }
 
-    // ── AI-generated tab header background images (PNG/JPEG, 10MB) ─────────
+    // ── AI-generated tab header background images (WebP/PNG/JPEG, 10MB) ────
     // One fixed file per student-portal tab (tabHeaderBackgrounds/home.png,
     // etc.), generated via generateTabHeaderBackground and uploaded here by
     // the admin client; the download URL is stored on appConfig/tabHeaders.
@@ -61,11 +61,11 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow create, update: if isAdmin()
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/png|image/jpeg');
+        && request.resource.contentType.matches('image/png|image/jpeg|image/webp');
       allow delete: if isAdmin();
     }
 
-    // ── AI-generated category icon images (PNG/JPEG, 10MB) ─────────────────
+    // ── AI-generated category icon images (WebP/PNG/JPEG, 10MB) ────────────
     // One fixed file per Overview/Recent-Activity category
     // (categoryIcons/circulars.png, etc.), generated via generateCategoryIcon
     // and uploaded here by the admin client; the download URL is stored on
@@ -74,7 +74,7 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow create, update: if isAdmin()
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/png|image/jpeg');
+        && request.resource.contentType.matches('image/png|image/jpeg|image/webp');
       allow delete: if isAdmin();
     }
 

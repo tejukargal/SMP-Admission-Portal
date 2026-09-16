@@ -205,7 +205,12 @@ service cloud.firestore {
     // (or the checkPlayStoreRelease Cloud Function via the Admin SDK, which
     // bypasses rules entirely).
     match /appConfig/{docId} {
-      allow read: if isActiveUser() || isStudentClaim();
+      // tabHeaders / categoryIcons hold nothing but AI-image download URLs
+      // (no student data). They're readable pre-auth so the student app can
+      // start downloading those images while the Login screen is still up,
+      // instead of after sign-in — see the app's warmPublicPortalImages().
+      allow read: if docId in ['tabHeaders', 'categoryIcons']
+        || isActiveUser() || isStudentClaim();
       allow write: if isAdmin();
     }
 

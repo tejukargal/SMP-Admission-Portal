@@ -7,6 +7,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage, app } from '../config/firebase';
+import { imageExtensionFor, imageUploadMetadata } from './imageUpload';
 
 const functions = getFunctions(app, 'asia-south1');
 
@@ -45,10 +46,11 @@ export async function generateCategoryIcon(key: CategoryIconKey): Promise<Pendin
 
 /** Uploads an accepted AI-generated icon and saves its download URL onto the shared appConfig/categoryIcons doc. */
 export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategoryIcon): Promise<string> {
-  const ext = icon.mimeType === 'image/jpeg' ? 'jpg' : 'png';
-  const path = `categoryIcons/${key}.${ext}`;
+  // Timestamped for the same reason as uploadCircularBackground: a
+  // regenerated icon must get a new URL, not new bytes behind the old one.
+  const path = `categoryIcons/${key}-${Date.now()}.${imageExtensionFor(icon.mimeType)}`;
   const sref = storageRef(storage, path);
-  await uploadString(sref, icon.base64, 'base64', { contentType: icon.mimeType });
+  await uploadString(sref, icon.base64, 'base64', imageUploadMetadata(icon.mimeType));
   const url = await getDownloadURL(sref);
   await setDoc(doc(db, 'appConfig', 'categoryIcons'), { [key]: url }, { merge: true });
   return url;

@@ -22,12 +22,28 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateCategoryIcon = exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyBriefing = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
+exports.optimizeStoredImages = exports.generateCategoryIcon = exports.generateTabHeaderBackground = exports.generateCircularBackground = exports.generateCircularDraft = exports.generateDailyBriefing = exports.generateAdmissionSummary = exports.sendBulkSMS = exports.studentLogin = exports.syncMyAdminClaim = exports.syncAdminClaim = exports.checkPlayStoreRelease = exports.notifyOnStudentNotification = exports.notifyOnCircularUpdated = exports.notifyOnNewCircular = exports.notifyOnNoticeUpdated = exports.notifyOnNewNotice = void 0;
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https = __importStar(require("https"));
+const crypto = __importStar(require("crypto"));
+const sharp_1 = __importDefault(require("sharp"));
 const indianQuotes_1 = require("./indianQuotes");
 admin.initializeApp();
 const db = admin.firestore();
@@ -639,14 +655,20 @@ function buildDailyQuoteImagePrompt(scene, provider) {
  *  a public download URL — storage.rules allows public read on this path
  *  since it's generic daily-inspiration art, nothing sensitive. */
 async function uploadDailyQuoteImage(date, imageBase64, mimeType) {
-    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    const path = `dailyQuoteBackgrounds/${date}.${ext}`;
+    const path = `dailyQuoteBackgrounds/${date}.${imageExtensionFor(mimeType)}`;
     const bucket = admin.storage().bucket();
     await bucket.file(path).save(Buffer.from(imageBase64, 'base64'), {
-        metadata: { contentType: mimeType },
+        metadata: { contentType: mimeType, cacheControl: OPTIMIZED_CACHE_CONTROL },
         resumable: false,
     });
     return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+}
+function imageExtensionFor(mimeType) {
+    if (mimeType === 'image/webp')
+        return 'webp';
+    if (mimeType === 'image/jpeg')
+        return 'jpg';
+    return 'png';
 }
 /** Reads (or, on the first request of the day across all students, generates)
  *  the shared "quote of the day" — one curated Indian-personality quote,
@@ -1412,7 +1434,44 @@ async function callBudgetPixelImage(apiKey, model, prompt, aspectRatio) {
     const bytes = await downloadAsBase64(outputUrl);
     return { imageBase64: bytes.toString('base64'), mimeType: 'image/png' };
 }
-function generateAiImage(settings, prompt, aspectRatio = '16:9') {
+// ── Generated-image optimisation ────────────────────────────────────────────
+// Every provider hands back a raw ~1-1.5 MP PNG (1-4 MB). The student app
+// downloads up to a dozen of these on its very first login and every one of
+// them is only ever displayed as a card/header backdrop at phone width, so
+// the full-resolution PNG is pure cost: it was the single biggest reason the
+// portal showed blank backdrops for 5-10 s after login. Downscaling to a
+// phone-appropriate width and re-encoding as WebP shrinks each image
+// 10-30x (typically 50-150 KB) with no visible difference at display size.
+// Applied inside generateAiImage() so all four call sites (circular, tab
+// header, category icon, daily quote) — and the one-off optimizeStoredImages
+// migration below — share exactly one pipeline.
+const OPTIMIZED_IMAGE_MIME = 'image/webp';
+const OPTIMIZED_IMAGE_WIDTH = { '16:9': 1280, '1:1': 800 };
+const OPTIMIZED_IMAGE_QUALITY = 82;
+const OPTIMIZED_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+async function optimizeImageBuffer(input, aspectRatio) {
+    return (0, sharp_1.default)(input)
+        .resize({ width: OPTIMIZED_IMAGE_WIDTH[aspectRatio], withoutEnlargement: true })
+        .webp({ quality: OPTIMIZED_IMAGE_QUALITY })
+        .toBuffer();
+}
+async function optimizeGeneratedImage(image, aspectRatio) {
+    try {
+        const out = await optimizeImageBuffer(Buffer.from(image.imageBase64, 'base64'), aspectRatio);
+        return { imageBase64: out.toString('base64'), mimeType: OPTIMIZED_IMAGE_MIME };
+    }
+    catch (err) {
+        // Never fail a generation over the optimisation step — the raw provider
+        // output is still a perfectly valid (just larger) image.
+        console.warn('optimizeGeneratedImage: falling back to raw provider output', err);
+        return image;
+    }
+}
+async function generateAiImage(settings, prompt, aspectRatio = '16:9') {
+    const raw = await generateRawAiImage(settings, prompt, aspectRatio);
+    return optimizeGeneratedImage(raw, aspectRatio);
+}
+function generateRawAiImage(settings, prompt, aspectRatio) {
     var _a, _b, _c, _d, _e, _f, _g, _h;
     if (settings.imageProvider === 'openai') {
         return callOpenAiImage(((_a = settings.openaiApiKey) !== null && _a !== void 0 ? _a : '').trim(), ((_b = settings.openaiImageModel) === null || _b === void 0 ? void 0 : _b.trim()) || 'gpt-image-1-mini', prompt, aspectRatio);
@@ -1628,5 +1687,124 @@ exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', time
         const msg = err instanceof Error ? err.message : String(err);
         throw new https_1.HttpsError('internal', `Image generation failed: ${msg}`);
     }
+});
+/** Extracts the bucket object path from a Firebase Storage download URL
+ *  (`.../o/{encodedPath}?alt=media...`), or null if it isn't one. */
+function storagePathFromDownloadUrl(url) {
+    const m = /\/o\/([^?]+)/.exec(url);
+    if (!m)
+        return null;
+    try {
+        return decodeURIComponent(m[1]);
+    }
+    catch (_a) {
+        return null;
+    }
+}
+async function optimizeOneStoredImage(target) {
+    const oldPath = storagePathFromDownloadUrl(target.url);
+    if (!oldPath)
+        return { status: 'skipped', reason: 'not a Firebase Storage download URL' };
+    if (/\.webp$/i.test(oldPath))
+        return { status: 'skipped', reason: 'already WebP' };
+    const bucket = admin.storage().bucket();
+    const oldFile = bucket.file(oldPath);
+    const [exists] = await oldFile.exists();
+    if (!exists)
+        return { status: 'skipped', reason: `object not found: ${oldPath}` };
+    const [original] = await oldFile.download();
+    const optimized = await optimizeImageBuffer(original, target.aspectRatio);
+    const newPath = oldPath.replace(/\.[a-z0-9]+$/i, '') + '.webp';
+    // Client-side getDownloadURL() mints this token automatically; the Admin
+    // SDK doesn't, so set it explicitly to produce the same tokenised URL shape
+    // the rest of the app (and storage.rules) already relies on.
+    const token = crypto.randomUUID();
+    await bucket.file(newPath).save(optimized, {
+        metadata: {
+            contentType: OPTIMIZED_IMAGE_MIME,
+            cacheControl: OPTIMIZED_CACHE_CONTROL,
+            metadata: { firebaseStorageDownloadTokens: token },
+        },
+        resumable: false,
+    });
+    const newUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(newPath)}` +
+        `?alt=media&token=${token}`;
+    await target.update(newUrl);
+    // Firestore now points at the WebP; the old PNG is unreferenced and can go.
+    // Best-effort — an orphaned file is harmless, a failed migration isn't.
+    try {
+        await oldFile.delete();
+    }
+    catch (err) {
+        console.warn(`optimizeStoredImages: could not delete old object ${oldPath}`, err);
+    }
+    return { status: 'converted', from: oldPath, to: newPath, bytesBefore: original.length, bytesAfter: optimized.length };
+}
+exports.optimizeStoredImages = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 540, memory: '1GiB' }, async (request) => {
+    var _a, _b, _c, _d;
+    if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+    const targets = [];
+    const tabHeadersRef = db.doc('appConfig/tabHeaders');
+    const tabHeaders = (_c = (await tabHeadersRef.get()).data()) !== null && _c !== void 0 ? _c : {};
+    for (const key of TAB_HEADER_KEYS) {
+        const url = tabHeaders[key];
+        if (typeof url === 'string' && url) {
+            targets.push({
+                label: `tabHeaders/${key}`,
+                url,
+                aspectRatio: '16:9',
+                update: (newUrl) => tabHeadersRef.set({ [key]: newUrl }, { merge: true }),
+            });
+        }
+    }
+    const categoryIconsRef = db.doc('appConfig/categoryIcons');
+    const categoryIcons = (_d = (await categoryIconsRef.get()).data()) !== null && _d !== void 0 ? _d : {};
+    for (const key of CATEGORY_ICON_KEYS) {
+        const url = categoryIcons[key];
+        if (typeof url === 'string' && url) {
+            targets.push({
+                label: `categoryIcons/${key}`,
+                url,
+                aspectRatio: '1:1',
+                update: (newUrl) => categoryIconsRef.set({ [key]: newUrl }, { merge: true }),
+            });
+        }
+    }
+    const circularsSnap = await db.collection('circulars').get();
+    for (const snap of circularsSnap.docs) {
+        const url = snap.get('backgroundImageUrl');
+        if (typeof url === 'string' && url) {
+            targets.push({
+                label: `circulars/${snap.id}`,
+                url,
+                aspectRatio: '16:9',
+                update: (newUrl) => snap.ref.update({ backgroundImageUrl: newUrl }),
+            });
+        }
+    }
+    const result = { converted: [], skipped: [], failed: [] };
+    // Sequential on purpose: each conversion holds a multi-MB decode in
+    // memory, and there are at most a few dozen images — well inside the
+    // 540 s ceiling without needing to parallelise.
+    for (const target of targets) {
+        try {
+            const outcome = await optimizeOneStoredImage(target);
+            if (outcome.status === 'converted') {
+                const { status: _status } = outcome, rest = __rest(outcome, ["status"]);
+                result.converted.push(Object.assign({ label: target.label }, rest));
+            }
+            else {
+                result.skipped.push({ label: target.label, reason: outcome.reason });
+            }
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`optimizeStoredImages: ${target.label} failed`, err);
+            result.failed.push({ label: target.label, error: msg });
+        }
+    }
+    return result;
 });
 //# sourceMappingURL=index.js.map

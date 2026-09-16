@@ -7,6 +7,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage, app } from '../config/firebase';
+import { imageExtensionFor, imageUploadMetadata } from './imageUpload';
 
 const functions = getFunctions(app, 'asia-south1');
 
@@ -47,10 +48,11 @@ export async function generateTabHeaderBackground(tabKey: TabHeaderKey): Promise
 
 /** Uploads an accepted AI-generated background and saves its download URL onto the shared appConfig/tabHeaders doc. */
 export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: PendingTabHeaderBackground): Promise<string> {
-  const ext = background.mimeType === 'image/jpeg' ? 'jpg' : 'png';
-  const path = `tabHeaderBackgrounds/${tabKey}.${ext}`;
+  // Timestamped for the same reason as uploadCircularBackground: a
+  // regenerated header must get a new URL, not new bytes behind the old one.
+  const path = `tabHeaderBackgrounds/${tabKey}-${Date.now()}.${imageExtensionFor(background.mimeType)}`;
   const sref = storageRef(storage, path);
-  await uploadString(sref, background.base64, 'base64', { contentType: background.mimeType });
+  await uploadString(sref, background.base64, 'base64', imageUploadMetadata(background.mimeType));
   const url = await getDownloadURL(sref);
   await setDoc(doc(db, 'appConfig', 'tabHeaders'), { [tabKey]: url }, { merge: true });
   return url;

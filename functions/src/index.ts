@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as https from 'https';
+import * as crypto from 'crypto';
+import sharp from 'sharp';
 import { INDIAN_QUOTES } from './indianQuotes';
 
 admin.initializeApp();
@@ -853,14 +855,19 @@ function buildDailyQuoteImagePrompt(scene: string, provider: AiImageSettings['im
  *  a public download URL — storage.rules allows public read on this path
  *  since it's generic daily-inspiration art, nothing sensitive. */
 async function uploadDailyQuoteImage(date: string, imageBase64: string, mimeType: string): Promise<string> {
-  const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-  const path = `dailyQuoteBackgrounds/${date}.${ext}`;
+  const path = `dailyQuoteBackgrounds/${date}.${imageExtensionFor(mimeType)}`;
   const bucket = admin.storage().bucket();
   await bucket.file(path).save(Buffer.from(imageBase64, 'base64'), {
-    metadata: { contentType: mimeType },
+    metadata: { contentType: mimeType, cacheControl: OPTIMIZED_CACHE_CONTROL },
     resumable: false,
   });
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+}
+
+function imageExtensionFor(mimeType: string): string {
+  if (mimeType === 'image/webp') return 'webp';
+  if (mimeType === 'image/jpeg') return 'jpg';
+  return 'png';
 }
 
 interface DailyQuoteDoc {
@@ -1845,10 +1852,57 @@ interface AiImageSettings {
   budgetpixelImageModel?: string;
 }
 
-function generateAiImage(
+// ── Generated-image optimisation ────────────────────────────────────────────
+// Every provider hands back a raw ~1-1.5 MP PNG (1-4 MB). The student app
+// downloads up to a dozen of these on its very first login and every one of
+// them is only ever displayed as a card/header backdrop at phone width, so
+// the full-resolution PNG is pure cost: it was the single biggest reason the
+// portal showed blank backdrops for 5-10 s after login. Downscaling to a
+// phone-appropriate width and re-encoding as WebP shrinks each image
+// 10-30x (typically 50-150 KB) with no visible difference at display size.
+// Applied inside generateAiImage() so all four call sites (circular, tab
+// header, category icon, daily quote) — and the one-off optimizeStoredImages
+// migration below — share exactly one pipeline.
+const OPTIMIZED_IMAGE_MIME = 'image/webp';
+const OPTIMIZED_IMAGE_WIDTH: Record<ImageAspectRatio, number> = { '16:9': 1280, '1:1': 800 };
+const OPTIMIZED_IMAGE_QUALITY = 82;
+const OPTIMIZED_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+async function optimizeImageBuffer(input: Buffer, aspectRatio: ImageAspectRatio): Promise<Buffer> {
+  return sharp(input)
+    .resize({ width: OPTIMIZED_IMAGE_WIDTH[aspectRatio], withoutEnlargement: true })
+    .webp({ quality: OPTIMIZED_IMAGE_QUALITY })
+    .toBuffer();
+}
+
+async function optimizeGeneratedImage(
+  image: { imageBase64: string; mimeType: string },
+  aspectRatio: ImageAspectRatio,
+): Promise<{ imageBase64: string; mimeType: string }> {
+  try {
+    const out = await optimizeImageBuffer(Buffer.from(image.imageBase64, 'base64'), aspectRatio);
+    return { imageBase64: out.toString('base64'), mimeType: OPTIMIZED_IMAGE_MIME };
+  } catch (err) {
+    // Never fail a generation over the optimisation step — the raw provider
+    // output is still a perfectly valid (just larger) image.
+    console.warn('optimizeGeneratedImage: falling back to raw provider output', err);
+    return image;
+  }
+}
+
+async function generateAiImage(
   settings: AiImageSettings,
   prompt: string,
   aspectRatio: ImageAspectRatio = '16:9',
+): Promise<{ imageBase64: string; mimeType: string }> {
+  const raw = await generateRawAiImage(settings, prompt, aspectRatio);
+  return optimizeGeneratedImage(raw, aspectRatio);
+}
+
+function generateRawAiImage(
+  settings: AiImageSettings,
+  prompt: string,
+  aspectRatio: ImageAspectRatio,
 ): Promise<{ imageBase64: string; mimeType: string }> {
   if (settings.imageProvider === 'openai') {
     return callOpenAiImage(
@@ -2131,5 +2185,160 @@ export const generateCategoryIcon = onCall(
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
     }
+  },
+);
+
+// ── One-off: optimise already-stored background images ──────────────────────
+// Everything uploaded before the WebP pipeline above existed is a raw
+// multi-megabyte PNG. This admin-triggered callable (Settings → AI Settings →
+// "Optimise stored images") walks every image URL the student app consumes —
+// appConfig/tabHeaders, appConfig/categoryIcons and circulars/*.backgroundImageUrl —
+// re-encodes each through the same sharp pipeline, uploads the .webp sibling
+// with long-lived cache headers, points the Firestore field at it, and only
+// then deletes the old object. Idempotent: anything already ending in .webp
+// is skipped, so it's safe to re-run after a partial failure.
+interface StoredImageTarget {
+  /** Human-readable label for the result report. */
+  label: string;
+  url: string;
+  aspectRatio: ImageAspectRatio;
+  /** Writes the new URL back to wherever the old one lived. */
+  update: (newUrl: string) => Promise<unknown>;
+}
+
+interface OptimizeStoredImagesResult {
+  converted: { label: string; from: string; to: string; bytesBefore: number; bytesAfter: number }[];
+  skipped: { label: string; reason: string }[];
+  failed: { label: string; error: string }[];
+}
+
+/** Extracts the bucket object path from a Firebase Storage download URL
+ *  (`.../o/{encodedPath}?alt=media...`), or null if it isn't one. */
+function storagePathFromDownloadUrl(url: string): string | null {
+  const m = /\/o\/([^?]+)/.exec(url);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+async function optimizeOneStoredImage(target: StoredImageTarget): Promise<
+  { status: 'converted'; from: string; to: string; bytesBefore: number; bytesAfter: number } |
+  { status: 'skipped'; reason: string }
+> {
+  const oldPath = storagePathFromDownloadUrl(target.url);
+  if (!oldPath) return { status: 'skipped', reason: 'not a Firebase Storage download URL' };
+  if (/\.webp$/i.test(oldPath)) return { status: 'skipped', reason: 'already WebP' };
+
+  const bucket = admin.storage().bucket();
+  const oldFile = bucket.file(oldPath);
+  const [exists] = await oldFile.exists();
+  if (!exists) return { status: 'skipped', reason: `object not found: ${oldPath}` };
+
+  const [original] = await oldFile.download();
+  const optimized = await optimizeImageBuffer(original, target.aspectRatio);
+
+  const newPath = oldPath.replace(/\.[a-z0-9]+$/i, '') + '.webp';
+  // Client-side getDownloadURL() mints this token automatically; the Admin
+  // SDK doesn't, so set it explicitly to produce the same tokenised URL shape
+  // the rest of the app (and storage.rules) already relies on.
+  const token = crypto.randomUUID();
+  await bucket.file(newPath).save(optimized, {
+    metadata: {
+      contentType: OPTIMIZED_IMAGE_MIME,
+      cacheControl: OPTIMIZED_CACHE_CONTROL,
+      metadata: { firebaseStorageDownloadTokens: token },
+    },
+    resumable: false,
+  });
+  const newUrl =
+    `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(newPath)}` +
+    `?alt=media&token=${token}`;
+
+  await target.update(newUrl);
+
+  // Firestore now points at the WebP; the old PNG is unreferenced and can go.
+  // Best-effort — an orphaned file is harmless, a failed migration isn't.
+  try {
+    await oldFile.delete();
+  } catch (err) {
+    console.warn(`optimizeStoredImages: could not delete old object ${oldPath}`, err);
+  }
+
+  return { status: 'converted', from: oldPath, to: newPath, bytesBefore: original.length, bytesAfter: optimized.length };
+}
+
+export const optimizeStoredImages = onCall(
+  { region: 'asia-south1', timeoutSeconds: 540, memory: '1GiB' },
+  async (request): Promise<OptimizeStoredImagesResult> => {
+    if (request.auth?.token?.admin !== true) {
+      throw new HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+
+    const targets: StoredImageTarget[] = [];
+
+    const tabHeadersRef = db.doc('appConfig/tabHeaders');
+    const tabHeaders = (await tabHeadersRef.get()).data() ?? {};
+    for (const key of TAB_HEADER_KEYS) {
+      const url = tabHeaders[key];
+      if (typeof url === 'string' && url) {
+        targets.push({
+          label: `tabHeaders/${key}`,
+          url,
+          aspectRatio: '16:9',
+          update: (newUrl) => tabHeadersRef.set({ [key]: newUrl }, { merge: true }),
+        });
+      }
+    }
+
+    const categoryIconsRef = db.doc('appConfig/categoryIcons');
+    const categoryIcons = (await categoryIconsRef.get()).data() ?? {};
+    for (const key of CATEGORY_ICON_KEYS) {
+      const url = categoryIcons[key];
+      if (typeof url === 'string' && url) {
+        targets.push({
+          label: `categoryIcons/${key}`,
+          url,
+          aspectRatio: '1:1',
+          update: (newUrl) => categoryIconsRef.set({ [key]: newUrl }, { merge: true }),
+        });
+      }
+    }
+
+    const circularsSnap = await db.collection('circulars').get();
+    for (const snap of circularsSnap.docs) {
+      const url = snap.get('backgroundImageUrl');
+      if (typeof url === 'string' && url) {
+        targets.push({
+          label: `circulars/${snap.id}`,
+          url,
+          aspectRatio: '16:9',
+          update: (newUrl) => snap.ref.update({ backgroundImageUrl: newUrl }),
+        });
+      }
+    }
+
+    const result: OptimizeStoredImagesResult = { converted: [], skipped: [], failed: [] };
+    // Sequential on purpose: each conversion holds a multi-MB decode in
+    // memory, and there are at most a few dozen images — well inside the
+    // 540 s ceiling without needing to parallelise.
+    for (const target of targets) {
+      try {
+        const outcome = await optimizeOneStoredImage(target);
+        if (outcome.status === 'converted') {
+          const { status: _status, ...rest } = outcome;
+          result.converted.push({ label: target.label, ...rest });
+        } else {
+          result.skipped.push({ label: target.label, reason: outcome.reason });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`optimizeStoredImages: ${target.label} failed`, err);
+        result.failed.push({ label: target.label, error: msg });
+      }
+    }
+    return result;
   },
 );
