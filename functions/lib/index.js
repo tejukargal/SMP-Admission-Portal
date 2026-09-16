@@ -1594,24 +1594,25 @@ const TAB_HEADER_SCENES = {
     certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
     notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
 };
-// One vivid two-tone neon gradient per tab, so the six headers read as a
-// family without all being the same hue. Deliberately bright and saturated
-// (not the pastel brochure palette used for circular cards) — the Home
-// greeting/name text is black, which stays legible on these.
+// One light two-tone neon gradient per tab, so the six headers read as a
+// family without all being the same hue. Light rather than deeply
+// saturated — fully-saturated neon darkened the whole image and crushed
+// the scene — and light enough that the black Home greeting/name text
+// stays legible on the left. Plain flat color, no glow/luminous effects.
 const TAB_HEADER_NEON_GRADIENTS = {
-    home: 'electric violet flowing into hot magenta-pink',
-    circulars: 'bright cyan flowing into electric blue',
-    profile: 'neon lime-green flowing into vivid teal',
-    fees: 'neon orange flowing into hot pink',
-    certificates: 'vivid golden-yellow flowing into neon coral',
-    notices: 'hot pink flowing into electric purple',
+    home: 'light lavender-violet flowing into soft neon pink',
+    circulars: 'pale aqua-cyan flowing into light sky blue',
+    profile: 'light lime-mint flowing into soft aqua-teal',
+    fees: 'light peach-orange flowing into soft bubblegum pink',
+    certificates: 'light lemon-yellow flowing into soft coral',
+    notices: 'soft candy pink flowing into light lilac-purple',
 };
 function buildTabHeaderPrompt(tabKey, provider) {
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-        `The whole background is one smooth, vibrant neon gradient of ${TAB_HEADER_NEON_GRADIENTS[tabKey]}, glowing and saturated across the entire frame — never pale, washed-out, or pastel anywhere.`,
-        `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it in the same vivid neon gradient (at most slightly brighter), with just a few subtle background elements such as soft glowing shapes fading in from the scene; do not turn it into a plain, flat, or lighter wash.`,
-        imageStyleDirective(provider, 'vivid neon color palette — electric, saturated, high-energy hues with glowing accents'),
+        `The whole background is one smooth, light neon-toned gradient of ${TAB_HEADER_NEON_GRADIENTS[tabKey]} — bright, airy, and high-key across the entire frame, as plain flat color. Keep it light: medium saturation, never dark, deep, heavy, or fully-saturated neon, and never a dull grey pastel either. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
+        `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in the same light, medium-saturation colors as the background so the scene stays bright and readable rather than dark or heavy. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it in the same light neon gradient (at most slightly brighter), with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not turn it into a plain, flat, or lighter wash.`,
+        imageStyleDirective(provider, 'light neon color palette — bright, medium-saturation hues on a high-key background, as plain flat color; no dark or heavy colors, no glow or luminous effects'),
     ].join(' ');
 }
 exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
