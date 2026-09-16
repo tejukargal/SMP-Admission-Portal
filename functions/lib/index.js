@@ -1594,11 +1594,24 @@ const TAB_HEADER_SCENES = {
     certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
     notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
 };
+// One vivid two-tone neon gradient per tab, so the six headers read as a
+// family without all being the same hue. Deliberately bright and saturated
+// (not the pastel brochure palette used for circular cards) — the Home
+// greeting/name text is black, which stays legible on these.
+const TAB_HEADER_NEON_GRADIENTS = {
+    home: 'electric violet flowing into hot magenta-pink',
+    circulars: 'bright cyan flowing into electric blue',
+    profile: 'neon lime-green flowing into vivid teal',
+    fees: 'neon orange flowing into hot pink',
+    certificates: 'vivid golden-yellow flowing into neon coral',
+    notices: 'hot pink flowing into electric purple',
+};
 function buildTabHeaderPrompt(tabKey, provider) {
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-        `Depict ${TAB_HEADER_SCENES[tabKey]}, centered mainly in the right half of the frame. Let the scene extend slightly past the center and gently fade — through a soft gradient, never a hard edge — into a lighter, pastel-toned version of the same background color as it reaches the left side, so the left portion ends up a plain, softly pastel wash with no strong shapes, lines, or objects, calm enough for text to sit clearly on top.`,
-        imageStyleDirective(provider, 'warm and friendly college-brochure color palette'),
+        `The whole background is one smooth, vibrant neon gradient of ${TAB_HEADER_NEON_GRADIENTS[tabKey]}, glowing and saturated across the entire frame — never pale, washed-out, or pastel anywhere.`,
+        `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it in the same vivid neon gradient (at most slightly brighter), with just a few subtle background elements such as soft glowing shapes fading in from the scene; do not turn it into a plain, flat, or lighter wash.`,
+        imageStyleDirective(provider, 'vivid neon color palette — electric, saturated, high-energy hues with glowing accents'),
     ].join(' ');
 }
 exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
