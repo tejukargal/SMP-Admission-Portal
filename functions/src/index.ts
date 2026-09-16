@@ -2168,21 +2168,35 @@ const CATEGORY_ICON_SCENES: Record<CategoryIconKey, string> = {
 };
 
 // Flat-vector "app illustration" style image models default toward blue/purple
-// without an explicit hue — an explicit, distinct color family per category is
+// without an explicit hue — an explicit, dominant color family per category is
 // what actually produces visual variety across the 4 tiles instead of every one
-// landing on the same default palette.
+// landing on the same default palette. Unlike a single flat fill, this now tints
+// a full illustrated scene (see buildCategoryIconPrompt), so all four stay
+// bright/vivid rather than needing a light-vs-deep split to read as distinct.
 const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
   circulars: 'soft coral-orange',
   notices: 'warm butter-yellow',
-  fees: 'fresh mint-green',
-  certificates: 'soft blush-pink',
+  fees: 'vivid sky-blue',
+  certificates: 'vivid magenta-pink',
 };
 
+// Matches generateCircularBackground's approach (buildCircularImagePrompt,
+// imageStyleDirective(provider, 'warm and friendly college-brochure color
+// palette')) — a full illustrated scene (sky/backdrop, ground, a few simple
+// environmental elements) reads as far more "bright and colourful" than a
+// single flat color fill, which is what the category icons were using and
+// is why they looked comparatively flat/dull next to the circular cards.
+// The one thing circular cards don't need that these do: the Overview tile
+// overlays its label/value text directly on the left of this same image (no
+// separate text panel below it, unlike CircularCard), so the left portion
+// still has to stay legible — same balance already tuned for the tab header
+// prompt (buildTabHeaderPrompt): colorful throughout, only the leftmost
+// slice kept calm, never a flat separate-colored wash.
 function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
   return [
-    'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge with a single solid, light and airy, softly saturated flat color background — no soft gradients, no dark or deeply saturated tones, no gray, dull, or washed-out colors anywhere in the frame.',
-    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right half of the frame. The left half must stay the exact same solid color as the rest of the background (no gradient or separate shade) and simply free of characters or objects, so text can be legibly overlaid there.`,
-    imageStyleDirective(provider, `a single solid, light and softly saturated ${CATEGORY_ICON_COLORS[key]} as the dominant background color — bright and cheerful but light, not dark, not blue, not purple, not gray/dull/muted`),
+    'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge as one rich, lively illustrated scene with a proper backdrop (sky or setting, ground, a few simple environmental details) — not a flat, empty, single-color fill.',
+    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right two-thirds of the frame, set within that scene. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it part of the same colorful scene (the backdrop simply continuing), never a flat, plain, or separately-colored patch.`,
+    imageStyleDirective(provider, `a bright, vivid, and cheerful color palette dominated by ${CATEGORY_ICON_COLORS[key]} — colorful and lively like a storybook illustration, not a flat single-color background, and not dark, dull, or washed-out`),
   ].join(' ');
 }
 
