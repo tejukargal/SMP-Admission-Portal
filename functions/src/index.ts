@@ -1972,13 +1972,17 @@ function generateRawAiImage(
  *  rendering is one of their strengths, so it needs to be explicitly, firmly refused)
  *  unless the negative-space and flatness constraints are spelled out more forcefully.
  *  Kept provider-aware here so switching providers doesn't require retuning prompts. */
-function imageStyleDirective(provider: AiImageSettings['imageProvider'], palette: string): string {
+function imageStyleDirective(
+  provider: AiImageSettings['imageProvider'],
+  palette: string,
+  aspectRatio: ImageAspectRatio = '16:9',
+): string {
   if (provider === 'openai') {
     return [
       'Style: 2D flat vector illustration, in the style of modern flat-design app/brochure graphics.',
       'Solid flat colors with soft cel-shading only — no gradients, no realistic lighting, no shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.',
       `Color palette: ${palette}.`,
-      'The illustration fills the entire 16:9 frame edge-to-edge with no white margins, borders, or empty background space.',
+      `The illustration fills the entire ${aspectRatio} frame edge-to-edge with no white margins, borders, or empty background space.`,
       'Absolutely no text, letters, numbers, words, captions, signage, or logos anywhere in the image — illustrate the scene only, nothing written.',
     ].join(' ');
   }
@@ -2160,43 +2164,54 @@ export const generateTabHeaderBackground = onCall(
 const CATEGORY_ICON_KEYS = ['circulars', 'notices', 'fees', 'certificates'] as const;
 type CategoryIconKey = (typeof CATEGORY_ICON_KEYS)[number];
 
+// Each category keeps a recognisable prop/action so the four tiles stay
+// distinguishable at a glance; the character itself is styled once, below, in
+// buildCategoryIconPrompt (same colourful flat-vector look as the Home tab
+// header's waving student from buildTabHeaderPrompt).
 const CATEGORY_ICON_SCENES: Record<CategoryIconKey, string> = {
-  circulars: 'a student pinning a paper notice or flyer onto a campus bulletin board',
-  notices: 'a student looking up, alert and attentive, at a large ringing bell or megaphone above a notice board',
-  fees: 'a student happily paying with a card at a counter, holding a receipt',
-  certificates: 'a student proudly holding up a rolled certificate scroll with a ribbon seal',
+  circulars:
+    'a cheerful college student pinning a paper flyer onto a small bulletin board, holding a few extra flyers in the other hand',
+  notices:
+    'a cheerful college student looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
+  fees:
+    'a cheerful college student happily holding up a paid receipt in one hand and a payment card in the other',
+  certificates:
+    'a cheerful college student proudly holding up a rolled certificate scroll tied with a ribbon',
 };
 
-// Flat-vector "app illustration" style image models default toward blue/purple
-// without an explicit hue — an explicit, dominant color family per category is
-// what actually produces visual variety across the 4 tiles instead of every one
-// landing on the same default palette. Unlike a single flat fill, this now tints
-// a full illustrated scene (see buildCategoryIconPrompt), so all four stay
-// bright/vivid rather than needing a light-vs-deep split to read as distinct.
+// Reference look: a course-catalogue style app card — one plain, solid soft
+// pastel background per card (peach / periwinkle / mint / lavender) with a
+// single colourful illustration sitting on it. The background is the *only*
+// pastel element; the character is deliberately vivid so it pops against it.
+// Four distinct hues keep the Overview tiles visually separate from each other.
 const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
-  circulars: 'soft coral-orange',
-  notices: 'warm butter-yellow',
-  fees: 'vivid sky-blue',
-  certificates: 'vivid magenta-pink',
+  circulars: 'soft pastel peach (a light, warm apricot)',
+  notices: 'soft pastel periwinkle blue (a light, lavender-tinted blue)',
+  fees: 'soft pastel mint (a light, minty aqua-green)',
+  certificates: 'soft pastel lilac (a light lavender-purple)',
 };
 
-// Matches generateCircularBackground's approach (buildCircularImagePrompt,
-// imageStyleDirective(provider, 'warm and friendly college-brochure color
-// palette')) — a full illustrated scene (sky/backdrop, ground, a few simple
-// environmental elements) reads as far more "bright and colourful" than a
-// single flat color fill, which is what the category icons were using and
-// is why they looked comparatively flat/dull next to the circular cards.
-// The one thing circular cards don't need that these do: the Overview tile
-// overlays its label/value text directly on the left of this same image (no
-// separate text panel below it, unlike CircularCard), so the left portion
-// still has to stay legible — same balance already tuned for the tab header
-// prompt (buildTabHeaderPrompt): colorful throughout, only the leftmost
-// slice kept calm, never a flat separate-colored wash.
+// Composition is pinned to what the student app's Overview tile needs: the
+// image is rendered full-bleed behind the tile, with the label/value text
+// overlaid on the LEFT third, so the character must stay in the right
+// two-thirds and the left third must be plain background. A flat solid colour
+// is legible under text on its own — no blur/gradient band is needed.
+//
+// The character direction intentionally mirrors the Home header illustration
+// (full-body, expressive face, saturated outfit) rather than the earlier
+// "rounded geometric shapes, minimal facial detail" wording, which produced
+// muted, faceless mannequin-like figures.
 function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
   return [
-    'Flat vector illustration for a colorful mobile app stat-card background, square 1:1 composition, filling the entire frame edge-to-edge as one rich, lively illustrated scene with a proper backdrop (sky or setting, ground, a few simple environmental details) — not a flat, empty, single-color fill.',
-    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned toward the right two-thirds of the frame, set within that scene. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it part of the same colorful scene (the backdrop simply continuing), never a flat, plain, or separately-colored patch.`,
-    imageStyleDirective(provider, `a bright, vivid, and cheerful color palette dominated by ${CATEGORY_ICON_COLORS[key]} — colorful and lively like a storybook illustration, not a flat single-color background, and not dark, dull, or washed-out`),
+    `Flat vector illustration for a mobile app stat card, square 1:1 composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
+    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned in the right two-thirds of the frame.`,
+    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+    'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
+    imageStyleDirective(
+      provider,
+      'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic',
+      '1:1',
+    ),
   ].join(' ');
 }
 
