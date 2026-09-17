@@ -104,26 +104,24 @@ export function TabHeaderBackgroundsPanel() {
   }
 
   return (
-    <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="max-w-2xl">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Tab Header Backgrounds</h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              AI-generated illustration shown behind the student portal's header for each tab.
-              Generate a preview, then Save to publish it — students see the update the next time they open the app.
-            </p>
-          </div>
-          {loading ? (
-            <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {TAB_HEADER_TABS.map((t) => (
-                <TabHeaderRow key={t.key} tabKey={t.key} label={t.label} savedUrl={saved[t.key]} onSaved={handleSaved} />
-              ))}
-            </div>
-          )}
+    <div className="max-w-2xl">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Tab Header Backgrounds</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            AI-generated illustration shown behind the student portal's header for each tab.
+            Generate a preview, then Save to publish it — students see the update the next time they open the app.
+          </p>
         </div>
+        {loading ? (
+          <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {TAB_HEADER_TABS.map((t) => (
+              <TabHeaderRow key={t.key} tabKey={t.key} label={t.label} savedUrl={saved[t.key]} onSaved={handleSaved} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

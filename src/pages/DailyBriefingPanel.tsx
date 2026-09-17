@@ -307,11 +307,9 @@ function StudentPreviewCard() {
  *  student's personalized briefing can be previewed to check accuracy. */
 export function DailyBriefingPanel() {
   return (
-    <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="max-w-2xl space-y-4">
-        <QuoteCard />
-        <StudentPreviewCard />
-      </div>
+    <div className="max-w-2xl space-y-4">
+      <QuoteCard />
+      <StudentPreviewCard />
     </div>
   );
 }

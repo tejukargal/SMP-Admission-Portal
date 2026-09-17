@@ -110,28 +110,26 @@ export function CategoryIconsPanel() {
   }
 
   return (
-    <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="max-w-4xl">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Category Icons</h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              AI-generated illustrated background shown full-bleed on the student portal Home tab's
-              Overview tile for each category, replacing the plain icon and flat color entirely.
-              Generate a preview, then Save to publish it — students see the update the next time they
-              open the app.
-            </p>
-          </div>
-          {loading ? (
-            <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
-              {CATEGORY_ICON_TABS.map((t) => (
-                <CategoryIconRow key={t.key} iconKey={t.key} label={t.label} savedUrl={saved[t.key]} onSaved={handleSaved} />
-              ))}
-            </div>
-          )}
+    <div className="max-w-4xl">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Category Icons</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            AI-generated illustrated background shown full-bleed on the student portal Home tab's
+            Overview tile for each category, replacing the plain icon and flat color entirely.
+            Generate a preview, then Save to publish it — students see the update the next time they
+            open the app.
+          </p>
         </div>
+        {loading ? (
+          <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+            {CATEGORY_ICON_TABS.map((t) => (
+              <CategoryIconRow key={t.key} iconKey={t.key} label={t.label} savedUrl={saved[t.key]} onSaved={handleSaved} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

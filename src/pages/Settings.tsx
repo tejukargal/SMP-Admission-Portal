@@ -10,9 +10,7 @@ import { deleteFeeStructuresByAcademicYear } from '../services/feeStructureServi
 import { resetDocumentsByStudentIds } from '../services/studentDocumentService';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear, syncMyAdminClaim } from '../services/userService';
 import { auth } from '../config/firebase';
-import { getMessagingConfig, saveMessagingConfig, getAiSettingsConfig, saveAiSettingsConfig, type AiSettingsConfig } from '../services/adminConfigService';
-import { getPublishedVersion, getPendingRelease, savePendingRelease, publishVersionNow, type PublishedVersion, type PendingRelease } from '../services/appVersionService';
-import { optimizeStoredImages, type OptimizeStoredImagesResult } from '../services/imageOptimizationService';
+import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
 import { RESET_PASSKEY } from '../config/constants';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
@@ -23,12 +21,10 @@ import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
 import { ImportResults } from './ImportResults';
 import { BackupRestore } from './BackupRestore';
-import { TabHeaderBackgroundsPanel } from './TabHeaderBackgroundsPanel';
-import { CategoryIconsPanel } from './CategoryIconsPanel';
-import { DailyBriefingPanel } from './DailyBriefingPanel';
+import { StudentAppPanel, isStudentAppSection, type StudentAppSection } from './StudentAppPanel';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'ai-settings' | 'app-version' | 'tab-headers' | 'category-icons' | 'daily-briefing' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'student-app' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -40,15 +36,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'import-results', label: 'Import Results' },
   { id: 'staff', label: 'Staff Accounts' },
   { id: 'messaging', label: 'Messaging' },
-  { id: 'ai-settings', label: 'AI Settings' },
-  { id: 'app-version', label: 'App Version' },
-  { id: 'tab-headers', label: 'Tab Header Backgrounds' },
-  { id: 'category-icons', label: 'Category Icons' },
-  { id: 'daily-briefing', label: 'Daily Briefing' },
+  { id: 'student-app', label: 'Student App' },
   { id: 'backup', label: 'Backup & Restore' },
 ];
-
-const DEFAULT_UPDATE_URL = 'https://play.google.com/store/apps/details?id=com.smpstudents.portal';
 
 const ACADEMIC_YEAR_OPTIONS = [
   { value: '2029-30', label: '2029-30' },
@@ -71,13 +61,34 @@ const ACADEMIC_YEAR_OPTIONS = [
   { value: '2012-13', label: '2012-13' },
 ];
 
+// The five student-app tabs were folded into one 'student-app' tab with
+// sections; old ?tab= links keep working by mapping to the section.
+const LEGACY_TAB_TO_SECTION: Record<string, StudentAppSection> = {
+  'ai-settings': 'ai-settings',
+  'app-version': 'app-version',
+  'tab-headers': 'tab-headers',
+  'category-icons': 'category-icons',
+  'daily-briefing': 'daily-briefing',
+};
 
 export function Settings() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const tabParam = searchParams.get('tab');
-  const initialTab = TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'general';
+  const tabParam = searchParams.get('tab') ?? '';
+  const legacySection = LEGACY_TAB_TO_SECTION[tabParam];
+  const initialTab: Tab = legacySection ? 'student-app' : TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : 'general';
+  const sectionParam = searchParams.get('section');
+  const initialSection: StudentAppSection = legacySection ?? (isStudentAppSection(sectionParam) ? sectionParam : 'ai-settings');
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [appSection, setAppSection] = useState<StudentAppSection>(initialSection);
+
+  // Mirror the tab (and Student App section) into the URL so a refresh or a
+  // shared link lands on the same place.
+  useEffect(() => {
+    const next: Record<string, string> = { tab: activeTab };
+    if (activeTab === 'student-app') next.section = appSection;
+    setSearchParams(next, { replace: true });
+  }, [activeTab, appSection, setSearchParams]);
 
   const { settings, loading, refetch } = useSettings();
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
@@ -154,32 +165,6 @@ export function Settings() {
   const [msgSaving, setMsgSaving] = useState(false);
   const [msgSaveMsg, setMsgSaveMsg] = useState('');
   const [msgSaveError, setMsgSaveError] = useState('');
-
-  const [aiProvider, setAiProvider] = useState<AiSettingsConfig['imageProvider']>('gemini');
-  const [aiGeminiKey, setAiGeminiKey] = useState('');
-  const [aiOpenaiKey, setAiOpenaiKey] = useState('');
-  const [aiReplicateKey, setAiReplicateKey] = useState('');
-  const [aiBudgetpixelKey, setAiBudgetpixelKey] = useState('');
-  const [aiGeminiTextModel, setAiGeminiTextModel] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSaving, setAiSaving] = useState(false);
-  const [aiSaveMsg, setAiSaveMsg] = useState('');
-  const [aiSaveError, setAiSaveError] = useState('');
-  const [imgOptRunning, setImgOptRunning] = useState(false);
-  const [imgOptResult, setImgOptResult] = useState<OptimizeStoredImagesResult | null>(null);
-  const [imgOptError, setImgOptError] = useState('');
-
-  // App version state
-  const [publishedVersion, setPublishedVersion] = useState<PublishedVersion | null>(null);
-  const [pendingRelease, setPendingRelease] = useState<PendingRelease | null>(null);
-  const [avLoading, setAvLoading] = useState(false);
-  const [avVersionCode, setAvVersionCode] = useState('');
-  const [avVersionName, setAvVersionName] = useState('');
-  const [avUpdateUrl, setAvUpdateUrl] = useState(DEFAULT_UPDATE_URL);
-  const [avSaving, setAvSaving] = useState(false);
-  const [avPublishing, setAvPublishing] = useState(false);
-  const [avSaveMsg, setAvSaveMsg] = useState('');
-  const [avSaveError, setAvSaveError] = useState('');
 
   // Staff accounts state
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
@@ -414,44 +399,6 @@ export function Settings() {
       .catch(() => {})
       .finally(() => setMsgLoading(false));
   }, [activeTab]);
-
-  // Load AI settings when the AI Settings tab is opened
-  useEffect(() => {
-    if (activeTab !== 'ai-settings') return;
-    setAiLoading(true);
-    getAiSettingsConfig()
-      .then((cfg) => {
-        if (cfg) {
-          setAiProvider(cfg.imageProvider);
-          setAiGeminiKey(cfg.geminiApiKey);
-          setAiOpenaiKey(cfg.openaiApiKey);
-          setAiReplicateKey(cfg.replicateApiKey);
-          setAiBudgetpixelKey(cfg.budgetpixelApiKey);
-          setAiGeminiTextModel(cfg.geminiTextModel);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setAiLoading(false));
-  }, [activeTab]);
-
-  // Load app version state when the App Version tab is opened
-  useEffect(() => {
-    if (activeTab !== 'app-version') return;
-    setAvLoading(true);
-    Promise.all([getPublishedVersion(), getPendingRelease()])
-      .then(([published, pending]) => {
-        setPublishedVersion(published);
-        setPendingRelease(pending);
-        if (pending) {
-          setAvVersionCode(String(pending.versionCode));
-          setAvVersionName(pending.versionName);
-          setAvUpdateUrl(pending.updateUrl);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setAvLoading(false));
-  }, [activeTab]);
-
   // Load staff list when staff tab is opened
   useEffect(() => {
     if (activeTab !== 'staff') return;
@@ -655,108 +602,6 @@ export function Settings() {
       setMsgSaveError(err instanceof Error ? err.message : 'Failed to save.');
     } finally {
       setMsgSaving(false);
-    }
-  }
-
-  async function handleSaveAiSettings(e: FormEvent) {
-    e.preventDefault();
-    setAiSaveMsg('');
-    setAiSaveError('');
-    if (aiProvider === 'openai' && !aiOpenaiKey.trim()) {
-      setAiSaveError('OpenAI API key is required when OpenAI is selected.');
-      return;
-    }
-    if (aiProvider === 'gemini' && !aiGeminiKey.trim()) {
-      setAiSaveError('Gemini API key is required when Gemini is selected.');
-      return;
-    }
-    if (aiProvider === 'replicate' && !aiReplicateKey.trim()) {
-      setAiSaveError('Replicate API key is required when Replicate is selected.');
-      return;
-    }
-    if (aiProvider === 'budgetpixel' && !aiBudgetpixelKey.trim()) {
-      setAiSaveError('BudgetPixel API key is required when BudgetPixel is selected.');
-      return;
-    }
-    setAiSaving(true);
-    try {
-      await saveAiSettingsConfig({
-        imageProvider: aiProvider,
-        geminiApiKey: aiGeminiKey.trim(),
-        openaiApiKey: aiOpenaiKey.trim(),
-        replicateApiKey: aiReplicateKey.trim(),
-        budgetpixelApiKey: aiBudgetpixelKey.trim(),
-        geminiTextModel: aiGeminiTextModel.trim(),
-      });
-      setAiSaveMsg('AI settings saved.');
-    } catch (err: unknown) {
-      setAiSaveError(err instanceof Error ? err.message : 'Failed to save.');
-    } finally {
-      setAiSaving(false);
-    }
-  }
-
-  async function handleOptimizeStoredImages() {
-    setImgOptRunning(true);
-    setImgOptResult(null);
-    setImgOptError('');
-    try {
-      setImgOptResult(await optimizeStoredImages());
-    } catch (err: unknown) {
-      setImgOptError(err instanceof Error ? err.message : 'Optimisation failed.');
-    } finally {
-      setImgOptRunning(false);
-    }
-  }
-
-  function parseAvForm(): PendingRelease | null {
-    const versionCode = Number(avVersionCode.trim());
-    const versionName = avVersionName.trim();
-    const updateUrl = avUpdateUrl.trim() || DEFAULT_UPDATE_URL;
-    if (!Number.isInteger(versionCode) || versionCode <= 0) {
-      setAvSaveError('Version code must be a positive whole number.');
-      return null;
-    }
-    if (!versionName) {
-      setAvSaveError('Version name is required (e.g. 1.0.15).');
-      return null;
-    }
-    return { versionCode, versionName, updateUrl, createdAt: '' };
-  }
-
-  async function handleSavePendingRelease(e: FormEvent) {
-    e.preventDefault();
-    setAvSaveMsg('');
-    setAvSaveError('');
-    const parsed = parseAvForm();
-    if (!parsed) return;
-    setAvSaving(true);
-    try {
-      await savePendingRelease({ versionCode: parsed.versionCode, versionName: parsed.versionName, updateUrl: parsed.updateUrl });
-      setPendingRelease({ ...parsed, createdAt: new Date().toISOString() });
-      setAvSaveMsg('Pending release saved. It will go live automatically once Play Store confirms this version code is live in production.');
-    } catch (err: unknown) {
-      setAvSaveError(err instanceof Error ? err.message : 'Failed to save pending release.');
-    } finally {
-      setAvSaving(false);
-    }
-  }
-
-  async function handlePublishNow() {
-    setAvSaveMsg('');
-    setAvSaveError('');
-    const parsed = parseAvForm();
-    if (!parsed) return;
-    setAvPublishing(true);
-    try {
-      await publishVersionNow({ latestVersion: parsed.versionName, updateUrl: parsed.updateUrl });
-      setPublishedVersion({ latestVersion: parsed.versionName, updateUrl: parsed.updateUrl });
-      setPendingRelease(null);
-      setAvSaveMsg('Published immediately — skipped the Play Store check.');
-    } catch (err: unknown) {
-      setAvSaveError(err instanceof Error ? err.message : 'Failed to publish.');
-    } finally {
-      setAvPublishing(false);
     }
   }
 
@@ -1275,235 +1120,6 @@ export function Settings() {
           </div>
         )}
 
-        {/* ── AI Settings ── */}
-        {activeTab === 'ai-settings' && (
-          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <div className="max-w-md space-y-5">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Background Image Generation</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Choose which AI provider generates circular, tab-header, and daily-quote background
-                  images, and store its API key. Keys are stored securely in Firestore and never
-                  exposed to students.
-                </p>
-                {aiLoading ? (
-                  <p className="text-sm text-gray-400">Loading…</p>
-                ) : (
-                  <form onSubmit={(e) => { void handleSaveAiSettings(e); }} className="space-y-4">
-                    <Select
-                      label="Image Provider"
-                      value={aiProvider}
-                      onChange={(e) => { setAiProvider(e.target.value as AiSettingsConfig['imageProvider']); setAiSaveMsg(''); setAiSaveError(''); }}
-                      options={[
-                        { value: 'gemini', label: 'Google Gemini' },
-                        { value: 'openai', label: 'OpenAI (GPT Image 1 Mini)' },
-                        { value: 'replicate', label: 'Replicate (FLUX.2 Klein 4B)' },
-                        { value: 'budgetpixel', label: 'BudgetPixel (Nano Banana 2 Lite / Gemini 3.1 Flash Lite Image)' },
-                      ]}
-                    />
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Gemini API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={aiGeminiKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiGeminiKey(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                        placeholder="Paste your Gemini API key"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        OpenAI API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={aiOpenaiKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiOpenaiKey(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                        placeholder="Paste your OpenAI API key"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Replicate API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={aiReplicateKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiReplicateKey(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                        placeholder="Paste your Replicate API key"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        BudgetPixel API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={aiBudgetpixelKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiBudgetpixelKey(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                        placeholder="Paste your BudgetPixel API key"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Gemini Text Model
-                      </label>
-                      <input
-                        type="text"
-                        value={aiGeminiTextModel}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiGeminiTextModel(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                        placeholder="gemini-3.5-flash-lite (default)"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="text-xs text-gray-400 mt-1">
-                        Writes the Daily Briefing quote, note and highlights (always Gemini, whichever image provider is
-                        selected). Leave blank for the default; a larger model such as gemini-3.5-flash gives more careful
-                        highlights at a higher per-call cost.
-                      </p>
-                    </div>
-                    {aiSaveError && (
-                      <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{aiSaveError}</p>
-                    )}
-                    {aiSaveMsg && (
-                      <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">{aiSaveMsg}</p>
-                    )}
-                    <Button type="submit" loading={aiSaving}>
-                      Save AI Settings
-                    </Button>
-                  </form>
-                )}
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Image Optimisation</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Newly generated images are automatically downscaled and saved as WebP. Run this once
-                  to convert the images that were stored before that (tab headers, category icons and
-                  every circular background) — they are multi-megabyte PNGs that make the student app
-                  show blank backdrops for several seconds after login. Safe to run again; images that
-                  are already WebP are skipped.
-                </p>
-                <Button type="button" loading={imgOptRunning} onClick={() => { void handleOptimizeStoredImages(); }}>
-                  {imgOptRunning ? 'Optimising… (this can take a few minutes)' : 'Optimise stored images'}
-                </Button>
-                {imgOptError && (
-                  <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{imgOptError}</p>
-                )}
-                {imgOptResult && (
-                  <div className="mt-3 space-y-2 text-sm">
-                    <p className="text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">
-                      Converted {imgOptResult.converted.length}, skipped {imgOptResult.skipped.length}, failed {imgOptResult.failed.length}.
-                      {imgOptResult.converted.length > 0 && (() => {
-                        const before = imgOptResult.converted.reduce((n, c) => n + c.bytesBefore, 0);
-                        const after = imgOptResult.converted.reduce((n, c) => n + c.bytesAfter, 0);
-                        return ` ${(before / 1048576).toFixed(1)} MB → ${(after / 1048576).toFixed(1)} MB.`;
-                      })()}
-                    </p>
-                    {imgOptResult.failed.length > 0 && (
-                      <ul className="text-red-700 bg-red-50 border border-red-100 rounded-md px-3 py-2 space-y-1">
-                        {imgOptResult.failed.map((f) => (
-                          <li key={f.label}><span className="font-medium">{f.label}</span>: {f.error}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── App Version ── */}
-        {activeTab === 'app-version' && (
-          <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <div className="max-w-md space-y-5">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Currently Published</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  What the student app currently sees as the latest available version.
-                </p>
-                {avLoading ? (
-                  <p className="text-sm text-gray-400">Loading…</p>
-                ) : publishedVersion ? (
-                  <div className="text-sm text-gray-700 bg-gray-50 rounded-md px-3 py-2 space-y-1">
-                    <div><span className="font-medium">Version:</span> {publishedVersion.latestVersion}</div>
-                    <div className="break-all"><span className="font-medium">Update URL:</span> {publishedVersion.updateUrl}</div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400">Nothing published yet.</p>
-                )}
-                {!avLoading && pendingRelease && (
-                  <div className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mt-3">
-                    Waiting on Play Store: version code {pendingRelease.versionCode} ({pendingRelease.versionName}) will
-                    publish automatically once it's confirmed live in the production track.
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Register a New Release</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  After uploading a build to Play Console, enter its version code and version name here.
-                  A scheduled Cloud Function checks the Play Store production track every few hours and
-                  publishes it to the student app automatically once it's live — no need to remember to flip it yourself.
-                </p>
-                <form onSubmit={(e) => { void handleSavePendingRelease(e); }} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Version Code</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={avVersionCode}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setAvVersionCode(e.target.value); setAvSaveMsg(''); setAvSaveError(''); }}
-                      placeholder="e.g. 15"
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Version Name</label>
-                    <input
-                      type="text"
-                      value={avVersionName}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setAvVersionName(e.target.value); setAvSaveMsg(''); setAvSaveError(''); }}
-                      placeholder="e.g. 1.0.15"
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Update URL</label>
-                    <input
-                      type="text"
-                      value={avUpdateUrl}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setAvUpdateUrl(e.target.value); setAvSaveMsg(''); setAvSaveError(''); }}
-                      placeholder={DEFAULT_UPDATE_URL}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  {avSaveError && (
-                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{avSaveError}</p>
-                  )}
-                  {avSaveMsg && (
-                    <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">{avSaveMsg}</p>
-                  )}
-                  <div className="flex gap-3">
-                    <Button type="submit" loading={avSaving}>
-                      Save Pending Release
-                    </Button>
-                    <Button type="button" variant="secondary" loading={avPublishing} onClick={() => { void handlePublishNow(); }}>
-                      Publish Now (skip check)
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Staff Accounts ── */}
         {activeTab === 'staff' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
@@ -1630,19 +1246,9 @@ export function Settings() {
           </div>
         )}
 
-        {/* ── Tab Header Backgrounds ── */}
-        {activeTab === 'tab-headers' && (
-          <TabHeaderBackgroundsPanel />
-        )}
-
-        {/* ── Category Icons ── */}
-        {activeTab === 'category-icons' && (
-          <CategoryIconsPanel />
-        )}
-
-        {/* ── Daily Briefing ── */}
-        {activeTab === 'daily-briefing' && (
-          <DailyBriefingPanel />
+        {/* ── Student App (AI settings, app version, header/icon art, daily briefing) ── */}
+        {activeTab === 'student-app' && (
+          <StudentAppPanel section={appSection} onSectionChange={setAppSection} />
         )}
 
         {/* ── Backup & Restore ── */}
