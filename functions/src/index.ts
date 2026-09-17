@@ -2312,17 +2312,24 @@ function imageStyleDirective(
   provider: AiImageSettings['imageProvider'],
   palette: string,
   aspectRatio: ImageAspectRatio = '16:9',
+  // The one piece of text the image may contain (e.g. the college's short
+  // name on a building). Omitted = the default blanket ban on any text,
+  // which is what every prompt except the Home header wants.
+  allowedText?: string,
 ): string {
+  const noText = allowedText
+    ? `The only text allowed anywhere in the image is exactly "${allowedText}" — no other letters, numbers, words, captions, signage, or logos.`
+    : 'Absolutely no text, letters, numbers, words, captions, signage, or logos anywhere in the image — illustrate the scene only, nothing written.';
   if (provider === 'openai') {
     return [
       'Style: 2D flat vector illustration, in the style of modern flat-design app/brochure graphics.',
       'Solid flat colors with soft cel-shading only — no gradients, no realistic lighting, no shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.',
       `Color palette: ${palette}.`,
       `The illustration fills the entire ${aspectRatio} frame edge-to-edge with no white margins, borders, or empty background space.`,
-      'Absolutely no text, letters, numbers, words, captions, signage, or logos anywhere in the image — illustrate the scene only, nothing written.',
+      noText,
     ].join(' ');
   }
-  return `Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, ${palette}, no photorealism, no text, no letters, no numbers, no logos anywhere in the image.`;
+  return `Style: modern flat-design vector illustration, simple clean shapes, soft flat shading, ${palette}, no photorealism. ${noText}`;
 }
 
 function buildCircularImagePrompt(
@@ -2411,7 +2418,7 @@ const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates',
 type TabHeaderKey = (typeof TAB_HEADER_KEYS)[number];
 
 const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
-  home: 'a welcoming student standing and waving cheerfully at the college entrance steps',
+  home: 'a welcoming student standing and waving cheerfully at the college entrance steps, with the college building behind them carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
   circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
   profile: 'a friendly student in college uniform, standing, holding a notebook',
   fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
@@ -2426,7 +2433,7 @@ const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
 // single flat pastel keeps the black Home greeting/name text legible on the
 // left and lets the colourful scene carry the image. No glow/luminous effects.
 const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
-  home: 'soft pastel blush pink (a light, warm rose)',
+  home: 'soft pastel blush pink (a light, warm rose)', // unused: Home has its own multi-pastel prompt (buildHomeHeaderPrompt)
   circulars: 'soft pastel peach (a light, warm apricot)',
   profile: 'soft pastel butter yellow (a light, creamy yellow)',
   fees: 'soft pastel mint (a light, minty aqua-green)',
@@ -2438,22 +2445,31 @@ const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
 // the background wording moved from a two-tone gradient to a single flat
 // pastel. The scene itself stays medium-saturation and colourful so it pops
 // against the pale background instead of blending into it.
-// The Home header is the one tab whose image sits directly under text the
-// student reads every open ("Welcome Back" + their name, drawn in black by
-// HomeScreen) rather than a short tab label — so its left side gets a soft
-// white haze baked into the illustration for contrast, while the other tabs
-// keep a plain flat left zone.
-const HOME_LEFT_HAZE =
-  'Over the leftmost third of the frame, lay a soft, smoky white haze — like a gentle white mist or fog that is nearly opaque white at the far left edge and dissolves smoothly into the pastel background by about the centre of the frame, with no hard edge, no visible band and no shape outline — so that dark text placed on the left reads clearly against it. Keep the haze pure white, flat and matte: no glow, no light rays, no sparkle. Elements of the scene may fade softly into the haze but nothing strong should sit inside it.';
+// The Home header is the one tab image students read text over on every
+// open ("Welcome Back" + their name, drawn in black by HomeScreen), and the
+// app paints it bare — no accent tint, no scrim — so it gets its own
+// treatment: a background built from several soft pastels instead of the
+// single flat tab colour the other five use, and the college's short name
+// "SMP" on the building (the only text any header image may carry).
+const HOME_HEADER_PASTELS =
+  'soft pastel peach, mint, periwinkle blue, lilac and butter yellow';
+
+function buildHomeHeaderPrompt(provider: AiImageSettings['imageProvider']): string {
+  return [
+    'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
+    `The background is made of several large, soft, flat pastel colour areas — ${HOME_HEADER_PASTELS} — arranged as gentle overlapping rounded shapes or bands that flow across the whole frame, all equally light and airy, with no single colour dominating and no dark or saturated patch anywhere. Plain flat colour throughout: no gradients inside a shape, no texture, no shadows, no glow, no bloom, no halos, no lens flares.`,
+    `Depict ${TAB_HEADER_SCENES.home}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. The "SMP" signage on the building must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.`,
+    'The leftmost quarter of the frame should stay free of strong shapes, lines, objects or the signage — a calm zone for text — but keep it in the same light pastel areas as the rest, with at most a few subtle flat background elements fading in from the scene; do not make it a different or lighter wash and do not add any haze, mist or fog.',
+    imageStyleDirective(provider, 'a light multi-pastel background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects', '16:9', 'SMP'),
+  ].join(' ');
+}
 
 function buildTabHeaderPrompt(tabKey: TabHeaderKey, provider: AiImageSettings['imageProvider']): string {
-  const leftZone = tabKey === 'home'
-    ? HOME_LEFT_HAZE
-    : 'Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.';
+  if (tabKey === 'home') return buildHomeHeaderPrompt(provider);
   return [
     'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
     `The entire background is one single, solid, flat ${TAB_HEADER_COLORS[tabKey]} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
-    `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. ${leftZone}`,
+    `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
     imageStyleDirective(provider, 'a soft pastel solid background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects'),
   ].join(' ');
 }
