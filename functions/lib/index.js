@@ -1866,13 +1866,16 @@ const TAB_HEADER_COLORS = {
 // single flat tab colour the other five use, and the college's short name
 // "SMP" on the building (the only text any header image may carry).
 const HOME_HEADER_PASTELS = 'soft pastel peach, mint, periwinkle blue, lilac and butter yellow';
+// Plain white is the dominant colour on the left third — a flat white area
+// (not a mist or fade) as the base the black greeting/name sit on, with the
+// pastels taking over from the centre rightwards.
 function buildHomeHeaderPrompt(provider) {
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-        `The background is made of several large, soft, flat pastel colour areas — ${HOME_HEADER_PASTELS} — arranged as gentle overlapping rounded shapes or bands that flow across the whole frame, all equally light and airy, with no single colour dominating and no dark or saturated patch anywhere. Plain flat colour throughout: no gradients inside a shape, no texture, no shadows, no glow, no bloom, no halos, no lens flares.`,
+        `The background is made of several large, soft, flat colour areas arranged as gentle overlapping rounded shapes or bands that flow across the whole frame. Plain white is the major colour and owns the left third of the frame outright — one large, clean, flat pure-white area filling the left side edge-to-edge — and the pastels (${HOME_HEADER_PASTELS}) begin only from around the centre and take over the right side, all light and airy, with no dark or saturated patch anywhere. Plain flat colour throughout: no gradients inside a shape, no texture, no shadows, no glow, no bloom, no halos, no lens flares.`,
         `Depict ${TAB_HEADER_SCENES.home}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. The "SMP" signage on the building must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.`,
-        'The leftmost quarter of the frame should stay free of strong shapes, lines, objects or the signage — a calm zone for text — but keep it in the same light pastel areas as the rest, with at most a few subtle flat background elements fading in from the scene; do not make it a different or lighter wash and do not add any haze, mist or fog.',
-        imageStyleDirective(provider, 'a light multi-pastel background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects', '16:9', 'SMP'),
+        'The left third of the frame is that flat white area and must stay free of strong shapes, lines, objects or the signage — a calm zone for text — with at most a few subtle, very light flat background elements fading in from the scene at its right edge. The white must be a solid flat shape with a clean soft boundary where the pastels begin, not a haze, mist, fog, glow or gradient.',
+        imageStyleDirective(provider, 'a white-dominant background on the left flowing into light multi-pastel areas on the right, with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects', '16:9', 'SMP'),
     ].join(' ');
 }
 function buildTabHeaderPrompt(tabKey, provider) {
