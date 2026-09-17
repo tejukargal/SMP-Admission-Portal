@@ -101,12 +101,24 @@ export interface ScholarshipScheme {
   sources: string[];
 }
 
+/** One dated announcement from a portal's notifications / news page. */
+export interface ScholarshipNewsItem {
+  /** YYYY-MM-DD when the notice carries a date, else null. */
+  date: string | null;
+  dateText: string;
+  title: string;
+  titleKn: string;
+  portal: string;
+  url: string;
+}
+
 /** What fetchScholarshipUpdates returns and what Publish sends back up
  *  (after the admin's edits). */
 export interface PendingScholarshipUpdates {
   overviewEn: string;
   overviewKn: string;
   schemes: ScholarshipScheme[];
+  news: ScholarshipNewsItem[];
   sourceUrls: string[];
   fetchedAt: string;
 }

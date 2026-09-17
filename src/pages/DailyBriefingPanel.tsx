@@ -6,7 +6,7 @@ import {
   getScholarshipSources, saveScholarshipSources, getPublishedScholarshipUpdates, fetchScholarshipUpdates, publishScholarshipUpdates,
   DEFAULT_SCHOLARSHIP_SOURCES,
   type DailyQuoteRecord, type PendingDailyQuote, type StudentBriefingPreview,
-  type ScholarshipScheme, type ScholarshipStatus, type PendingScholarshipUpdates, type ScholarshipUpdatesRecord,
+  type ScholarshipScheme, type ScholarshipStatus, type ScholarshipNewsItem, type PendingScholarshipUpdates, type ScholarshipUpdatesRecord,
 } from '../services/dailyBriefingAdminService';
 
 const TEXTAREA_CLASS =
@@ -323,6 +323,62 @@ function SchemeEditor({
   );
 }
 
+const EMPTY_NEWS_ITEM: ScholarshipNewsItem = { date: null, dateText: '', title: '', titleKn: '', portal: '', url: '' };
+
+/** One announcement's editable row inside the pending summary. */
+function NewsEditor({
+  item, index, onChange, onRemove,
+}: {
+  item: ScholarshipNewsItem;
+  index: number;
+  onChange: (next: ScholarshipNewsItem) => void;
+  onRemove: () => void;
+}) {
+  function set<K extends keyof ScholarshipNewsItem>(key: K, value: ScholarshipNewsItem[K]) {
+    onChange({ ...item, [key]: value });
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">News {index + 1}</p>
+        <button type="button" className="text-xs font-semibold text-red-500 hover:text-red-700" onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+      <Input label="Announcement (English)" value={item.title} onChange={(e) => set('title', e.target.value)} />
+      <Input label="Announcement (Kannada)" value={item.titleKn} onChange={(e) => set('titleKn', e.target.value)} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Input label="Date" type="date" value={item.date ?? ''} onChange={(e) => set('date', e.target.value || null)} />
+        <Input label="Date (in words)" value={item.dateText} onChange={(e) => set('dateText', e.target.value)} placeholder="28 September 2026" />
+        <Input label="Portal" value={item.portal} onChange={(e) => set('portal', e.target.value)} placeholder="SSP / NSP" />
+      </div>
+      <Input label="Link" value={item.url} onChange={(e) => set('url', e.target.value)} placeholder="https://…" />
+    </div>
+  );
+}
+
+/** Read-only rendering of the published announcements. */
+function NewsView({ items }: { items: ScholarshipNewsItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-gray-200 px-4 py-3 space-y-2">
+      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Latest news</p>
+      <ul className="space-y-1.5">
+        {items.map((n, i) => (
+          <li key={i} className="text-sm text-gray-700">
+            <span className="font-semibold text-gray-800">{n.dateText}</span>
+            <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 ml-2">{n.portal}</span>
+            <span className="block">{n.title}</span>
+            {n.titleKn && <span className="block text-gray-600">{n.titleKn}</span>}
+            {n.url && <a href={n.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline break-all">{n.url}</a>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Read-only rendering of one scheme, used for the currently published set. */
 function SchemeView({ scheme }: { scheme: ScholarshipScheme }) {
   return (
@@ -444,7 +500,7 @@ function ScholarshipsCard() {
     setError('');
     setPublishing(true);
     try {
-      setPublished(await publishScholarshipUpdates(pending));
+      setPublished(await publishScholarshipUpdates({ ...pending, news: pending.news.filter((n) => n.title.trim()) }));
       setPending(null);
       setShowPublished(false);
     } catch (e) {
@@ -464,6 +520,18 @@ function ScholarshipsCard() {
 
   function removeScheme(index: number) {
     setPending((prev) => (prev ? { ...prev, schemes: prev.schemes.filter((_, i) => i !== index) } : prev));
+  }
+
+  function updateNews(index: number, next: ScholarshipNewsItem) {
+    setPending((prev) => (prev ? { ...prev, news: prev.news.map((n, i) => (i === index ? next : n)) } : prev));
+  }
+
+  function removeNews(index: number) {
+    setPending((prev) => (prev ? { ...prev, news: prev.news.filter((_, i) => i !== index) } : prev));
+  }
+
+  function addNews() {
+    setPending((prev) => (prev ? { ...prev, news: [...prev.news, { ...EMPTY_NEWS_ITEM }] } : prev));
   }
 
   const publishedAge = published ? daysAgo(published.publishedAt) : null;
@@ -489,6 +557,7 @@ function ScholarshipsCard() {
                 Published {formatDateTime(published.publishedAt)}
                 {publishedAge !== null && publishedAge > 0 ? ` (${publishedAge} day${publishedAge === 1 ? '' : 's'} ago)` : ' (today)'}
                 {' · '}{published.schemes.length} scheme{published.schemes.length === 1 ? '' : 's'}
+                {' · '}{(published.news ?? []).length} news
               </span>
             ) : (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
@@ -539,6 +608,16 @@ function ScholarshipsCard() {
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Overview (Kannada)</label>
                 <textarea className={TEXTAREA_CLASS} rows={2} value={pending.overviewKn} onChange={(e) => updatePending('overviewKn', e.target.value)} />
               </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Latest news ({pending.news.length})</p>
+                <Button type="button" variant="secondary" size="sm" onClick={addNews}>Add news item</Button>
+              </div>
+              {pending.news.map((item, i) => (
+                <NewsEditor key={i} item={item} index={i} onChange={(next) => updateNews(i, next)} onRemove={() => removeNews(i)} />
+              ))}
+
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider pt-1">Schemes ({pending.schemes.length})</p>
               {pending.schemes.map((scheme, i) => (
                 <SchemeEditor
                   key={i}
@@ -601,6 +680,7 @@ function ScholarshipsCard() {
                 <div className="mt-3 space-y-3">
                   {published.overviewEn && <p className="text-sm text-gray-700">{published.overviewEn}</p>}
                   {published.overviewKn && <p className="text-sm text-gray-600">{published.overviewKn}</p>}
+                  <NewsView items={published.news ?? []} />
                   {published.schemes.map((s, i) => <SchemeView key={i} scheme={s} />)}
                 </div>
               )}

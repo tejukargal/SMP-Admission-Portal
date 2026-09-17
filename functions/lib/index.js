@@ -916,6 +916,7 @@ const DEFAULT_SCHOLARSHIP_SOURCES = [
     'https://scholarships.gov.in/',
 ];
 const MAX_SCHOLARSHIP_SCHEMES = 8;
+const MAX_SCHOLARSHIP_NEWS = 6;
 // Closing dates this many days out (or fewer) earn an ACTION NEEDED point in
 // the student's own briefing.
 const SCHOLARSHIP_NUDGE_DAYS = 14;
@@ -944,6 +945,16 @@ Skip schemes that only cover pre-matric, degree-only, PhD-only, or non-Karnataka
 - summaryKn: ONE natural Kannada sentence (proper Kannada script) giving the closing date and who can apply.
 - sources: the URLs you actually used for this scheme.
 
+## LATEST NEWS
+Also list up to ${MAX_SCHOLARSHIP_NEWS} dated announcements from the portals' notifications / news / circular pages for this academic year, newest first — last-date extensions, portal opening or closing, document-verification windows, new schemes, helpline changes. Each with:
+- date: YYYY-MM-DD only if the notice states a date; otherwise null.
+- dateText: the date in words (e.g. "28 September 2026"), or "Undated" when none.
+- title: one plain English sentence saying what was announced, with the key date or fact in it.
+- titleKn: a natural Kannada rendering of title (proper Kannada script).
+- portal: "SSP", "NSP" or the site's name.
+- url: the notice or page you read it on.
+Only announcements you actually found; an empty list is fine.
+
 ## RULES
 - Every date, amount, document and condition must come from an official page or notice you read. Never invent, estimate or carry over last year's date as this year's; if unsure, say it is not announced.
 - Be specific and useful to a student who has to act: dates, amounts, document names, where to go.
@@ -951,7 +962,7 @@ Skip schemes that only cover pre-matric, degree-only, PhD-only, or non-Karnataka
 - overviewEn: 1-2 sentences summarising the current situation (what is open, what is closing soon). overviewKn: a natural Kannada rendering of overviewEn.
 
 ## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "schemes": [ { "name", "portal", "url", "status", "applyBy", "applyByText", "eligibility", "documents": string[], "howToApply", "notes", "summaryKn", "sources": string[] } ]}. No markdown fences, no explanation, no trailing text.`;
+Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "schemes": [ { "name", "portal", "url", "status", "applyBy", "applyByText", "eligibility", "documents": string[], "howToApply", "notes", "summaryKn", "sources": string[] } ], "news": [ { "date", "dateText", "title", "titleKn", "portal", "url" } ]}. No markdown fences, no explanation, no trailing text.`;
 /** Like callGeminiTextForCircular, but with Gemini's built-in Google Search
  *  and URL-context tools switched on so the model can read live web pages.
  *  JSON response mode is not allowed alongside these tools, so the caller
@@ -1057,6 +1068,23 @@ function normalizeScheme(value, today) {
         sources: cleanStringList(v.sources, 10, 1000).map((s) => cleanUrl(s)).filter(Boolean),
     };
 }
+function normalizeNewsItem(value) {
+    if (!value || typeof value !== 'object')
+        return null;
+    const v = value;
+    const title = cleanString(v.title, 300);
+    if (!title)
+        return null;
+    const dateRaw = cleanString(v.date, 20);
+    return {
+        date: /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null,
+        dateText: cleanString(v.dateText, 60) || 'Undated',
+        title,
+        titleKn: cleanString(v.titleKn, 400),
+        portal: cleanString(v.portal, 60) || 'Portal',
+        url: cleanUrl(v.url),
+    };
+}
 function normalizeScholarshipUpdates(value, today) {
     if (!value || typeof value !== 'object')
         return null;
@@ -1066,7 +1094,11 @@ function normalizeScholarshipUpdates(value, today) {
         : [];
     if (schemes.length === 0)
         return null;
-    return { overviewEn: cleanString(v.overviewEn, 600), overviewKn: cleanString(v.overviewKn, 600), schemes };
+    // News is optional — a summary with schemes and no announcements is valid.
+    const news = Array.isArray(v.news)
+        ? v.news.map(normalizeNewsItem).filter((n) => n !== null).slice(0, MAX_SCHOLARSHIP_NEWS)
+        : [];
+    return { overviewEn: cleanString(v.overviewEn, 600), overviewKn: cleanString(v.overviewKn, 600), schemes, news };
 }
 /** Whole days from `from` to `to` (both YYYY-MM-DD); negative when `to` is past. */
 function daysBetweenIsoDates(from, to) {
