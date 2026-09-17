@@ -1280,6 +1280,10 @@ interface ScholarshipUpdatesDoc {
   overviewKn: string;
   schemes: ScholarshipScheme[];
   news: ScholarshipNewsItem[];
+  // Hue (0-359) of the pastel the app paints the Scholarships page and its
+  // CTA card in — drawn at random with each fresh fetch so every published
+  // summary gets its own colour.
+  themeHue: number;
   sourceUrls: string[];
   fetchedAt: string;
   publishedAt: string;
@@ -1494,6 +1498,10 @@ function daysBetweenIsoDates(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
+function randomHue(): number {
+  return Math.floor(Math.random() * 360);
+}
+
 async function getScholarshipUpdates(): Promise<ScholarshipUpdatesDoc | null> {
   const snap = await db.doc('scholarshipUpdates/current').get();
   const data = snap.data() as ScholarshipUpdatesDoc | undefined;
@@ -1555,7 +1563,7 @@ export const fetchScholarshipUpdates = onCall(
     }
     // Schemes the model left unattributed fall back to the grounding URLs.
     const schemes = normalized.schemes.map((s) => (s.sources.length > 0 ? s : { ...s, sources: groundedSources.slice(0, 5) }));
-    return { ...normalized, schemes, sourceUrls, fetchedAt: new Date().toISOString() };
+    return { ...normalized, schemes, themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString() };
   },
 );
 
@@ -1575,6 +1583,7 @@ export const publishScholarshipUpdates = onCall(
     const doc: ScholarshipUpdatesDoc = {
       ...normalized,
       sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean),
+      themeHue: Number.isInteger(data.themeHue) && (data.themeHue as number) >= 0 && (data.themeHue as number) < 360 ? (data.themeHue as number) : randomHue(),
       fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(),
       publishedAt: new Date().toISOString(),
       publishedBy: request.auth?.uid ?? '',

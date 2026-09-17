@@ -119,6 +119,8 @@ export interface PendingScholarshipUpdates {
   overviewKn: string;
   schemes: ScholarshipScheme[];
   news: ScholarshipNewsItem[];
+  /** 0-359: the pastel hue the app paints this summary in; assigned per fetch. */
+  themeHue?: number;
   sourceUrls: string[];
   fetchedAt: string;
 }

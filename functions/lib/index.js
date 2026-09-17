@@ -1104,6 +1104,9 @@ function normalizeScholarshipUpdates(value, today) {
 function daysBetweenIsoDates(from, to) {
     return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
 }
+function randomHue() {
+    return Math.floor(Math.random() * 360);
+}
 async function getScholarshipUpdates() {
     const snap = await db.doc('scholarshipUpdates/current').get();
     const data = snap.data();
@@ -1161,7 +1164,7 @@ exports.fetchScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1', t
     }
     // Schemes the model left unattributed fall back to the grounding URLs.
     const schemes = normalized.schemes.map((s) => (s.sources.length > 0 ? s : Object.assign(Object.assign({}, s), { sources: groundedSources.slice(0, 5) })));
-    return Object.assign(Object.assign({}, normalized), { schemes, sourceUrls, fetchedAt: new Date().toISOString() });
+    return Object.assign(Object.assign({}, normalized), { schemes, themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString() });
 });
 /** Settings › Daily Briefing › Scholarship Updates › "Publish": stores the
  *  reviewed summary at scholarshipUpdates/current (Admin SDK — clients can't
@@ -1175,7 +1178,7 @@ exports.publishScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1',
     if (!normalized) {
         throw new https_1.HttpsError('invalid-argument', 'At least one scheme with a name is required.');
     }
-    const doc = Object.assign(Object.assign({}, normalized), { sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean), fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(), publishedAt: new Date().toISOString(), publishedBy: (_c = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid) !== null && _c !== void 0 ? _c : '' });
+    const doc = Object.assign(Object.assign({}, normalized), { sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean), themeHue: Number.isInteger(data.themeHue) && data.themeHue >= 0 && data.themeHue < 360 ? data.themeHue : randomHue(), fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(), publishedAt: new Date().toISOString(), publishedBy: (_c = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid) !== null && _c !== void 0 ? _c : '' });
     await db.doc('scholarshipUpdates/current').set(doc);
     return doc;
 });
