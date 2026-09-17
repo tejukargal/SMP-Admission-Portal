@@ -3,8 +3,10 @@
 // tabHeaderService, except upload + Firestore write happen inside the
 // saveDailyQuote Cloud Function because dailyQuote/* and the
 // dailyQuoteBackgrounds/ Storage path are Admin-SDK-only), plus a read-only
-// tester that renders any student's personalized briefing.
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
+// tester that renders any student's personalized briefing, and the
+// admin-published scholarship summary (fetch via Gemini grounding -> edit ->
+// publish; scholarshipUpdates/current is Admin-SDK-only too).
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, app } from '../config/firebase';
 
@@ -41,6 +43,7 @@ export interface PendingDailyQuote {
 export interface StudentBriefingPreview {
   date: string;
   quote: DailyQuoteRecord;
+  scholarships: ScholarshipUpdatesRecord | null;
   greeting: string;
   messageEn: string;
   messageKn: string;
@@ -75,5 +78,78 @@ export async function saveDailyQuote(pending: PendingDailyQuote): Promise<DailyQ
 export async function previewStudentBriefing(regNumber: string): Promise<StudentBriefingPreview> {
   const fn = httpsCallable<{ regNumber: string }, StudentBriefingPreview>(functions, 'previewStudentBriefing', { timeout: CALL_TIMEOUT_MS });
   const result = await fn({ regNumber });
+  return result.data;
+}
+
+// ── Scholarship Updates ──────────────────────────────────────────────────────
+
+export type ScholarshipStatus = 'open' | 'closing-soon' | 'closed' | 'upcoming' | 'unknown';
+
+export interface ScholarshipScheme {
+  name: string;
+  portal: string;
+  url: string;
+  status: ScholarshipStatus;
+  /** YYYY-MM-DD when a firm closing date is known, else null. */
+  applyBy: string | null;
+  applyByText: string;
+  eligibility: string;
+  documents: string[];
+  howToApply: string;
+  notes: string;
+  summaryKn: string;
+  sources: string[];
+}
+
+/** What fetchScholarshipUpdates returns and what Publish sends back up
+ *  (after the admin's edits). */
+export interface PendingScholarshipUpdates {
+  overviewEn: string;
+  overviewKn: string;
+  schemes: ScholarshipScheme[];
+  sourceUrls: string[];
+  fetchedAt: string;
+}
+
+/** What's stored at scholarshipUpdates/current and what students see. */
+export interface ScholarshipUpdatesRecord extends PendingScholarshipUpdates {
+  publishedAt: string;
+  publishedBy: string;
+}
+
+export const DEFAULT_SCHOLARSHIP_SOURCES = [
+  'https://ssp.postmatric.karnataka.gov.in/',
+  'https://scholarships.gov.in/',
+];
+
+const SOURCES_DOC = doc(db, 'adminConfig', 'scholarshipSources');
+// Grounded fetches read several live pages before answering.
+const FETCH_TIMEOUT_MS = 180_000;
+
+export async function getScholarshipSources(): Promise<string[]> {
+  const snap = await getDoc(SOURCES_DOC);
+  const urls = (snap.data() as { urls?: unknown } | undefined)?.urls;
+  return Array.isArray(urls) && urls.length > 0 ? urls.filter((u): u is string => typeof u === 'string') : DEFAULT_SCHOLARSHIP_SOURCES;
+}
+
+export async function saveScholarshipSources(urls: string[]): Promise<void> {
+  await setDoc(SOURCES_DOC, { urls, updatedAt: new Date().toISOString() });
+}
+
+export async function getPublishedScholarshipUpdates(): Promise<ScholarshipUpdatesRecord | null> {
+  const snap = await getDoc(doc(db, 'scholarshipUpdates', 'current'));
+  const data = snap.data() as ScholarshipUpdatesRecord | undefined;
+  return data && Array.isArray(data.schemes) && data.schemes.length > 0 ? data : null;
+}
+
+export async function fetchScholarshipUpdates(sourceUrls: string[]): Promise<PendingScholarshipUpdates> {
+  const fn = httpsCallable<{ sourceUrls: string[] }, PendingScholarshipUpdates>(functions, 'fetchScholarshipUpdates', { timeout: FETCH_TIMEOUT_MS });
+  const result = await fn({ sourceUrls });
+  return result.data;
+}
+
+export async function publishScholarshipUpdates(pending: PendingScholarshipUpdates): Promise<ScholarshipUpdatesRecord> {
+  const fn = httpsCallable<PendingScholarshipUpdates, ScholarshipUpdatesRecord>(functions, 'publishScholarshipUpdates', { timeout: CALL_TIMEOUT_MS });
+  const result = await fn(pending);
   return result.data;
 }

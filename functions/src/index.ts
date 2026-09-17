@@ -1064,6 +1064,7 @@ Produce up to 12 short bullet points total (each one sentence, using the exact a
    - Fee dues: if any academic year shows a due amount, state the exact due amount for that year (and the fine, if the year's fine is non-zero). If more than one year has dues, one point per year plus, if useful, the exact total. Mention the last payment (date, receipt) only if it helps the student place the figure.
    - Notices addressed to this student marked UNREAD: one point each, naming the notice and saying plainly what it asks them to do (use the excerpt; if the excerpt has a deadline or an amount, quote it).
    - Circulars marked UNREAD or pinned: one point each for the most time-sensitive ones (pinned first), naming the title and telling them to read it soon. Skip circulars marked "read" unless they are pinned.
+   - Scholarship deadlines listed in the data: one point each, naming the scheme, the portal and the exact closing date, telling the student to apply or renew on that portal before the date if they are eligible — never claim that this particular student is eligible, and never mention scholarships at all when the data says "(none)".
 2. ACADEMICS — from RESULTS: state the exam session, the overall result and CGPA / latest SGPA exactly as given; if any subject shows F or AB, list those subjects by name (and code) as things to clear, phrased supportively and without judgement. If all subjects passed, say so as good news. Skip entirely if there are no results on record — do not mention the absence.
 3. RECORDS — attendance-shortage letters (say the status and what it means: 'sent' = the college has written to them and they should meet their HOD/class teacher; 'visited' = acknowledged; 'resolved' = closed), unseen notifications (one point each, in plain words), and any recently issued TC/PC/refund with its date or amount.
 4. GOOD NEWS — genuinely positive facts worth a line: fully paid fees, all subjects cleared, a refund received, a new certificate issued.
@@ -1236,10 +1237,315 @@ export const saveDailyQuote = onCall(
  *  client-side computations in the student app (fetchMyTotalDue,
  *  noticeAppliesToMe, circularSeenKey, …) rather than trusting a client
  *  payload. */
+// ── Scholarship Updates ──────────────────────────────────────────────────────
+// Settings › Student App › Daily Briefing › "Scholarship Updates": the admin
+// asks Gemini (with its Google Search + URL-context tools, so it can read the
+// JS-rendered SSP / NSP portals and their latest notices) for a structured
+// summary of the schemes open to the college's students — closing dates,
+// eligibility, documents, how to apply — reviews/edits it, and publishes it to
+// scholarshipUpdates/current. Students get it inside their Daily Briefing
+// response (same ride-along as the quote) and a nudge point when a closing
+// date is near. Never generated automatically.
+
+type ScholarshipStatus = 'open' | 'closing-soon' | 'closed' | 'upcoming' | 'unknown';
+const SCHOLARSHIP_STATUSES: ScholarshipStatus[] = ['open', 'closing-soon', 'closed', 'upcoming', 'unknown'];
+
+interface ScholarshipScheme {
+  name: string;
+  portal: string;
+  url: string;
+  status: ScholarshipStatus;
+  applyBy: string | null; // YYYY-MM-DD when a firm closing date is known
+  applyByText: string;
+  eligibility: string;
+  documents: string[];
+  howToApply: string;
+  notes: string;
+  summaryKn: string;
+  sources: string[];
+}
+
+interface ScholarshipUpdatesDoc {
+  overviewEn: string;
+  overviewKn: string;
+  schemes: ScholarshipScheme[];
+  sourceUrls: string[];
+  fetchedAt: string;
+  publishedAt: string;
+  publishedBy: string;
+}
+
+const DEFAULT_SCHOLARSHIP_SOURCES = [
+  'https://ssp.postmatric.karnataka.gov.in/',
+  'https://scholarships.gov.in/',
+];
+
+const MAX_SCHOLARSHIP_SCHEMES = 8;
+// Closing dates this many days out (or fewer) earn an ACTION NEEDED point in
+// the student's own briefing.
+const SCHOLARSHIP_NUDGE_DAYS = 14;
+
+const SCHOLARSHIP_SYSTEM = `You are the scholarship help desk of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka — a government-aided polytechnic whose students are post-matric DIPLOMA students (3-year engineering diploma after 10th standard) from Karnataka, across all categories: SC, ST, OBC (Category-1, 2A, 2B, 3A, 3B), minorities, EWS/general, and students with disabilities.
+
+Your job: read the scholarship portals and official notices listed in the message (use your web tools to open each source URL and its latest notifications / news / circular / important-dates pages, and search for this academic year's official announcements), then write a structured, practical summary for the students of what matters right now.
+
+## WHAT TO INCLUDE
+Up to ${MAX_SCHOLARSHIP_SCHEMES} schemes, most urgent first (nearest closing date first, then open ones, then upcoming, then closed). Prefer:
+- Karnataka SSP post-matric scholarships (SC/ST, OBC, minority, and other department schemes run through the SSP portal) for the current academic year.
+- NSP central schemes a diploma student can apply for (post-matric scholarships for minorities, SC, ST, OBC/EBC/DNT, Top Class, disability schemes, etc.).
+- Any other genuinely relevant scheme you find on the given sources.
+Skip schemes that only cover pre-matric, degree-only, PhD-only, or non-Karnataka students.
+
+## PER SCHEME — FIELDS
+- name: scheme name with the academic year, e.g. "SSP Post-Matric Scholarship 2026-27 (SC/ST)".
+- portal: short portal name — "SSP", "NSP", or the site's name.
+- url: the best link to apply or read the official details.
+- status: one of "open", "closing-soon" (closing within 14 days of TODAY), "closed", "upcoming", "unknown".
+- applyBy: the closing date as YYYY-MM-DD ONLY if an official notice states a firm date for this academic year; otherwise null.
+- applyByText: the closing date in words with its basis, e.g. "30 September 2026 for fresh and renewal (SSP notice dated 12 August 2026)"; if no date is announced, say "Not announced yet — check the portal" (never guess).
+- eligibility: who can apply in plain words — categories, income ceiling (with the exact amount if stated), course level, minimum attendance/marks conditions.
+- documents: the documents needed, one per array entry (Aadhaar, caste certificate, income certificate, bank passbook, previous marks card, fee receipt, college ID, photo, etc. — only what the source actually asks for).
+- howToApply: 2-3 short steps (portal registration, filling the form, college verification, etc.).
+- notes: renewal vs fresh, Aadhaar-bank seeding, verification at the college office, helpline numbers — brief, only if useful.
+- summaryKn: ONE natural Kannada sentence (proper Kannada script) giving the closing date and who can apply.
+- sources: the URLs you actually used for this scheme.
+
+## RULES
+- Every date, amount, document and condition must come from an official page or notice you read. Never invent, estimate or carry over last year's date as this year's; if unsure, say it is not announced.
+- Be specific and useful to a student who has to act: dates, amounts, document names, where to go.
+- Keep each field short and plain; English fields in English (Kannada only in summaryKn and overviewKn).
+- overviewEn: 1-2 sentences summarising the current situation (what is open, what is closing soon). overviewKn: a natural Kannada rendering of overviewEn.
+
+## OUTPUT FORMAT — STRICT
+Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "schemes": [ { "name", "portal", "url", "status", "applyBy", "applyByText", "eligibility", "documents": string[], "howToApply", "notes", "summaryKn", "sources": string[] } ]}. No markdown fences, no explanation, no trailing text.`;
+
+interface GeminiGroundedResponse {
+  candidates?: {
+    content?: { parts?: { text?: string }[] };
+    groundingMetadata?: { groundingChunks?: { web?: { uri?: string } }[] };
+    urlContextMetadata?: { urlMetadata?: { retrievedUrl?: string }[] };
+  }[];
+}
+
+/** Like callGeminiTextForCircular, but with Gemini's built-in Google Search
+ *  and URL-context tools switched on so the model can read live web pages.
+ *  JSON response mode is not allowed alongside these tools, so the caller
+ *  parses the text with extractJsonObject. Also returns the URLs the model
+ *  grounded on, for attribution. */
+function callGeminiGrounded(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+): Promise<{ text: string; sources: string[] }> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: userMessage }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      tools: [{ google_search: {} }, { url_context: {} }],
+      generationConfig: { maxOutputTokens: maxTokens },
+    });
+    const req = https.request(
+      {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              let apiMsg = `HTTP ${res.statusCode}`;
+              try {
+                const errBody = JSON.parse(raw) as { error?: { message?: string } };
+                if (errBody.error?.message) apiMsg += `: ${errBody.error.message}`;
+              } catch { /* raw may not be JSON */ }
+              reject(new Error(apiMsg));
+              return;
+            }
+            const parsed = JSON.parse(raw) as GeminiGroundedResponse;
+            const candidate = parsed.candidates?.[0];
+            const text = candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+            const sources = new Set<string>();
+            for (const chunk of candidate?.groundingMetadata?.groundingChunks ?? []) {
+              if (chunk.web?.uri) sources.add(chunk.web.uri);
+            }
+            for (const meta of candidate?.urlContextMetadata?.urlMetadata ?? []) {
+              if (meta.retrievedUrl) sources.add(meta.retrievedUrl);
+            }
+            resolve({ text: text.trim(), sources: [...sources] });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function cleanString(value: unknown, maxLen = 2000): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLen) : '';
+}
+
+function cleanStringList(value: unknown, maxItems: number, maxLen = 500): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => cleanString(v, maxLen)).filter(Boolean).slice(0, maxItems);
+}
+
+/** Accepts only http(s) URLs, so a stray value can never become a javascript:
+ *  link in the app. */
+function cleanUrl(value: unknown): string {
+  const s = cleanString(value, 1000);
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
+/** Normalises one scheme from the model (or the admin's edited form) into the
+ *  stored shape; returns null if it has no usable name. */
+function normalizeScheme(value: unknown, today: string): ScholarshipScheme | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const name = cleanString(v.name, 200);
+  if (!name) return null;
+  const applyByRaw = cleanString(v.applyBy, 20);
+  const applyBy = /^\d{4}-\d{2}-\d{2}$/.test(applyByRaw) ? applyByRaw : null;
+  let status = SCHOLARSHIP_STATUSES.includes(v.status as ScholarshipStatus) ? (v.status as ScholarshipStatus) : 'unknown';
+  // A firm date decides the status regardless of what the model said.
+  if (applyBy) {
+    const days = daysBetweenIsoDates(today, applyBy);
+    status = days < 0 ? 'closed' : days <= SCHOLARSHIP_NUDGE_DAYS ? 'closing-soon' : 'open';
+  }
+  return {
+    name,
+    portal: cleanString(v.portal, 60) || 'Portal',
+    url: cleanUrl(v.url),
+    status,
+    applyBy,
+    applyByText: cleanString(v.applyByText, 300) || (applyBy ?? 'Not announced yet — check the portal'),
+    eligibility: cleanString(v.eligibility, 1000),
+    documents: cleanStringList(v.documents, 20, 200),
+    howToApply: cleanString(v.howToApply, 1000),
+    notes: cleanString(v.notes, 1000),
+    summaryKn: cleanString(v.summaryKn, 500),
+    sources: cleanStringList(v.sources, 10, 1000).map((s) => cleanUrl(s)).filter(Boolean),
+  };
+}
+
+function normalizeScholarshipUpdates(value: unknown, today: string): Pick<ScholarshipUpdatesDoc, 'overviewEn' | 'overviewKn' | 'schemes'> | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const schemes = Array.isArray(v.schemes)
+    ? v.schemes.map((s) => normalizeScheme(s, today)).filter((s): s is ScholarshipScheme => s !== null).slice(0, MAX_SCHOLARSHIP_SCHEMES)
+    : [];
+  if (schemes.length === 0) return null;
+  return { overviewEn: cleanString(v.overviewEn, 600), overviewKn: cleanString(v.overviewKn, 600), schemes };
+}
+
+/** Whole days from `from` to `to` (both YYYY-MM-DD); negative when `to` is past. */
+function daysBetweenIsoDates(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+async function getScholarshipUpdates(): Promise<ScholarshipUpdatesDoc | null> {
+  const snap = await db.doc('scholarshipUpdates/current').get();
+  const data = snap.data() as ScholarshipUpdatesDoc | undefined;
+  return data && Array.isArray(data.schemes) && data.schemes.length > 0 ? data : null;
+}
+
+/** The lines the student's briefing model sees: only schemes closing within
+ *  SCHOLARSHIP_NUDGE_DAYS, and only their public facts. */
+function scholarshipDeadlineLines(updates: ScholarshipUpdatesDoc | null, today: string): string[] {
+  if (!updates) return ['(none)'];
+  const lines = updates.schemes
+    .filter((s) => s.applyBy && daysBetweenIsoDates(today, s.applyBy) >= 0 && daysBetweenIsoDates(today, s.applyBy) <= SCHOLARSHIP_NUDGE_DAYS)
+    .map((s) => `- ${s.name} | ${s.portal} | closes ${s.applyBy} (${daysBetweenIsoDates(today, s.applyBy as string)} day(s) left) | ${s.eligibility || 'see portal'}`);
+  return lines.length > 0 ? lines : ['(none)'];
+}
+
+/** Settings › Daily Briefing › Scholarship Updates › "Fetch latest": asks
+ *  Gemini (grounded) for the current summary. Stateless — nothing is written
+ *  until the admin publishes. */
+export const fetchScholarshipUpdates = onCall(
+  { region: 'asia-south1', timeoutSeconds: 180 },
+  async (request) => {
+    requireAdmin(request);
+    const requested = cleanStringList(((request.data ?? {}) as { sourceUrls?: unknown }).sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean);
+    const sourceUrls = requested.length > 0 ? requested : DEFAULT_SCHOLARSHIP_SOURCES;
+
+    const { textModel, imageSettings } = await loadBriefingAiSettings();
+    const geminiApiKey = (imageSettings.geminiApiKey ?? '').trim();
+    const today = todayIST();
+    const { dayLabel, dateLabel } = todayLabelsIST();
+
+    const userMessage = [
+      `TODAY: ${dayLabel}, ${dateLabel} (${today}). Academic year in Karnataka runs June to May.`,
+      '',
+      'SOURCES (open each one, and also its latest notifications / news / circulars / important-dates pages):',
+      ...sourceUrls.map((u) => `- ${u}`),
+      '',
+      'Also search the web for this academic year\'s official closing-date announcements for these portals (Karnataka SSP post-matric scholarship last date, NSP last date) and prefer official government pages and notices over news sites.',
+    ].join('\n');
+
+    let rawText = '';
+    let groundedSources: string[] = [];
+    try {
+      ({ text: rawText, sources: groundedSources } = await callGeminiGrounded(geminiApiKey, textModel, SCHOLARSHIP_SYSTEM, userMessage, 6000));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI fetch failed: ${msg}`);
+    }
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(extractJsonObject(rawText));
+    } catch {
+      throw new HttpsError('internal', `The AI response was not valid JSON. It began: ${rawText.slice(0, 200)}`);
+    }
+    const normalized = normalizeScholarshipUpdates(parsedJson, today);
+    if (!normalized) {
+      throw new HttpsError('internal', 'The AI response contained no usable schemes. Try again, or switch the Gemini text model in AI Settings.');
+    }
+    // Schemes the model left unattributed fall back to the grounding URLs.
+    const schemes = normalized.schemes.map((s) => (s.sources.length > 0 ? s : { ...s, sources: groundedSources.slice(0, 5) }));
+    return { ...normalized, schemes, sourceUrls, fetchedAt: new Date().toISOString() };
+  },
+);
+
+/** Settings › Daily Briefing › Scholarship Updates › "Publish": stores the
+ *  reviewed summary at scholarshipUpdates/current (Admin SDK — clients can't
+ *  write it). */
+export const publishScholarshipUpdates = onCall(
+  { region: 'asia-south1', timeoutSeconds: 30 },
+  async (request) => {
+    requireAdmin(request);
+    const data = (request.data ?? {}) as Record<string, unknown>;
+    const today = todayIST();
+    const normalized = normalizeScholarshipUpdates(data, today);
+    if (!normalized) {
+      throw new HttpsError('invalid-argument', 'At least one scheme with a name is required.');
+    }
+    const doc: ScholarshipUpdatesDoc = {
+      ...normalized,
+      sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean),
+      fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      publishedBy: request.auth?.uid ?? '',
+    };
+    await db.doc('scholarshipUpdates/current').set(doc);
+    return doc;
+  },
+);
+
 async function collectStudentBriefingData(regNumber: string): Promise<{ primary: StudentDoc; dataBlock: string }> {
   const [
     studentsSnap, feeSnap, refundsSnap, circularsSnap, noticesSnap, circularsCountSnap, pinnedSnap,
-    resultsSnap, notificationsSnap, noticeStateSnap, circularStateSnap,
+    resultsSnap, notificationsSnap, noticeStateSnap, circularStateSnap, scholarshipUpdates,
   ] = await Promise.all([
     db.collection('students').where('regNumber', '==', regNumber).get(),
     db.collection('feeRecords').where('regNumber', '==', regNumber).get(),
@@ -1254,6 +1560,7 @@ async function collectStudentBriefingData(regNumber: string): Promise<{ primary:
     db.collection('studentNotifications').where('regNumber', '==', regNumber).get(),
     db.collection('studentNoticeState').doc(regNumber).get(),
     db.collection('studentCircularState').doc(regNumber).get(),
+    getScholarshipUpdates(),
   ]);
 
   const studentDocs = studentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as StudentDoc) }));
@@ -1426,6 +1733,9 @@ async function collectStudentBriefingData(regNumber: string): Promise<{ primary:
     ...(unseenNotifications.length > 0
       ? unseenNotifications.map((n) => `- ${n.type ?? ''} | ${n.title ?? ''} | ${n.message ?? ''} | ${n.createdAt ?? ''}`)
       : ['(none)']),
+    '',
+    `SCHOLARSHIP DEADLINES within ${SCHOLARSHIP_NUDGE_DAYS} days, from the admin-published scholarship summary (scheme | portal | closes on | who can apply):`,
+    ...scholarshipDeadlineLines(scholarshipUpdates, todayIST()),
   ].join('\n');
 
   return { primary, dataBlock };
@@ -1442,7 +1752,7 @@ async function generateBriefingText(apiKey: string, textModel: string, dataBlock
 }
 
 /** Student app: the Daily Briefing screen. Returns the latest admin-saved
- *  quote plus this student's note + highlights, generated once per IST day
+ *  quote, the admin-published scholarship summary (or null), plus this student's note + highlights, generated once per IST day
  *  and cached at dailyBriefing/{regNumber}. `date` is the day the cached
  *  digest belongs to — the client keys its own cache on it (the quote's own
  *  `date` may be older, since the admin may not have saved one today). */
@@ -1468,8 +1778,9 @@ export const generateDailyBriefing = onCall(
 
     const today = todayIST();
 
-    const [quote, cachedBriefingSnap] = await Promise.all([
+    const [quote, scholarships, cachedBriefingSnap] = await Promise.all([
       getLatestDailyQuote(),
+      getScholarshipUpdates(),
       db.collection('dailyBriefing').doc(regNumber).get(),
     ]);
 
@@ -1477,7 +1788,7 @@ export const generateDailyBriefing = onCall(
     const cachedGeneratedAt = cachedBriefing?.generatedAt;
     if (cachedBriefing?.date === today && isBriefingResult(cachedBriefing)) {
       const { greeting, messageEn, messageKn, points } = cachedBriefing;
-      return { date: today, quote, greeting, messageEn, messageKn, points, generatedAt: cachedGeneratedAt ?? new Date().toISOString() };
+      return { date: today, quote, scholarships, greeting, messageEn, messageKn, points, generatedAt: cachedGeneratedAt ?? new Date().toISOString() };
     }
 
     const { dataBlock } = await collectStudentBriefingData(regNumber);
@@ -1486,7 +1797,7 @@ export const generateDailyBriefing = onCall(
       const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
       const generatedAt = new Date().toISOString();
       await db.collection('dailyBriefing').doc(regNumber).set({ date: today, ...result, generatedAt });
-      return { date: today, quote, ...result, generatedAt };
+      return { date: today, quote, scholarships, ...result, generatedAt };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `AI generation failed: ${msg}`);
@@ -1511,14 +1822,15 @@ export const previewStudentBriefing = onCall(
     const { textModel, imageSettings } = await loadBriefingAiSettings();
     const geminiApiKey = imageSettings.geminiApiKey ?? '';
 
-    const [quote, { dataBlock }] = await Promise.all([
+    const [quote, scholarships, { dataBlock }] = await Promise.all([
       getLatestDailyQuote(),
+      getScholarshipUpdates(),
       collectStudentBriefingData(regNumber),
     ]);
 
     try {
       const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
-      return { date: todayIST(), quote, ...result, generatedAt: new Date().toISOString(), dataBlock };
+      return { date: todayIST(), quote, scholarships, ...result, generatedAt: new Date().toISOString(), dataBlock };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `AI generation failed: ${msg}`);

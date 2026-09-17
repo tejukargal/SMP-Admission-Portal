@@ -285,12 +285,19 @@ service cloud.firestore {
     // show what students currently see. `dailyBriefing/{regNumber}` is each
     // student's personalized note+highlights cache, written only by
     // generateDailyBriefing — no direct client access at all.
+    // `scholarshipUpdates/current` is the admin-published scholarship summary
+    // (written only by publishScholarshipUpdates); students receive it inside
+    // their briefing response, the panel reads it to show what is live.
     match /dailyQuote/{date} {
       allow read: if isAdmin();
       allow write: if false;
     }
     match /dailyBriefing/{regNumber} {
       allow read, write: if false;
+    }
+    match /scholarshipUpdates/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // ── Student Portal Login Activity ("active users") ─────────────────────

@@ -3,7 +3,10 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import {
   getLatestDailyQuote, generateDailyQuotePreview, saveDailyQuote, previewStudentBriefing,
+  getScholarshipSources, saveScholarshipSources, getPublishedScholarshipUpdates, fetchScholarshipUpdates, publishScholarshipUpdates,
+  DEFAULT_SCHOLARSHIP_SOURCES,
   type DailyQuoteRecord, type PendingDailyQuote, type StudentBriefingPreview,
+  type ScholarshipScheme, type ScholarshipStatus, type PendingScholarshipUpdates, type ScholarshipUpdatesRecord,
 } from '../services/dailyBriefingAdminService';
 
 const TEXTAREA_CLASS =
@@ -204,6 +207,411 @@ function QuoteCard() {
   );
 }
 
+const STATUS_LABEL: Record<ScholarshipStatus, string> = {
+  open: 'Open',
+  'closing-soon': 'Closing soon',
+  closed: 'Closed',
+  upcoming: 'Upcoming',
+  unknown: 'Unknown',
+};
+
+const STATUS_CLASS: Record<ScholarshipStatus, string> = {
+  open: 'bg-emerald-50 text-emerald-700',
+  'closing-soon': 'bg-amber-50 text-amber-700',
+  closed: 'bg-gray-100 text-gray-500',
+  upcoming: 'bg-blue-50 text-blue-700',
+  unknown: 'bg-gray-100 text-gray-600',
+};
+
+function daysAgo(iso: string): number {
+  return Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+/** One scheme's editable block inside the pending (unpublished) summary. */
+function SchemeEditor({
+  scheme, index, onChange, onRemove,
+}: {
+  scheme: ScholarshipScheme;
+  index: number;
+  onChange: (next: ScholarshipScheme) => void;
+  onRemove: () => void;
+}) {
+  function set<K extends keyof ScholarshipScheme>(key: K, value: ScholarshipScheme[K]) {
+    onChange({ ...scheme, [key]: value });
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Scheme {index + 1}</p>
+        <button type="button" className="text-xs font-semibold text-red-500 hover:text-red-700" onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+      <Input label="Scheme name" value={scheme.name} onChange={(e) => set('name', e.target.value)} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Input label="Portal" value={scheme.portal} onChange={(e) => set('portal', e.target.value)} placeholder="SSP / NSP" />
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</label>
+          <select
+            className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+            value={scheme.status}
+            onChange={(e) => set('status', e.target.value as ScholarshipStatus)}
+          >
+            {(Object.keys(STATUS_LABEL) as ScholarshipStatus[]).map((s) => (
+              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+            ))}
+          </select>
+        </div>
+        <Input
+          label="Closing date (firm)"
+          type="date"
+          value={scheme.applyBy ?? ''}
+          onChange={(e) => set('applyBy', e.target.value || null)}
+        />
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-1">
+        A firm closing date drives the status automatically on publish and puts a reminder in every student's briefing
+        from 14 days before it. Leave it empty when no date has been announced.
+      </p>
+      <Input label="Closing date (in words)" value={scheme.applyByText} onChange={(e) => set('applyByText', e.target.value)} />
+      <Input label="Apply / details link" value={scheme.url} onChange={(e) => set('url', e.target.value)} placeholder="https://…" />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Who can apply</label>
+        <textarea className={TEXTAREA_CLASS} rows={2} value={scheme.eligibility} onChange={(e) => set('eligibility', e.target.value)} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Documents needed (one per line)</label>
+        <textarea
+          className={TEXTAREA_CLASS}
+          rows={Math.min(8, Math.max(3, scheme.documents.length + 1))}
+          value={scheme.documents.join('\n')}
+          onChange={(e) => set('documents', e.target.value.split('\n').map((l) => l.trim()).filter(Boolean))}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">How to apply</label>
+        <textarea className={TEXTAREA_CLASS} rows={2} value={scheme.howToApply} onChange={(e) => set('howToApply', e.target.value)} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Notes</label>
+        <textarea className={TEXTAREA_CLASS} rows={2} value={scheme.notes} onChange={(e) => set('notes', e.target.value)} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Kannada summary</label>
+        <textarea className={TEXTAREA_CLASS} rows={2} value={scheme.summaryKn} onChange={(e) => set('summaryKn', e.target.value)} />
+      </div>
+      {scheme.sources.length > 0 && (
+        <p className="text-[11px] text-gray-500 break-all">
+          <span className="font-semibold">Sources:</span>{' '}
+          {scheme.sources.map((u, i) => (
+            <span key={u}>
+              {i > 0 && ' · '}
+              <a href={u} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{u}</a>
+            </span>
+          ))}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Read-only rendering of one scheme, used for the currently published set. */
+function SchemeView({ scheme }: { scheme: ScholarshipScheme }) {
+  return (
+    <div className="rounded-lg border border-gray-200 px-4 py-3 space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="text-sm font-semibold text-gray-800">{scheme.name}</p>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{scheme.portal}</span>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${STATUS_CLASS[scheme.status]}`}>{STATUS_LABEL[scheme.status]}</span>
+      </div>
+      <p className="text-sm text-gray-700"><span className="font-semibold">Apply by:</span> {scheme.applyByText}</p>
+      {scheme.eligibility && <p className="text-sm text-gray-700"><span className="font-semibold">Who can apply:</span> {scheme.eligibility}</p>}
+      {scheme.documents.length > 0 && (
+        <div className="text-sm text-gray-700">
+          <span className="font-semibold">Documents:</span>
+          <ul className="list-disc pl-5">
+            {scheme.documents.map((d, i) => <li key={i}>{d}</li>)}
+          </ul>
+        </div>
+      )}
+      {scheme.howToApply && <p className="text-sm text-gray-700"><span className="font-semibold">How to apply:</span> {scheme.howToApply}</p>}
+      {scheme.notes && <p className="text-sm text-gray-700"><span className="font-semibold">Notes:</span> {scheme.notes}</p>}
+      {scheme.summaryKn && <p className="text-sm text-gray-600">{scheme.summaryKn}</p>}
+      {scheme.url && (
+        <a href={scheme.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline break-all">{scheme.url}</a>
+      )}
+    </div>
+  );
+}
+
+/** Scholarship summary for the Daily Briefing: the admin keeps a list of
+ *  source portals, asks Gemini (with web access) for a structured summary of
+ *  closing dates / eligibility / documents, edits it, and publishes it.
+ *  Students see the published summary inside their briefing and get a
+ *  reminder point when a closing date is within two weeks. Never refreshed
+ *  automatically — same rule as the quote. */
+function ScholarshipsCard() {
+  const [sources, setSources] = useState<string[]>(DEFAULT_SCHOLARSHIP_SOURCES);
+  const [sourcesDirty, setSourcesDirty] = useState(false);
+  const [savingSources, setSavingSources] = useState(false);
+  const [published, setPublished] = useState<ScholarshipUpdatesRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<PendingScholarshipUpdates | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState('');
+  const [showPublished, setShowPublished] = useState(false);
+
+  useEffect(() => {
+    Promise.all([getScholarshipSources(), getPublishedScholarshipUpdates()])
+      .then(([urls, current]) => {
+        setSources(urls);
+        setPublished(current);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function updateSource(index: number, value: string) {
+    setSources((prev) => prev.map((u, i) => (i === index ? value : u)));
+    setSourcesDirty(true);
+  }
+
+  function removeSource(index: number) {
+    setSources((prev) => prev.filter((_, i) => i !== index));
+    setSourcesDirty(true);
+  }
+
+  function addSource() {
+    setSources((prev) => [...prev, '']);
+    setSourcesDirty(true);
+  }
+
+  function cleanSources(): string[] {
+    return sources.map((u) => u.trim()).filter((u) => /^https?:\/\//i.test(u));
+  }
+
+  async function handleSaveSources() {
+    const urls = cleanSources();
+    if (urls.length === 0) {
+      setError('Add at least one source URL starting with http:// or https://.');
+      return;
+    }
+    setError('');
+    setSavingSources(true);
+    try {
+      await saveScholarshipSources(urls);
+      setSources(urls);
+      setSourcesDirty(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the sources.');
+    } finally {
+      setSavingSources(false);
+    }
+  }
+
+  async function handleFetch() {
+    const urls = cleanSources();
+    if (urls.length === 0) {
+      setError('Add at least one source URL starting with http:// or https://.');
+      return;
+    }
+    setError('');
+    setFetching(true);
+    try {
+      setPending(await fetchScholarshipUpdates(urls));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not fetch the scholarship summary. Please try again.');
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!pending) return;
+    if (pending.schemes.length === 0 || pending.schemes.some((s) => !s.name.trim())) {
+      setError('Every scheme needs a name, and at least one scheme is required.');
+      return;
+    }
+    setError('');
+    setPublishing(true);
+    try {
+      setPublished(await publishScholarshipUpdates(pending));
+      setPending(null);
+      setShowPublished(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not publish. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  function updatePending<K extends keyof PendingScholarshipUpdates>(key: K, value: PendingScholarshipUpdates[K]) {
+    setPending((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  function updateScheme(index: number, next: ScholarshipScheme) {
+    setPending((prev) => (prev ? { ...prev, schemes: prev.schemes.map((s, i) => (i === index ? next : s)) } : prev));
+  }
+
+  function removeScheme(index: number) {
+    setPending((prev) => (prev ? { ...prev, schemes: prev.schemes.filter((_, i) => i !== index) } : prev));
+  }
+
+  const publishedAge = published ? daysAgo(published.publishedAt) : null;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Scholarship Updates</h3>
+        <p className="text-xs text-gray-400 mt-0.5">
+          A summary of scholarship closing dates, eligibility and documents, read by the AI from the portals below and
+          shown on every student's Daily Briefing. Fetch the latest, check and edit it, then Publish — it stays until you
+          publish again, so refresh it whenever a portal announces new dates.
+        </p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
+      ) : (
+        <div className="px-6 py-5 space-y-5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {published ? (
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${(publishedAge ?? 0) > 21 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                Published {formatDateTime(published.publishedAt)}
+                {publishedAge !== null && publishedAge > 0 ? ` (${publishedAge} day${publishedAge === 1 ? '' : 's'} ago)` : ' (today)'}
+                {' · '}{published.schemes.length} scheme{published.schemes.length === 1 ? '' : 's'}
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                Not published yet — students see no scholarship section
+              </span>
+            )}
+            {pending && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Unpublished summary</span>
+            )}
+          </div>
+
+          {/* Sources */}
+          <div className="space-y-2 max-w-xl">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Source websites</p>
+            {sources.map((u, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={u}
+                  onChange={(e) => updateSource(i, e.target.value)}
+                  placeholder="https://…"
+                  className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                />
+                <button type="button" className="text-xs font-semibold text-red-500 hover:text-red-700 shrink-0" onClick={() => removeSource(i)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2 flex-wrap">
+              <Button type="button" variant="secondary" size="sm" onClick={addSource}>Add source</Button>
+              {sourcesDirty && (
+                <Button type="button" size="sm" loading={savingSources} onClick={() => void handleSaveSources()}>Save sources</Button>
+              )}
+            </div>
+          </div>
+
+          {/* Pending (editable) summary */}
+          {pending && (
+            <div className="space-y-4">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                Fetched {formatDateTime(pending.fetchedAt)} — check every date against the portal before publishing
+              </p>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Overview (English)</label>
+                <textarea className={TEXTAREA_CLASS} rows={2} value={pending.overviewEn} onChange={(e) => updatePending('overviewEn', e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Overview (Kannada)</label>
+                <textarea className={TEXTAREA_CLASS} rows={2} value={pending.overviewKn} onChange={(e) => updatePending('overviewKn', e.target.value)} />
+              </div>
+              {pending.schemes.map((scheme, i) => (
+                <SchemeEditor
+                  key={i}
+                  scheme={scheme}
+                  index={i}
+                  onChange={(next) => updateScheme(i, next)}
+                  onRemove={() => removeScheme(i)}
+                />
+              ))}
+              {pending.schemes.length === 0 && (
+                <p className="text-xs text-gray-500">All schemes removed — fetch again or discard.</p>
+              )}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={fetching}
+              disabled={fetching || publishing}
+              onClick={() => void handleFetch()}
+            >
+              {pending || published ? 'Fetch latest again' : 'Fetch latest'}
+            </Button>
+            {pending && (
+              <Button type="button" size="sm" loading={publishing} disabled={fetching} onClick={() => void handlePublish()}>
+                Publish
+              </Button>
+            )}
+            {pending && (
+              <Button type="button" variant="secondary" size="sm" disabled={fetching || publishing} onClick={() => { setPending(null); setError(''); }}>
+                Discard
+              </Button>
+            )}
+          </div>
+          {fetching && (
+            <p className="text-xs text-gray-400">Reading the portals and their latest notices — this can take a minute or two.</p>
+          )}
+          <p className="text-[11px] text-gray-400">
+            Uses the Gemini text model from AI Settings with web access. If fetching fails with a tools/model error, pick a
+            model that supports Google Search grounding there. A newly published summary shows in the app immediately; the
+            reminder point in a student's highlights appears from their next daily generation.
+          </p>
+
+          {/* Currently published (read-only) */}
+          {published && (
+            <div>
+              <button
+                type="button"
+                className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+                onClick={() => setShowPublished((v) => !v)}
+              >
+                {showPublished ? '▾ Hide' : '▸ Show'} what students currently see
+              </button>
+              {showPublished && (
+                <div className="mt-3 space-y-3">
+                  {published.overviewEn && <p className="text-sm text-gray-700">{published.overviewEn}</p>}
+                  {published.overviewKn && <p className="text-sm text-gray-600">{published.overviewKn}</p>}
+                  {published.schemes.map((s, i) => <SchemeView key={i} scheme={s} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Read-only tester: generates the personalized note + highlights for any
  *  reg number exactly as the student app would, without touching that
  *  student's cached briefing, and shows the data block the AI was given so
@@ -239,7 +647,8 @@ function StudentPreviewCard() {
         <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Preview a Student's Briefing</h3>
         <p className="text-xs text-gray-400 mt-0.5">
           See the personalized note and highlights a student would get today, generated from their live fees, results,
-          notices, circulars and certificates. Read-only — it does not change what the student sees.
+          notices, circulars, certificates and any scholarship deadline within two weeks. Read-only — it does not change
+          what the student sees.
         </p>
       </div>
       <div className="px-6 py-5 space-y-4">
@@ -303,12 +712,14 @@ function StudentPreviewCard() {
 }
 
 /** Admin-only panel that replaces the old scheduled quote generation:
- *  today's shared quote is generated and published from here, and any
- *  student's personalized briefing can be previewed to check accuracy. */
+ *  today's shared quote and the scholarship summary are generated and
+ *  published from here, and any student's personalized briefing can be
+ *  previewed to check accuracy. */
 export function DailyBriefingPanel() {
   return (
     <div className="max-w-2xl space-y-4">
       <QuoteCard />
+      <ScholarshipsCard />
       <StudentPreviewCard />
     </div>
   );
