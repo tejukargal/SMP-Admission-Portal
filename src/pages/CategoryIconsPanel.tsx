@@ -51,39 +51,35 @@ function CategoryIconRow({
   const previewSrc = pending ? `data:${pending.mimeType};base64,${pending.base64}` : savedUrl;
 
   return (
-    <div className="rounded-lg border border-gray-200 overflow-hidden bg-white flex flex-col">
-      {/* Full, uncropped preview (object-contain, not object-cover) — the actual
-          tile on the student app crops this to fit via object-cover, but the admin
-          needs to see the complete generated image to judge composition/color
-          before deciding to save. */}
-      <div className="h-72 shrink-0 bg-gray-50 border-b border-gray-100 overflow-hidden flex items-center justify-center">
+    <div className="flex items-center gap-4 px-6 py-4">
+      {/* Square thumbnail, cropped the same way the student app's Overview
+          tile crops it (object-cover), so what the admin sees is what ships. */}
+      <div className="w-20 h-20 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
         {previewSrc ? (
-          <img src={previewSrc} alt={`${label} card background`} className="max-w-full max-h-full object-contain" />
+          <img src={previewSrc} alt={`${label} card background`} className="w-full h-full object-cover" />
         ) : (
-          <span className="text-xs text-gray-400 text-center px-4">No image yet</span>
+          <span className="text-[10px] text-gray-400">No image yet</span>
         )}
       </div>
-      <div className="p-4 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-800">{label}</p>
-          {error && <p className="text-xs text-red-500 font-medium mt-1">{error}</p>}
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            loading={generating}
-            onClick={() => void handleGenerate()}
-          >
-            {savedUrl || pending ? 'Regenerate' : 'Generate'}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800">{label}</p>
+        {error && <p className="text-xs text-red-500 font-medium mt-1">{error}</p>}
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={generating}
+          onClick={() => void handleGenerate()}
+        >
+          {savedUrl || pending ? 'Regenerate' : 'Generate'}
+        </Button>
+        {pending && (
+          <Button type="button" size="sm" loading={saving} onClick={() => void handleSave()}>
+            Save
           </Button>
-          {pending && (
-            <Button type="button" size="sm" loading={saving} onClick={() => void handleSave()}>
-              Save
-            </Button>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -110,7 +106,7 @@ export function CategoryIconsPanel() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-2xl">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" style={{ animation: 'page-enter 0.2s ease-out both' }}>
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Category Icons</h3>
@@ -124,7 +120,7 @@ export function CategoryIconsPanel() {
         {loading ? (
           <p className="text-sm text-gray-500 px-6 py-5">Loading…</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+          <div className="divide-y divide-gray-100">
             {CATEGORY_ICON_TABS.map((t) => (
               <CategoryIconRow key={t.key} iconKey={t.key} label={t.label} savedUrl={saved[t.key]} onSaved={handleSaved} />
             ))}
