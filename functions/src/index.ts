@@ -2418,7 +2418,9 @@ const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates',
 type TabHeaderKey = (typeof TAB_HEADER_KEYS)[number];
 
 const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
-  home: 'a cheerful college student standing and waving a friendly hello, with a small, simple flat college building drawn as a prop just behind them carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
+  // Only the building prop lives here; the student's pose is drawn at random
+  // per generation by buildHomeHeaderPrompt (HOME_HEADER_POSES).
+  home: 'a small, simple flat college building drawn as a prop just behind the student, carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
   circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
   profile: 'a friendly student in college uniform, standing, holding a notebook',
   fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
@@ -2433,7 +2435,7 @@ const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
 // single flat pastel keeps the black Home greeting/name text legible on the
 // left and lets the colourful scene carry the image. No glow/luminous effects.
 const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
-  home: 'soft pastel blush pink (a light, warm rose)',
+  home: 'soft pastel blush pink (a light, warm rose)', // unused: Home picks from HOME_HEADER_BACKGROUNDS
   circulars: 'soft pastel peach (a light, warm apricot)',
   profile: 'soft pastel butter yellow (a light, creamy yellow)',
   fees: 'soft pastel mint (a light, minty aqua-green)',
@@ -2451,11 +2453,44 @@ const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
 // Icons look (buildCategoryIconPrompt): one plain solid pastel with a single
 // colourful student character, here with the college's short name "SMP" on
 // a small building prop (the only text any header image may carry).
+// Every Generate draws a fresh background colour and pose, so the admin can
+// keep regenerating until one fits.
+const HOME_HEADER_BACKGROUNDS = [
+  'soft pastel blush pink (a light, warm rose)',
+  'soft pastel peach (a light, warm apricot)',
+  'soft pastel butter yellow (a light, creamy yellow)',
+  'soft pastel mint (a light, minty aqua-green)',
+  'soft pastel sky blue (a light, airy baby blue)',
+  'soft pastel periwinkle blue (a light, lavender-tinted blue)',
+  'soft pastel lilac (a light lavender-purple)',
+  'soft pastel coral (a light, warm salmon pink)',
+  'soft pastel sage (a light, muted grey-green)',
+];
+
+const HOME_HEADER_POSES = [
+  'standing and waving a friendly hello with one raised hand',
+  'walking briskly towards the college with a relaxed smile, mid-stride',
+  'standing in a relaxed, confident pose with one hand resting on the strap of their bag',
+  'standing with both hands casually in their pockets, chin up and smiling',
+  'standing and giving a cheerful thumbs-up',
+  'standing side-on and looking back over their shoulder with a smile',
+  'holding a couple of books against their chest with one arm and smiling',
+  'standing with arms folded loosely, smiling warmly',
+  'walking while glancing at a phone in one hand, smiling',
+  'standing and adjusting the strap of their bag with one hand, smiling',
+];
+
+function pickRandom<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
 function buildHomeHeaderPrompt(provider: AiImageSettings['imageProvider']): string {
+  const background = pickRandom(HOME_HEADER_BACKGROUNDS);
+  const pose = pickRandom(HOME_HEADER_POSES);
   return [
-    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${TAB_HEADER_COLORS.home} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
-    `Depict ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
-    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${background} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
+    `Depict a cheerful college student ${pose}, wearing a college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
+    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair) and a backpack in a contrasting colour, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
     'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.',
     'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
     imageStyleDirective(
