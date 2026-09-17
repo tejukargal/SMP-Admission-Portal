@@ -278,14 +278,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ── Daily Briefing caches (generateDailyBriefing) ───────────────────────
-    // `dailyQuote/{date}` is the shared quote-of-the-day (one doc per calendar
-    // day, reused by every student); `dailyBriefing/{regNumber}` is each
-    // student's personalized note+highlights. Both are written only by the
-    // generateDailyBriefing Cloud Function via the Admin SDK, which bypasses
-    // rules entirely — these rules just block any direct client access.
+    // ── Daily Briefing ───────────────────────────────────────────────────────
+    // `dailyQuote/{date}` is the shared quote-of-the-day the admin saves from
+    // Settings › Daily Briefing (written only by the saveDailyQuote Cloud
+    // Function via the Admin SDK); the panel reads the latest one directly to
+    // show what students currently see. `dailyBriefing/{regNumber}` is each
+    // student's personalized note+highlights cache, written only by
+    // generateDailyBriefing — no direct client access at all.
     match /dailyQuote/{date} {
-      allow read, write: if false;
+      allow read: if isAdmin();
+      allow write: if false;
     }
     match /dailyBriefing/{regNumber} {
       allow read, write: if false;

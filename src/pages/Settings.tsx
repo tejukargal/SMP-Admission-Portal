@@ -25,9 +25,10 @@ import { ImportResults } from './ImportResults';
 import { BackupRestore } from './BackupRestore';
 import { TabHeaderBackgroundsPanel } from './TabHeaderBackgroundsPanel';
 import { CategoryIconsPanel } from './CategoryIconsPanel';
+import { DailyBriefingPanel } from './DailyBriefingPanel';
 import type { AcademicYear, StaffUser, Student } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'ai-settings' | 'app-version' | 'tab-headers' | 'category-icons' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import-students' | 'import-fee' | 'import-address' | 'import-results' | 'staff' | 'messaging' | 'ai-settings' | 'app-version' | 'tab-headers' | 'category-icons' | 'daily-briefing' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -43,6 +44,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'app-version', label: 'App Version' },
   { id: 'tab-headers', label: 'Tab Header Backgrounds' },
   { id: 'category-icons', label: 'Category Icons' },
+  { id: 'daily-briefing', label: 'Daily Briefing' },
   { id: 'backup', label: 'Backup & Restore' },
 ];
 
@@ -158,6 +160,7 @@ export function Settings() {
   const [aiOpenaiKey, setAiOpenaiKey] = useState('');
   const [aiReplicateKey, setAiReplicateKey] = useState('');
   const [aiBudgetpixelKey, setAiBudgetpixelKey] = useState('');
+  const [aiGeminiTextModel, setAiGeminiTextModel] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiSaveMsg, setAiSaveMsg] = useState('');
@@ -424,6 +427,7 @@ export function Settings() {
           setAiOpenaiKey(cfg.openaiApiKey);
           setAiReplicateKey(cfg.replicateApiKey);
           setAiBudgetpixelKey(cfg.budgetpixelApiKey);
+          setAiGeminiTextModel(cfg.geminiTextModel);
         }
       })
       .catch(() => {})
@@ -682,6 +686,7 @@ export function Settings() {
         openaiApiKey: aiOpenaiKey.trim(),
         replicateApiKey: aiReplicateKey.trim(),
         budgetpixelApiKey: aiBudgetpixelKey.trim(),
+        geminiTextModel: aiGeminiTextModel.trim(),
       });
       setAiSaveMsg('AI settings saved.');
     } catch (err: unknown) {
@@ -1344,6 +1349,23 @@ export function Settings() {
                         className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Gemini Text Model
+                      </label>
+                      <input
+                        type="text"
+                        value={aiGeminiTextModel}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiGeminiTextModel(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
+                        placeholder="gemini-3.5-flash-lite (default)"
+                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Writes the Daily Briefing quote, note and highlights (always Gemini, whichever image provider is
+                        selected). Leave blank for the default; a larger model such as gemini-3.5-flash gives more careful
+                        highlights at a higher per-call cost.
+                      </p>
+                    </div>
                     {aiSaveError && (
                       <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{aiSaveError}</p>
                     )}
@@ -1616,6 +1638,11 @@ export function Settings() {
         {/* ── Category Icons ── */}
         {activeTab === 'category-icons' && (
           <CategoryIconsPanel />
+        )}
+
+        {/* ── Daily Briefing ── */}
+        {activeTab === 'daily-briefing' && (
+          <DailyBriefingPanel />
         )}
 
         {/* ── Backup & Restore ── */}

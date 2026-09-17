@@ -1,11 +1,9 @@
 import * as admin from 'firebase-admin';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as https from 'https';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
-import { INDIAN_QUOTES } from './indianQuotes';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -700,14 +698,18 @@ export const generateAdmissionSummary = onCall(
 );
 
 // ── Daily Briefing (merged AI Summary + Daily Motivation) ───────────────────
-// One combined feature, generated via Gemini instead of Claude: a shared
-// "quote of the day" from a curated bank of great Indian personalities (see
-// generateDailyBriefing further below) plus a personalized mentor note +
-// highlights digest built from the student's own circulars/fees/
-// certificates. The types and helpers below (student/fee/circular/notice
-// shapes, the due-calculation helpers) are shared by that function.
-// Deliberately excludes sensitive PII (Aadhaar, APAAR ID, DOB, parent names)
-// from what's sent to Gemini — only what's needed for a useful digest.
+// One combined feature, generated via Gemini: a shared "quote of the day"
+// that the admin generates and saves from Settings › Daily Briefing (see
+// generateDailyQuotePreview / saveDailyQuote further below — there is no
+// scheduled or lazy auto-generation; students see the most recently saved
+// quote until the admin saves a new one) plus a personalized mentor note +
+// highlights digest built from the student's own fees, results, notices,
+// circulars, certificates, notifications and attendance letters. The types
+// and helpers below (student/fee/circular/notice shapes, the due-calculation
+// helpers) are shared by the student callable and the admin preview tester.
+// Deliberately excludes sensitive PII (Aadhaar, APAAR ID, DOB, parent names,
+// mobiles, address, income, caste category) from what's sent to Gemini —
+// only what's needed for a useful digest.
 
 // Mirrors the TCRecord/PCRecord shapes embedded on a student doc's tcHistory/
 // pcHistory arrays in src/types/index.ts on the student app — duplicated here
@@ -734,6 +736,15 @@ interface RefundRecord {
   paymentDate?: string;
 }
 
+// Mirrors AnsLetterRecord (attendance-shortage intimation letters appended to
+// a student doc's ansHistory) from src/types/index.ts — only the fields the
+// digest cites.
+interface AnsLetterEntry {
+  academicYear?: string;
+  issuedAt?: string;
+  status?: string; // 'sent' | 'visited' | 'resolved'
+}
+
 interface StudentDoc {
   id?: string;
   regNumber?: string;
@@ -742,8 +753,37 @@ interface StudentDoc {
   year?: string;
   academicYear?: string;
   admissionStatus?: string;
+  notAdmittedStatusTag?: string;
+  admType?: string;
+  admCat?: string;
+  enrollmentDate?: string;
   tcHistory?: TcHistoryEntry[];
   pcHistory?: PcHistoryEntry[];
+  ansHistory?: AnsLetterEntry[];
+}
+
+// Mirrors ExamResult / ExamResultSubject / ExamResultSemesterSummary from
+// src/types/index.ts (collection `examResults`, one doc per reg number per
+// exam session) — only what the digest cites.
+interface ExamResultDoc {
+  examSession?: string;
+  subjects?: { sem?: string | number; code?: string; subject?: string; result?: string; grade?: string }[];
+  semesterSummary?: { semester?: string | number; sgpa?: number | null }[];
+  cgpa?: number | null;
+  cgpaStatus?: string;
+  overallResult?: string;
+  updatedAt?: string;
+  importedAt?: string;
+}
+
+// Mirrors StudentNotification (collection `studentNotifications`) — the
+// "your record changed" toasts the app shows once at login.
+interface StudentNotificationDoc {
+  type?: string;
+  title?: string;
+  message?: string;
+  createdAt?: string;
+  seen?: boolean;
 }
 
 type SMPHeadsDoc = Record<string, number | undefined>;
@@ -760,6 +800,9 @@ interface FeeRecordDoc {
   year?: string;
   admType?: string;
   admCat?: string;
+  date?: string;
+  receiptNumber?: string;
+  paymentMode?: string;
   smp?: SMPHeadsDoc;
   svk?: number;
   additionalPaid?: { amount?: number }[];
@@ -778,22 +821,54 @@ interface FeeOverrideDoc {
 }
 
 interface CircularDoc {
+  id?: string;
   title?: string;
   subject?: string;
   department?: string;
   date?: string;
   pinned?: boolean;
   archivedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface NoticeDoc {
+  id?: string;
   title?: string;
+  body?: string;
   category?: string;
+  pinned?: boolean;
   createdAt?: string;
   archivedAt?: string;
+  inactiveAt?: string;
   scope?: string;
   scopeValue?: string;
   targetRegNumbers?: string[];
+}
+
+// Mirrors src/utils/htmlContent.ts's `circularSeenKey` from the student app:
+// a circular counts as unread again whenever it's edited, so the seen key
+// carries the edit timestamp.
+function circularSeenKey(c: CircularDoc): string {
+  return `${c.id ?? ''}:${c.updatedAt ?? c.createdAt ?? ''}`;
+}
+
+// Notice/circular bodies are stored as HTML; the digest only needs a short
+// plain-text excerpt so the model knows what a notice actually asks for.
+function htmlExcerpt(html: string | undefined, maxChars: number): string {
+  if (!html) return '';
+  const text = html
+    .replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > maxChars ? `${text.slice(0, maxChars - 1).trimEnd()}…` : text;
 }
 
 // Mirrors src/utils/noticeUtils.ts's `noticeAppliesToMe` from the student app —
@@ -835,13 +910,6 @@ function calcAllottedForYear(
   return smpTotal + effSvk + additionalTotal;
 }
 
-function dayOfYearIST(dateStr: string): number {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const start = Date.UTC(y, 0, 1);
-  const current = Date.UTC(y, m - 1, d);
-  return Math.floor((current - start) / (24 * 60 * 60 * 1000));
-}
-
 function buildDailyQuoteImagePrompt(scene: string, provider: AiImageSettings['imageProvider']): string {
   return [
     'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition.',
@@ -850,13 +918,15 @@ function buildDailyQuoteImagePrompt(scene: string, provider: AiImageSettings['im
   ].join(' ');
 }
 
-/** Uploads a generated daily-quote background image via the Admin SDK (this
- *  flow is triggered by a student's device, not the admin web client, so
- *  there's no admin Storage session to upload with client-side) and returns
- *  a public download URL — storage.rules allows public read on this path
- *  since it's generic daily-inspiration art, nothing sensitive. */
+/** Uploads a daily-quote background image via the Admin SDK (storage.rules
+ *  allows no client write on this path; public read is fine since it's
+ *  generic daily-inspiration art, nothing sensitive) and returns a public
+ *  download URL. The object name is timestamped, not just date-keyed: the
+ *  upload carries `immutable` cache-control, so re-saving the same day under
+ *  the same name would leave devices/CDN serving the old bytes (the same
+ *  stale-cache trap fixed for tab headers and category icons). */
 async function uploadDailyQuoteImage(date: string, imageBase64: string, mimeType: string): Promise<string> {
-  const path = `dailyQuoteBackgrounds/${date}.${imageExtensionFor(mimeType)}`;
+  const path = `dailyQuoteBackgrounds/${date}-${Date.now()}.${imageExtensionFor(mimeType)}`;
   const bucket = admin.storage().bucket();
   await bucket.file(path).save(Buffer.from(imageBase64, 'base64'), {
     metadata: { contentType: mimeType, cacheControl: OPTIMIZED_CACHE_CONTROL },
@@ -871,44 +941,111 @@ function imageExtensionFor(mimeType: string): string {
   return 'png';
 }
 
+// Stored at dailyQuote/{date}. `date` is the IST day the admin saved it for;
+// the student app receives whichever doc has the latest date (see
+// getLatestDailyQuote), so it may be older than "today".
 interface DailyQuoteDoc {
   date?: string;
   quoteEn?: string;
   quoteAuthor?: string;
+  quoteKn?: string;
   theme?: string;
+  scene?: string;
   backgroundImageUrl?: string;
+  savedAt?: string;
+  savedBy?: string;
 }
 
-/** Reads (or, on the first request of the day across all students, generates)
- *  the shared "quote of the day" — one curated Indian-personality quote,
- *  paired with a matching AI-generated background image. Shared across every
- *  student that day, not regenerated per student; a small chance of two
- *  near-simultaneous first-requests both generating once is accepted as
- *  harmless (last write wins), same as every other day-cache in this file. */
-async function getOrCreateDailyQuote(
-  today: string,
-  aiSettings: AiImageSettings,
-): Promise<DailyQuoteDoc> {
-  const ref = db.collection('dailyQuote').doc(today);
-  const snap = await ref.get();
-  const cached = snap.data() as DailyQuoteDoc | undefined;
-  if (cached?.date === today && cached.quoteEn && cached.backgroundImageUrl) {
-    return cached;
+// Shown only until the admin saves the very first quote — keeps the student
+// app's briefing screen (which requires a `quote`) working out of the box.
+const FALLBACK_QUOTE: DailyQuoteDoc = {
+  date: '1970-01-01',
+  quoteEn: 'Arise, awake, and stop not till the goal is reached.',
+  quoteAuthor: 'Swami Vivekananda',
+  quoteKn: 'ಎದ್ದೇಳಿ, ಎಚ್ಚರಗೊಳ್ಳಿ, ಗುರಿ ತಲುಪುವವರೆಗೆ ನಿಲ್ಲಬೇಡಿ.',
+  theme: 'perseverance',
+};
+
+/** The most recently admin-saved quote of the day. There is deliberately no
+ *  auto-generation fallback: if nothing has been saved for today, students
+ *  keep seeing the last saved one — generation only ever happens from the
+ *  admin's Settings › Daily Briefing panel, so there are no surprise
+ *  provider calls or costs. */
+async function getLatestDailyQuote(): Promise<DailyQuoteDoc> {
+  const snap = await db.collection('dailyQuote').orderBy('date', 'desc').limit(1).get();
+  const latest = snap.docs[0]?.data() as DailyQuoteDoc | undefined;
+  return latest?.quoteEn ? latest : FALLBACK_QUOTE;
+}
+
+// Misattribution is the main risk with an AI-written quote, so the prompt
+// makes "original line, attributed to Daily Briefing" the default and allows
+// a named author only when the model is sure of the exact wording — and the
+// admin can still edit the author/text in the panel before saving.
+const QUOTE_SYSTEM = `You write the "quote of the day" for the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka. Every student sees the same quote on their Daily Briefing screen first thing in the morning.
+
+## THE QUOTE
+- quoteEn: one short, genuinely motivating line in English — at most 25 words — that suits a diploma/polytechnic student starting their day: effort, learning, persistence, curiosity, courage, kindness, focus, hope. Plain, warm, concrete language; no clichés like "believe in yourself", no hashtags, no emojis.
+- quoteAuthor: attribution rules, strictly:
+  - Prefer a real, well-known quote from a notable Indian personality (freedom fighters, scientists, writers, sportspeople, spiritual leaders, public servants) ONLY if you are highly confident of BOTH the exact wording AND who said it.
+  - Otherwise write an original line yourself and set quoteAuthor to exactly "Daily Briefing". Never attach a real person's name to words you are not certain they said, and never invent a person.
+- quoteKn: a natural, fluent Kannada rendering of quoteEn in proper Kannada script — the way a Kannada speaker would actually say it, not a stiff word-for-word translation. Same length and tone.
+- theme: one or two lowercase English words naming the theme (e.g. "perseverance", "curiosity", "fresh start").
+- scene: a concrete, visual, text-free scene for a flat-vector background illustration that matches the quote's mood — one sentence, e.g. "a lone cyclist climbing a hill road at sunrise with a small town below". Describe objects, place and light; no people's faces, no words or signs in the scene.
+
+## VARIETY
+The user message lists quotes already used recently. Do not repeat or lightly rephrase any of them, and pick a different theme and a different kind of scene from the most recent few.
+
+## OUTPUT FORMAT — STRICT
+Return ONLY a raw JSON object: {"quoteEn": string, "quoteAuthor": string, "quoteKn": string, "theme": string, "scene": string}. No markdown fences, no explanation, no trailing text.`;
+
+interface QuoteResult {
+  quoteEn: string;
+  quoteAuthor: string;
+  quoteKn: string;
+  theme: string;
+  scene: string;
+}
+
+function isQuoteResult(value: unknown): value is QuoteResult {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.quoteEn === 'string' && v.quoteEn.trim().length > 0 &&
+    typeof v.quoteAuthor === 'string' && v.quoteAuthor.trim().length > 0 &&
+    typeof v.quoteKn === 'string' &&
+    typeof v.theme === 'string' &&
+    typeof v.scene === 'string' && v.scene.trim().length > 0
+  );
+}
+
+/** Asks Gemini for a fresh quote of the day, steering it away from the last
+ *  30 saved quotes so consecutive days don't repeat. */
+async function generateQuoteText(apiKey: string, textModel: string): Promise<QuoteResult> {
+  const recentSnap = await db.collection('dailyQuote').orderBy('date', 'desc').limit(30).get();
+  const recent = recentSnap.docs
+    .map((d) => d.data() as DailyQuoteDoc)
+    .filter((q) => q.quoteEn)
+    .map((q) => `- "${q.quoteEn}" — ${q.quoteAuthor ?? ''} (theme: ${q.theme ?? ''}; scene: ${q.scene ?? 'n/a'})`);
+  const { dayLabel, dateLabel } = todayLabelsIST();
+  const userMessage = [
+    `TODAY: ${dayLabel}, ${dateLabel}`,
+    '',
+    'RECENTLY USED QUOTES (most recent first) — do not repeat these:',
+    ...(recent.length > 0 ? recent : ['(none yet)']),
+  ].join('\n');
+
+  const rawText = await callGeminiTextForCircular(apiKey, textModel, QUOTE_SYSTEM, userMessage, 800, 'application/json');
+  const parsed: unknown = JSON.parse(extractJsonObject(rawText));
+  if (!isQuoteResult(parsed)) {
+    throw new Error('The AI response was missing required quote fields.');
   }
-
-  const quote = INDIAN_QUOTES[dayOfYearIST(today) % INDIAN_QUOTES.length];
-  const image = await generateAiImage(aiSettings, buildDailyQuoteImagePrompt(quote.scene, aiSettings.imageProvider));
-  const backgroundImageUrl = await uploadDailyQuoteImage(today, image.imageBase64, image.mimeType);
-
-  const toStore: DailyQuoteDoc = {
-    date: today,
-    quoteEn: quote.textEn,
-    quoteAuthor: quote.author,
-    theme: quote.theme,
-    backgroundImageUrl,
+  return {
+    quoteEn: parsed.quoteEn.trim(),
+    quoteAuthor: parsed.quoteAuthor.trim(),
+    quoteKn: parsed.quoteKn.trim(),
+    theme: parsed.theme.trim(),
+    scene: parsed.scene.trim(),
   };
-  await ref.set(toStore);
-  return toStore;
 }
 
 const BRIEFING_SYSTEM = `You are a warm, thoughtful mentor inside the student portal app of Sanjay Memorial Polytechnic (SMP), Sagar, Karnataka — like a favorite teacher and a close friend rolled into one. You write a short personal note and a short highlights digest for one student, based only on the data given to you.
@@ -918,13 +1055,20 @@ const BRIEFING_SYSTEM = `You are a warm, thoughtful mentor inside the student po
 - messageEn: exactly 1-2 short sentences in English, no more than ~25 words total, mentor/friend voice — grounded, genuinely encouraging, naturally acknowledging today is a fresh day. Address the student by first name at least once, woven naturally into a sentence. Be concise — every word should earn its place.
 - messageKn: an accurate, natural Kannada translation of messageEn, phrased the way a fluent Kannada speaker would naturally write it — not a stiff literal translation. Proper Kannada script. Just as concise as messageEn.
 
+If the data contains one clearly most important item for this student today (an unpaid fee, a subject to clear, an UNREAD pinned circular or notice), messageEn may gently nod to it in a supportive way — but keep it to the one item, never a list.
+
 ## HIGHLIGHTS
-Produce up to 10 short bullet points total (each one sentence, using exact numbers/titles/dates from the data — never invent one, never mention data you were not given), in two groups, in this order:
+Produce up to 12 short bullet points total (each one sentence, using the exact amounts, titles, dates, codes and names from the data — never invent one, never mention data you were not given, never round or estimate a figure). Order them by what matters most to the student today, in these groups:
 
-1. PINNED CIRCULARS (up to 3 points): one point per circular listed under PINNED CIRCULARS, naming it and telling the student plainly that it's important and they should read it / act on it soon. If there are more than 3, pick the 3 most time-sensitive or recent. If there are fewer than 3 (including none), write only that many points — never invent a pinned circular to fill the group, and skip the group entirely if there are none.
-2. FEE DUES, REFUNDS & CERTIFICATES (up to 7 points): one point per genuinely distinct, real fact drawn only from the fee-due figure and the individual entries under CERTIFICATES & REFUNDS — e.g. the pending due amount, one specific refund with its amount, one specific TC or PC with its date. Never state the same fact twice across two points. If there are fewer than 7 real, distinct facts available, write only that many — do not pad, repeat, or invent to reach 7.
+1. ACTION NEEDED — things the student should do something about:
+   - Fee dues: if any academic year shows a due amount, state the exact due amount for that year (and the fine, if the year's fine is non-zero). If more than one year has dues, one point per year plus, if useful, the exact total. Mention the last payment (date, receipt) only if it helps the student place the figure.
+   - Notices addressed to this student marked UNREAD: one point each, naming the notice and saying plainly what it asks them to do (use the excerpt; if the excerpt has a deadline or an amount, quote it).
+   - Circulars marked UNREAD or pinned: one point each for the most time-sensitive ones (pinned first), naming the title and telling them to read it soon. Skip circulars marked "read" unless they are pinned.
+2. ACADEMICS — from RESULTS: state the exam session, the overall result and CGPA / latest SGPA exactly as given; if any subject shows F or AB, list those subjects by name (and code) as things to clear, phrased supportively and without judgement. If all subjects passed, say so as good news. Skip entirely if there are no results on record — do not mention the absence.
+3. RECORDS — attendance-shortage letters (say the status and what it means: 'sent' = the college has written to them and they should meet their HOD/class teacher; 'visited' = acknowledged; 'resolved' = closed), unseen notifications (one point each, in plain words), and any recently issued TC/PC/refund with its date or amount.
+4. GOOD NEWS — genuinely positive facts worth a line: fully paid fees, all subjects cleared, a refund received, a new certificate issued.
 
-Across both groups: accuracy always wins over hitting the count of 10 — a shorter, fully honest list beats a padded or repetitive one. Don't force in generic filler (like a bare circular count) unless there's genuinely nothing more specific worth saying.
+Rules across all groups: every point must trace to a specific line in the data; never state the same fact twice; never pad, repeat or write filler to reach 12 — a shorter, fully honest list is always better; skip any group that has nothing real to say; prefer UNREAD items over read ones; don't mention counts or the total number of circulars unless there's genuinely nothing more specific to say. Address the student as "you", never in the third person.
 
 ## OUTPUT FORMAT — STRICT
 Return ONLY a raw JSON object: {"greeting": string, "messageEn": string, "messageKn": string, "points": string[]}. No markdown fences, no explanation, no trailing text.`;
@@ -999,26 +1143,309 @@ async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSetti
   };
 }
 
-/** Generates the shared quote-of-the-day (text + AI background image) ahead
- *  of demand, so the first student to open their Daily Briefing each morning
- *  doesn't sit through 10-30 s of image generation inside the callable.
- *  Runs at 00:10 IST, with a 06:00 IST re-run as a safety net (the provider
- *  can be flaky at midnight); getOrCreateDailyQuote is idempotent, so the
- *  second run is a no-op when the first succeeded. */
-export const pregenerateDailyQuote = onSchedule(
-  { schedule: '10 0,6 * * *', timeZone: 'Asia/Kolkata', region: 'asia-south1', timeoutSeconds: 300 },
-  async () => {
-    const today = todayIST();
+function requireAdmin(request: CallableRequest): void {
+  if (request.auth?.token?.admin !== true) {
+    throw new HttpsError('permission-denied', 'Admin sign-in required.');
+  }
+}
+
+/** Settings › Daily Briefing › "Generate": writes a fresh quote (Gemini
+ *  text) and draws its background image, returning both for preview —
+ *  nothing is stored until the admin clicks Save (saveDailyQuote). Passing
+ *  `scene` skips the text step and only redraws the image, so the admin can
+ *  keep (or hand-edit) the quote and just try another picture. Same
+ *  stateless generate → preview → save flow as generateTabHeaderBackground. */
+export const generateDailyQuotePreview = onCall(
+  { region: 'asia-south1', timeoutSeconds: 120 },
+  async (request) => {
+    requireAdmin(request);
+    const { scene: sceneOnly } = (request.data ?? {}) as { scene?: string };
+
+    const { textModel, imageSettings } = await loadBriefingAiSettings();
+    const geminiApiKey = imageSettings.geminiApiKey ?? '';
+
     try {
-      const { imageSettings } = await loadBriefingAiSettings();
-      const quote = await getOrCreateDailyQuote(today, imageSettings);
-      console.log(`pregenerateDailyQuote: ${today} ready (${quote.quoteAuthor}) → ${quote.backgroundImageUrl}`);
+      const quote = sceneOnly?.trim()
+        ? { quoteEn: '', quoteAuthor: '', quoteKn: '', theme: '', scene: sceneOnly.trim() }
+        : await generateQuoteText(geminiApiKey, textModel);
+      const image = await generateAiImage(
+        imageSettings,
+        buildDailyQuoteImagePrompt(quote.scene, imageSettings.imageProvider),
+        '16:9',
+      );
+      return { date: todayIST(), ...quote, imageBase64: image.imageBase64, mimeType: image.mimeType };
     } catch (err) {
-      console.error(`pregenerateDailyQuote: failed for ${today}`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI generation failed: ${msg}`);
     }
   },
 );
 
+/** Settings › Daily Briefing › "Save": uploads the previewed image and writes
+ *  dailyQuote/{date}. Done server-side (not client upload + setDoc like the
+ *  tab-header flow) because storage.rules allows no client write on
+ *  dailyQuoteBackgrounds/ and dailyQuote/* is Admin-SDK-only. */
+export const saveDailyQuote = onCall(
+  { region: 'asia-south1', timeoutSeconds: 120 },
+  async (request) => {
+    requireAdmin(request);
+    const data = (request.data ?? {}) as {
+      date?: string; quoteEn?: string; quoteAuthor?: string; quoteKn?: string;
+      theme?: string; scene?: string; imageBase64?: string; mimeType?: string;
+    };
+
+    const date = data.date?.trim() ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new HttpsError('invalid-argument', 'date must be YYYY-MM-DD.');
+    }
+    const quoteEn = data.quoteEn?.trim() ?? '';
+    const quoteAuthor = data.quoteAuthor?.trim() ?? '';
+    if (!quoteEn || !quoteAuthor) {
+      throw new HttpsError('invalid-argument', 'quoteEn and quoteAuthor are required.');
+    }
+    if (!data.imageBase64 || !data.mimeType?.startsWith('image/')) {
+      throw new HttpsError('invalid-argument', 'A generated image is required.');
+    }
+
+    try {
+      const backgroundImageUrl = await uploadDailyQuoteImage(date, data.imageBase64, data.mimeType);
+      const toStore: DailyQuoteDoc = {
+        date,
+        quoteEn,
+        quoteAuthor,
+        quoteKn: data.quoteKn?.trim() ?? '',
+        theme: data.theme?.trim() ?? '',
+        scene: data.scene?.trim() ?? '',
+        backgroundImageUrl,
+        savedAt: new Date().toISOString(),
+        savedBy: request.auth?.uid ?? '',
+      };
+      await db.collection('dailyQuote').doc(date).set(toStore);
+      return toStore;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `Could not save the quote: ${msg}`);
+    }
+  },
+);
+
+/** Gathers everything the highlights digest may cite for one student into a
+ *  plain-text data block. Shared by the student callable
+ *  (generateDailyBriefing) and the admin tester (previewStudentBriefing) so
+ *  what the admin previews is exactly what students get. Mirrors the
+ *  client-side computations in the student app (fetchMyTotalDue,
+ *  noticeAppliesToMe, circularSeenKey, …) rather than trusting a client
+ *  payload. */
+async function collectStudentBriefingData(regNumber: string): Promise<{ primary: StudentDoc; dataBlock: string }> {
+  const [
+    studentsSnap, feeSnap, refundsSnap, circularsSnap, noticesSnap, circularsCountSnap, pinnedSnap,
+    resultsSnap, notificationsSnap, noticeStateSnap, circularStateSnap,
+  ] = await Promise.all([
+    db.collection('students').where('regNumber', '==', regNumber).get(),
+    db.collection('feeRecords').where('regNumber', '==', regNumber).get(),
+    db.collection('refunds').where('regNumber', '==', regNumber).get(),
+    db.collection('circulars').orderBy('createdAt', 'desc').limit(15).get(),
+    db.collection('notices').orderBy('createdAt', 'desc').limit(40).get(),
+    db.collection('circulars').count().get(),
+    db.collection('circulars').where('pinned', '==', true).get(),
+    db.collection('examResults').where('regNumber', '==', regNumber).get(),
+    // Filtered to unseen in memory (rather than a composite where) so no new
+    // Firestore index is needed; a student has at most a handful of these.
+    db.collection('studentNotifications').where('regNumber', '==', regNumber).get(),
+    db.collection('studentNoticeState').doc(regNumber).get(),
+    db.collection('studentCircularState').doc(regNumber).get(),
+  ]);
+
+  const studentDocs = studentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as StudentDoc) }));
+  if (studentDocs.length === 0) {
+    throw new HttpsError('not-found', 'Student record not found.');
+  }
+  // Prefer the doc for the current-looking enrollment (has admissionStatus/course); fall
+  // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
+  // across all of a student's year-by-year docs on the client.
+  const primary = studentDocs.find((s) => !!s.course) ?? studentDocs[0];
+  const tcRecords = studentDocs.flatMap((d) => d.tcHistory ?? []);
+  const pcRecords = studentDocs.flatMap((d) => d.pcHistory ?? []);
+  const ansLetters = studentDocs
+    .flatMap((d) => d.ansHistory ?? [])
+    .sort((a, b) => (b.issuedAt ?? '').localeCompare(a.issuedAt ?? ''));
+  const refundRecords = refundsSnap.docs.map((d) => d.data() as RefundRecord);
+
+  // One combined, most-recent-first, capped line list — real per-record facts
+  // (not just counts) so the model can cite specifics instead of a bare aggregate.
+  const certificateAndRefundLines = [
+    ...tcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `TC #${r.tcNumber ?? '?'} | ${r.course ?? ''} ${r.semester ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
+    ...pcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `PC | ${r.examPeriod ?? ''}, ${r.resultClass ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
+    ...refundRecords.map((r) => ({ date: r.paymentDate ?? '', line: `Refund | Rs.${r.refundAmount ?? '?'} (${r.refundCategory ?? 'GENERAL'}) | ${r.paymentDate ?? 'unknown date'}` })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8)
+    .map((e) => e.line);
+
+  const feeRecords = feeSnap.docs.map((d) => d.data() as FeeRecordDoc);
+  const totalPaid = feeRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
+  const lastPayment = [...feeRecords]
+    .filter((r) => r.date)
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+
+  // Precise due (allotted − paid) per academic year, mirroring fetchMyTotalDue in
+  // src/services/studentPortalService.ts on the client — reported per year (with
+  // the year's fine) so the digest can quote the exact figure a student will see
+  // on their Fee History tab, not just an overall total.
+  const recordsByYear = new Map<string, FeeRecordDoc[]>();
+  for (const r of feeRecords) {
+    if (!r.academicYear) continue;
+    const list = recordsByYear.get(r.academicYear) ?? [];
+    list.push(r);
+    recordsByYear.set(r.academicYear, list);
+  }
+  const feeYears = await Promise.all(
+    [...recordsByYear.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(async ([ay, yearRecords]) => {
+        const first = yearRecords[0];
+        const structureId = `${ay}__${first.course ?? ''}__${first.year ?? ''}__${first.admType ?? ''}__${first.admCat ?? ''}`;
+        const structureDoc = await db.collection('feeStructure').doc(structureId).get();
+        const structure = structureDoc.exists ? (structureDoc.data() as FeeStructureDoc) : null;
+
+        const ownDocForYear = studentDocs.find((s) => s.academicYear === ay);
+        const overrideDoc = ownDocForYear
+          ? await db.collection('feeOverrides').doc(`${ownDocForYear.id}__${ay}`).get()
+          : null;
+        const override = overrideDoc?.exists ? (overrideDoc.data() as FeeOverrideDoc) : null;
+
+        const effective = override ?? structure;
+        const paid = yearRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
+        if (!effective) return { ay, allotted: null as number | null, paid, due: 0, fine: 0 };
+
+        const allotted = calcAllottedForYear(effective.smp ?? {}, effective.svk ?? 0, effective.additionalHeads ?? [], yearRecords);
+        const finePaid = yearRecords.reduce((s, r) => s + (r.smp?.fine ?? 0), 0);
+        const fine = Math.max(effective.smp?.fine ?? 0, finePaid);
+        return { ay, allotted, paid, due: Math.max(0, allotted - paid), fine };
+      }),
+  );
+  const totalDue = feeYears.reduce((s, y) => s + y.due, 0);
+
+  const totalCircularsCount = circularsCountSnap.data().count;
+
+  const seenCircularKeys = new Set<string>(
+    ((circularStateSnap.data() as { seenCircularIds?: string[] } | undefined)?.seenCircularIds) ?? [],
+  );
+  const seenNoticeIds = new Set<string>(
+    ((noticeStateSnap.data() as { seenNoticeIds?: string[] } | undefined)?.seenNoticeIds) ?? [],
+  );
+  const circularLine = (c: CircularDoc) =>
+    `- ${c.title ?? ''} | ${c.department ?? ''} | ${c.date ?? ''} | ${c.subject ?? ''} | ${seenCircularKeys.has(circularSeenKey(c)) ? 'read' : 'UNREAD'}`;
+
+  const circulars = circularsSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as CircularDoc) }))
+    .filter((c) => !c.archivedAt);
+  const pinnedCirculars = pinnedSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as CircularDoc) }))
+    .filter((c) => !c.archivedAt);
+
+  const notices = noticesSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as NoticeDoc) }))
+    .filter((n) => !n.inactiveAt && noticeAppliesToStudent(n, primary))
+    .slice(0, 8);
+
+  // Latest exam session only — the ledger import keeps one doc per session,
+  // and "what should I clear / how am I doing" is about the most recent one.
+  const latestResult = resultsSnap.docs
+    .map((d) => d.data() as ExamResultDoc)
+    .sort((a, b) => (b.updatedAt ?? b.importedAt ?? '').localeCompare(a.updatedAt ?? a.importedAt ?? ''))[0];
+  const resultLines: string[] = [];
+  if (latestResult) {
+    const cgpa = typeof latestResult.cgpa === 'number' ? String(latestResult.cgpa) : (latestResult.cgpaStatus || 'n/a');
+    resultLines.push(`- Session: ${latestResult.examSession ?? 'unknown'} | Overall result: ${latestResult.overallResult ?? 'n/a'} | CGPA: ${cgpa}`);
+    const sgpas = (latestResult.semesterSummary ?? [])
+      .filter((s) => typeof s.sgpa === 'number')
+      .slice(-2)
+      .map((s) => `Sem ${s.semester ?? '?'} SGPA ${s.sgpa}`);
+    if (sgpas.length > 0) resultLines.push(`- Latest SGPA: ${sgpas.join(', ')}`);
+    const toClear = (latestResult.subjects ?? []).filter((s) => s.result === 'F' || s.result === 'AB');
+    resultLines.push(
+      toClear.length > 0
+        ? `- Subjects to clear (${toClear.length}): ${toClear.map((s) => `${s.subject ?? ''} (${s.code ?? ''}, ${s.result === 'AB' ? 'absent' : 'fail'})`).join('; ')}`
+        : `- All ${(latestResult.subjects ?? []).length} subjects passed`,
+    );
+  }
+
+  const unseenNotifications = notificationsSnap.docs
+    .map((d) => d.data() as StudentNotificationDoc)
+    .filter((n) => !n.seen)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+    .slice(0, 5);
+
+  const fullName = primary.studentNameSSLC?.trim();
+  const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
+  const { dayLabel, dateLabel } = todayLabelsIST();
+
+  const dataBlock = [
+    `STUDENT FIRST NAME: ${firstName}`,
+    `TODAY: ${dayLabel}, ${dateLabel}`,
+    `STUDENT: ${fullName ?? 'Student'}, ${primary.course ?? ''} ${primary.year ?? ''} (${primary.academicYear ?? ''})`,
+    `Admission: ${primary.admissionStatus ?? 'unknown'}${primary.notAdmittedStatusTag ? ` (${primary.notAdmittedStatusTag})` : ''} | ${primary.admType ?? ''} ${primary.admCat ?? ''} | enrolled ${primary.enrollmentDate ?? 'unknown'}`,
+    '',
+    `FEES BY ACADEMIC YEAR (year | allotted | paid | due | fine):`,
+    ...(feeYears.length > 0
+      ? feeYears.map((y) => `- ${y.ay} | ${y.allotted === null ? 'allotted unknown' : `Rs.${y.allotted}`} | Rs.${y.paid} | ${y.due > 0 ? `Rs.${y.due} DUE` : 'no dues'} | ${y.fine > 0 ? `Rs.${y.fine}` : 'none'}`)
+      : ['(no fee records)']),
+    totalDue > 0
+      ? `Fee summary: Rs.${totalDue} pending in total (Rs.${totalPaid} paid so far)`
+      : `Fee summary: no dues — fully paid (Rs.${totalPaid} paid so far)`,
+    lastPayment
+      ? `Last payment: ${lastPayment.date} | receipt ${lastPayment.receiptNumber ?? 'n/a'} | ${lastPayment.paymentMode ?? ''} | Rs.${sumFeeRecord(lastPayment)}`
+      : 'Last payment: none on record',
+    '',
+    `RESULTS (latest exam session):`,
+    ...(resultLines.length > 0 ? resultLines : ['(no results on record)']),
+    '',
+    `PINNED CIRCULARS (title | department | date | subject | read status):`,
+    ...(pinnedCirculars.length > 0 ? pinnedCirculars.map(circularLine) : ['(none)']),
+    '',
+    `RECENT CIRCULARS (title | department | date | subject | read status):`,
+    ...circulars.slice(0, 10).map(circularLine),
+    `Total circulars ever published: ${totalCircularsCount}`,
+    '',
+    `NOTICES ADDRESSED TO THIS STUDENT (title | category | date | read status | pinned | what it says):`,
+    ...(notices.length > 0
+      ? notices.map((n) => `- ${n.title ?? ''} | ${n.category ?? ''} | ${n.createdAt ?? ''} | ${seenNoticeIds.has(n.id ?? '') ? 'read' : 'UNREAD'} | ${n.pinned ? 'pinned' : 'not pinned'} | ${htmlExcerpt(n.body, 160) || '(no text)'}`)
+      : ['(none)']),
+    '',
+    `CERTIFICATES & REFUNDS (most recent first):`,
+    ...(certificateAndRefundLines.length > 0 ? certificateAndRefundLines.map((l) => `- ${l}`) : ['(none)']),
+    `Certificate totals: ${tcRecords.length} Transfer Certificate(s), ${pcRecords.length} Provisional Certificate(s), ${refundRecords.length} Refund(s)`,
+    '',
+    `ATTENDANCE SHORTAGE LETTERS (academic year | issued | status):`,
+    ...(ansLetters.length > 0
+      ? ansLetters.slice(0, 3).map((l) => `- ${l.academicYear ?? ''} | ${l.issuedAt ?? 'unknown date'} | ${l.status ?? 'sent'}`)
+      : ['(none)']),
+    '',
+    `UNSEEN NOTIFICATIONS (type | title | message | date):`,
+    ...(unseenNotifications.length > 0
+      ? unseenNotifications.map((n) => `- ${n.type ?? ''} | ${n.title ?? ''} | ${n.message ?? ''} | ${n.createdAt ?? ''}`)
+      : ['(none)']),
+  ].join('\n');
+
+  return { primary, dataBlock };
+}
+
+async function generateBriefingText(apiKey: string, textModel: string, dataBlock: string): Promise<BriefingResult> {
+  const rawText = await callGeminiTextForCircular(apiKey, textModel, BRIEFING_SYSTEM, dataBlock, 2400, 'application/json');
+  const parsedJson: unknown = JSON.parse(extractJsonObject(rawText));
+  if (!isBriefingResult(parsedJson)) {
+    throw new Error('The AI response was missing required fields.');
+  }
+  const { greeting, messageEn, messageKn, points } = parsedJson;
+  return { greeting, messageEn, messageKn, points };
+}
+
+/** Student app: the Daily Briefing screen. Returns the latest admin-saved
+ *  quote plus this student's note + highlights, generated once per IST day
+ *  and cached at dailyBriefing/{regNumber}. `date` is the day the cached
+ *  digest belongs to — the client keys its own cache on it (the quote's own
+ *  `date` may be older, since the admin may not have saved one today). */
 export const generateDailyBriefing = onCall(
   { region: 'asia-south1', timeoutSeconds: 120 },
   async (request) => {
@@ -1042,7 +1469,7 @@ export const generateDailyBriefing = onCall(
     const today = todayIST();
 
     const [quote, cachedBriefingSnap] = await Promise.all([
-      getOrCreateDailyQuote(today, imageSettings),
+      getLatestDailyQuote(),
       db.collection('dailyBriefing').doc(regNumber).get(),
     ]);
 
@@ -1050,139 +1477,48 @@ export const generateDailyBriefing = onCall(
     const cachedGeneratedAt = cachedBriefing?.generatedAt;
     if (cachedBriefing?.date === today && isBriefingResult(cachedBriefing)) {
       const { greeting, messageEn, messageKn, points } = cachedBriefing;
-      return { quote, greeting, messageEn, messageKn, points, generatedAt: cachedGeneratedAt ?? new Date().toISOString() };
+      return { date: today, quote, greeting, messageEn, messageKn, points, generatedAt: cachedGeneratedAt ?? new Date().toISOString() };
     }
 
-    const [studentsSnap, feeSnap, refundsSnap, circularsSnap, noticesSnap, circularsCountSnap, pinnedSnap] = await Promise.all([
-      db.collection('students').where('regNumber', '==', regNumber).get(),
-      db.collection('feeRecords').where('regNumber', '==', regNumber).get(),
-      db.collection('refunds').where('regNumber', '==', regNumber).get(),
-      db.collection('circulars').orderBy('createdAt', 'desc').limit(15).get(),
-      db.collection('notices').orderBy('createdAt', 'desc').limit(30).get(),
-      db.collection('circulars').count().get(),
-      db.collection('circulars').where('pinned', '==', true).get(),
-    ]);
-
-    const studentDocs = studentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as StudentDoc) }));
-    if (studentDocs.length === 0) {
-      throw new HttpsError('not-found', 'Student record not found.');
-    }
-    // Prefer the doc for the current-looking enrollment (has admissionStatus/course); fall
-    // back to the first match — mirrors how fetchMyTcRecords/fetchMyPcRecords aggregate
-    // across all of a student's year-by-year docs on the client.
-    const primary = studentDocs.find((s) => !!s.course) ?? studentDocs[0];
-    const tcRecords = studentDocs.flatMap((d) => d.tcHistory ?? []);
-    const pcRecords = studentDocs.flatMap((d) => d.pcHistory ?? []);
-    const refundRecords = refundsSnap.docs.map((d) => d.data() as RefundRecord);
-    const tcCount = tcRecords.length;
-    const pcCount = pcRecords.length;
-    const refundCount = refundRecords.length;
-
-    // One combined, most-recent-first, capped line list for the HIGHLIGHTS prompt's
-    // "FEE DUES, REFUNDS & CERTIFICATES" group — real per-record facts (not just
-    // counts) so the model can cite specifics instead of a bare aggregate.
-    const certificateAndRefundLines = [
-      ...tcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `TC #${r.tcNumber ?? '?'} | ${r.course ?? ''} ${r.semester ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
-      ...pcRecords.map((r) => ({ date: r.issuedAt ?? '', line: `PC | ${r.examPeriod ?? ''}, ${r.resultClass ?? ''} | issued ${r.issuedAt ?? 'unknown date'}` })),
-      ...refundRecords.map((r) => ({ date: r.paymentDate ?? '', line: `Refund | Rs.${r.refundAmount ?? '?'} (${r.refundCategory ?? 'GENERAL'}) | ${r.paymentDate ?? 'unknown date'}` })),
-    ]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 8)
-      .map((e) => e.line);
-
-    const feeRecords = feeSnap.docs.map((d) => d.data() as FeeRecordDoc);
-    const totalPaid = feeRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
-
-    // Precise due (allotted − paid) per academic year, mirroring fetchMyTotalDue in
-    // src/services/studentPortalService.ts on the client — not just a "paid so far" total.
-    const recordsByYear = new Map<string, FeeRecordDoc[]>();
-    for (const r of feeRecords) {
-      if (!r.academicYear) continue;
-      const list = recordsByYear.get(r.academicYear) ?? [];
-      list.push(r);
-      recordsByYear.set(r.academicYear, list);
-    }
-    const dueByYear = await Promise.all(
-      [...recordsByYear.entries()].map(async ([ay, yearRecords]) => {
-        const first = yearRecords[0];
-        const structureId = `${ay}__${first.course ?? ''}__${first.year ?? ''}__${first.admType ?? ''}__${first.admCat ?? ''}`;
-        const structureDoc = await db.collection('feeStructure').doc(structureId).get();
-        const structure = structureDoc.exists ? (structureDoc.data() as FeeStructureDoc) : null;
-
-        const ownDocForYear = studentDocs.find((s) => s.academicYear === ay);
-        const overrideDoc = ownDocForYear
-          ? await db.collection('feeOverrides').doc(`${ownDocForYear.id}__${ay}`).get()
-          : null;
-        const override = overrideDoc?.exists ? (overrideDoc.data() as FeeOverrideDoc) : null;
-
-        const effective = override ?? structure;
-        if (!effective) return 0;
-
-        const paid = yearRecords.reduce((s, r) => s + sumFeeRecord(r), 0);
-        const allotted = calcAllottedForYear(effective.smp ?? {}, effective.svk ?? 0, effective.additionalHeads ?? [], yearRecords);
-        return Math.max(0, allotted - paid);
-      }),
-    );
-    const totalDue = dueByYear.reduce((s, d) => s + d, 0);
-
-    const totalCircularsCount = circularsCountSnap.data().count;
-
-    const circulars = circularsSnap.docs
-      .map((d) => d.data() as CircularDoc)
-      .filter((c) => !c.archivedAt);
-
-    const pinnedCirculars = pinnedSnap.docs
-      .map((d) => d.data() as CircularDoc)
-      .filter((c) => !c.archivedAt);
-
-    const notices = noticesSnap.docs
-      .map((d) => d.data() as NoticeDoc)
-      .filter((n) => noticeAppliesToStudent(n, primary))
-      .slice(0, 8);
-
-    const fullName = primary.studentNameSSLC?.trim();
-    const firstName = fullName ? fullName.split(/\s+/)[0] : 'Student';
-    const { dayLabel, dateLabel } = todayLabelsIST();
-
-    const dataBlock = [
-      `STUDENT FIRST NAME: ${firstName}`,
-      `TODAY: ${dayLabel}, ${dateLabel}`,
-      `STUDENT: ${fullName ?? 'Student'}, ${primary.course ?? ''} ${primary.year ?? ''} (${primary.academicYear ?? ''})`,
-      `Admission status: ${primary.admissionStatus ?? 'unknown'}`,
-      totalDue > 0
-        ? `Fee dues: Rs.${totalDue} pending across academic years (Rs.${totalPaid} paid so far)`
-        : `Fee dues: none — fully paid (Rs.${totalPaid} paid so far)`,
-      `Certificates: ${tcCount} Transfer Certificate(s), ${pcCount} Provisional Certificate(s), ${refundCount} Refund(s) issued`,
-      `Total circulars ever published: ${totalCircularsCount}`,
-      '',
-      `PINNED CIRCULARS (title | department | date | subject):`,
-      ...(pinnedCirculars.length > 0
-        ? pinnedCirculars.map((c) => `- ${c.title ?? ''} | ${c.department ?? ''} | ${c.date ?? ''} | ${c.subject ?? ''}`)
-        : ['(none)']),
-      '',
-      // Per-record detail (not just the aggregate line above) so the HIGHLIGHTS
-      // prompt's fee/refund/certificate group can cite specific, real facts.
-      `CERTIFICATES & REFUNDS (most recent first):`,
-      ...(certificateAndRefundLines.length > 0 ? certificateAndRefundLines.map((l) => `- ${l}`) : ['(none)']),
-      '',
-      `RECENT CIRCULARS (title | department | date):`,
-      ...circulars.slice(0, 10).map((c) => `- ${c.title ?? ''} | ${c.department ?? ''} | ${c.date ?? ''}`),
-      '',
-      `NOTICES RELEVANT TO THIS STUDENT (title | category | date):`,
-      ...(notices.length > 0
-        ? notices.map((n) => `- ${n.title ?? ''} | ${n.category ?? ''} | ${n.createdAt ?? ''}`)
-        : ['(none)']),
-    ].join('\n');
+    const { dataBlock } = await collectStudentBriefingData(regNumber);
 
     try {
-      const rawText = await callGeminiTextForCircular(geminiApiKey.trim(), textModel, BRIEFING_SYSTEM, dataBlock, 1600, 'application/json');
-      const parsedJson: unknown = JSON.parse(extractJsonObject(rawText));
-      if (!isBriefingResult(parsedJson)) {
-        throw new Error('The AI response was missing required fields.');
-      }
+      const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
       const generatedAt = new Date().toISOString();
-      await db.collection('dailyBriefing').doc(regNumber).set({ date: today, ...parsedJson, generatedAt });
-      return { quote, ...parsedJson, generatedAt };
+      await db.collection('dailyBriefing').doc(regNumber).set({ date: today, ...result, generatedAt });
+      return { date: today, quote, ...result, generatedAt };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI generation failed: ${msg}`);
+    }
+  },
+);
+
+/** Settings › Daily Briefing › "Preview a student's briefing": runs the exact
+ *  same data collection + generation as generateDailyBriefing for any reg
+ *  number, WITHOUT touching that student's cached digest, and also returns
+ *  the data block the model was given so the admin can check every
+ *  highlight against its source line. */
+export const previewStudentBriefing = onCall(
+  { region: 'asia-south1', timeoutSeconds: 120 },
+  async (request) => {
+    requireAdmin(request);
+    const regNumber = ((request.data ?? {}) as { regNumber?: string }).regNumber?.trim();
+    if (!regNumber) {
+      throw new HttpsError('invalid-argument', 'regNumber is required.');
+    }
+
+    const { textModel, imageSettings } = await loadBriefingAiSettings();
+    const geminiApiKey = imageSettings.geminiApiKey ?? '';
+
+    const [quote, { dataBlock }] = await Promise.all([
+      getLatestDailyQuote(),
+      collectStudentBriefingData(regNumber),
+    ]);
+
+    try {
+      const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
+      return { date: todayIST(), quote, ...result, generatedAt: new Date().toISOString(), dataBlock };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `AI generation failed: ${msg}`);

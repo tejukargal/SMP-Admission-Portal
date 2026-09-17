@@ -24,6 +24,9 @@ export interface AiSettingsConfig {
   openaiApiKey: string;
   replicateApiKey: string;
   budgetpixelApiKey: string;
+  /** Gemini model for the Daily Briefing text (quote, note, highlights). Empty = the
+   *  function's default (gemini-3.5-flash-lite). */
+  geminiTextModel: string;
 }
 
 const AI_SETTINGS_DOC = doc(db, 'adminConfig', 'aiSettings');
@@ -42,10 +45,11 @@ export async function getAiSettingsConfig(): Promise<AiSettingsConfig | null> {
     openaiApiKey: data.openaiApiKey ?? '',
     replicateApiKey: data.replicateApiKey ?? '',
     budgetpixelApiKey: data.budgetpixelApiKey ?? '',
+    geminiTextModel: data.geminiTextModel ?? '',
   };
 }
 
-// This doc also holds anthropicApiKey/geminiTextModel/geminiImageModel/openaiImageModel/
+// This doc also holds anthropicApiKey/geminiImageModel/openaiImageModel/
 // replicateImageModel/budgetpixelImageModel fields managed outside this tab (via Firebase
 // Console) — merge so saving here never wipes them out.
 export async function saveAiSettingsConfig(config: AiSettingsConfig): Promise<void> {
