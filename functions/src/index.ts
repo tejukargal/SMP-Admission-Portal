@@ -2083,26 +2083,31 @@ const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
   notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
 };
 
-// One light two-tone neon gradient per tab, so the six headers read as a
-// family without all being the same hue. Light rather than deeply
-// saturated — fully-saturated neon darkened the whole image and crushed
-// the scene — and light enough that the black Home greeting/name text
-// stays legible on the left. Plain flat color, no glow/luminous effects.
-const TAB_HEADER_NEON_GRADIENTS: Record<TabHeaderKey, string> = {
-  home: 'light lavender-violet flowing into soft neon pink',
-  circulars: 'pale aqua-cyan flowing into light sky blue',
-  profile: 'light lime-mint flowing into soft aqua-teal',
-  fees: 'light peach-orange flowing into soft bubblegum pink',
-  certificates: 'light lemon-yellow flowing into soft coral',
-  notices: 'soft candy pink flowing into light lilac-purple',
+// One plain solid soft pastel per tab — the same card-background family as
+// CATEGORY_ICON_COLORS below, so a tab's header and its Overview tile share a
+// hue where both exist (circulars/notices/fees/certificates), with two extra
+// hues for Home and Profile. Replaced the earlier light neon gradients: a
+// single flat pastel keeps the black Home greeting/name text legible on the
+// left and lets the colourful scene carry the image. No glow/luminous effects.
+const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
+  home: 'soft pastel blush pink (a light, warm rose)',
+  circulars: 'soft pastel peach (a light, warm apricot)',
+  profile: 'soft pastel butter yellow (a light, creamy yellow)',
+  fees: 'soft pastel mint (a light, minty aqua-green)',
+  certificates: 'soft pastel lilac (a light lavender-purple)',
+  notices: 'soft pastel periwinkle blue (a light, lavender-tinted blue)',
 };
 
+// Scene/character direction is unchanged from the neon-gradient version; only
+// the background wording moved from a two-tone gradient to a single flat
+// pastel. The scene itself stays medium-saturation and colourful so it pops
+// against the pale background instead of blending into it.
 function buildTabHeaderPrompt(tabKey: TabHeaderKey, provider: AiImageSettings['imageProvider']): string {
   return [
     'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-    `The whole background is one smooth, light neon-toned gradient of ${TAB_HEADER_NEON_GRADIENTS[tabKey]} — bright, airy, and high-key across the entire frame, as plain flat color. Keep it light: medium saturation, never dark, deep, heavy, or fully-saturated neon, and never a dull grey pastel either. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
-    `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in the same light, medium-saturation colors as the background so the scene stays bright and readable rather than dark or heavy. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it in the same light neon gradient (at most slightly brighter), with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not turn it into a plain, flat, or lighter wash.`,
-    imageStyleDirective(provider, 'light neon color palette — bright, medium-saturation hues on a high-key background, as plain flat color; no dark or heavy colors, no glow or luminous effects'),
+    `The entire background is one single, solid, flat ${TAB_HEADER_COLORS[tabKey]} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
+    `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
+    imageStyleDirective(provider, 'a soft pastel solid background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects'),
   ].join(' ');
 }
 
