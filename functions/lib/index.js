@@ -1760,23 +1760,16 @@ function imageStyleDirective(provider, palette, aspectRatio = '16:9',
 // The one piece of text the image may contain (e.g. the college's short
 // name on a building). Omitted = the default blanket ban on any text,
 // which is what every prompt except the Home header wants.
-allowedText, 
-// Home header only: its background is soft colour mists fading into white,
-// so the OpenAI wording must not ban gradients or a white left area.
-softBackground = false) {
+allowedText) {
     const noText = allowedText
         ? `The only text allowed anywhere in the image is exactly "${allowedText}" — no other letters, numbers, words, captions, signage, or logos.`
         : 'Absolutely no text, letters, numbers, words, captions, signage, or logos anywhere in the image — illustrate the scene only, nothing written.';
     if (provider === 'openai') {
         return [
             'Style: 2D flat vector illustration, in the style of modern flat-design app/brochure graphics.',
-            softBackground
-                ? 'Flat-coloured scene elements with soft cel-shading over a smooth, misty, gradient-washed background — no realistic lighting, no hard shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.'
-                : 'Solid flat colors with soft cel-shading only — no gradients, no realistic lighting, no shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.',
+            'Solid flat colors with soft cel-shading only — no gradients, no realistic lighting, no shadows, no depth of field, no textures, no 3D rendering, no photorealism, not a photograph.',
             `Color palette: ${palette}.`,
-            softBackground
-                ? `The illustration fills the entire ${aspectRatio} frame edge-to-edge with no borders or margins; the white on the left is part of the background wash, not empty space.`
-                : `The illustration fills the entire ${aspectRatio} frame edge-to-edge with no white margins, borders, or empty background space.`,
+            `The illustration fills the entire ${aspectRatio} frame edge-to-edge with no white margins, borders, or empty background space.`,
             noText,
         ].join(' ');
     }
@@ -1841,7 +1834,7 @@ exports.generateCircularBackground = (0, https_1.onCall)({ region: 'asia-south1'
 // instead of a per-circular one.
 const TAB_HEADER_KEYS = ['home', 'circulars', 'profile', 'fees', 'certificates', 'notices'];
 const TAB_HEADER_SCENES = {
-    home: 'a welcoming student standing and waving cheerfully at the college entrance steps, with the college building behind them carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
+    home: 'a cheerful college student standing and waving a friendly hello, with a small, simple flat college building drawn as a prop just behind them carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
     circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
     profile: 'a friendly student in college uniform, standing, holding a notebook',
     fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
@@ -1855,7 +1848,7 @@ const TAB_HEADER_SCENES = {
 // single flat pastel keeps the black Home greeting/name text legible on the
 // left and lets the colourful scene carry the image. No glow/luminous effects.
 const TAB_HEADER_COLORS = {
-    home: 'soft pastel blush pink (a light, warm rose)', // unused: Home has its own multi-pastel prompt (buildHomeHeaderPrompt)
+    home: 'soft pastel blush pink (a light, warm rose)',
     circulars: 'soft pastel peach (a light, warm apricot)',
     profile: 'soft pastel butter yellow (a light, creamy yellow)',
     fees: 'soft pastel mint (a light, minty aqua-green)',
@@ -1868,19 +1861,18 @@ const TAB_HEADER_COLORS = {
 // against the pale background instead of blending into it.
 // The Home header is the one tab image students read text over on every
 // open ("Welcome Back" + their name, drawn in black by HomeScreen), and the
-// app paints it bare — no accent tint, no scrim — so it gets its own
-// treatment: a background of soft pastel colour mists that spread into the
-// left half and dissolve into white at the left edge (the base the black
-// greeting/name sit on), a few birds and clouds across the upper sky, and the college's short name "SMP" on the
-// building (the only text any header image may carry).
-const HOME_HEADER_PASTELS = 'soft pastel peach, mint, periwinkle blue, lilac and butter yellow';
+// app paints it bare — no accent tint, no scrim. It follows the Category
+// Icons look (buildCategoryIconPrompt): one plain solid pastel with a single
+// colourful student character, here with the college's short name "SMP" on
+// a small building prop (the only text any header image may carry).
 function buildHomeHeaderPrompt(provider) {
     return [
-        'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-        `The background is a smooth, airy wash of soft colour mists — ${HOME_HEADER_PASTELS} — drifting into one another like diffused watercolour clouds with no hard edges, stripes, bands or blocks anywhere. The mists are fullest on the right side behind the scene and spread well into the left half of the frame, thinning and dissolving gradually and evenly into plain white as they go, so that white is still the major colour but the colour reaches all the way to around the left quarter, and only the leftmost edge of the frame settles into near-pure white. Keep the whole background light: no dark or saturated patch, no texture, no glow, no bloom, no halos, no lens flares.`,
-        `Depict ${TAB_HEADER_SCENES.home}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. The "SMP" signage on the building must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade. Add a touch of greenery around the building — two or three simple, flat, rounded trees in fresh light green beside the entrance or behind the student, plus a small shrub or two — kept sparse and modest so the scene stays airy; not a forest, not a dense hedge, and never crossing into the white left third. Across the upper sky add a few small, simple flat white clouds and three or four tiny birds drawn as minimal flat silhouettes in flight — light, sparse accents spread from the right side across into the left half of the frame, kept small and high near the top edge so they never crowd the scene or the text area below them.`,
-        'The left third of the frame, below the sky, must stay free of strong shapes, lines, objects or the signage — a calm zone for text — carrying only the soft colour mist as it fades toward white, the small clouds and birds high up near the top, and at most a subtle, very light background element or two fading in from the scene at its right edge. The transition from pastel mist to white must be gradual and seamless, with no visible edge, band or seam.',
-        imageStyleDirective(provider, 'soft multi-pastel colour mists spreading from the right across the left half and dissolving gradually into white at the left edge, with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects', '16:9', 'SMP', true),
+        `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${TAB_HEADER_COLORS.home} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
+        `Depict ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
+        'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+        'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.',
+        'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
+        imageStyleDirective(provider, 'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic', '16:9', 'SMP'),
     ].join(' ');
 }
 function buildTabHeaderPrompt(tabKey, provider) {
