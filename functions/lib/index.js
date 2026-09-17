@@ -1852,11 +1852,20 @@ const TAB_HEADER_COLORS = {
 // the background wording moved from a two-tone gradient to a single flat
 // pastel. The scene itself stays medium-saturation and colourful so it pops
 // against the pale background instead of blending into it.
+// The Home header is the one tab whose image sits directly under text the
+// student reads every open ("Welcome Back" + their name, drawn in black by
+// HomeScreen) rather than a short tab label — so its left side gets a soft
+// white haze baked into the illustration for contrast, while the other tabs
+// keep a plain flat left zone.
+const HOME_LEFT_HAZE = 'Over the leftmost third of the frame, lay a soft, smoky white haze — like a gentle white mist or fog that is nearly opaque white at the far left edge and dissolves smoothly into the pastel background by about the centre of the frame, with no hard edge, no visible band and no shape outline — so that dark text placed on the left reads clearly against it. Keep the haze pure white, flat and matte: no glow, no light rays, no sparkle. Elements of the scene may fade softly into the haze but nothing strong should sit inside it.';
 function buildTabHeaderPrompt(tabKey, provider) {
+    const leftZone = tabKey === 'home'
+        ? HOME_LEFT_HAZE
+        : 'Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.';
     return [
         'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
         `The entire background is one single, solid, flat ${TAB_HEADER_COLORS[tabKey]} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
-        `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
+        `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. ${leftZone}`,
         imageStyleDirective(provider, 'a soft pastel solid background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects'),
     ].join(' ');
 }
