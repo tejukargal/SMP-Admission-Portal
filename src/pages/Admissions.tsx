@@ -4,6 +4,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useMeritListSnapshots } from '../hooks/useMeritListSnapshots';
 import { updateStudentStatus, updateStudentAllottedCategory } from '../services/studentService';
+import { isWPStudent } from '../utils/wpStudent';
 import { getAllFeeRecordsByStudent } from '../services/feeRecordService';
 import { SMP_FEE_HEADS } from '../types';
 import { saveMeritListSnapshot, saveLateralMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
@@ -431,7 +432,7 @@ export function Admissions() {
     try {
       await updateStudentStatus(student.id, newStatus);
       const msgs: Record<string, string> = {
-        CONFIRMED: `${student.studentNameSSLC} confirmed. Student now appears in the Students list.`,
+        CONFIRMED: `${student.studentNameSSLC} confirmed. Student now appears in the ${isWPStudent(student) ? 'WP Students' : 'Students'} list.`,
         CANCELLED: `${student.studentNameSSLC} moved to Cancelled.`,
         PENDING: `${student.studentNameSSLC} restored to Pending.`,
       };

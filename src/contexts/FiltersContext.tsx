@@ -30,6 +30,18 @@ interface StudentsFilters {
   visibleCount: number;
 }
 
+// WP Students page (/wp-students) — same shape as StudentsFilters minus
+// admTypeFilter, since every WP row is admType EXTERNAL by definition.
+interface WPFilters {
+  searchTerm: string;
+  courseFilter: Course[];
+  yearFilter: Year[];
+  genderFilter: Gender[];
+  categoryFilter: Category[];
+  admCatFilter: AdmCat[];
+  visibleCount: number;
+}
+
 interface FiltersContextValue {
   dashboardFilters: DashboardFilters;
   setDashboardFilters: (filters: Partial<DashboardFilters>) => void;
@@ -37,6 +49,9 @@ interface FiltersContextValue {
   studentsFilters: StudentsFilters;
   setStudentsFilters: (filters: Partial<StudentsFilters>) => void;
   clearStudentsFilters: () => void;
+  wpFilters: WPFilters;
+  setWpFilters: (filters: Partial<WPFilters>) => void;
+  clearWpFilters: () => void;
 }
 
 const defaultDashboard: DashboardFilters = {
@@ -64,6 +79,16 @@ const defaultStudents: StudentsFilters = {
   visibleCount: PAGE_SIZE,
 };
 
+const defaultWp: WPFilters = {
+  searchTerm: '',
+  courseFilter: [],
+  yearFilter: [],
+  genderFilter: [],
+  categoryFilter: [],
+  admCatFilter: [],
+  visibleCount: PAGE_SIZE,
+};
+
 const FiltersContext = createContext<FiltersContextValue | null>(null);
 
 export function FiltersProvider({ children }: { children: ReactNode }) {
@@ -76,6 +101,7 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     academicYearFilter: (getCachedSettings()?.currentAcademicYear ?? '') as AcademicYear | '',
   }));
   const [studentsFilters, setStudents] = useState<StudentsFilters>(defaultStudents);
+  const [wpFilters, setWp] = useState<WPFilters>(defaultWp);
 
   // When settings load (or change), apply the current academic year as the
   // default if no year filter has been selected yet.
@@ -104,6 +130,14 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
     setStudents(defaultStudents);
   }
 
+  function setWpFilters(patch: Partial<WPFilters>) {
+    setWp((prev) => ({ ...prev, ...patch }));
+  }
+
+  function clearWpFilters() {
+    setWp(defaultWp);
+  }
+
   return (
     <FiltersContext.Provider
       value={{
@@ -113,6 +147,9 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
         studentsFilters,
         setStudentsFilters,
         clearStudentsFilters,
+        wpFilters,
+        setWpFilters,
+        clearWpFilters,
       }}
     >
       {children}

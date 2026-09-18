@@ -9,6 +9,7 @@ import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useAuth } from '../contexts/AuthContext';
 import { exportStudentReportPdf } from '../utils/studentReportPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
+import { isWPStudent } from '../utils/wpStudent';
 import { exportStudentsPdf, type StudentsPdfFilters } from '../utils/studentsPdf';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { exportTcIssuedPdf, type TcRow } from '../utils/tcIssuedPdf';
@@ -281,8 +282,12 @@ export function StudentReports() {
     ? (ACADEMIC_YEARS[ACADEMIC_YEARS.indexOf(academicYear) - 1] ?? null)
     : null) as AcademicYear | null;
 
-  const { students: allStudents, loading, error, refetch } = useStudents(academicYear);
-  const { students: prevYearStudents, loading: prevYearLoading } = useStudents(previousAcademicYear);
+  const { students: rawStudents, loading, error, refetch } = useStudents(academicYear);
+  const { students: rawPrevYearStudents, loading: prevYearLoading } = useStudents(previousAcademicYear);
+  // WP (Working Professional / EXTERNAL) admissions are managed on /wp-students
+  // and are excluded from every student report.
+  const allStudents = useMemo(() => rawStudents.filter((s) => !isWPStudent(s)), [rawStudents]);
+  const prevYearStudents = useMemo(() => rawPrevYearStudents.filter((s) => !isWPStudent(s)), [rawPrevYearStudents]);
 
   const [clearingTransferOutId, setClearingTransferOutId] = useState<string | null>(null);
   async function handleClearTransferOut(student: Student) {
@@ -297,7 +302,8 @@ export function StudentReports() {
     }
   }
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
-  const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
+  const { students: rawStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
+  const allStudentsForTC = useMemo(() => rawStudentsForTC.filter((s) => !isWPStudent(s)), [rawStudentsForTC]);
   const { refunds: allRefunds, loading: refundsLoading, error: refundsError } = useAllRefunds();
 
   // ── Report type ─────────────────────────────────────────────────────────────

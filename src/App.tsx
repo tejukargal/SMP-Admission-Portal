@@ -25,6 +25,9 @@ const StudentMessages = lazy(() =>
 );
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Students = lazy(() => import('./pages/Students').then((m) => ({ default: m.Students })));
+const WPStudents = lazy(() =>
+  import('./pages/WPStudents').then((m) => ({ default: m.WPStudents }))
+);
 const Admissions = lazy(() =>
   import('./pages/Admissions').then((m) => ({ default: m.Admissions }))
 );
@@ -100,6 +103,7 @@ function AppRoutes() {
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/inquiries" element={<Inquiries />} />
           <Route path="/students" element={<Students />} />
+          <Route path="/wp-students" element={<WPStudents />} />
           <Route path="/student-reports" element={<StudentReports />} />
           <Route path="/results" element={<Results />} />
           <Route path="/ans-letters" element={<AnsLetters />} />

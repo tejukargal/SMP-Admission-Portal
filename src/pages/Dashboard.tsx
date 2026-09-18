@@ -20,6 +20,7 @@ import { ProvisionalCertificateModal } from '../components/common/ProvisionalCer
 import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
 import { generateTCApplication } from '../utils/tcApplicationPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
+import { isWPStudent } from '../utils/wpStudent';
 import {
   exportSummaryReport, exportCategoryReport,
   exportGenderCourseYearReport, exportGenderCategoryReport,
@@ -243,7 +244,10 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const { students: allStudents, loading, error } = useAllStudents();
+  const { students: rawStudents, loading, error } = useAllStudents();
+  // WP (Working Professional / EXTERNAL) admissions are managed on /wp-students
+  // and are kept out of every dashboard count, search and drill-down.
+  const allStudents = useMemo(() => rawStudents.filter((s) => !isWPStudent(s)), [rawStudents]);
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);

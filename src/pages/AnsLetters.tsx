@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useAllStudents } from '../hooks/useAllStudents';
+import { isWPStudent } from '../utils/wpStudent';
 import { useSettings } from '../hooks/useSettings';
 import { updateAnsLetterStatus, deleteAnsLetterRecord } from '../services/ansLetterService';
 import { exportAnsIssuedListPdf, exportAnsFilingSummaryPdf, type AnsRow } from '../utils/ansLetterPdf';
@@ -77,7 +78,7 @@ export function AnsLetters() {
   const [ineligibleWarning, setIneligibleWarning] = useState<Student | null>(null);
 
   function isEligibleForAns(s: Student): boolean {
-    return s.admissionStatus === 'CONFIRMED' && s.academicYear === currentAcademicYear;
+    return s.admissionStatus === 'CONFIRMED' && !isWPStudent(s) && s.academicYear === currentAcademicYear;
   }
 
   const rawGenMatches = useMemo(() => {

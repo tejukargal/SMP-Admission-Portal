@@ -122,6 +122,16 @@ function IconChevronLeft() {
   );
 }
 
+function IconWP() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/>
+      <path d="M2 13h20"/>
+    </svg>
+  );
+}
+
 // ── Nav items ──────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { to: '/dashboard',    label: 'Dashboard',      Icon: IconDashboard  },
@@ -129,6 +139,7 @@ const NAV_ITEMS = [
   { to: '/enroll',       label: 'Enroll Student', Icon: IconEnroll     },
   { to: '/admissions',   label: 'Admissions',     Icon: IconAdmissions },
   { to: '/students',        label: 'Students',        Icon: IconStudents        },
+  { to: '/wp-students',     label: 'WP Students',     Icon: IconWP              },
   { to: '/student-reports', label: 'Student Reports', Icon: IconStudentReports  },
   { to: '/results',         label: 'Results',         Icon: IconResults         },
   { to: '/ans-letters',     label: 'ANS Letters',     Icon: IconAnsLetters      },
