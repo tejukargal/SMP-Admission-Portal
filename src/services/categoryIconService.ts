@@ -11,14 +11,20 @@ import { imageExtensionFor, imageUploadMetadata } from './imageUpload';
 
 const functions = getFunctions(app, 'asia-south1');
 
-export type CategoryIconKey = 'circulars' | 'notices' | 'fees' | 'certificates';
+export type CategoryIconKey = 'circulars' | 'notices' | 'fees' | 'certificates' | 'dailyBriefing' | 'scholarships';
 
 export const CATEGORY_ICON_TABS: { key: CategoryIconKey; label: string }[] = [
   { key: 'circulars', label: 'Circulars' },
   { key: 'notices', label: 'Notices' },
   { key: 'fees', label: 'Fees' },
   { key: 'certificates', label: 'Certificates' },
+  { key: 'dailyBriefing', label: 'Daily Briefing banner' },
+  { key: 'scholarships', label: 'Scholarships banner' },
 ];
+
+/** Keys that back the two full-width Home banners rather than a square
+ *  Overview tile — generated 16:9 and shown as a short wide strip. */
+export const BANNER_ICON_KEYS: readonly CategoryIconKey[] = ['dailyBriefing', 'scholarships'];
 
 /** An AI-generated icon image held in memory, not yet uploaded to Storage. */
 export interface PendingCategoryIcon {

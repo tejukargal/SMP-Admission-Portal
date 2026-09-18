@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../components/common/Button';
 import {
-  CATEGORY_ICON_TABS, generateCategoryIcon, setCategoryIcon, getCategoryIcons,
+  CATEGORY_ICON_TABS, BANNER_ICON_KEYS, generateCategoryIcon, setCategoryIcon, getCategoryIcons,
   type CategoryIconKey, type PendingCategoryIcon, type CategoryIcons,
 } from '../services/categoryIconService';
 
@@ -49,12 +49,14 @@ function CategoryIconRow({
   }
 
   const previewSrc = pending ? `data:${pending.mimeType};base64,${pending.base64}` : savedUrl;
+  const isBanner = BANNER_ICON_KEYS.includes(iconKey);
 
   return (
     <div className="flex items-center gap-4 px-6 py-4">
-      {/* Square thumbnail, cropped the same way the student app's Overview
-          tile crops it (object-cover), so what the admin sees is what ships. */}
-      <div className="w-20 h-20 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
+      {/* Thumbnail cropped the same way the student app crops it (object-cover):
+          a square for an Overview tile, a short wide strip for a Home banner —
+          so what the admin sees is what ships. */}
+      <div className={`${isBanner ? 'w-44 h-14' : 'w-20 h-20'} shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center`}>
         {previewSrc ? (
           <img src={previewSrc} alt={`${label} card background`} className="w-full h-full object-cover" />
         ) : (
@@ -63,6 +65,9 @@ function CategoryIconRow({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-800">{label}</p>
+        {isBanner && (
+          <p className="text-[11px] text-gray-400 mt-0.5">Shown as a wide strip on the Home banner — students see the middle band of the image.</p>
+        )}
         {error && <p className="text-xs text-red-500 font-medium mt-1">{error}</p>}
       </div>
       <div className="flex gap-2 shrink-0">
@@ -112,7 +117,8 @@ export function CategoryIconsPanel() {
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Category Icons</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             AI-generated illustrated background shown full-bleed on the student portal Home tab's
-            Overview tile for each category, replacing the plain icon and flat color entirely.
+            Overview tile for each category — and on the Daily Briefing and Scholarships banners
+            below them — replacing the plain icon and flat color entirely.
             Generate a preview, then Save to publish it — students see the update the next time they
             open the app.
           </p>

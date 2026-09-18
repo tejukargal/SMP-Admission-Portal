@@ -1270,10 +1270,10 @@ async function collectStudentBriefingData(regNumber) {
     const circularLine = (c) => { var _a, _b, _c, _d; return `- ${(_a = c.title) !== null && _a !== void 0 ? _a : ''} | ${(_b = c.department) !== null && _b !== void 0 ? _b : ''} | ${(_c = c.date) !== null && _c !== void 0 ? _c : ''} | ${(_d = c.subject) !== null && _d !== void 0 ? _d : ''} | ${seenCircularKeys.has(circularSeenKey(c)) ? 'read' : 'UNREAD'}`; };
     const circulars = circularsSnap.docs
         .map((d) => (Object.assign({ id: d.id }, d.data())))
-        .filter((c) => !c.archivedAt);
+        .filter((c) => !c.archivedAt && !c.expiredAt);
     const pinnedCirculars = pinnedSnap.docs
         .map((d) => (Object.assign({ id: d.id }, d.data())))
-        .filter((c) => !c.archivedAt);
+        .filter((c) => !c.archivedAt && !c.expiredAt);
     const notices = noticesSnap.docs
         .map((d) => (Object.assign({ id: d.id }, d.data())))
         .filter((n) => !n.inactiveAt && noticeAppliesToStudent(n, primary))
@@ -2237,7 +2237,14 @@ exports.generateTabHeaderBackground = (0, https_1.onCall)({ region: 'asia-south1
 // not a small icon inset over the app's own gradient. Same stateless generate →
 // preview → client-side upload flow as generateCircularBackground/
 // generateTabHeaderBackground above, just keyed by a fixed category identity.
-const CATEGORY_ICON_KEYS = ['circulars', 'notices', 'fees', 'certificates'];
+const CATEGORY_ICON_KEYS = ['circulars', 'notices', 'fees', 'certificates', 'dailyBriefing', 'scholarships'];
+// The last two aren't Overview tiles but the two full-width Home banners
+// (Daily Briefing, Scholarship Info & News). Same look, but generated wide
+// and composed for the short strip the banner crops out of the middle.
+const CATEGORY_ICON_BANNER_KEYS = new Set(['dailyBriefing', 'scholarships']);
+function categoryIconAspect(key) {
+    return CATEGORY_ICON_BANNER_KEYS.has(key) ? '16:9' : '1:1';
+}
 // Each category keeps a recognisable prop/action so the four tiles stay
 // distinguishable at a glance; the character itself is styled once, below, in
 // buildCategoryIconPrompt (same colourful flat-vector look as the Home tab
@@ -2247,6 +2254,8 @@ const CATEGORY_ICON_SCENES = {
     notices: 'a cheerful college student looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
     fees: 'a cheerful college student happily holding up a paid receipt in one hand and a payment card in the other',
     certificates: 'a cheerful college student proudly holding up a rolled certificate scroll tied with a ribbon',
+    dailyBriefing: 'a cheerful college student stretching happily at sunrise with one arm raised, a small steaming mug on a ledge beside them, and a simple rising sun with a few short rays behind',
+    scholarships: 'a cheerful college student holding up a graduation cap in one hand and a small coin-marked money bag in the other, with a rolled award ribbon at their feet',
 };
 // Reference look: a course-catalogue style app card — one plain, solid soft
 // pastel background per card (peach / periwinkle / mint / lavender) with a
@@ -2258,6 +2267,8 @@ const CATEGORY_ICON_COLORS = {
     notices: 'soft pastel periwinkle blue (a light, lavender-tinted blue)',
     fees: 'soft pastel mint (a light, minty aqua-green)',
     certificates: 'soft pastel lilac (a light lavender-purple)',
+    dailyBriefing: 'soft pastel butter yellow (a light, warm sunrise yellow)',
+    scholarships: 'soft pastel sage (a light, gentle sage green)',
 };
 // Composition is pinned to what the student app's Overview tile needs: the
 // image is rendered full-bleed behind the tile, with the label/value text
@@ -2270,12 +2281,27 @@ const CATEGORY_ICON_COLORS = {
 // "rounded geometric shapes, minimal facial detail" wording, which produced
 // muted, faceless mannequin-like figures.
 function buildCategoryIconPrompt(key, provider) {
+    if (CATEGORY_ICON_BANNER_KEYS.has(key))
+        return buildBannerIconPrompt(key, provider);
     return [
         `Flat vector illustration for a mobile app stat card, square 1:1 composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
         `Depict ${CATEGORY_ICON_SCENES[key]}, positioned in the right two-thirds of the frame.`,
         'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
         'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
         imageStyleDirective(provider, 'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic', '1:1'),
+    ].join(' ');
+}
+// Banner variant: the student app crops the 16:9 result to a short, wide
+// strip (~3.4:1) behind the banner, with the title/subtitle on the left. So
+// the scene must sit compactly in the right half AND within the vertical
+// middle band, or the crop takes the character's head or feet off.
+function buildBannerIconPrompt(key, provider) {
+    return [
+        `Flat vector illustration for a mobile app banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
+        `Depict ${CATEGORY_ICON_SCENES[key]}, positioned in the right half of the frame and drawn compact: the whole character and their props must fit inside the vertical middle band of the frame, leaving the top quarter and bottom quarter of the frame as plain background, because the banner is cropped to a short wide strip through the middle.`,
+        'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+        'Leave the left 45% of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
+        imageStyleDirective(provider, 'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic', '16:9'),
     ].join(' ');
 }
 exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
@@ -2312,7 +2338,7 @@ exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', time
     }
     const prompt = buildCategoryIconPrompt(key, settings.imageProvider);
     try {
-        return await generateAiImage(settings, prompt, '1:1');
+        return await generateAiImage(settings, prompt, categoryIconAspect(key));
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -2398,7 +2424,7 @@ exports.optimizeStoredImages = (0, https_1.onCall)({ region: 'asia-south1', time
             targets.push({
                 label: `categoryIcons/${key}`,
                 url,
-                aspectRatio: '1:1',
+                aspectRatio: categoryIconAspect(key),
                 update: (newUrl) => categoryIconsRef.set({ [key]: newUrl }, { merge: true }),
             });
         }

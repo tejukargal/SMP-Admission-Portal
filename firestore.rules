@@ -288,15 +288,18 @@ service cloud.firestore {
     // `scholarshipUpdates/current` is the admin-published scholarship summary
     // (written only by publishScholarshipUpdates); students receive it inside
     // their briefing response, the panel reads it to show what is live.
+    // Students may also *read* the quote and summary docs directly: the app
+    // listens to them (like circulars) so its "new" badges flip the moment
+    // the admin saves/publishes, without waiting for a briefing refetch.
     match /dailyQuote/{date} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || isStudentClaim();
       allow write: if false;
     }
     match /dailyBriefing/{regNumber} {
       allow read, write: if false;
     }
     match /scholarshipUpdates/{docId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || isStudentClaim();
       allow write: if false;
     }
 
@@ -325,6 +328,12 @@ service cloud.firestore {
 
     // ── Student Circular Seen-State (unread badge) ────────────────────────
     match /studentCircularState/{regNumber} {
+      allow read, write: if isActiveUser()
+        || (isStudentClaim() && regNumber == request.auth.token.regNumber);
+    }
+
+    // ── Student Briefing Seen-State (Daily Briefing / Scholarship Info "new" badges) ──
+    match /studentBriefingState/{regNumber} {
       allow read, write: if isActiveUser()
         || (isStudentClaim() && regNumber == request.auth.token.regNumber);
     }
