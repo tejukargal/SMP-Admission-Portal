@@ -152,7 +152,7 @@ export function StudentPortal() {
   useEffect(() => {
     if (!student) return;
     const unsubscribe = subscribeToCirculars((all) => {
-      setCirculars(all.filter((c) => !c.archivedAt));
+      setCirculars(all.filter((c) => !c.archivedAt && !c.expiredAt));
       setCircularsLoading(false);
     });
     return unsubscribe;

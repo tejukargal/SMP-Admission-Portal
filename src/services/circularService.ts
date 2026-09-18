@@ -178,3 +178,16 @@ export async function pinCircular(id: string): Promise<void> {
 export async function unpinCircular(id: string): Promise<void> {
   await updateDoc(doc(db, COL, id), { pinned: deleteField() });
 }
+
+/** Expire — moves the circular to the students' Expired tab and unpins it in the
+ *  same write. Deliberately leaves updatedAt alone: the student app's seen-key
+ *  includes updatedAt, so bumping it would re-flag the circular as unread.
+ *  Reversible via restoreCircular. */
+export async function expireCircular(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { expiredAt: new Date().toISOString(), pinned: deleteField() });
+}
+
+/** Restore — returns an expired circular to Active (does not re-pin). */
+export async function restoreCircular(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { expiredAt: deleteField() });
+}

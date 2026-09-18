@@ -828,6 +828,7 @@ interface CircularDoc {
   date?: string;
   pinned?: boolean;
   archivedAt?: string;
+  expiredAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1697,10 +1698,10 @@ async function collectStudentBriefingData(regNumber: string): Promise<{ primary:
 
   const circulars = circularsSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as CircularDoc) }))
-    .filter((c) => !c.archivedAt);
+    .filter((c) => !c.archivedAt && !c.expiredAt);
   const pinnedCirculars = pinnedSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as CircularDoc) }))
-    .filter((c) => !c.archivedAt);
+    .filter((c) => !c.archivedAt && !c.expiredAt);
 
   const notices = noticesSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as NoticeDoc) }))

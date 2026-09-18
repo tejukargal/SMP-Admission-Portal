@@ -4,7 +4,7 @@ import type { User } from 'firebase/auth';
 import type { Circular, StoredAttachment } from '../../types';
 import {
   subscribeToCirculars, createCircular, updateCircular, deleteCircular,
-  publishCircular, unpublishCircular, pinCircular, unpinCircular,
+  publishCircular, unpublishCircular, pinCircular, unpinCircular, expireCircular, restoreCircular,
   generateCircularBackground, setCircularBackground, type PendingBackground,
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
@@ -32,6 +32,8 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [pinningId, setPinningId] = useState<string | null>(null);
+  const [expiringId, setExpiringId] = useState<string | null>(null);
+  const [view, setView] = useState<'active' | 'expired'>('active');
   const [menu, setMenu] = useState<{ x: number; y: number; circular: Circular } | null>(null);
   const [bgTarget, setBgTarget] = useState<Circular | null>(null);
 
@@ -76,6 +78,16 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
     }
   }
 
+  async function handleToggleExpired(c: Circular) {
+    setExpiringId(c.id);
+    try {
+      if (c.expiredAt) await restoreCircular(c.id);
+      else await expireCircular(c.id);
+    } finally {
+      setExpiringId(null);
+    }
+  }
+
   async function handleDelete() {
     if (!confirmDelete) return;
     setDeleting(true);
@@ -87,12 +99,32 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
     }
   }
 
+  const activeCount = circulars.filter((c) => !c.expiredAt).length;
+  const expiredCount = circulars.length - activeCount;
+  const shown = [...circulars]
+    .filter((c) => (view === 'expired' ? !!c.expiredAt : !c.expiredAt))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2.5">
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <p className="text-xs text-gray-500">
-          Circulars are visible to <span className="font-semibold text-gray-700">all students</span> in the portal — department is a label/filter only.
-        </p>
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs text-gray-500">
+            Circulars are visible to <span className="font-semibold text-gray-700">all students</span> in the portal — department is a label/filter only.
+          </p>
+          <div className="flex items-center gap-1">
+            {([['active', 'Active', activeCount], ['expired', 'Expired', expiredCount]] as const).map(([key, label, count]) => (
+              <button
+                key={key}
+                onClick={() => setView(key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold cursor-pointer transition-colors ${view === key ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {label}
+                <span className={`rounded-full text-[10px] px-1.5 ${view === key ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-600'}`}>{count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <Button size="sm" onClick={() => setShowForm(true)} className="self-start sm:self-auto">
           <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -106,9 +138,13 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
           <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
         ) : circulars.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-10">No circulars posted yet. Click "New Circular" to publish the first one.</div>
+        ) : shown.length === 0 ? (
+          <div className="text-sm text-gray-400 text-center py-10">
+            {view === 'expired' ? 'No expired circulars. Use "Mark as Expired" on a circular to move it here.' : 'No active circulars — everything is under Expired.'}
+          </div>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {[...circulars].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((c) => (
+            {shown.map((c) => (
               <AdminCircularCard
                 key={c.id}
                 circular={c}
@@ -128,17 +164,24 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
           actions={[
             { label: 'Preview', onClick: () => setPreview(menu.circular) },
             { label: 'Edit', onClick: () => setEditing(menu.circular) },
-            {
+            // Pinning an expired circular makes no sense (expiring also unpins).
+            ...(menu.circular.expiredAt ? [] : [{
               label: menu.circular.pinned ? 'Unpin' : 'Pin to Top',
-              variant: 'accent',
+              variant: 'accent' as const,
               disabled: pinningId === menu.circular.id,
               onClick: () => void handleTogglePin(menu.circular),
-            },
+            }]),
             {
               label: menu.circular.archivedAt ? 'Publish' : 'Unpublish',
               variant: 'accent',
               disabled: togglingId === menu.circular.id,
               onClick: () => void handleTogglePublish(menu.circular),
+            },
+            {
+              label: menu.circular.expiredAt ? 'Restore to Active' : 'Mark as Expired',
+              variant: 'accent',
+              disabled: expiringId === menu.circular.id,
+              onClick: () => void handleToggleExpired(menu.circular),
             },
             {
               label: menu.circular.backgroundImageUrl ? 'Regenerate Background' : 'Generate Background',
@@ -206,7 +249,7 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : c.expiredAt ? 'bg-gray-50' : 'bg-white'}`}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
     >
       {c.backgroundImageUrl && (
@@ -215,7 +258,7 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
           <div className="absolute inset-0 bg-white/80" />
         </>
       )}
-      {c.archivedAt && <CardWatermark label="Unpublished" />}
+      {c.archivedAt ? <CardWatermark label="Unpublished" /> : c.expiredAt ? <CardWatermark label="Expired" /> : null}
       <button
         type="button"
         aria-label="Options"
@@ -238,6 +281,9 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
           <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
             {c.archivedAt ? 'Unpublished' : 'Published'}
           </span>
+          {c.expiredAt && (
+            <span className="rounded-full bg-gray-200 text-gray-600 px-1.5 py-0.5 text-[9px] font-bold">Expired</span>
+          )}
           {c.pinned && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
               <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>

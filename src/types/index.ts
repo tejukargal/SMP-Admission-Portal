@@ -555,6 +555,7 @@ export interface Circular {
   createdBy: string;     // admin uid
   updatedAt?: string;
   archivedAt?: string;   // unpublished — hidden from students, kept for admin
+  expiredAt?: string;    // marked Expired by admin — students see it only under the Expired tab, never on Home/unread; cleared on Restore to Active
   pinned?: boolean;      // shown first in the student portal's Circulars tab, ahead of date sorting
   backgroundImageUrl?: string; // AI-generated flat-vector illustration shown as the card's full-bleed background
 }
