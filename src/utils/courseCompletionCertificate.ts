@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
+import { isWPStudent, isLateralEntry, WP_CERTIFICATE_NOTE } from './wpStudent';
 
 export const CCC_COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -30,12 +31,14 @@ function esc(s: string): string {
  * Computes the "from" (start) academic year for the certificate body.
  * The student's academicYear is their 3rd-year enrollment year (the "to" year).
  * Regular students go back 2 years; lateral-entry students go back 1 year.
+ * Working Professionals (admType EXTERNAL) enter directly in 2nd Year too, so
+ * they share the lateral 1-year offset — see isLateralEntry.
  * e.g. "2025-26" (regular) → "2023-24"
  */
 export function computeFromYear(academicYear: string, admType?: string | null): string {
   const match = academicYear.match(/^(\d{4})-(\d{2})$/);
   if (!match) return academicYear;
-  const yearsBack = admType === 'LATERAL' ? 1 : 2;
+  const yearsBack = isLateralEntry(admType) ? 1 : 2;
   const startY = parseInt(match[1], 10) - yearsBack;
   const endY   = parseInt(match[2], 10) - yearsBack;
   return `${startY}-${endY.toString().padStart(2, '0')}`;
@@ -50,6 +53,9 @@ function buildCCC(student: Student, data: CCCFormData): string {
   const regNumber   = esc(data.regNumber);
   const dateOfIssue = esc(data.dateOfIssue);
   const refNumber   = esc(data.refNumber);
+  const wpNote      = isWPStudent(student)
+    ? `<p class="para">${esc(WP_CERTIFICATE_NOTE)}</p>`
+    : '';
   const startYear   = esc(data.studyFrom);
   const endYear     = esc(data.studyTo);
 
@@ -202,6 +208,8 @@ function buildCCC(student: Student, data: CCCFormData): string {
       <strong>${endYear}</strong> and ${pronoun} has appeared for Sixth Semester Diploma
       Examination held during <strong>${examPeriod}</strong> with Register
       No.<strong>${regNumber}</strong>.</p>
+
+    ${wpNote}
 
     <div class="sign-block">
       <div class="place-date">

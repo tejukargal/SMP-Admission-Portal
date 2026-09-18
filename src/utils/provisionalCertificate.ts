@@ -1,6 +1,7 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
 import { computeFromYear } from './courseCompletionCertificate';
+import { isWPStudent, isLateralEntry, WP_CERTIFICATE_NOTE } from './wpStudent';
 
 export const PC_COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -36,7 +37,10 @@ function buildPC(student: Student, data: PCFormData): string {
   const regNumber   = esc(data.regNumber);
   const resultClass = esc(data.resultClass.toUpperCase());
   const dateOfIssue = esc(data.dateOfIssue);
-  const isLateral   = student.admType === 'LATERAL';
+  const isLateral   = isLateralEntry(student.admType);
+  const wpNote      = isWPStudent(student)
+    ? `<p class="para">${esc(WP_CERTIFICATE_NOTE)}</p>`
+    : '';
   const fromYear    = esc(computeFromYear(student.academicYear, student.admType));
   const toYear      = esc(student.academicYear);
   const refNumber   = `SMP/ADM/${student.academicYear}/`;
@@ -218,6 +222,8 @@ function buildPC(student: Student, data: PCFormData): string {
 
     <p class="para">During the period of ${pronoun} stay in the institution ${pronoun} character
       and conduct were satisfactory.</p>
+
+    ${wpNote}
 
     <div class="principal-row">
       <svg class="seal-watermark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">

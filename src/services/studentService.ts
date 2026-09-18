@@ -14,6 +14,7 @@ import {
   documentId,
   type QueryConstraint,
 } from 'firebase/firestore';
+import { isLateralEntry } from '../utils/wpStudent';
 import { db } from '../config/firebase';
 import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, NotAdmittedStatusTag } from '../types';
 
@@ -446,7 +447,7 @@ export async function getStudentEnrollmentHistory(
   const byIndex = (ay: AcademicYear) => ACADEMIC_YEARS.indexOf(ay);
 
   const entryYearValue: import('../types').Year =
-    student.admType === 'LATERAL' ? '2ND YEAR' : '1ST YEAR';
+    isLateralEntry(student.admType) ? '2ND YEAR' : '1ST YEAR';
   const entryRecord = records.find((r) => r.year === entryYearValue);
   const admittedYear = entryRecord?.academicYear ?? student.academicYear;
 

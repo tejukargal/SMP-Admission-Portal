@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Student } from '../../types';
+import { isLateralEntry } from '../../utils/wpStudent';
 import {
   generateProvisionalCertificate,
   PC_COURSE_NAMES,
@@ -260,7 +261,7 @@ export function ProvisionalCertificateModal({ student, onClose }: Props) {
           {/* Eligibility reminder */}
           <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
             <strong>Note:</strong> This certificate is only to be issued to 3rd year students who have passed all subjects
-            {student.admType === 'LATERAL'
+            {isLateralEntry(student.admType)
               ? ' — for Lateral Entry students, this means both the 2nd and 3rd Year (they were admitted directly to the 2nd Year).'
               : ' after completing all 3 years.'}
           </div>

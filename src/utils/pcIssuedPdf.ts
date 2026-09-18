@@ -16,6 +16,17 @@ export interface PcRow {
   isDuplicate: boolean;
   issuedAt: string;
   pcAcademicYear: string;
+  admType: string;
+}
+
+// WP (Working Professional) students share the same TC/PC numbering as regular
+// admissions, so they are listed together — the name carries a "(WP)" suffix,
+// the same convention as the ★ duplicate marker.
+function displayName(r: { studentName: string; admType?: string; isDuplicate: boolean }): string {
+  let n = r.studentName;
+  if (r.admType === 'EXTERNAL') n += ' (WP)';
+  if (r.isDuplicate) n += ' ★';
+  return n;
 }
 
 export function exportPcIssuedPdf(rows: PcRow[], filters: {
@@ -74,7 +85,7 @@ export function exportPcIssuedPdf(rows: PcRow[], filters: {
     head: [['Sl', 'Student Name', 'Course', 'Reg No', 'Exam Period', 'Result Class', 'Date of Issue']],
     body: rows.map((r, i) => [
       i + 1,
-      r.isDuplicate ? `${r.studentName} ★` : r.studentName,
+      displayName(r),
       r.course,
       r.regNumber || '—',
       r.examPeriod || '—',

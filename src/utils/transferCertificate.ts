@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
+import { isWPStudent, WP_CERTIFICATE_NOTE } from './wpStudent';
 
 export const TC_COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -97,6 +98,11 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
   const duesPaid   = data.duesPaid   ? 'YES' : 'NO';
   const concession = data.concession ? 'YES' : 'NO';
   const character  = esc(data.character || 'SATISFACTORY');
+  // Working Professionals get a footnote rather than a 19th numbered field —
+  // the 18-row proforma stays exactly as prescribed.
+  const wpNote = isWPStudent(student)
+    ? `<div class="wp-note">${esc(WP_CERTIFICATE_NOTE)}</div>`
+    : '';
   const isDuplicate = data.isDuplicate;
 
   return `<!DOCTYPE html>
@@ -226,6 +232,14 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
   .tc-table tr:last-child td   { border-bottom: none; }
   .val { font-weight: bold; }
 
+  .wp-note {
+    padding: 8pt 14pt 0;
+    font-size: 10.5pt;
+    font-style: italic;
+    line-height: 1.5;
+    text-align: justify;
+  }
+
   /* ── Footer ── */
   .tc-footer {
     padding: 16pt 14pt 36pt;
@@ -338,6 +352,7 @@ export function buildTCHTML(student: Student, data: TCFormData): string {
       <td colspan="6">18. Character of the student :&nbsp; <span class="val">${character}</span></td>
     </tr>
   </table>
+  ${wpNote}
 
   <!-- Footer -->
   <div class="tc-footer">

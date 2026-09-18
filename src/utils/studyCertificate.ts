@@ -1,6 +1,7 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
 import { computeFromYear } from './courseCompletionCertificate';
+import { isWPStudent, isLateralEntry, WP_CERTIFICATE_NOTE } from './wpStudent';
 
 export type CertificateType = 'STUDYING' | 'COMPLETED' | 'CANCELLED';
 
@@ -65,7 +66,7 @@ export function getDefaultBodyText(student: Student, certType: CertificateType, 
 
   const isCompleted = certType === 'COMPLETED';
   const isLeft      = certType === 'CANCELLED';
-  const isLateral   = student.admType === 'LATERAL';
+  const isLateral   = isLateralEntry(student.admType);
   const fromYear    = computeFromYear(ay, student.admType);
 
   let para1: string;
@@ -86,6 +87,9 @@ export function getDefaultBodyText(student: Student, certType: CertificateType, 
   if (opts.includeCaste && opts.casteName && opts.casteCategory) {
     parts.push(`${pronoun} belongs to ${opts.casteName.trim()} caste under ${opts.casteCategory.trim()} category as per our records.`);
   }
+  // Must stay in lockstep with wpClause in buildStudyCertHTML — this text
+  // pre-fills the edit textarea, that one renders the un-edited print path.
+  if (isWPStudent(student)) parts.push(WP_CERTIFICATE_NOTE);
   return parts.join('\n\n');
 }
 
@@ -111,6 +115,10 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
     ? `<p class="cert-para">${pronoun} belongs to <span class="hl">${esc(opts.casteName.trim())}</span> caste under <span class="hl">${esc(opts.casteCategory.trim())}</span> category as per our records.</p>`
     : '';
 
+  const wpClause = isWPStudent(student)
+    ? `<p class="cert-para">${esc(WP_CERTIFICATE_NOTE)}</p>`
+    : '';
+
   // Only show reg number when it matches the real format: 308XX99999 (9–10 chars)
   const isRealRegNo = /^\d{3}[A-Z]{2}\d{4,5}$/.test(regNo);
   const regClause = isRealRegNo
@@ -119,7 +127,7 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
 
   const isCompleted = certType === 'COMPLETED';
   const isLeft      = certType === 'CANCELLED';
-  const isLateral   = student.admType === 'LATERAL';
+  const isLateral   = isLateralEntry(student.admType);
   const fromYear    = esc(computeFromYear(student.academicYear, student.admType));
 
   return `<!DOCTYPE html>
@@ -315,7 +323,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       were satisfactory.
     </p>
-    ${casteClause}` : isCompleted ? `
+    ${casteClause}
+    ${wpClause}` : isCompleted ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -328,7 +337,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       were satisfactory.
     </p>
-    ${casteClause}` : isLeft ? `
+    ${casteClause}
+    ${wpClause}` : isLeft ? `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -341,7 +351,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       were satisfactory.
     </p>
-    ${casteClause}` : `
+    ${casteClause}
+    ${wpClause}` : `
     <p class="cert-para">
       This is to certify that <span class="hl">${salutation} ${studentName}</span>,
       ${sonDaughter} of <span class="hl">Sri. ${fatherName}</span>${regClause}
@@ -354,7 +365,8 @@ export function buildStudyCertHTML(student: Student, certType: CertificateType, 
       During ${hisHer} stay in this institution ${hisHer} character and conduct
       are satisfactory.
     </p>
-    ${casteClause}`}
+    ${casteClause}
+    ${wpClause}`}
     ${opts.customExtra ? opts.customExtra.split(/\n\n+/).filter(p => p.trim()).map(p => `<p class="cert-para">${esc(p.trim())}</p>`).join('\n    ') : ''}
 
     <!-- Signature: 2 inches below last paragraph -->

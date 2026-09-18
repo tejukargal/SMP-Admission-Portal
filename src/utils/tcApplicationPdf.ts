@@ -1,4 +1,5 @@
 import type { Student, AcademicYear } from '../types';
+import { isLateralEntry } from './wpStudent';
 
 const COURSE_NAMES: Record<string, string> = {
   CE: 'Civil Engineering',
@@ -157,7 +158,7 @@ export function buildTCApplicationHTML(
 
   const admAY        = esc(admittedYear);
   const studiedTillAY = esc(studiedTillYear);
-  const entryYear    = student.admType === 'LATERAL' ? '2nd' : '1st';
+  const entryYear    = isLateralEntry(student.admType) ? '2nd' : '1st';
 
   const salutation  = student.gender === 'GIRL' ? 'Madam' : 'Sir';
   const yearLabel   = lastStudiedYear === '1ST YEAR' ? '1st Year'

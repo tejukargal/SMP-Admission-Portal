@@ -29,6 +29,14 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
+// tcHistory / pcHistory live on the student doc but aren't on the Student type —
+// same local-cast pattern as StudentReports.tsx.
+type CertStudent = Student & { tcHistory?: unknown[]; pcHistory?: unknown[] };
+function certCounts(s: Student): { tc: number; pc: number } {
+  const c = s as CertStudent;
+  return { tc: c.tcHistory?.length ?? 0, pc: c.pcHistory?.length ?? 0 };
+}
+
 function AnimNum({ value }: { value: number }) {
   return (
     <span
@@ -638,6 +646,7 @@ export function WPStudents() {
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
                 <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
+                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Certificates</th>
                 {isAdmin && (
                   <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-48">Actions</th>
                 )}
@@ -710,6 +719,26 @@ export function WPStudents() {
                       </span>
                     )}
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {(() => {
+                      const { tc, pc } = certCounts(student);
+                      if (!tc && !pc) return <span className="text-gray-300 text-[10px]">—</span>;
+                      return (
+                        <span className="flex items-center gap-1">
+                          {tc > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-50 border border-sky-200 text-sky-700 leading-none" title={`${tc} Transfer Certificate${tc > 1 ? 's' : ''} issued`}>
+                              TC{tc > 1 ? ` ×${tc}` : ''}
+                            </span>
+                          )}
+                          {pc > 0 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-50 border border-violet-200 text-violet-700 leading-none" title={`${pc} Provisional Certificate${pc > 1 ? 's' : ''} issued`}>
+                              PC{pc > 1 ? ` ×${pc}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   {isAdmin && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <Button
@@ -726,7 +755,7 @@ export function WPStudents() {
 
               {hasMore && (
                 <tr>
-                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-2.5 text-center">
+                  <td colSpan={isAdmin ? 13 : 12} className="px-4 py-2.5 text-center">
                     <button
                       className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}

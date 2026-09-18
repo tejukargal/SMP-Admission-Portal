@@ -302,8 +302,10 @@ export function StudentReports() {
     }
   }
   const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
-  const { students: rawStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
-  const allStudentsForTC = useMemo(() => rawStudentsForTC.filter((s) => !isWPStudent(s)), [rawStudentsForTC]);
+  // Certificate reports deliberately INCLUDE WP students: TCs and PCs are issued
+  // to them from /wp-students using the same counters/{ay}__tc sequence, so the
+  // issued lists must account for them. The Adm Type filter can isolate them.
+  const { students: allStudentsForTC, loading: tcLoading, error: tcError } = useAllStudents();
   const { refunds: allRefunds, loading: refundsLoading, error: refundsError } = useAllRefunds();
 
   // ── Report type ─────────────────────────────────────────────────────────────
@@ -640,6 +642,7 @@ export function StudentReports() {
           category: s.category,
           enrollmentYear: s.academicYear,
           regNumber: s.regNumber ?? '',
+          admType: s.admType,
           tcId: tc.id,
           tcNumber: tc.tcNumber,
           dateOfAdmission: tc.dateOfAdmission,
@@ -726,6 +729,7 @@ export function StudentReports() {
           category: s.category,
           enrollmentYear: s.academicYear,
           regNumber: s.regNumber ?? '',
+          admType: s.admType,
           pcId: pc.id,
           examPeriod: pc.examPeriod,
           resultClass: pc.resultClass,
@@ -1218,7 +1222,7 @@ export function StudentReports() {
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'tc-issued') {
           const headers = [
-            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Enrollment Year',
+            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Adm Type', 'Enrollment Year',
             'Reg No', 'TC Number', 'Date of Admission', 'Date of Leaving',
             'Semester', 'Last Exam', 'Result', 'Duplicate', 'Issued Date',
           ];
@@ -1228,6 +1232,7 @@ export function StudentReports() {
             r.course,
             r.year,
             r.category,
+            r.admType,
             r.enrollmentYear,
             r.regNumber,
             r.tcNumber,
@@ -1242,7 +1247,7 @@ export function StudentReports() {
           const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
           ws['!cols'] = [
             { wch: 6 }, { wch: 26 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 14 },
-            { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+            { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
             { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 16 },
           ];
           const wb = XLSX.utils.book_new();
@@ -1254,7 +1259,7 @@ export function StudentReports() {
           XLSX.writeFile(wb, parts.join('_') + '.xlsx');
         } else if (reportType === 'pc-issued') {
           const headers = [
-            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Enrollment Year',
+            'Sl No', 'Student Name', 'Course', 'Year', 'Category', 'Adm Type', 'Enrollment Year',
             'Reg No', 'Exam Period', 'Result Class', 'Date of Issue', 'Duplicate', 'Issued Date',
           ];
           const rows = pcRows.map((r, i) => [
@@ -1263,6 +1268,7 @@ export function StudentReports() {
             r.course,
             r.year,
             r.category,
+            r.admType,
             r.enrollmentYear,
             r.regNumber,
             r.examPeriod,
@@ -1273,7 +1279,7 @@ export function StudentReports() {
           ]);
           const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
           ws['!cols'] = [
-            { wch: 6 }, { wch: 26 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 14 },
+            { wch: 6 }, { wch: 26 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 },
             { wch: 14 }, { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 10 }, { wch: 16 },
           ];
           const wb = XLSX.utils.book_new();
@@ -2059,6 +2065,11 @@ export function StudentReports() {
                     <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
                       {r.studentName}
+                      {r.admType === 'EXTERNAL' && (
+                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 border border-amber-300 text-amber-800 leading-none" title="Working Professional (Evening College)">
+                          WP
+                        </span>
+                      )}
                       {r.isDuplicate && (
                         <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
                           DUP
@@ -2135,6 +2146,11 @@ export function StudentReports() {
                     <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                     <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
                       {r.studentName}
+                      {r.admType === 'EXTERNAL' && (
+                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 border border-amber-300 text-amber-800 leading-none" title="Working Professional (Evening College)">
+                          WP
+                        </span>
+                      )}
                       {r.isDuplicate && (
                         <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
                           DUP

@@ -10,3 +10,18 @@ import type { Student } from '../types';
 export function isWPStudent(s: Student): boolean {
   return s.admType === 'EXTERNAL';
 }
+
+// Working Professionals enroll directly into 2nd Year and finish the Diploma in
+// two years — identical to a lateral-entry admission. Certificate wording, the
+// study-from year and admission-order titles all key off this, NOT off
+// admType === 'LATERAL' alone. Fee rules deliberately do not use it: the
+// FeeCollectionModal lateral fine-exemption stays keyed to LATERAL only.
+export function isLateralEntry(admType?: string | null): boolean {
+  return admType === 'LATERAL' || admType === 'EXTERNAL';
+}
+
+// Printed on the Study / Transfer / Provisional / Course Completion certificates
+// of DB-backed WP students (admType EXTERNAL). Manual certificates synthesize
+// admType 'LATERAL', so they deliberately do not carry this line.
+export const WP_CERTIFICATE_NOTE =
+  'Admitted as a Working Professional (Evening College) under the Lateral Entry scheme.';

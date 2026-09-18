@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
+import { isLateralEntry } from './wpStudent';
 
 const COURSE_NAMES: Record<string, string> = {
   CE: 'Civil',
@@ -52,7 +53,7 @@ function buildOrderBlock(student: Student, counsellingDate: string): string {
   const category    = student.allottedCategory ? esc(student.allottedCategory) : '';
   const counselDate = formatDate(counsellingDate);
   const ayFormatted = formatAcademicYear(student.academicYear);
-  const isLateral   = student.admType === 'LATERAL';
+  const isLateral   = isLateralEntry(student.admType);
 
   const relation    = student.gender === 'GIRL' ? 'D/o' : 'S/o';
 
