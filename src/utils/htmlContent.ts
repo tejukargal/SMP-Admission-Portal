@@ -54,6 +54,32 @@ export function renderHtmlContent(html: string): { __html: string } {
   return { __html: linkifyUrls(sanitizeHtmlContent(html)) };
 }
 
+const HTML_TAG_RE = /<[a-z][^>]*>/i;
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Notice bodies are rich HTML (RichTextEditor / AI drafts), but notices sent
+ *  before that were plain text with `\n` line breaks. Returns HTML either way:
+ *  an HTML body passes through as-is; a plain-text body is escaped and its
+ *  blank-line-separated blocks become `<p>`s with single newlines as `<br>`. */
+export function noticeBodyToHtml(body: string): string {
+  if (!body) return '';
+  if (HTML_TAG_RE.test(body)) return body;
+  return body
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 /** Plain-text version of an HTML string — for card previews and "body is non-empty" validation. */
 export function stripHtml(html: string): string {
   if (!html) return '';

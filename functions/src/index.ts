@@ -1946,11 +1946,24 @@ type CircularAiLanguage = 'english' | 'kannada' | 'both';
 
 // Explicit script name + a concrete anchor phrase, because some models (Claude
 // in particular, observed generating Hindi/Devanagari instead) will otherwise
-// conflate "Kannada" with a generic "Indian regional language" request.
+// conflate "Kannada" with a generic "Indian regional language" request. The
+// Unicode block is named as well since a model that is unsure of the script
+// still knows its code points; and the whole thing is paired with a
+// post-generation script check (see checkDraftScript) because prompting alone
+// has been seen to fail.
 const KANNADA_ANCHOR =
-  'KANNADA (ಕನ್ನಡ) — the official language of Karnataka state, written ONLY in the Kannada script. ' +
-  'Do NOT use Hindi, Devanagari script, or any other Indian language under any circumstances. ' +
+  'KANNADA (ಕನ್ನಡ) — the official language of Karnataka state, written ONLY in the Kannada script (Unicode block U+0C80–U+0CFF: ಅ ಆ ಇ ಕ ಖ ಗ ನ ಮ ವ). ' +
+  'Hindi and the Devanagari script (U+0900–U+097F: अ आ इ क ख ग) are WRONG and must not appear anywhere in the output, nor any other Indian language. ' +
   'For reference, a natural Kannada notice opening reads like "ಎಲ್ಲಾ ವಿದ್ಯಾರ್ಥಿಗಳಿಗೆ ಈ ಮೂಲಕ ತಿಳಿಸಲಾಗಿದೆ..." — match that script and register.';
+
+// Short, unmissable statement of the language requirement, placed FIRST in the
+// system prompt and repeated at the end of the user message, so it isn't buried
+// among the formatting rules (which is where it was when Claude drifted to Hindi).
+function draftLanguageHeadline(language: CircularAiLanguage): string {
+  if (language === 'kannada') return 'LANGUAGE: Kannada only, in Kannada script (ಕನ್ನಡ). Not Hindi, not Devanagari.';
+  if (language === 'both') return 'LANGUAGE: English AND Kannada. The Kannada part must be in Kannada script (ಕನ್ನಡ) — not Hindi, not Devanagari.';
+  return 'LANGUAGE: English only.';
+}
 
 function circularLanguageInstruction(language: CircularAiLanguage): string {
   if (language === 'kannada') {
@@ -1962,9 +1975,27 @@ function circularLanguageInstruction(language: CircularAiLanguage): string {
   return 'Write entirely in formal, clear English.';
 }
 
+const DEVANAGARI_RE = /[ऀ-ॿ]/;
+const KANNADA_RE = /[ಀ-೿]/;
+
+/** Returns a correction to feed back to the model when a Kannada/both draft
+ *  came out in the wrong script (Devanagari present, or no Kannada at all), or
+ *  null when the script is right. English drafts are never checked. */
+function checkDraftScript(rawText: string, language: CircularAiLanguage): string | null {
+  if (language === 'english') return null;
+  if (DEVANAGARI_RE.test(rawText)) {
+    return 'Your previous attempt used Hindi / Devanagari script, which is WRONG. Rewrite it with the Kannada portion in the Kannada script (ಕನ್ನಡ, U+0C80–U+0CFF) only — no Devanagari characters anywhere.';
+  }
+  if (!KANNADA_RE.test(rawText)) {
+    return 'Your previous attempt contained no Kannada text at all, which is WRONG. Rewrite it so the Kannada portion is genuinely written in Kannada script (ಕನ್ನಡ).';
+  }
+  return null;
+}
+
 function buildCircularDraftSystemPrompt(language: CircularAiLanguage): string {
   const deptList = CIRCULAR_DEPARTMENTS.map((d) => `${d.code} (${d.name})`).join(', ');
   return [
+    draftLanguageHeadline(language),
     'You are an assistant that drafts short official circulars/notices for Sanjay Memorial Polytechnic, a college, to be posted on its student portal.',
     'Produce ONLY a JSON object (no prose, no markdown fences) with this exact shape: { "title": string, "subject": string, "department": string, "bodyHtml": string }',
     `"department" must be exactly one of these codes (pick the single best match, or "All" if it applies to everyone or none fit well): ${deptList}.`,
@@ -1981,9 +2012,10 @@ function buildCircularDraftSystemPrompt(language: CircularAiLanguage): string {
   ].join(' ');
 }
 
-function buildCircularDraftUserMessage(brief: string, keyDates: string | undefined): string {
+function buildCircularDraftUserMessage(brief: string, keyDates: string | undefined, language: CircularAiLanguage): string {
   const lines = [`BRIEF: ${brief}`];
   if (keyDates?.trim()) lines.push(`KEY DATES/DEADLINES: ${keyDates.trim()}`);
+  lines.push(draftLanguageHeadline(language));
   return lines.join('\n');
 }
 
@@ -2145,6 +2177,64 @@ function callGeminiTextForCircular(
   });
 }
 
+// Shared by the circular and notice drafting callables: reads the admin's AI
+// keys/model from Firestore, checks the chosen provider is actually configured,
+// runs the prompt and maps every failure to an HttpsError the client can show.
+// For Kannada/both drafts the output's script is verified; a wrong-script draft
+// is sent back once with a correction, and a second failure is reported rather
+// than handed to the admin as if it were Kannada.
+async function runDraftModel(
+  provider: 'claude' | 'gemini' | undefined,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+  language: CircularAiLanguage,
+): Promise<string> {
+  const configSnap = await db.doc('adminConfig/aiSettings').get();
+  if (!configSnap.exists) {
+    throw new HttpsError(
+      'failed-precondition',
+      'AI not configured. Add anthropicApiKey/geminiApiKey to adminConfig/aiSettings in Firestore.',
+    );
+  }
+  const { anthropicApiKey, geminiApiKey, geminiTextModel } = configSnap.data() as {
+    anthropicApiKey?: string;
+    geminiApiKey?: string;
+    geminiTextModel?: string;
+  };
+
+  const useGemini = provider === 'gemini';
+  if (useGemini && !geminiApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
+  }
+  if (!useGemini && !anthropicApiKey?.trim()) {
+    throw new HttpsError('failed-precondition', 'Anthropic API key is empty.');
+  }
+
+  const generate = (message: string): Promise<string> =>
+    useGemini
+      ? callGeminiTextForCircular(geminiApiKey!.trim(), geminiTextModel?.trim() || 'gemini-3.5-flash-lite', systemPrompt, message, maxTokens)
+      : callClaudeForCircular(anthropicApiKey!.trim(), systemPrompt, message, maxTokens);
+
+  let rawText: string;
+  try {
+    rawText = await generate(userMessage);
+    const correction = checkDraftScript(rawText, language);
+    if (correction) {
+      console.warn(`Draft came back in the wrong script (${useGemini ? 'gemini' : 'claude'}, ${language}) — retrying once with a correction.`);
+      rawText = await generate(`${userMessage}\n\n${correction}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new HttpsError('internal', `Draft generation failed: ${msg}`);
+  }
+
+  if (checkDraftScript(rawText, language)) {
+    throw new HttpsError('internal', 'The AI wrote the Kannada part in the wrong script (Hindi/Devanagari) twice. Please retry, or try the other provider.');
+  }
+  return rawText;
+}
+
 export const generateCircularDraft = onCall(
   { region: 'asia-south1', timeoutSeconds: 60 },
   async (request) => {
@@ -2162,41 +2252,13 @@ export const generateCircularDraft = onCall(
       throw new HttpsError('invalid-argument', 'brief is required.');
     }
 
-    const configSnap = await db.doc('adminConfig/aiSettings').get();
-    if (!configSnap.exists) {
-      throw new HttpsError(
-        'failed-precondition',
-        'AI not configured. Add anthropicApiKey/geminiApiKey to adminConfig/aiSettings in Firestore.',
-      );
-    }
-    const { anthropicApiKey, geminiApiKey, geminiTextModel } = configSnap.data() as {
-      anthropicApiKey?: string;
-      geminiApiKey?: string;
-      geminiTextModel?: string;
-    };
-
-    const useGemini = provider === 'gemini';
-    if (useGemini && !geminiApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
-    }
-    if (!useGemini && !anthropicApiKey?.trim()) {
-      throw new HttpsError('failed-precondition', 'Anthropic API key is empty.');
-    }
-
-    const systemPrompt = buildCircularDraftSystemPrompt(language ?? 'english');
-    const userMessage = buildCircularDraftUserMessage(brief.trim(), keyDates);
+    const lang: CircularAiLanguage = language ?? 'english';
+    const systemPrompt = buildCircularDraftSystemPrompt(lang);
+    const userMessage = buildCircularDraftUserMessage(brief.trim(), keyDates, lang);
     // "both" roughly doubles output length (full English + full Kannada blocks).
-    const maxTokens = language === 'both' ? 2500 : 1500;
+    const maxTokens = lang === 'both' ? 2500 : 1500;
 
-    let rawText: string;
-    try {
-      rawText = useGemini
-        ? await callGeminiTextForCircular(geminiApiKey!.trim(), geminiTextModel?.trim() || 'gemini-3.5-flash-lite', systemPrompt, userMessage, maxTokens)
-        : await callClaudeForCircular(anthropicApiKey!.trim(), systemPrompt, userMessage, maxTokens);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new HttpsError('internal', `Draft generation failed: ${msg}`);
-    }
+    const rawText = await runDraftModel(provider, systemPrompt, userMessage, maxTokens, lang);
 
     let parsed: unknown;
     try {
@@ -2217,6 +2279,127 @@ export const generateCircularDraft = onCall(
       title: draft.title.trim(),
       subject: draft.subject.trim(),
       department: validDepartment,
+      bodyHtml: sanitizeCircularBodyHtml(draft.bodyHtml.trim()),
+    };
+  },
+);
+
+// ── Notice AI drafting ("Compose with AI" on Student Messages › Compose) ────
+// Same shape as generateCircularDraft, but for the targeted notices an admin
+// sends to a hand-picked/filtered set of students (fee reminders, document
+// requests, …): the draft is a short direct message with a suggested category
+// instead of a college-wide circular with a department. Stateless — the admin
+// reviews/edits it in the compose modal and nothing is written until Send.
+
+const NOTICE_CATEGORIES = ['fee', 'document', 'general'] as const;
+type NoticeDraftCategory = (typeof NOTICE_CATEGORIES)[number];
+
+function buildNoticeDraftSystemPrompt(language: CircularAiLanguage): string {
+  return [
+    draftLanguageHeadline(language),
+    'You are an assistant that drafts short notices/messages from the office of Sanjay Memorial Polytechnic, a college, sent directly to a specific group of its students through the student portal app.',
+    'Produce ONLY a JSON object (no prose, no markdown fences) with this exact shape: { "title": string, "category": string, "bodyHtml": string }',
+    '"category" must be exactly one of: "fee" (fee dues, payments, fines, receipts), "document" (documents/certificates to submit or collect), "general" (anything else).',
+    '"title" is a short headline (max ~10 words) naming the matter and, where relevant, the action or date.',
+    '"bodyHtml" must use ONLY these HTML tags: <p> <strong> <em> <u> <ul> <ol> <li> <br>. No other tags, no attributes, no inline styles, no links, no scripts, no images.',
+    'This is a direct message to the students who receive it, not a public circular: it may open with a brief salutation such as "Dear Student," and should speak to them directly (e.g. "your fee", "please submit").',
+    'Keep it short: 1-2 short paragraphs, or a 2-4 item list when there are multiple points — roughly 40-110 words in total.',
+    'The students first see this as a phone push notification that shows only the first ~150 characters of the text, so the first sentence must state the key point (what is due / what to do / by when) on its own.',
+    'Tone: formal, courteous, direct and clear, as written by the college office.',
+    'Wrap the key date(s)/deadline(s) — and any other single most critical detail, like an amount or a fine — in <strong> tags so they stand out. Use this sparingly: only the 1-2 truly essential details, not every sentence.',
+    circularLanguageInstruction(language),
+    'Never invent specific facts (dates, amounts, fees, fines, document names) that are not present in the brief or the optional key-dates hint — if a specific detail is needed but not given, use a bracket placeholder like [DATE] or [AMOUNT] instead of guessing.',
+    'The AUDIENCE line in the message describes who is receiving this (e.g. course, year, fee status, count) so you can pitch the wording correctly — use it only as context; never repeat the audience description or the student count in the notice itself.',
+    'Stay strictly on the topic given in the brief and key-dates hint — never add unrelated facts, filler, generic boilerplate, or off-topic content of any kind.',
+    'The final output must read as clean, neat, refined, and straight to the point — meaningful and genuinely appealing to read, not padded, robotic, or generic.',
+    'Output valid JSON only.',
+  ].join(' ');
+}
+
+function buildNoticeDraftUserMessage(
+  brief: string,
+  keyDates: string | undefined,
+  audience: { count: number; label: string } | undefined,
+  language: CircularAiLanguage,
+): string {
+  const lines = [`BRIEF: ${brief}`];
+  if (keyDates?.trim()) lines.push(`KEY DATES/DEADLINES: ${keyDates.trim()}`);
+  if (audience) {
+    const label = audience.label.trim() || 'Selected students';
+    lines.push(`AUDIENCE: ${label} (${audience.count} student${audience.count === 1 ? '' : 's'})`);
+  }
+  lines.push(draftLanguageHeadline(language));
+  return lines.join('\n');
+}
+
+interface NoticeDraft {
+  title: string;
+  category?: string;
+  bodyHtml: string;
+}
+
+function isNoticeDraft(value: unknown): value is NoticeDraft {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.title === 'string' && v.title.trim() !== '' &&
+    typeof v.bodyHtml === 'string' && v.bodyHtml.trim() !== '' &&
+    (v.category === undefined || typeof v.category === 'string')
+  );
+}
+
+export const generateNoticeDraft = onCall(
+  { region: 'asia-south1', timeoutSeconds: 60 },
+  async (request) => {
+    if (request.auth?.token?.admin !== true) {
+      throw new HttpsError('permission-denied', 'Admin sign-in required.');
+    }
+
+    const { brief, keyDates, provider, language, audience } = (request.data ?? {}) as {
+      brief?: string;
+      keyDates?: string;
+      provider?: 'claude' | 'gemini';
+      language?: CircularAiLanguage;
+      audience?: { count?: number; label?: string };
+    };
+    if (!brief?.trim()) {
+      throw new HttpsError('invalid-argument', 'brief is required.');
+    }
+
+    const lang: CircularAiLanguage = language ?? 'english';
+    const systemPrompt = buildNoticeDraftSystemPrompt(lang);
+    const userMessage = buildNoticeDraftUserMessage(
+      brief.trim(),
+      keyDates,
+      audience && typeof audience.count === 'number'
+        ? { count: audience.count, label: typeof audience.label === 'string' ? audience.label : '' }
+        : undefined,
+      lang,
+    );
+    // Notices are shorter than circulars; "both" still needs room for the
+    // full English + full Kannada blocks.
+    const maxTokens = lang === 'both' ? 2200 : 1200;
+
+    const rawText = await runDraftModel(provider, systemPrompt, userMessage, maxTokens, lang);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(extractJsonObject(rawText));
+    } catch {
+      throw new HttpsError('internal', 'The AI returned malformed JSON. Please retry.');
+    }
+    if (!isNoticeDraft(parsed)) {
+      throw new HttpsError('internal', 'The AI response was missing required fields. Please retry.');
+    }
+    const draft: NoticeDraft = parsed;
+
+    const category = (NOTICE_CATEGORIES as readonly string[]).includes(draft.category?.trim().toLowerCase() ?? '')
+      ? (draft.category!.trim().toLowerCase() as NoticeDraftCategory)
+      : undefined;
+
+    return {
+      title: draft.title.trim(),
+      category,
       bodyHtml: sanitizeCircularBodyHtml(draft.bodyHtml.trim()),
     };
   },

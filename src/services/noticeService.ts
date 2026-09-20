@@ -4,10 +4,36 @@
 import {
   collection, doc, addDoc, deleteDoc, deleteField, getDocs, onSnapshot, orderBy, query, updateDoc,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import type { Notice } from '../types';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, app } from '../config/firebase';
+import type { Notice, NoticeCategory } from '../types';
+import type { CircularAiProvider, CircularAiLanguage } from './circularService';
 
 const COL = 'notices';
+const functions = getFunctions(app, 'asia-south1');
+
+export interface GenerateNoticeDraftInput {
+  brief: string;
+  keyDates?: string;
+  provider: CircularAiProvider;
+  language: CircularAiLanguage;
+  /** Who the notice is going to — context for the prompt only (count + the
+   *  same human-readable summary stored as `audienceLabel` on send). */
+  audience: { count: number; label: string };
+}
+
+export interface NoticeDraft {
+  title: string;
+  category?: NoticeCategory;
+  bodyHtml: string;
+}
+
+/** Calls the generateNoticeDraft Cloud Function — returns a draft only, nothing is saved until the admin reviews it and clicks Send. */
+export async function generateNoticeDraft(input: GenerateNoticeDraftInput): Promise<NoticeDraft> {
+  const fn = httpsCallable<GenerateNoticeDraftInput, NoticeDraft>(functions, 'generateNoticeDraft');
+  const result = await fn(input);
+  return result.data;
+}
 
 export async function getNotices(): Promise<Notice[]> {
   const q = query(collection(db, COL), orderBy('createdAt', 'desc'));

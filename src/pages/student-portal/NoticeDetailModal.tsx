@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Notice } from '../../types';
-import { formatBytes, attachmentKind } from '../../utils/htmlContent';
+import { formatBytes, attachmentKind, renderHtmlContent, noticeBodyToHtml } from '../../utils/htmlContent';
 import { AttachmentPreview } from '../../components/circulars/AttachmentPreview';
 
 const CATEGORY_DOT: Record<Notice['category'], string> = {
@@ -19,8 +19,9 @@ interface NoticeDetailModalProps {
   onClose: () => void;
 }
 
-/** Full-detail notice modal — category-tinted header, plain-text body
- *  (notices keep textarea bodies) and downloadable Storage attachments. */
+/** Full-detail notice modal — category-tinted header, rich-text body (older
+ *  plain-text notices are converted on the fly) and downloadable Storage
+ *  attachments. */
 export function NoticeDetailModal({ notice, onClose }: NoticeDetailModalProps) {
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -71,7 +72,10 @@ export function NoticeDetailModal({ notice, onClose }: NoticeDetailModalProps) {
         </div>
 
         <div className="no-scrollbar flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4">
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">{notice.body}</p>
+          <div
+            className="text-sm text-gray-700 leading-relaxed break-words [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-1.5"
+            dangerouslySetInnerHTML={renderHtmlContent(noticeBodyToHtml(notice.body))}
+          />
 
           {(notice.attachments?.length ?? 0) > 0 && (
             <div>

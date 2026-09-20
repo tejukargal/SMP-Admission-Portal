@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Notice, NoticeCategory } from '../../types';
 import { NoticeDetailModal } from './NoticeDetailModal';
+import { stripHtml } from '../../utils/htmlContent';
 
 const NOTICE_CATEGORY_DOT: Record<Notice['category'], string> = {
   fee: 'bg-red-500',
@@ -37,7 +38,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
     if (activeCategory !== 'all') rows = rows.filter((n) => n.category === activeCategory);
     if (search.trim()) {
       const q = search.trim().toUpperCase();
-      rows = rows.filter((n) => n.title.toUpperCase().includes(q) || n.body.toUpperCase().includes(q));
+      rows = rows.filter((n) => n.title.toUpperCase().includes(q) || stripHtml(n.body).toUpperCase().includes(q));
     }
     return rows.slice().sort((a, b) => {
       if (!!a.inactiveAt !== !!b.inactiveAt) return a.inactiveAt ? 1 : -1;
@@ -143,7 +144,7 @@ export function NoticesTab({ notices, loading }: NoticesTabProps) {
                 </span>
               </div>
               <h4 className="text-sm font-bold text-gray-900">{n.title}</h4>
-              <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap line-clamp-3">{n.body}</p>
+              <p className="text-sm text-gray-600 mt-1 line-clamp-3">{stripHtml(n.body)}</p>
               <div className="flex items-center justify-between pt-2 mt-2.5 border-t border-gray-200/70">
                 {(n.attachments?.length ?? 0) > 0 ? (
                   <span className="flex items-center gap-1 text-gray-500 text-[11px]">

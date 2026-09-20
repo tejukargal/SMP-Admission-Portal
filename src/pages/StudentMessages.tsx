@@ -5,8 +5,11 @@ import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { subscribeToNotices, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive, pinNotice, unpinNotice } from '../services/noticeService';
+import { subscribeToNotices, updateNotice, deleteNotice, publishNotice, unpublishNotice, markNoticeInactive, markNoticeActive, pinNotice, unpinNotice, generateNoticeDraft } from '../services/noticeService';
+import type { CircularAiProvider, CircularAiLanguage } from '../services/circularService';
 import { createNoticeWithAttachments } from '../services/noticeAttachmentService';
+import { RichTextEditor } from '../components/circulars/RichTextEditor';
+import { stripHtml, noticeBodyToHtml } from '../utils/htmlContent';
 import {
   getAllStudentMessages,
   resolveStudentMessage,
@@ -37,6 +40,11 @@ const CATEGORY_OPTIONS: { value: NoticeCategory; label: string }[] = [
   { value: 'document', label: 'Document Submission' },
   { value: 'general', label: 'General' },
 ];
+
+// Own keys (not the circular form's) so the admin's preferred provider/language
+// for notices is remembered independently.
+const AI_PROVIDER_KEY = 'smp-admissions:notice-ai-provider';
+const AI_LANGUAGE_KEY = 'smp-admissions:notice-ai-language';
 
 const LEGACY_SCOPE_LABEL: Record<string, string> = {
   all: 'All Students',
@@ -228,6 +236,73 @@ export function StudentMessages() {
   const [confirmSend, setConfirmSend] = useState(false);
   const [showComposeModal, setShowComposeModal] = useState(false);
   const [attachFiles, setAttachFiles] = useState<File[]>([]);
+  // RichTextEditor only seeds its contentEditable HTML from `value` once, on
+  // mount — bumping this key forces a clean remount so an AI-generated body (or
+  // a fresh empty editor after Send) actually shows up, not just in `body` state.
+  const [bodySeedVersion, setBodySeedVersion] = useState(0);
+  const [bodySeed, setBodySeed] = useState('');
+  const bodyHasText = stripHtml(body).trim() !== '';
+
+  // ── Compose with AI ──────────────────────────────────────────────────────────
+  const [brief, setBrief] = useState('');
+  const [keyDates, setKeyDates] = useState('');
+  const [aiProvider, setAiProvider] = useState<CircularAiProvider>(
+    () => (localStorage.getItem(AI_PROVIDER_KEY) as CircularAiProvider) || 'claude',
+  );
+  const [aiLanguage, setAiLanguage] = useState<CircularAiLanguage>(
+    () => (localStorage.getItem(AI_LANGUAGE_KEY) as CircularAiLanguage) || 'english',
+  );
+  const [composing, setComposing] = useState(false);
+  const [composeError, setComposeError] = useState<string | null>(null);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+
+  function handleProviderChange(next: CircularAiProvider) {
+    setAiProvider(next);
+    localStorage.setItem(AI_PROVIDER_KEY, next);
+  }
+
+  function handleLanguageChange(next: CircularAiLanguage) {
+    setAiLanguage(next);
+    localStorage.setItem(AI_LANGUAGE_KEY, next);
+  }
+
+  async function runCompose() {
+    setComposeError(null);
+    setComposing(true);
+    try {
+      const draft = await generateNoticeDraft({
+        brief: brief.trim(),
+        keyDates: keyDates.trim() || undefined,
+        provider: aiProvider,
+        language: aiLanguage,
+        audience: { count: selectedRows.length, label: buildAudienceLabel(selectedRows.length) },
+      });
+      setTitle(draft.title);
+      if (draft.category) setCategory(draft.category);
+      setBodySeed(draft.bodyHtml);
+      setBodySeedVersion((v) => v + 1);
+      setBody(draft.bodyHtml);
+    } catch (e) {
+      setComposeError(e instanceof Error ? e.message : 'Could not generate a draft. Please try again.');
+    } finally {
+      setComposing(false);
+    }
+  }
+
+  function handleGenerateDraftClick() {
+    if (title.trim() !== '' || bodyHasText) {
+      setConfirmOverwrite(true);
+      return;
+    }
+    void runCompose();
+  }
+
+  function resetComposer() {
+    setTitle(''); setBody(''); setAttachFiles([]);
+    setBodySeed(''); setBodySeedVersion((v) => v + 1);
+    setBrief(''); setKeyDates('');
+    setComposeError(null); setConfirmOverwrite(false);
+  }
 
   // Edit an already-sent notice (title/body/category only — audience stays fixed)
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
@@ -235,16 +310,20 @@ export function StudentMessages() {
   const [editBody, setEditBody] = useState('');
   const [editCategory, setEditCategory] = useState<NoticeCategory>('general');
   const [editSaving, setEditSaving] = useState(false);
+  // Same remount trick as the composer — a different notice needs a fresh editor.
+  const [editSeedVersion, setEditSeedVersion] = useState(0);
 
   function startEditNotice(n: Notice) {
     setEditingNotice(n);
     setEditTitle(n.title);
-    setEditBody(n.body);
+    // Older notices are plain text — convert so the editor shows their line breaks.
+    setEditBody(noticeBodyToHtml(n.body));
     setEditCategory(n.category);
+    setEditSeedVersion((v) => v + 1);
   }
 
   async function handleSaveEditNotice() {
-    if (!editingNotice || !editTitle.trim() || !editBody.trim()) return;
+    if (!editingNotice || !editTitle.trim() || !stripHtml(editBody).trim()) return;
     setEditSaving(true);
     try {
       await updateNotice(editingNotice.id, { title: editTitle.trim(), body: editBody.trim(), category: editCategory });
@@ -324,7 +403,7 @@ export function StudentMessages() {
   );
 
   async function handlePostNotice() {
-    if (!title.trim() || !body.trim() || !user || selectedRows.length === 0) return;
+    if (!title.trim() || !bodyHasText || !user || selectedRows.length === 0) return;
     setConfirmSend(false);
     setPosting(true);
     try {
@@ -338,7 +417,7 @@ export function StudentMessages() {
         audienceLabel: buildAudienceLabel(selectedRows.length),
         createdBy: user.uid,
       }, attachFiles);
-      setTitle(''); setBody(''); setAttachFiles([]);
+      resetComposer();
       setShowComposeModal(false);
     } finally {
       setPosting(false);
@@ -699,20 +778,89 @@ export function StudentMessages() {
       {showComposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowComposeModal(false)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-900">Compose & Send</h3>
             <p className="text-[11px] text-gray-400">
               Recipients: <span className="font-semibold text-emerald-700">{selectedRows.length}</span> student{selectedRows.length !== 1 ? 's' : ''} selected
             </p>
+
+            {/* Compose with AI — mirrors CircularForm's panel; the audience
+                (count + filter summary) is sent along as prompt context. */}
+            <div className="flex flex-col gap-1.5 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Compose with AI</label>
+              <textarea
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+                rows={3}
+                placeholder="e.g. Remind these students to clear their pending fee before the exams, with a fine after the last date"
+                className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+              />
+              <details className="text-xs">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">Add key dates/amounts (optional)</summary>
+                <textarea
+                  value={keyDates}
+                  onChange={(e) => setKeyDates(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Last date: 30 September 2026. Rs.200 fine after that."
+                  className="mt-1.5 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+                />
+              </details>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={aiProvider}
+                  onChange={(e) => handleProviderChange(e.target.value as CircularAiProvider)}
+                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                >
+                  <option value="claude">Claude</option>
+                  <option value="gemini">Gemini</option>
+                </select>
+                <select
+                  value={aiLanguage}
+                  onChange={(e) => handleLanguageChange(e.target.value as CircularAiLanguage)}
+                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                >
+                  <option value="english">English</option>
+                  <option value="kannada">Kannada</option>
+                  <option value="both">Both</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleGenerateDraftClick}
+                  disabled={composing || brief.trim() === ''}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                >
+                  {composing ? 'Generating…' : 'Generate Draft'}
+                </button>
+              </div>
+              {confirmOverwrite && (
+                <div className="flex items-center gap-2 flex-wrap text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span>This will replace your current Title and Body.</span>
+                  <button
+                    type="button"
+                    onClick={() => { setConfirmOverwrite(false); void runCompose(); }}
+                    className="font-semibold underline cursor-pointer"
+                  >
+                    Continue
+                  </button>
+                  <button type="button" onClick={() => setConfirmOverwrite(false)} className="text-gray-500 underline cursor-pointer">
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {composeError && <p className="text-xs text-red-500 font-medium">{composeError}</p>}
+            </div>
+
             <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" />
             <div>
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={4}
-                className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 resize-none"
-              />
+              <div className="mt-1">
+                <RichTextEditor
+                  key={bodySeedVersion}
+                  value={bodySeed}
+                  onChange={setBody}
+                  placeholder="Write the notice…"
+                />
+              </div>
             </div>
             <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
             <div>
@@ -730,7 +878,7 @@ export function StudentMessages() {
               <Button
                 size="sm"
                 onClick={() => setConfirmSend(true)}
-                disabled={!title.trim() || !body.trim() || selectedRows.length === 0}
+                disabled={!title.trim() || !bodyHasText || selectedRows.length === 0}
               >
                 Send to {selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}
               </Button>
@@ -743,7 +891,7 @@ export function StudentMessages() {
       {editingNotice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setEditingNotice(null)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-5 space-y-3">
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-900">Edit Notice</h3>
             <p className="text-[11px] text-gray-400">
               Recipients: {editingNotice.scope === 'selected'
@@ -753,17 +901,19 @@ export function StudentMessages() {
             <Input label="Title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
             <div>
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
-              <textarea
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-                rows={4}
-                className="mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 resize-none"
-              />
+              <div className="mt-1">
+                <RichTextEditor
+                  key={editSeedVersion}
+                  value={editBody}
+                  onChange={setEditBody}
+                  placeholder="Write the notice…"
+                />
+              </div>
             </div>
             <Select label="Category" value={editCategory} onChange={(e) => setEditCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setEditingNotice(null)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
-              <Button size="sm" loading={editSaving} disabled={!editTitle.trim() || !editBody.trim()} onClick={() => void handleSaveEditNotice()}>Save Changes</Button>
+              <Button size="sm" loading={editSaving} disabled={!editTitle.trim() || !stripHtml(editBody).trim()} onClick={() => void handleSaveEditNotice()}>Save Changes</Button>
             </div>
           </div>
         </div>
@@ -784,7 +934,7 @@ export function StudentMessages() {
             </p>
             <div className="bg-gray-50 rounded border border-gray-200 px-3 py-2 text-xs text-gray-700">
               <p className="font-semibold">{title}</p>
-              <p className="mt-1 whitespace-pre-wrap">{body.slice(0, 200)}{body.length > 200 ? '…' : ''}</p>
+              <p className="mt-1 whitespace-pre-wrap">{stripHtml(body).slice(0, 200)}{stripHtml(body).length > 200 ? '…' : ''}</p>
               {attachFiles.length > 0 && (
                 <p className="mt-1 text-gray-500">📎 {attachFiles.length} attachment{attachFiles.length !== 1 ? 's' : ''}</p>
               )}
@@ -872,7 +1022,7 @@ function AdminNoticeCard({ notice: n, categoryLabel, scopeLabel, onContextMenu }
           {n.updatedAt && ' · edited'}
         </p>
         <h4 className="text-sm font-bold text-gray-900 mt-1 line-clamp-1">{n.title}</h4>
-        <p className="text-xs text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">{n.body}</p>
+        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{stripHtml(n.body)}</p>
         {(n.attachments?.length ?? 0) > 0 && (
           <p className="flex items-center gap-1 text-[10px] text-gray-400 mt-1">
             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
