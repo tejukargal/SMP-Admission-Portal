@@ -1975,18 +1975,42 @@ function circularLanguageInstruction(language: CircularAiLanguage): string {
   return 'Write entirely in formal, clear English.';
 }
 
-const DEVANAGARI_RE = /[ऀ-ॿ]/;
+// Devanagari letters/signs/digits only — the block's two punctuation marks,
+// the danda "।" (U+0964) and double danda "॥" (U+0965), are shared across
+// Indic scripts and models routinely end Kannada sentences with them, so they
+// must not count as "Hindi". (They're normalised to full stops below anyway.)
+const DEVANAGARI_LETTER_RE = /[ऀ-ॣ०-ॿ]/g;
+const DANDA_RE = /[।॥]/g;
 const KANNADA_RE = /[ಀ-೿]/;
+
+/** The model's answer is JSON, and a model may escape non-ASCII as \uXXXX —
+ *  decode it so the script check sees real characters; falls back to the raw
+ *  text when it isn't parseable JSON. */
+function draftTextForScriptCheck(rawText: string): string {
+  try {
+    const parsed = JSON.parse(extractJsonObject(rawText)) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      return Object.values(parsed as Record<string, unknown>)
+        .filter((v): v is string => typeof v === 'string')
+        .join('\n');
+    }
+  } catch { /* not JSON — check the raw text */ }
+  return rawText;
+}
 
 /** Returns a correction to feed back to the model when a Kannada/both draft
  *  came out in the wrong script (Devanagari present, or no Kannada at all), or
  *  null when the script is right. English drafts are never checked. */
 function checkDraftScript(rawText: string, language: CircularAiLanguage): string | null {
   if (language === 'english') return null;
-  if (DEVANAGARI_RE.test(rawText)) {
+  const text = draftTextForScriptCheck(rawText);
+  const devanagari = text.match(DEVANAGARI_LETTER_RE);
+  if (devanagari) {
+    console.warn(`Draft script check: Devanagari found — ${JSON.stringify([...new Set(devanagari)].slice(0, 20).join(''))}`);
     return 'Your previous attempt used Hindi / Devanagari script, which is WRONG. Rewrite it with the Kannada portion in the Kannada script (ಕನ್ನಡ, U+0C80–U+0CFF) only — no Devanagari characters anywhere.';
   }
-  if (!KANNADA_RE.test(rawText)) {
+  if (!KANNADA_RE.test(text)) {
+    console.warn(`Draft script check: no Kannada found — ${JSON.stringify(text.slice(0, 200))}`);
     return 'Your previous attempt contained no Kannada text at all, which is WRONG. Rewrite it so the Kannada portion is genuinely written in Kannada script (ಕನ್ನಡ).';
   }
   return null;
@@ -2061,6 +2085,11 @@ function sanitizeCircularBodyHtml(html: string): string {
   });
 }
 
+// Sonnet rather than Haiku for drafting: Haiku kept slipping into Hindi/
+// Devanagari on Kannada requests, and a draft is a few hundred output tokens
+// at most, so the stronger model costs next to nothing per call.
+const CLAUDE_DRAFT_MODEL = 'claude-sonnet-5';
+
 function callClaudeForCircular(
   apiKey: string,
   systemPrompt: string,
@@ -2069,7 +2098,7 @@ function callClaudeForCircular(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLAUDE_DRAFT_MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -2100,8 +2129,20 @@ function callClaudeForCircular(
               reject(new Error(apiMsg));
               return;
             }
-            const parsed = JSON.parse(raw) as AnthropicResponse;
-            resolve(parsed.content?.[0]?.text?.trim() ?? '');
+            const parsed = JSON.parse(raw) as AnthropicResponse & { stop_reason?: string };
+            // Newer models can put a non-text block first (seen with Sonnet 5:
+            // reading content[0] alone came back empty), so join every text
+            // block rather than trusting the first one.
+            const text = (parsed.content ?? [])
+              .filter((c) => c.type === 'text' && typeof c.text === 'string')
+              .map((c) => c.text)
+              .join('')
+              .trim();
+            if (!text) {
+              reject(new Error(`empty response from Claude (stop_reason: ${parsed.stop_reason ?? 'unknown'}, blocks: ${(parsed.content ?? []).map((c) => c.type).join(',') || 'none'})`));
+              return;
+            }
+            resolve(text);
           } catch (err) {
             reject(err);
           }
@@ -2216,13 +2257,17 @@ async function runDraftModel(
       ? callGeminiTextForCircular(geminiApiKey!.trim(), geminiTextModel?.trim() || 'gemini-3.5-flash-lite', systemPrompt, message, maxTokens)
       : callClaudeForCircular(anthropicApiKey!.trim(), systemPrompt, message, maxTokens);
 
+  // Kannada is written with ordinary full stops; models still tend to close
+  // Kannada sentences with the Hindi-style danda, so swap those out.
+  const normalise = (text: string) => text.replace(DANDA_RE, '.');
+
   let rawText: string;
   try {
-    rawText = await generate(userMessage);
+    rawText = normalise(await generate(userMessage));
     const correction = checkDraftScript(rawText, language);
     if (correction) {
       console.warn(`Draft came back in the wrong script (${useGemini ? 'gemini' : 'claude'}, ${language}) — retrying once with a correction.`);
-      rawText = await generate(`${userMessage}\n\n${correction}`);
+      rawText = normalise(await generate(`${userMessage}\n\n${correction}`));
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
