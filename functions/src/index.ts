@@ -1105,13 +1105,14 @@ async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSetti
       'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
     );
   }
-  const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data() as {
+  const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, openaiImageQuality, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data() as {
     geminiApiKey?: string;
     geminiTextModel?: string;
     geminiImageModel?: string;
     imageProvider?: 'gemini' | 'openai' | 'replicate' | 'budgetpixel';
     openaiApiKey?: string;
     openaiImageModel?: string;
+    openaiImageQuality?: string;
     replicateApiKey?: string;
     replicateImageModel?: string;
     budgetpixelApiKey?: string;
@@ -1137,6 +1138,7 @@ async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSetti
       geminiImageModel: geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image',
       openaiApiKey: openaiApiKey?.trim(),
       openaiImageModel: openaiImageModel?.trim(),
+      openaiImageQuality: openaiImageQuality?.trim(),
       replicateApiKey: replicateApiKey?.trim(),
       replicateImageModel: replicateImageModel?.trim(),
       budgetpixelApiKey: budgetpixelApiKey?.trim(),
@@ -2543,11 +2545,14 @@ interface OpenAiImageResponse {
 
 /** OpenAI's gpt-image-1 family always returns base64 PNG data (no url/response_format
  *  option like the older dall-e models), so mimeType is always 'image/png' here. */
+const OPENAI_IMAGE_QUALITIES = ['low', 'medium', 'high'] as const;
+
 function callOpenAiImage(
   apiKey: string,
   model: string,
   prompt: string,
   aspectRatio: ImageAspectRatio,
+  quality?: string,
 ): Promise<{ imageBase64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     // gpt-image-1 models only accept these exact size strings (no arbitrary aspect ratio).
@@ -2556,7 +2561,10 @@ function callOpenAiImage(
       model,
       prompt,
       size,
-      quality: 'high',
+      // Admin-selectable (AI Settings) — it's the biggest cost lever on OpenAI,
+      // `high` running roughly 5–25× the price of `low`. `high` was the only
+      // value before this was exposed, so it stays the fallback.
+      quality: (OPENAI_IMAGE_QUALITIES as readonly string[]).includes(quality ?? '') ? quality : 'high',
       n: 1,
     });
 
@@ -2804,6 +2812,8 @@ interface AiImageSettings {
   geminiImageModel?: string;
   openaiApiKey?: string;
   openaiImageModel?: string;
+  /** `low` | `medium` | `high` — anything else falls back to `high`. */
+  openaiImageQuality?: string;
   replicateApiKey?: string;
   replicateImageModel?: string;
   budgetpixelApiKey?: string;
@@ -2868,6 +2878,7 @@ function generateRawAiImage(
       settings.openaiImageModel?.trim() || 'gpt-image-1-mini',
       prompt,
       aspectRatio,
+      settings.openaiImageQuality?.trim(),
     );
   }
   if (settings.imageProvider === 'replicate') {
@@ -3013,50 +3024,45 @@ const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
   // Only the building prop lives here; the student's pose is drawn at random
   // per generation by buildHomeHeaderPrompt (HOME_HEADER_POSES).
   home: 'a small, simple flat college building drawn as a prop just behind the student, carrying the short name "SMP" as clean, bold, correctly spelled signage above its entrance',
-  circulars: 'a campus notice board with a neat stack of papers and documents pinned to it',
-  profile: 'a friendly student in college uniform, standing, holding a notebook',
-  fees: 'a receipt or a payment counter scene with a ledger and a coin or card motif',
-  certificates: 'an award ribbon and a rolled-up certificate scroll, celebratory and proud',
-  notices: 'a bell or megaphone announcing news, with a few paper notes fluttering nearby',
+  // These four match CATEGORY_ICON_SCENES below exactly, so the header and
+  // the Overview tile agree on what circulars/fees/certificates/notices
+  // "look like". They used to be bare prop scenes with no one in them (a
+  // stack of papers, a ledger, a scroll, a bell) — that read as flat, and on
+  // repeat Regenerate the model had nothing to vary but a static object, so
+  // it kept collapsing onto the same notice-board illustration. Now every
+  // header draws {student} (see buildTabHeaderPrompt), the same randomly
+  // drawn look used everywhere else, doing the tab's signature action.
+  circulars: '{student} pinning a paper flyer onto a small bulletin board, holding a few extra flyers in the other hand',
+  profile: '{student} in college uniform, standing, holding a notebook',
+  fees: '{student} happily holding up a paid receipt in one hand and a payment card in the other',
+  certificates: '{student} proudly holding up a rolled certificate scroll tied with a ribbon',
+  notices: '{student} looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
 };
 
-// One plain solid soft pastel per tab — the same card-background family as
-// CATEGORY_ICON_COLORS below, so a tab's header and its Overview tile share a
-// hue where both exist (circulars/notices/fees/certificates), with two extra
-// hues for Home and Profile. Replaced the earlier light neon gradients: a
-// single flat pastel keeps the black Home greeting/name text legible on the
-// left and lets the colourful scene carry the image. No glow/luminous effects.
-const TAB_HEADER_COLORS: Record<TabHeaderKey, string> = {
-  home: 'soft pastel blush pink (a light, warm rose)', // unused: Home picks from HOME_HEADER_BACKGROUNDS
-  circulars: 'soft pastel peach (a light, warm apricot)',
-  profile: 'soft pastel butter yellow (a light, creamy yellow)',
-  fees: 'soft pastel mint (a light, minty aqua-green)',
-  certificates: 'soft pastel lilac (a light lavender-purple)',
-  notices: 'soft pastel periwinkle blue (a light, lavender-tinted blue)',
-};
-
-// Scene/character direction is unchanged from the neon-gradient version; only
-// the background wording moved from a two-tone gradient to a single flat
-// pastel. The scene itself stays medium-saturation and colourful so it pops
-// against the pale background instead of blending into it.
-// The Home header is the one tab image students read text over on every
-// open ("Welcome Back" + their name, drawn in black by HomeScreen), and the
-// app paints it bare — no accent tint, no scrim. It follows the Category
-// Icons look (buildCategoryIconPrompt): one plain solid pastel with a single
-// colourful student character, here with the college's short name "SMP" on
-// a small building prop (the only text any header image may carry).
-// Every Generate draws a fresh background colour and pose, so the admin can
-// keep regenerating until one fits.
-const HOME_HEADER_BACKGROUNDS = [
-  'soft pastel blush pink (a light, warm rose)',
-  'soft pastel peach (a light, warm apricot)',
-  'soft pastel butter yellow (a light, creamy yellow)',
-  'soft pastel mint (a light, minty aqua-green)',
-  'soft pastel sky blue (a light, airy baby blue)',
-  'soft pastel periwinkle blue (a light, lavender-tinted blue)',
-  'soft pastel lilac (a light lavender-purple)',
-  'soft pastel coral (a light, warm salmon pink)',
-  'soft pastel sage (a light, muted grey-green)',
+// Every tab header (Home and the rest) now picks a fresh background at
+// random from this shared pool on each Generate, instead of one background
+// fixed per tab — the same "regenerate for real variety" behaviour Home
+// already had, extended to Circulars/Profile/Fees/Certificates/Notices so
+// their headers stop looking identical every time and on every reopen.
+//
+// `textHex` is the deep, same-hue tone the student app draws the Home
+// greeting/name in over the picked pastel (pale sky blue → deep slate blue,
+// and so on — the "Saltwater Sky" / "Blue Surf" pairing), instead of plain
+// black; it's only read for tabKey 'home' (generateTabHeaderBackground's
+// handler), since every entry here is a light pastel and the other tabs'
+// black title text stays legible against any of them. It rides back out of
+// generateTabHeaderBackground and is saved next to the image URL by
+// tabHeaderService.ts as appConfig/tabHeaders.homeTextColor.
+const HEADER_BACKGROUND_PALETTES: readonly { color: string; textHex: string }[] = [
+  { color: 'soft pastel blush pink (a light, warm rose)', textHex: '#8A3B5C' },
+  { color: 'soft pastel peach (a light, warm apricot)', textHex: '#8A4B36' },
+  { color: 'soft pastel butter yellow (a light, creamy yellow)', textHex: '#8A6A2E' },
+  { color: 'soft pastel mint (a light, minty aqua-green)', textHex: '#2F6B5E' },
+  { color: 'soft pastel sky blue (a light, airy baby blue)', textHex: '#3B5B8A' },
+  { color: 'soft pastel periwinkle blue (a light, lavender-tinted blue)', textHex: '#544B8A' },
+  { color: 'soft pastel lilac (a light lavender-purple)', textHex: '#7A4A63' },
+  { color: 'soft pastel coral (a light, warm salmon pink)', textHex: '#8F3F3A' },
+  { color: 'soft pastel sage (a light, muted grey-green)', textHex: '#3F6B45' },
 ];
 
 const HOME_HEADER_POSES = [
@@ -3076,13 +3082,148 @@ function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-function buildHomeHeaderPrompt(provider: AiImageSettings['imageProvider']): string {
-  const background = pickRandom(HOME_HEADER_BACKGROUNDS);
+// Character variety. The "cheerful college student" every character prompt
+// asks for (Home header, Overview tiles, the two Home banners) used to leave
+// the actual look to the model with only "for example a bright top,
+// contrasting trousers or skirt" as guidance. Gemini and BudgetPixel happen
+// to sample a different person each run, but GPT-Image is close to
+// deterministic for a fixed prompt and settled on one archetype — the same
+// girl in a yellow tee, blue jeans and a backpack, generation after
+// generation — so Regenerate under OpenAI produced near-duplicates. Each
+// generation now draws a concrete look at random and spells it out, which
+// every provider follows. Hair and bottoms are per figure so the pairing
+// reads naturally (no skirts on the young man); tops and shoes are shared.
+// Everything is mid-to-vivid colour so the outfit keeps standing out
+// against the pastel backgrounds.
+const CHARACTER_FIGURES: readonly { who: string; pronoun: string; hair: readonly string[]; bottoms: readonly string[] }[] = [
+  {
+    who: 'a young woman (a female college student)',
+    pronoun: 'She',
+    hair: [
+      'long straight black hair tied back in a ponytail',
+      'shoulder-length wavy dark brown hair',
+      'a short black bob haircut',
+      'long black hair in a single plait over one shoulder',
+      'curly dark hair tied up in a high bun',
+      'chin-length dark hair with a side fringe',
+    ],
+    bottoms: [
+      'dark navy jeans',
+      'a maroon pleated skirt',
+      'black leggings',
+      'a denim skirt',
+      'white palazzo pants',
+      'a teal midi skirt',
+      'olive chinos',
+    ],
+  },
+  {
+    who: 'a young man (a male college student)',
+    pronoun: 'He',
+    hair: [
+      'short neatly combed black hair',
+      'a short spiky dark haircut',
+      'short curly black hair',
+      'a side-parted dark brown haircut',
+      'a neat crew cut',
+      'medium-length wavy black hair swept back',
+    ],
+    bottoms: [
+      'dark navy jeans',
+      'olive chinos',
+      'grey trousers',
+      'tan cargo trousers',
+      'brown corduroy trousers',
+      'black jeans',
+      'beige linen trousers',
+    ],
+  },
+];
+
+const CHARACTER_TOPS = [
+  'a teal polo shirt',
+  'a coral hoodie',
+  'a mustard cardigan over a white t-shirt',
+  'a navy sweater vest over a light shirt',
+  'a red checked shirt',
+  'a bright green t-shirt',
+  'a purple long-sleeved top',
+  'a sky-blue denim jacket over a white tee',
+  'a pink kurta',
+  'an orange sweatshirt',
+  'a white shirt with a maroon tie',
+  'a striped blue-and-white t-shirt',
+];
+
+const CHARACTER_SHOES = [
+  'white sneakers',
+  'brown loafers',
+  'red canvas shoes',
+  'black ankle boots',
+  'blue sandals',
+  'yellow sneakers',
+  'grey running shoes',
+];
+
+const CHARACTER_BACKPACK_COLOURS = ['red', 'teal', 'mustard yellow', 'purple', 'orange', 'navy blue', 'forest green'];
+
+// Optional student props for the Overview tiles and Home banners (the Home
+// header always wears a backpack, drawn in buildHomeHeaderPrompt). Every
+// scene already occupies the character's hands (receipt + card, scroll,
+// graduation cap + money bag…), so these are all worn or tucked — nothing
+// that needs a free hand. Two empty entries make "no extra prop" a real
+// outcome, so the props read as a sometimes-detail rather than a uniform.
+const CHARACTER_PROPS: readonly ((colour: string) => string)[] = [
+  (c) => `a ${c} college backpack on their back, its straps visible over the shoulders`,
+  (c) => `a ${c} college backpack on their back, its straps visible over the shoulders`,
+  (c) => `a ${c} sling bag worn across the chest`,
+  (c) => `a ${c} tote bag hanging from one shoulder`,
+  () => 'two or three textbooks tucked under one arm',
+  (c) => `a ${c} backpack on their back and a thin notebook tucked under one arm`,
+  () => '',
+  () => '',
+];
+
+/** One concrete, randomly drawn look for the illustrated student.
+ *
+ *  `subject` is the noun phrase the prompt's opening "Depict …" sentence
+ *  uses in place of a bare "college student", and `outfit` is the follow-up
+ *  sentence with hair and clothes. The figure has to be named in that very
+ *  first sentence: an earlier version only said "The student is a young man"
+ *  a couple of sentences later, and the models had already committed to a
+ *  girl by then (every OpenAI regenerate came back female regardless). */
+function drawRandomCharacter(options: { withProps?: boolean } = {}): { subject: string; outfit: string } {
+  const figure = pickRandom(CHARACTER_FIGURES);
+  const prop = options.withProps ? pickRandom(CHARACTER_PROPS)(pickRandom(CHARACTER_BACKPACK_COLOURS)) : '';
+  return {
+    subject: `a cheerful college student who is ${figure.who}`,
+    outfit:
+      `${figure.pronoun} has ${pickRandom(figure.hair)} and wears ${pickRandom(CHARACTER_TOPS)}, ${pickRandom(figure.bottoms)} and ${pickRandom(CHARACTER_SHOES)}` +
+      (prop ? `, with ${prop}` : '') +
+      ' — exactly this person and this outfit.',
+  };
+}
+
+// Scene strings below carry this token where the student goes, so the
+// drawn figure lands in the opening sentence (see drawRandomCharacter).
+const STUDENT_TOKEN = '{student}';
+function withStudent(scene: string, subject: string): string {
+  return scene.replace(STUDENT_TOKEN, subject);
+}
+
+// The caller picks `background` (generateTabHeaderBackground) so it can
+// report the matching text colour alongside the image.
+function buildHomeHeaderPrompt(
+  provider: AiImageSettings['imageProvider'],
+  background: { color: string; textHex: string },
+): string {
   const pose = pickRandom(HOME_HEADER_POSES);
+  const backpack = pickRandom(CHARACTER_BACKPACK_COLOURS);
+  const character = drawRandomCharacter();
   return [
-    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${background} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
-    `Depict a cheerful college student ${pose}, wearing a college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
-    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair) and a backpack in a contrasting colour, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${background.color} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
+    `Depict ${character.subject}, ${pose}, wearing a ${backpack} college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
+    `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.`,
     'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.',
     'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
     imageStyleDirective(
@@ -3094,12 +3235,24 @@ function buildHomeHeaderPrompt(provider: AiImageSettings['imageProvider']): stri
   ].join(' ');
 }
 
-function buildTabHeaderPrompt(tabKey: TabHeaderKey, provider: AiImageSettings['imageProvider']): string {
-  if (tabKey === 'home') return buildHomeHeaderPrompt(provider);
+// Non-Home tabs only — Home is built by buildHomeHeaderPrompt directly from
+// generateTabHeaderBackground's handler. Both take the same randomly-picked
+// background so every tab header shares the one "regenerate for a fresh
+// colour" behaviour.
+function buildTabHeaderPrompt(
+  tabKey: Exclude<TabHeaderKey, 'home'>,
+  provider: AiImageSettings['imageProvider'],
+  background: { color: string; textHex: string },
+): string {
+  // Every non-Home tab now draws a character too, the same randomly drawn
+  // look used everywhere else, named in the "Depict …" sentence itself.
+  const character = drawRandomCharacter({ withProps: true });
+  const scene = withStudent(TAB_HEADER_SCENES[tabKey], character.subject);
   return [
     'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-    `The entire background is one single, solid, flat ${TAB_HEADER_COLORS[tabKey]} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
-    `Depict ${TAB_HEADER_SCENES[tabKey]}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
+    `The entire background is one single, solid, flat ${background.color} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
+    `Depict ${scene}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
+    `${character.outfit} Give them a friendly expressive face.`,
     imageStyleDirective(provider, 'a soft pastel solid background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects'),
   ].join(' ');
 }
@@ -3140,10 +3293,17 @@ export const generateTabHeaderBackground = onCall(
       throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
 
-    const prompt = buildTabHeaderPrompt(tabKey as TabHeaderKey, settings.imageProvider);
+    const background = pickRandom(HEADER_BACKGROUND_PALETTES);
+    const prompt =
+      tabKey === 'home'
+        ? buildHomeHeaderPrompt(settings.imageProvider, background)
+        : buildTabHeaderPrompt(tabKey as Exclude<TabHeaderKey, 'home'>, settings.imageProvider, background);
 
     try {
-      return await generateAiImage(settings, prompt);
+      const image = await generateAiImage(settings, prompt);
+      // Only Home needs the matching text colour — every other tab's title
+      // stays black, which reads fine against any of these light pastels.
+      return tabKey === 'home' ? { ...image, textColor: background.textHex } : image;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
@@ -3176,17 +3336,17 @@ function categoryIconAspect(key: CategoryIconKey): ImageAspectRatio {
 // header's waving student from buildTabHeaderPrompt).
 const CATEGORY_ICON_SCENES: Record<CategoryIconKey, string> = {
   circulars:
-    'a cheerful college student pinning a paper flyer onto a small bulletin board, holding a few extra flyers in the other hand',
+    '{student} pinning a paper flyer onto a small bulletin board, holding a few extra flyers in the other hand',
   notices:
-    'a cheerful college student looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
+    '{student} looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
   fees:
-    'a cheerful college student happily holding up a paid receipt in one hand and a payment card in the other',
+    '{student} happily holding up a paid receipt in one hand and a payment card in the other',
   certificates:
-    'a cheerful college student proudly holding up a rolled certificate scroll tied with a ribbon',
+    '{student} proudly holding up a rolled certificate scroll tied with a ribbon',
   dailyBriefing:
-    'a cheerful college student stretching happily at sunrise with one arm raised, a small steaming mug on a ledge beside them, and a simple rising sun with a few short rays behind',
+    '{student} stretching happily at sunrise with one arm raised, a small steaming mug on a ledge beside them, and a simple rising sun with a few short rays behind',
   scholarships:
-    'a cheerful college student holding up a graduation cap in one hand and a small coin-marked money bag in the other, with a rolled award ribbon at their feet',
+    '{student} holding up a graduation cap in one hand and a small coin-marked money bag in the other, with a rolled award ribbon at their feet',
 };
 
 // Reference look: a course-catalogue style app card — one plain, solid soft
@@ -3213,12 +3373,16 @@ const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
 // (full-body, expressive face, saturated outfit) rather than the earlier
 // "rounded geometric shapes, minimal facial detail" wording, which produced
 // muted, faceless mannequin-like figures.
+// Square-tile variant only — banner keys (dailyBriefing/scholarships) are
+// built by buildBannerIconPrompt directly from generateCategoryIcon's
+// handler below, since that one needs the randomly-picked palette back out
+// to report `textIsLight` alongside the image.
 function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
-  if (CATEGORY_ICON_BANNER_KEYS.has(key)) return buildBannerIconPrompt(key, provider);
+  const character = drawRandomCharacter({ withProps: true });
   return [
     `Flat vector illustration for a mobile app stat card, square 1:1 composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
-    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned in the right two-thirds of the frame.`,
-    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
+    `Depict ${withStudent(CATEGORY_ICON_SCENES[key], character.subject)}, positioned in the right two-thirds of the frame.`,
+    `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.`,
     'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
     imageStyleDirective(
       provider,
@@ -3228,19 +3392,75 @@ function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings
   ].join(' ');
 }
 
-// Banner variant: the student app crops the 16:9 result to a short, wide
-// strip (~3.4:1) behind the banner, with the title/subtitle on the left. So
-// the scene must sit compactly in the right half AND within the vertical
-// middle band, or the crop takes the character's head or feet off.
-function buildBannerIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
+// Daily Briefing / Scholarship Info's banner backgrounds use a richer,
+// more elegant palette than the Overview tiles' fixed single flat pastel —
+// modelled on a reference swatch pairing a deep, muted tone with a very pale
+// tint of the same family (e.g. "Blue Surf" #3B5B8A / "Saltwater Sky"
+// #D0E2F2), each usable on its own as a plain solid card colour with its own
+// matching text colour, not blended together. A two-tone *gradient* version
+// of this was tried first, but image models reliably collapsed it back to a
+// single flat colour anyway (gradients from a text prompt aren't something
+// this style of flat-vector illustration reliably renders) — so this pool
+// is entirely solid colours instead, each tagged with whether it's dark
+// enough to need light text.
+//
+// One is picked at random per generation (same `pickRandom` pattern as
+// HEADER_BACKGROUND_PALETTES above), independently per banner, so Regenerate
+// gives real variety instead of the same fixed colour every time. The
+// student app reads back `textIsLight` (see generateCategoryIcon below,
+// threaded through categoryIconService.ts's setCategoryIcon into
+// appConfig/categoryIcons.{key}TextIsLight) to switch its title/subtitle
+// between dark and light text to match whichever was picked.
+const CATEGORY_ICON_BANNER_PALETTES: readonly { color: string; textIsLight: boolean }[] = [
+  { color: 'a soft pastel powder blue (#D0E2F2)', textIsLight: false },
+  { color: 'a rich, deep slate blue (#3B5B8A)', textIsLight: true },
+  { color: 'a soft pastel mint (#D7ECE6)', textIsLight: false },
+  { color: 'a rich, deep teal-emerald (#2F6B5E)', textIsLight: true },
+  { color: 'a soft pastel dusty rose (#F3DDE2)', textIsLight: false },
+  { color: 'a rich, deep mauve-plum (#7A4A63)', textIsLight: true },
+  { color: 'a soft pastel warm sand (#F3E4D2)', textIsLight: false },
+  { color: 'a rich, deep terracotta (#8A4B36)', textIsLight: true },
+  { color: 'a soft pastel cool lilac (#E4DEF2)', textIsLight: false },
+  { color: 'a rich, deep indigo-violet (#544B8A)', textIsLight: true },
+  { color: 'a soft pastel sage (#DEEADB)', textIsLight: false },
+  { color: 'a rich, deep forest green (#3F6B45)', textIsLight: true },
+  { color: 'a soft pastel warm butter (#F5EAC9)', textIsLight: false },
+  { color: 'a rich, deep amber-bronze (#8A6A2E)', textIsLight: true },
+];
+
+// Banner variant: the student app crops the 16:9 result to a short, very
+// wide compact row (roughly 9:1 — considerably tighter than a standard
+// banner). So the scene must sit compactly against one edge AND within a
+// narrow vertical band right through the middle, or the crop takes the
+// character's head or feet off.
+//
+// The two banners stack directly on top of each other on Home and mirror
+// each other: Daily Briefing keeps its text on the left and the character
+// hugging the right edge; Scholarship Info flips that (character hugging the
+// left edge, text on the right — see the student app's HomeBanner `mirrored`
+// prop). "Hugging the edge" is spelled out because "in the right half" left
+// the character floating a quarter of the way in from the edge.
+const CATEGORY_ICON_BANNER_ART_SIDE: Record<'dailyBriefing' | 'scholarships', 'left' | 'right'> = {
+  dailyBriefing: 'right',
+  scholarships: 'left',
+};
+
+function buildBannerIconPrompt(
+  key: CategoryIconKey,
+  provider: AiImageSettings['imageProvider'],
+  palette: { color: string; textIsLight: boolean },
+): string {
+  const artSide = CATEGORY_ICON_BANNER_ART_SIDE[key as 'dailyBriefing' | 'scholarships'];
+  const textSide = artSide === 'right' ? 'left' : 'right';
+  const character = drawRandomCharacter({ withProps: true });
   return [
-    `Flat vector illustration for a mobile app banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
-    `Depict ${CATEGORY_ICON_SCENES[key]}, positioned in the right half of the frame and drawn compact: the whole character and their props must fit inside the vertical middle band of the frame, leaving the top quarter and bottom quarter of the frame as plain background, because the banner is cropped to a short wide strip through the middle.`,
-    'Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, vivid medium-saturation outfit colours (for example a bright top, contrasting trousers or skirt, coloured shoes and hair), clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.',
-    'Leave the left 45% of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
+    `Flat vector illustration for a mobile app banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${palette.color} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
+    `Depict ${withStudent(CATEGORY_ICON_SCENES[key], character.subject)}, placed hard against the ${artSide} edge of the frame — the character's outer side no more than about 5% of the frame's width in from the ${artSide} edge, the whole character and props contained within the ${artSide}-most 35% of the frame — and drawn small and zoomed out: the whole character and their props, from the top of their head to the bottom of their feet, must fit inside a narrow horizontal band no taller than roughly 25% of the frame's total height, centred vertically in the frame — leaving generous plain background above and below, at least a third of the frame's height clear on each side. The final banner keeps only a narrow strip through the exact vertical middle, so anything drawn above or below that central band will be cut off.`,
+    `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the plain background. Not abstract, not geometric, not faceless.`,
+    `Leave the ${textSide} 60% of the frame completely empty, plain background colour only, so text can sit on it — nothing from the scene may cross into it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly lighter or darker tint of the background colour — nothing else.`,
     imageStyleDirective(
       provider,
-      'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic',
+      `a solid ${palette.color} background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic`,
       '16:9',
     ),
   ].join(' ');
@@ -3282,10 +3502,15 @@ export const generateCategoryIcon = onCall(
       throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
 
-    const prompt = buildCategoryIconPrompt(key as CategoryIconKey, settings.imageProvider);
+    const isBanner = CATEGORY_ICON_BANNER_KEYS.has(key as CategoryIconKey);
+    const bannerPalette = isBanner ? pickRandom(CATEGORY_ICON_BANNER_PALETTES) : null;
+    const prompt = bannerPalette
+      ? buildBannerIconPrompt(key as CategoryIconKey, settings.imageProvider, bannerPalette)
+      : buildCategoryIconPrompt(key as CategoryIconKey, settings.imageProvider);
 
     try {
-      return await generateAiImage(settings, prompt, categoryIconAspect(key as CategoryIconKey));
+      const image = await generateAiImage(settings, prompt, categoryIconAspect(key as CategoryIconKey));
+      return { ...image, textIsLight: bannerPalette?.textIsLight ?? false };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);

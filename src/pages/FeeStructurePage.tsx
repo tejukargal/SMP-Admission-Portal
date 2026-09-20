@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { getFeeStructure, saveFeeStructure, getAllFeeStructures, deleteAllFeeStructures, applyAdditionalHeadsToYear } from '../services/feeStructureService';
 import { getFineSchedule, saveFineSchedule } from '../services/fineScheduleService';
 import { exportFeeStructurePDF, exportFeeStructureExcel, exportFeeStructureFormatted } from '../utils/feeStructureExport';
 import { Button } from '../components/common/Button';
-import { FeeStructureImportModal } from '../components/fee/FeeStructureImportModal';
 import type {
   AcademicYear,
   Course,
@@ -54,6 +54,7 @@ const SMP_LEFT = SMP_FEE_HEADS.slice(0, 7);
 const SMP_RIGHT = SMP_FEE_HEADS.slice(7);
 
 export function FeeStructurePage() {
+  const navigate = useNavigate();
   const { settings, loading: settingsLoading } = useSettings();
 
   const [selectedYear, setSelectedYear] = useState<AcademicYear | ''>('');
@@ -67,7 +68,6 @@ export function FeeStructurePage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showImport, setShowImport] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exporting, setExporting] = useState<'pdf' | 'excel' | 'formatted' | null>(null);
@@ -423,7 +423,7 @@ export function FeeStructurePage() {
 
           {/* Import from Excel */}
           <button
-            onClick={() => setShowImport(true)}
+            onClick={() => navigate('/settings?tab=import&section=fee-structure')}
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors shadow-sm"
           >
             <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -940,16 +940,6 @@ export function FeeStructurePage() {
 
       </div>{/* end content area */}
 
-      {/* Import modal */}
-      {showImport && (
-        <FeeStructureImportModal
-          onClose={() => setShowImport(false)}
-          onImported={() => {
-            setListTick((t) => t + 1);
-            setShowImport(false);
-          }}
-        />
-      )}
 
     </div>
   );

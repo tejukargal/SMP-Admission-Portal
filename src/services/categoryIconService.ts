@@ -30,6 +30,9 @@ export const BANNER_ICON_KEYS: readonly CategoryIconKey[] = ['dailyBriefing', 's
 export interface PendingCategoryIcon {
   base64: string;
   mimeType: string;
+  /** Banner keys only: whether the AI-picked solid background colour is dark
+   *  enough that the student app should render light/white text over it. */
+  textIsLight?: boolean;
 }
 
 export type CategoryIcons = Partial<Record<CategoryIconKey, string>>;
@@ -42,15 +45,17 @@ export async function getCategoryIcons(): Promise<CategoryIcons> {
 
 /** Calls the generateCategoryIcon Cloud Function — returns image bytes only, nothing is persisted yet. */
 export async function generateCategoryIcon(key: CategoryIconKey): Promise<PendingCategoryIcon> {
-  const fn = httpsCallable<{ key: CategoryIconKey }, { imageBase64: string; mimeType: string }>(
+  const fn = httpsCallable<{ key: CategoryIconKey }, { imageBase64: string; mimeType: string; textIsLight?: boolean }>(
     functions,
     'generateCategoryIcon',
   );
   const result = await fn({ key });
-  return { base64: result.data.imageBase64, mimeType: result.data.mimeType };
+  return { base64: result.data.imageBase64, mimeType: result.data.mimeType, textIsLight: result.data.textIsLight };
 }
 
-/** Uploads an accepted AI-generated icon and saves its download URL onto the shared appConfig/categoryIcons doc. */
+/** Uploads an accepted AI-generated icon and saves its download URL onto the shared appConfig/categoryIcons doc.
+ *  For a banner key, also saves `{key}TextIsLight` alongside the URL — the AI-picked solid background colour is
+ *  random each generation, so the student app needs this to switch title/subtitle between dark and light text. */
 export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategoryIcon): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
   // regenerated icon must get a new URL, not new bytes behind the old one.
@@ -58,6 +63,8 @@ export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategor
   const sref = storageRef(storage, path);
   await uploadString(sref, icon.base64, 'base64', imageUploadMetadata(icon.mimeType));
   const url = await getDownloadURL(sref);
-  await setDoc(doc(db, 'appConfig', 'categoryIcons'), { [key]: url }, { merge: true });
+  const patch: Record<string, string | boolean> = { [key]: url };
+  if (BANNER_ICON_KEYS.includes(key)) patch[`${key}TextIsLight`] = icon.textIsLight ?? false;
+  await setDoc(doc(db, 'appConfig', 'categoryIcons'), patch, { merge: true });
   return url;
 }

@@ -164,13 +164,6 @@ export function ImportAddress() {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">Import Address</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Update student Address, Mother Name, and Date of Birth in bulk from an Excel file.
-          Students are matched by Register Number and Academic Year.
-        </p>
-      </div>
 
       {/* Upload section */}
       {pageState === 'idle' && (

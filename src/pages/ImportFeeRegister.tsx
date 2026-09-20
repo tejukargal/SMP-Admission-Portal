@@ -262,13 +262,6 @@ export function ImportFeeRegister() {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">Import Fee Register</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Import fee payment records from an Excel (.xlsx) file. Each row is matched to a
-          student by registration number and academic year.
-        </p>
-      </div>
 
       {/* ── Idle: file picker ── */}
       {pageState === 'idle' && (

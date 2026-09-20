@@ -87,13 +87,6 @@ export function ImportResults() {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">Import Results</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Import a course-wise Result Ledger PDF (Board of Technical Examination). Each student
-          is matched to an enrolled student by Register Number.
-        </p>
-      </div>
 
       {/* ── Idle: file picker ── */}
       {pageState === 'idle' && (

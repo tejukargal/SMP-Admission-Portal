@@ -1,5 +1,8 @@
 import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
-import { getAiSettingsConfig, saveAiSettingsConfig, type AiSettingsConfig } from '../services/adminConfigService';
+import {
+  getAiSettingsConfig, saveAiSettingsConfig, type AiSettingsConfig, type ModelOption,
+  GEMINI_IMAGE_MODELS, OPENAI_IMAGE_MODELS, OPENAI_IMAGE_QUALITIES, BUDGETPIXEL_IMAGE_MODELS,
+} from '../services/adminConfigService';
 import { optimizeStoredImages, type OptimizeStoredImagesResult } from '../services/imageOptimizationService';
 import { Select } from '../components/common/Select';
 import { Button } from '../components/common/Button';
@@ -14,6 +17,10 @@ export function AiSettingsPanel() {
   const [aiReplicateKey, setAiReplicateKey] = useState('');
   const [aiBudgetpixelKey, setAiBudgetpixelKey] = useState('');
   const [aiGeminiTextModel, setAiGeminiTextModel] = useState('');
+  const [aiGeminiImageModel, setAiGeminiImageModel] = useState('');
+  const [aiOpenaiImageModel, setAiOpenaiImageModel] = useState('');
+  const [aiBudgetpixelImageModel, setAiBudgetpixelImageModel] = useState('');
+  const [aiOpenaiImageQuality, setAiOpenaiImageQuality] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiSaveMsg, setAiSaveMsg] = useState('');
@@ -34,6 +41,10 @@ export function AiSettingsPanel() {
           setAiReplicateKey(cfg.replicateApiKey);
           setAiBudgetpixelKey(cfg.budgetpixelApiKey);
           setAiGeminiTextModel(cfg.geminiTextModel);
+          setAiGeminiImageModel(cfg.geminiImageModel);
+          setAiOpenaiImageModel(cfg.openaiImageModel);
+          setAiBudgetpixelImageModel(cfg.budgetpixelImageModel);
+          setAiOpenaiImageQuality(cfg.openaiImageQuality);
         }
       })
       .catch(() => {})
@@ -69,6 +80,10 @@ export function AiSettingsPanel() {
         replicateApiKey: aiReplicateKey.trim(),
         budgetpixelApiKey: aiBudgetpixelKey.trim(),
         geminiTextModel: aiGeminiTextModel.trim(),
+        geminiImageModel: aiGeminiImageModel,
+        openaiImageModel: aiOpenaiImageModel,
+        budgetpixelImageModel: aiBudgetpixelImageModel,
+        openaiImageQuality: aiOpenaiImageQuality,
       });
       setAiSaveMsg('AI settings saved.');
     } catch (err: unknown) {
@@ -77,6 +92,15 @@ export function AiSettingsPanel() {
       setAiSaving(false);
     }
   }
+
+  // The model select for the currently chosen provider (Replicate has none —
+  // its model stays managed in the Firebase Console). An empty saved value
+  // shows the first option, which is exactly the Cloud Function's fallback.
+  const imageModelPicker: { options: ModelOption[]; value: string; set: (v: string) => void } | null =
+    aiProvider === 'gemini' ? { options: GEMINI_IMAGE_MODELS, value: aiGeminiImageModel, set: setAiGeminiImageModel }
+    : aiProvider === 'openai' ? { options: OPENAI_IMAGE_MODELS, value: aiOpenaiImageModel, set: setAiOpenaiImageModel }
+    : aiProvider === 'budgetpixel' ? { options: BUDGETPIXEL_IMAGE_MODELS, value: aiBudgetpixelImageModel, set: setAiBudgetpixelImageModel }
+    : null;
 
   async function handleOptimizeStoredImages() {
     setImgOptRunning(true);
@@ -110,11 +134,40 @@ export function AiSettingsPanel() {
               onChange={(e) => { setAiProvider(e.target.value as AiSettingsConfig['imageProvider']); setAiSaveMsg(''); setAiSaveError(''); }}
               options={[
                 { value: 'gemini', label: 'Google Gemini' },
-                { value: 'openai', label: 'OpenAI (GPT Image 1 Mini)' },
+                { value: 'openai', label: 'OpenAI' },
                 { value: 'replicate', label: 'Replicate (FLUX.2 Klein 4B)' },
-                { value: 'budgetpixel', label: 'BudgetPixel (Nano Banana 2 Lite / Gemini 3.1 Flash Lite Image)' },
+                { value: 'budgetpixel', label: 'BudgetPixel' },
               ]}
             />
+            {imageModelPicker && (
+              <div>
+                <Select
+                  label="Image Model"
+                  value={imageModelPicker.value || imageModelPicker.options[0].value}
+                  onChange={(e) => { imageModelPicker.set(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
+                  options={imageModelPicker.options}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Prices are per generated image at the provider&apos;s published rate (approximate). The first
+                  option is what runs when nothing has been saved. Retired models (gemini-2.5-flash-image,
+                  gpt-image-1) are deliberately not listed.
+                </p>
+              </div>
+            )}
+            {aiProvider === 'openai' && (
+              <div>
+                <Select
+                  label="OpenAI Image Quality"
+                  value={aiOpenaiImageQuality || 'high'}
+                  onChange={(e) => { setAiOpenaiImageQuality(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
+                  options={OPENAI_IMAGE_QUALITIES}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Quality is the biggest cost lever on OpenAI — Low is usually plenty for these flat pastel
+                  illustrations.
+                </p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Gemini API Key

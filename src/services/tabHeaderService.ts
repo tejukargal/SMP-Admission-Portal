@@ -26,6 +26,9 @@ export const TAB_HEADER_TABS: { key: TabHeaderKey; label: string }[] = [
 export interface PendingTabHeaderBackground {
   base64: string;
   mimeType: string;
+  /** Home only: the deep same-hue hex the student app draws the greeting and
+   *  name in over this image's pastel background. */
+  textColor?: string;
 }
 
 export type TabHeaderBackgrounds = Partial<Record<TabHeaderKey, string>>;
@@ -38,15 +41,17 @@ export async function getTabHeaderBackgrounds(): Promise<TabHeaderBackgrounds> {
 
 /** Calls the generateTabHeaderBackground Cloud Function — returns image bytes only, nothing is persisted yet. */
 export async function generateTabHeaderBackground(tabKey: TabHeaderKey): Promise<PendingTabHeaderBackground> {
-  const fn = httpsCallable<{ tabKey: TabHeaderKey }, { imageBase64: string; mimeType: string }>(
+  const fn = httpsCallable<{ tabKey: TabHeaderKey }, { imageBase64: string; mimeType: string; textColor?: string }>(
     functions,
     'generateTabHeaderBackground',
   );
   const result = await fn({ tabKey });
-  return { base64: result.data.imageBase64, mimeType: result.data.mimeType };
+  return { base64: result.data.imageBase64, mimeType: result.data.mimeType, textColor: result.data.textColor };
 }
 
-/** Uploads an accepted AI-generated background and saves its download URL onto the shared appConfig/tabHeaders doc. */
+/** Uploads an accepted AI-generated background and saves its download URL onto the shared appConfig/tabHeaders doc.
+ *  For Home, also saves `homeTextColor` beside it — the pastel is random each generation, so the student app needs
+ *  the matching deep tone to draw the greeting/name in. */
 export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: PendingTabHeaderBackground): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
   // regenerated header must get a new URL, not new bytes behind the old one.
@@ -54,6 +59,8 @@ export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: P
   const sref = storageRef(storage, path);
   await uploadString(sref, background.base64, 'base64', imageUploadMetadata(background.mimeType));
   const url = await getDownloadURL(sref);
-  await setDoc(doc(db, 'appConfig', 'tabHeaders'), { [tabKey]: url }, { merge: true });
+  const patch: Record<string, string> = { [tabKey]: url };
+  if (tabKey === 'home' && background.textColor) patch.homeTextColor = background.textColor;
+  await setDoc(doc(db, 'appConfig', 'tabHeaders'), patch, { merge: true });
   return url;
 }

@@ -101,6 +101,24 @@ async function pruneTokens(deadTokens) {
     if (touched)
         await batch.commit();
 }
+/** Notice bodies are rich HTML (older ones plain text) — a push notification
+ *  can only show plain text, so strip tags/entities before taking the excerpt. */
+function plainExcerpt(body, maxChars) {
+    if (!body)
+        return '';
+    const text = body
+        .replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+    return text.length > maxChars ? `${text.slice(0, maxChars - 1).trimEnd()}…` : text;
+}
 async function resolveNoticeRecipients(notice) {
     var _a;
     switch (notice.scope) {
@@ -130,7 +148,7 @@ exports.notifyOnNewNotice = (0, firestore_1.onDocumentCreated)({ document: 'noti
         return;
     const recipients = await resolveNoticeRecipients(notice);
     const tokens = await resolveTokens(recipients);
-    await sendPush(tokens, { title: notice.title, body: notice.body.slice(0, 150) }, { kind: 'notice', id: event.params.noticeId });
+    await sendPush(tokens, { title: notice.title, body: plainExcerpt(notice.body, 150) }, { kind: 'notice', id: event.params.noticeId });
 });
 // ── New Circular → push notification ────────────────────────────────────────
 // Circulars are visible to ALL students — department is a display label, not
@@ -183,7 +201,7 @@ exports.notifyOnNoticeUpdated = (0, firestore_1.onDocumentUpdated)({ document: '
     const tokens = await resolveTokens(recipients);
     await sendPush(tokens, {
         title: justPinned ? `📌 Pinned: ${after.title}` : after.title,
-        body: justPinned ? 'This notice has been pinned to the top.' : after.body.slice(0, 150),
+        body: justPinned ? 'This notice has been pinned to the top.' : plainExcerpt(after.body, 150),
     }, { kind: 'notice', id: event.params.noticeId });
 });
 // ── New Student Notification (fee-paid, status-changed, etc.) → push ───────

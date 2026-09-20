@@ -246,66 +246,73 @@ interface AdminCircularCardProps {
 function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProps) {
   const meta = departmentMeta(c.department);
   const preview3 = stripHtml(c.body);
+  const initials = c.department.slice(0, 2).toUpperCase();
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : c.expiredAt ? 'bg-gray-50' : 'bg-white'}`}
+      className={`relative flex overflow-hidden rounded-xl border shadow-sm border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : c.expiredAt ? 'bg-gray-50' : 'bg-white'}`}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
     >
-      {c.backgroundImageUrl && (
-        <>
+      {/* Background — 30% column, shown full (not masked) */}
+      <div className="w-[30%] shrink-0 relative bg-gray-100">
+        {c.backgroundImageUrl ? (
           <img src={c.backgroundImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-white/80" />
-        </>
-      )}
-      {c.archivedAt ? <CardWatermark label="Unpublished" /> : c.expiredAt ? <CardWatermark label="Expired" /> : null}
-      <button
-        type="button"
-        aria-label="Options"
-        className="absolute top-2 right-2 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-        onClick={(e) => {
-          e.stopPropagation();
-          const rect = e.currentTarget.getBoundingClientRect();
-          onContextMenu(rect.right, rect.bottom + 4);
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
-      </button>
-      <div className="relative z-10">
-        <span className="flex items-center gap-1 flex-wrap min-w-0">
-          <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${meta.pill}`}>{c.department}</span>
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-            {c.archivedAt ? 'Unpublished' : 'Published'}
+        ) : (
+          <div className={`absolute inset-0 flex items-center justify-center ${meta.cardBg}`}>
+            <span className={`text-base font-black ${meta.text} opacity-40`}>{initials}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Message preview — 70% column */}
+      <div className="flex-1 min-w-0 relative p-2">
+        {c.archivedAt ? <CardWatermark label="Unpublished" /> : c.expiredAt ? <CardWatermark label="Expired" /> : null}
+        <button
+          type="button"
+          aria-label="Options"
+          className="absolute top-1 right-1 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onContextMenu(rect.right, rect.bottom + 4);
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="12" cy="19" r="2" />
+          </svg>
+        </button>
+        <div className="relative z-10 pr-5">
+          <span className="flex items-center gap-1 flex-wrap min-w-0">
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${meta.pill}`}>{c.department}</span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
+              {c.archivedAt ? 'Unpublished' : 'Published'}
+            </span>
+            {c.expiredAt && (
+              <span className="rounded-full bg-gray-200 text-gray-600 px-1.5 py-0.5 text-[9px] font-bold">Expired</span>
+            )}
+            {c.pinned && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+                Pinned
+              </span>
+            )}
+            {(c.attachments?.length ?? 0) > 0 && (
+              <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                {c.attachments.length}
+              </span>
+            )}
           </span>
-          {c.expiredAt && (
-            <span className="rounded-full bg-gray-200 text-gray-600 px-1.5 py-0.5 text-[9px] font-bold">Expired</span>
-          )}
-          {c.pinned && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
-              Pinned
-            </span>
-          )}
-          {(c.attachments?.length ?? 0) > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-gray-400">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-              {c.attachments.length}
-            </span>
-          )}
-        </span>
-        <p className="text-[10px] text-gray-400 mt-1">
-          {formatCircularDate(c.date)} · posted {new Date(c.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          {c.updatedAt && ' · edited'}
-        </p>
-        <h4 className="text-sm font-bold text-gray-900 mt-1 line-clamp-1">{c.title}</h4>
-        <p className={`text-xs font-semibold ${meta.text} mt-0.5 line-clamp-1`}>{c.subject}</p>
-        {preview3 && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{preview3}</p>}
+          <h4 className="text-xs font-bold text-gray-900 mt-1 leading-snug line-clamp-1">{c.title}</h4>
+          <p className={`text-[10px] font-semibold ${meta.text} mt-0.5 line-clamp-1`}>
+            {c.subject} <span className="text-gray-400 font-normal">· {formatCircularDate(c.date)}</span>
+          </p>
+          {preview3 && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-snug">{preview3}</p>}
+        </div>
       </div>
     </div>
   );
