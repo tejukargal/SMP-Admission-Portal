@@ -35,6 +35,15 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// One printed entry: a record paired with the local serial number to print on
+// its slip. The caller (the Additional Fee Receipts report/table) decides
+// this — normally each row's position ("Sl") in the filtered report, zero-
+// padded to 4 digits — so a partial print of rows 5, 12, 20 prints "0005",
+// "0012", "0020", matching the report, not a fresh 0001/0002/0003 count of
+// just what's selected. This never touches record.additionalReceiptNumber
+// (the real database receipt number, unaffected and shown as-is elsewhere).
+export interface AdditionalFeeReceiptEntry { record: FeeRecord; serial: string; }
+
 // ── One compact copy (quarter-band height) ───────────────────────────────────
 // Same field order and visual language as buildAdditionalCopy() in
 // feeReceipts.ts (institute header, boxed title, dotted-underline fields,
@@ -43,7 +52,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // whatever vertical space is left in the band, so a 1-2 item receipt still
 // uses the full band instead of leaving a blank gap below the signature.
 
-function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY' | 'OFFICE COPY'): string {
+function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY' | 'OFFICE COPY', serial: string): string {
   const date  = formatDate(record.date);
   const items = record.additionalPaid.filter((h) => h.amount > 0);
   const total = items.reduce((s, h) => s + h.amount, 0);
@@ -64,7 +73,7 @@ function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY'
     </div>
 
     <div class="meta">
-      <span class="meta-no">No.&nbsp;<span class="rno">${esc(record.additionalReceiptNumber || '—')}</span></span>
+      <span class="meta-no">No.&nbsp;<span class="rno">${esc(serial)}</span></span>
       <span class="meta-date">Date&nbsp;<span class="date-dl"><span class="bval">${esc(date)}</span></span></span>
     </div>
 
@@ -102,17 +111,17 @@ function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY'
 
 // ── One A4 portrait page: up to 4 rows of Student|Office pairs ──────────────
 
-function buildBulkPage(rows: FeeRecord[]): string {
-  const rowsHtml = rows
-    .map((r) => `<div class="row">
-      ${buildCompactAdditionalCopy(r, 'STUDENT COPY')}
-      ${buildCompactAdditionalCopy(r, 'OFFICE COPY')}
+function buildBulkPage(entries: AdditionalFeeReceiptEntry[]): string {
+  const rowsHtml = entries
+    .map(({ record, serial }) => `<div class="row">
+      ${buildCompactAdditionalCopy(record, 'STUDENT COPY', serial)}
+      ${buildCompactAdditionalCopy(record, 'OFFICE COPY', serial)}
     </div>`)
     .join('');
 
   // Pad with blank filler rows so every page keeps the same 4-row grid height,
   // even when the final chunk has fewer than 4 records.
-  const fillerCount = Math.max(0, 4 - rows.length);
+  const fillerCount = Math.max(0, 4 - entries.length);
   const fillerHtml = Array.from({ length: fillerCount }, () => '<div class="row row-filler"></div>').join('');
 
   return `<div class="page"><div class="sheet">${rowsHtml}${fillerHtml}</div></div>`;
@@ -125,9 +134,13 @@ function buildBulkPage(rows: FeeRecord[]): string {
  * portrait sheet (Student Copy | Office Copy per row). Only records with a
  * non-zero additionalPaid amount are printed — callers should already filter
  * to paid records, but this is enforced here too as a safety net.
+ *
+ * Each entry's `serial` (the report's local numbering, e.g. its Sl No) is
+ * printed as the slip's "No." as-is — this function does not invent its own
+ * numbering, so the caller controls what "local serial" means.
  */
-export function generateAdditionalFeeReceiptsBulk(records: FeeRecord[]): void {
-  const paid = records.filter((r) => r.additionalPaid.some((h) => h.amount > 0));
+export function generateAdditionalFeeReceiptsBulk(entries: AdditionalFeeReceiptEntry[]): void {
+  const paid = entries.filter(({ record }) => record.additionalPaid.some((h) => h.amount > 0));
   if (paid.length === 0) return;
 
   const pagesHtml = chunk(paid, 4).map(buildBulkPage).join('');

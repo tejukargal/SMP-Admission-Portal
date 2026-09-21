@@ -5890,7 +5890,6 @@ function AdditionalFeeReceiptsTab({
   const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
   const [dateFrom,      setDateFrom]      = useState('');
   const [dateTo,        setDateTo]        = useState('');
-  const [selectedDate,  setSelectedDate]  = useState('');
   const [searchTerm,      setSearchTerm]      = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
@@ -5907,9 +5906,14 @@ function AdditionalFeeReceiptsTab({
     () => [...new Set(paidAdditionalRecords.map((r) => r.date.slice(0, 10)))].sort(),
     [paidAdditionalRecords],
   );
+  const [selectedDate, setSelectedDate] = useState<string>(
+    () => availableDates[availableDates.length - 1] ?? '',
+  );
   useEffect(() => {
+    // '' is the intentional "All dates" state — never auto-filled back to a date.
+    // Only repair a stale *specific* date (e.g. filters changed and it dropped out).
     if (selectedDate && availableDates.length > 0 && !availableDates.includes(selectedDate)) {
-      setSelectedDate('');
+      setSelectedDate(availableDates[availableDates.length - 1]);
     }
   }, [availableDates, selectedDate]);
   const dateIdx    = selectedDate ? availableDates.indexOf(selectedDate) : -1;
@@ -5962,11 +5966,30 @@ function AdditionalFeeReceiptsTab({
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const rowIdsKey = rowIds.join('|');
 
-  // Selection defaults to "everything currently filtered" and re-syncs whenever
-  // the filtered set changes; individual checkboxes then narrow it from there.
+  // Local serial shown in the "Addl Rpt No" column and printed on the slip —
+  // this row's position (Sl No) in the current report, not the real database
+  // additionalReceiptNumber. Kept as a lookup so printing a subset still uses
+  // each row's own report position rather than restarting at 0001.
+  const localSerialById = useMemo(
+    () => new Map(rows.map((r, i) => [r.id, String(i + 1).padStart(4, '0')])),
+    [rows],
+  );
+
+  // Nothing is selected by default — the office picks which receipts to print.
+  // When filters change, ids that fall out of the visible list are dropped
+  // from the selection (rather than staying invisibly "selected"), but no new
+  // ids are ever auto-added.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   useEffect(() => {
-    setSelected(new Set(rowIds));
+    const visible = new Set(rowIds);
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visible.has(id)) next.add(id); else changed = true;
+      }
+      return changed ? next : prev;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowIdsKey]);
 
@@ -5986,13 +6009,15 @@ function AdditionalFeeReceiptsTab({
     setSearchTerm('');
     setAidedFilter(''); setCourseFilter(''); setYearFilter('');
     setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
-    setSelectedDate('');
+    setSelectedDate(availableDates[availableDates.length - 1] ?? '');
   }
 
   function handlePrint() {
     const selectedRecords = rows.filter((r) => selected.has(r.id));
     if (selectedRecords.length === 0) return;
-    generateAdditionalFeeReceiptsBulk(selectedRecords);
+    generateAdditionalFeeReceiptsBulk(
+      selectedRecords.map((r) => ({ record: r, serial: localSerialById.get(r.id) ?? '—' })),
+    );
   }
 
   const allChecked  = rows.length > 0 && rows.every((r) => selected.has(r.id));
@@ -6016,13 +6041,13 @@ function AdditionalFeeReceiptsTab({
               className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >›</button>
             <button
-              onClick={() => setSelectedDate('')}
+              onClick={() => setSelectedDate(selectedDate ? '' : (availableDates[availableDates.length - 1] ?? ''))}
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
                 selectedDate
                   ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
                   : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
               }`}
-              title={selectedDate ? 'Show all dates' : 'Showing all dates'}
+              title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
             >All</button>
           </div>
           <select value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
@@ -6120,7 +6145,7 @@ function AdditionalFeeReceiptsTab({
                     </td>
                     <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
                     <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{formatDate(r.date)}</td>
-                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{r.additionalReceiptNumber || '—'}</td>
+                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{localSerialById.get(r.id) ?? '—'}</td>
                     <td className="px-2 py-1.5 font-medium truncate">{student?.studentNameSSLC ?? r.studentName}</td>
                     <td className="px-2 py-1.5 text-center font-semibold">{r.course}</td>
                     <td className="px-2 py-1.5 whitespace-nowrap">{r.year}</td>
