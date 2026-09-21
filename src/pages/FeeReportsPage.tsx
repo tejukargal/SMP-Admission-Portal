@@ -31,8 +31,10 @@ import { denominationAbstractId, getDenominationAbstract, saveDenominationAbstra
 import { getSMPBudget, saveSMPBudget } from '../services/smpBudgetService';
 import { getWPFeeDistribution, saveWPFeeDistribution } from '../services/wpFeeDistributionService';
 import { useAuth } from '../contexts/AuthContext';
+import { generateAdditionalFeeReceiptsBulk } from '../utils/additionalFeeBulkReceipts';
+import { formatDate } from '../utils/feeReceipts';
 
-type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'bank-remittance' | 'fee-distribution' | 'wp-fee-distribution' | 'budget' | 'fee-reg-1' | 'fee-structure';
+type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'additional-fee-receipts' | 'bank-remittance' | 'fee-distribution' | 'wp-fee-distribution' | 'budget' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -112,6 +114,9 @@ const TAB_ICONS: Record<TabId, ReactNode> = {
   'datewise-headwise': (
     <svg {...ICON_PROPS}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></svg>
   ),
+  'additional-fee-receipts': (
+    <svg {...ICON_PROPS}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>
+  ),
   'bank-remittance': (
     <svg {...ICON_PROPS}><path d="M3 21h18" /><path d="M4 21V9l8-5 8 5v12" /><path d="M9 21V13h6v8" /></svg>
   ),
@@ -145,6 +150,7 @@ const TAB_META: TabMeta[] = [
   { id: 'daily-collections',  label: 'Daily Collections',    group: 'Collections',             icon: TAB_ICONS['daily-collections'] },
   { id: 'day-summary',        label: 'Day Summary',          group: 'Collections',             icon: TAB_ICONS['day-summary'] },
   { id: 'datewise-headwise',  label: 'Datewise Headwise',    group: 'Collections',             icon: TAB_ICONS['datewise-headwise'] },
+  { id: 'additional-fee-receipts', label: 'Additional Fee Receipts', group: 'Collections',      icon: TAB_ICONS['additional-fee-receipts'] },
   { id: 'bank-remittance',    label: 'Bank Remittance',      group: 'Remittance & Structure',  icon: TAB_ICONS['bank-remittance'] },
   { id: 'fee-distribution',   label: 'Fee Distribution',     group: 'Remittance & Structure',  icon: TAB_ICONS['fee-distribution'] },
   { id: 'wp-fee-distribution', label: 'WP Fee Distribution', group: 'Remittance & Structure',  icon: TAB_ICONS['wp-fee-distribution'] },
@@ -5862,6 +5868,276 @@ function FeeReg1Tab({
   );
 }
 
+// ── Tab: Additional Fee Receipts (bulk print) ────────────────────────────────
+// Lets the office filter paid Additional Fee records (year/course/adm type
+// &amp; cat/date) and bulk-print them 4 students per A4 sheet (Student Copy |
+// Office Copy per row) via generateAdditionalFeeReceiptsBulk. Read-only — no
+// writes here, and no changes to the existing single-receipt flow in
+// feeReceipts.ts / FeeRegister.tsx.
+
+function AdditionalFeeReceiptsTab({
+  feeRecords, allStudents, showAllYears, academicYear: _academicYear,
+}: {
+  feeRecords: FeeRecord[];
+  allStudents: Student[];
+  showAllYears: boolean;
+  academicYear: string;
+}) {
+  const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
+  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [dateFrom,      setDateFrom]      = useState('');
+  const [dateTo,        setDateTo]        = useState('');
+  const [selectedDate,  setSelectedDate]  = useState('');
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const paidAdditionalRecords = useMemo(
+    () => feeRecords.filter((r) => r.additionalPaid.some((h) => h.amount > 0)),
+    [feeRecords],
+  );
+
+  const availableDates = useMemo(
+    () => [...new Set(paidAdditionalRecords.map((r) => r.date.slice(0, 10)))].sort(),
+    [paidAdditionalRecords],
+  );
+  useEffect(() => {
+    if (selectedDate && availableDates.length > 0 && !availableDates.includes(selectedDate)) {
+      setSelectedDate('');
+    }
+  }, [availableDates, selectedDate]);
+  const dateIdx    = selectedDate ? availableDates.indexOf(selectedDate) : -1;
+  const prevDate   = dateIdx > 0 ? availableDates[dateIdx - 1] : null;
+  const nextDate   = dateIdx !== -1 && dateIdx < availableDates.length - 1 ? availableDates[dateIdx + 1] : null;
+  const isRangeActive = !!(dateFrom || dateTo);
+
+  const studentMap = useMemo(
+    () => new Map(allStudents.map((s) => [s.id, s])),
+    [allStudents],
+  );
+
+  const baseRows = useMemo(() => {
+    let list = paidAdditionalRecords;
+    if (aidedFilter === 'AIDED')   list = list.filter((r) => AIDED_COURSES_SET.has(r.course));
+    if (aidedFilter === 'UNAIDED') list = list.filter((r) => !AIDED_COURSES_SET.has(r.course));
+    // Same precedence rule as Fee Reg_1: an explicit From/To range wins over the
+    // single-day pill; leaving both empty shows every date.
+    if (dateFrom || dateTo) {
+      if (dateFrom) list = list.filter((r) => r.date.slice(0, 10) >= dateFrom);
+      if (dateTo)   list = list.filter((r) => r.date.slice(0, 10) <= dateTo);
+    } else if (selectedDate) {
+      list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
+    }
+    if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
+    if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
+    if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
+    if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
+
+    return [...list].sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      if (d !== 0) return d;
+      return a.additionalReceiptNumber.localeCompare(b.additionalReceiptNumber);
+    });
+  }, [paidAdditionalRecords, aidedFilter, selectedDate, courseFilter, yearFilter, admTypeFilter, admCatFilter, dateFrom, dateTo]);
+
+  const rows = useMemo(() => {
+    if (!debouncedSearch) return baseRows;
+    const q = debouncedSearch.trim().toUpperCase();
+    return baseRows.filter((r) => {
+      const name = (studentMap.get(r.studentId)?.studentNameSSLC ?? r.studentName).toUpperCase();
+      return (
+        name.includes(q) ||
+        (r.regNumber ?? '').toUpperCase().includes(q) ||
+        (r.additionalReceiptNumber ?? '').includes(q)
+      );
+    });
+  }, [baseRows, debouncedSearch, studentMap]);
+
+  const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const rowIdsKey = rowIds.join('|');
+
+  // Selection defaults to "everything currently filtered" and re-syncs whenever
+  // the filtered set changes; individual checkboxes then narrow it from there.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelected(new Set(rowIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowIdsKey]);
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelected((prev) => (prev.size === rows.length ? new Set() : new Set(rowIds)));
+  }
+
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  function clearFilters() {
+    setSearchTerm('');
+    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
+    setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
+    setSelectedDate('');
+  }
+
+  function handlePrint() {
+    const selectedRecords = rows.filter((r) => selected.has(r.id));
+    if (selectedRecords.length === 0) return;
+    generateAdditionalFeeReceiptsBulk(selectedRecords);
+  }
+
+  const allChecked  = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someChecked = rows.some((r) => selected.has(r.id)) && !allChecked;
+
+  return (
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <FilterPanel
+        search={<>
+          <SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg / receipt…" />
+          <div className={`flex items-center gap-2 ${isRangeActive ? 'opacity-40 pointer-events-none' : ''}`} title={isRangeActive ? 'Clear the date range filter to use the day selector' : undefined}>
+            <button
+              disabled={!prevDate}
+              onClick={() => prevDate && setSelectedDate(prevDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >‹</button>
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={fs} />
+            <button
+              disabled={!nextDate}
+              onClick={() => nextDate && setSelectedDate(nextDate)}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >›</button>
+            <button
+              onClick={() => setSelectedDate('')}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                selectedDate
+                  ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+              }`}
+              title={selectedDate ? 'Show all dates' : 'Showing all dates'}
+            >All</button>
+          </div>
+          <select value={aidedFilter} onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
+            <option value="">Aided &amp; Unaided</option>
+            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
+            <option value="UNAIDED">Unaided (EE)</option>
+          </select>
+        </>}
+        right={<>
+          {showAllYears && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-400 bg-amber-50 text-[10px] font-semibold text-amber-700">
+              Incl. Prior Year Dues
+            </span>
+          )}
+          <span className="text-xs text-gray-500 whitespace-nowrap">{selected.size} / {rows.length} selected</span>
+          <button
+            onClick={handlePrint}
+            disabled={selected.size === 0}
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shadow-sm transition-colors ${
+              selected.size === 0
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-[#3B5B8A] text-white hover:bg-[#2e4a72]'
+            }`}
+          >
+            Print Receipts (4 per A4)
+          </button>
+        </>}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      >
+        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
+          <option value="">All Courses</option>
+          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
+          <option value="">All Years</option>
+          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
+          <option value="">All Adm Types</option>
+          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
+          <option value="">All Adm Cats</option>
+          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} title="From date" />
+        <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} title="To date" />
+      </FilterPanel>
+
+      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full table-fixed text-[11px] border-collapse">
+            <colgroup>
+              <col style={{ width: '4%' }} /><col style={{ width: '4%' }} /><col style={{ width: '9%' }} />
+              <col style={{ width: '10%' }} /><col style={{ width: '20%' }} /><col style={{ width: '7%' }} />
+              <col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col style={{ width: '18%' }} /><col style={{ width: '10%' }} />
+            </colgroup>
+            <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+              <tr>
+                <th className="px-2 py-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    ref={(el) => { if (el) el.indeterminate = someChecked; }}
+                    onChange={toggleAll}
+                    className="cursor-pointer"
+                  />
+                </th>
+                <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
+                <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Date</th>
+                <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Addl Rpt No</th>
+                <th className="px-2 py-1.5 font-semibold">Name</th>
+                <th className="px-2 py-1.5 text-center font-semibold">Course</th>
+                <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Year</th>
+                <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Adm Type/Cat</th>
+                <th className="px-2 py-1.5 font-semibold">Heads</th>
+                <th className="px-2 py-1.5 text-right font-semibold">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400 text-xs">No paid Additional Fee records match the current filters.</td>
+                </tr>
+              ) : rows.map((r, i) => {
+                const student = studentMap.get(r.studentId);
+                const isSelected = selected.has(r.id);
+                const items = r.additionalPaid.filter((h) => h.amount > 0);
+                const total = items.reduce((s, h) => s + h.amount, 0);
+                return (
+                  <tr key={r.id} className={isSelected ? 'bg-[#D0E2F2]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-2 py-1 text-center">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)} className="cursor-pointer" />
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{formatDate(r.date)}</td>
+                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{r.additionalReceiptNumber || '—'}</td>
+                    <td className="px-2 py-1.5 font-medium truncate">{student?.studentNameSSLC ?? r.studentName}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold">{r.course}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{r.year}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{r.admType} / {r.admCat}</td>
+                    <td className="px-2 py-1.5 truncate text-gray-600">{items.map((h) => h.label).join(', ')}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold">{total}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Blue Register ──────────────────────────────────────────────────────
 // One row per receipt: individual SMP fee-head breakup (Adm…Fine, single amount
 // per head — no cash/pay split), a Total, and an optional set of dynamic columns
@@ -7406,6 +7682,7 @@ export function FeeReportsPage() {
             {activeTab === 'daily-collections' && <DailyCollectionsTab feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'day-summary'       && <DaySummaryTab       feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'datewise-headwise' && <DatewiseHeadwiseTab feeRecords={dateTabFilteredRecords}  academicYear={academicYear} fp={fp} showAllYears={showAllYears} />}
+            {activeTab === 'additional-fee-receipts' && <AdditionalFeeReceiptsTab feeRecords={dateTabRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />}
             {activeTab === 'bank-remittance'   && <BankRemittanceTab   feeRecords={dateTabRecords}          academicYear={academicYear} showAllYears={showAllYears} />}
             {activeTab === 'fee-distribution'  && <FeeDistributionTab  students={allStudents} feeStructures={feeStructures} feeRecords={feeRecords} academicYear={academicYear} />}
             {activeTab === 'wp-fee-distribution' && <WPFeeDistributionTab feeStructures={feeStructures} academicYear={academicYear} />}
