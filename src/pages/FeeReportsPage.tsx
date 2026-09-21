@@ -17,6 +17,7 @@ import {
 } from '../utils/feeReportPdf';
 import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
+import { isWPStudent } from '../utils/wpStudent';
 import {
   exportStatsExcel, exportFeeListExcel, exportDuesExcel,
   exportCourseYearExcel, exportConsolidatedExcel,
@@ -3852,8 +3853,10 @@ function FeeDistributionTab({
   }, [feeRecords]);
 
   // ── CONFIRMED students only ──
+  // WP (EXTERNAL) students are excluded — their fee is tracked as manual counts
+  // in the WP Fee Distribution tab, so counting them here would double-count.
   const confirmedStudents = useMemo(
-    () => students.filter(isConfirmedActive),
+    () => students.filter((s) => isConfirmedActive(s) && !isWPStudent(s)),
     [students],
   );
 
@@ -3869,7 +3872,7 @@ function FeeDistributionTab({
         if (admTypeFilter2 === 'SNQ')      return s.admCat === 'SNQ';
         if (admTypeFilter2 === 'LATERAL')  return s.admType === 'LATERAL'  && s.admCat !== 'SNQ';
         if (admTypeFilter2 === 'REPEATER') return s.admType === 'REPEATER' && s.admCat !== 'SNQ';
-        // REGULAR: REGULAR + EXTERNAL + SNQ-admType rows that aren't lateral/repeater
+        // REGULAR: REGULAR + SNQ-admType rows that aren't lateral/repeater
         return s.admCat !== 'SNQ' && s.admType !== 'LATERAL' && s.admType !== 'REPEATER';
       });
     }
@@ -5162,7 +5165,8 @@ function BudgetTab({
     return m;
   }, [feeRecords]);
 
-  const confirmedStudents = useMemo(() => students.filter(isConfirmedActive), [students]);
+  // WP (EXTERNAL) students excluded, matching the Fee Distribution tab this mirrors.
+  const confirmedStudents = useMemo(() => students.filter((s) => isConfirmedActive(s) && !isWPStudent(s)), [students]);
   const aidedStudents   = useMemo(() => confirmedStudents.filter(s => (AIDED_COURSES as Course[]).includes(s.course)),   [confirmedStudents]);
   const unaidedStudents = useMemo(() => confirmedStudents.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course)), [confirmedStudents]);
 
