@@ -72,6 +72,16 @@ export function DtekCircularModal({ circular, onClose }: Props) {
                   </li>
                 ))}
               </ul>
+              {(circular.highlightsKn ?? []).length > 0 && (
+                <ul className="space-y-1 mt-2.5 border-t border-amber-200/70 pt-2.5">
+                  {(circular.highlightsKn ?? []).map((h, i) => (
+                    <li key={i} className="text-sm text-gray-600 flex gap-2">
+                      <span className="text-amber-500 shrink-0">•</span>
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

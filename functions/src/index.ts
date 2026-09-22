@@ -1671,16 +1671,14 @@ const DTEK_DEFAULT_SOURCES = [
 // off to a news aggregator and report second-hand dates as official ones.
 const DTEK_ALLOWED_DOMAINS = ['dtek.karnataka.gov.in', 'karnataka.gov.in'];
 
-const MAX_DTEK_CIRCULARS = 15;
-/** The model used to come back with only two or three items because the prompt
- *  framed it as one college's assistant and told it to skip what didn't apply.
- *  This is the floor it is now asked to reach. */
-const MIN_DTEK_CIRCULARS = 10;
-const MAX_DTEK_HIGHLIGHTS = 5;
-/** Circulars older than this are dropped — the dashboard section is a "what's
- *  new" feed, not an archive. A year's window, because the department can go
- *  quiet for weeks and a short one left too little to reach the floor above. */
-const DTEK_RECENT_DAYS = 365;
+/** Exactly the top of the listing page, and deliberately no minimum: an earlier
+ *  version asked for "at least 10, going back further if recent weeks are thin"
+ *  and the model dutifully dragged the set into last year. With a fixed small
+ *  target there is nothing to pad toward. */
+const MAX_DTEK_CIRCULARS = 5;
+const MAX_DTEK_HIGHLIGHTS = 8;
+/** Sorts unranked items last instead of letting them jump to the front. */
+const DTEK_UNRANKED = 9999;
 
 const DTEK_CATEGORIES = [
   'Circular', 'Exams', 'Admissions', 'Academics',
@@ -1689,6 +1687,10 @@ const DTEK_CATEGORIES = [
 type DtekCategory = (typeof DTEK_CATEGORIES)[number];
 
 interface DtekCircular {
+  /** Position on the listing page, 1 = topmost. This is what decides which five
+   *  are kept. It rides along into the stored doc and back through publish so
+   *  the chosen order survives an admin edit; the UI never displays it. */
+  listingRank: number;
   date: string | null;
   dateText: string;
   referenceNo: string;
@@ -1698,6 +1700,7 @@ interface DtekCircular {
   summary: string;
   summaryKn: string;
   highlights: string[];
+  highlightsKn: string[];
   affects: string;
   actionRequired: boolean;
   actionBy: string | null;
@@ -1720,39 +1723,36 @@ const DTEK_SYSTEM = `You are a technical-education desk officer in Karnataka, wr
 
 Your job: use your web tools to open the source URLs in the message — above all the departmental circulars listing page — then open the individual circulars themselves (they are often PDFs; read them), and write a structured, practical digest of what matters right now.
 
-## WHAT TO INCLUDE
-The ${MAX_DTEK_CIRCULARS} most recent circulars, newest first by the date printed on the circular. **Aim for at least ${MIN_DTEK_CIRCULARS}** — work steadily down the listing page until you have that many, going back further in time if the recent weeks are thin.
+## WHAT YOU ARE GIVEN
+The message lists the newest circulars already taken from the top of the department's listing page, each with its listingRank, its date, its order number and a link to its PDF. **That set is fixed.** Your job is to open each PDF and write it up in depth — not to choose, filter or look for other circulars.
 
-Cover the whole polytechnic sector, not any one college: examinations and results, admissions and counselling, academic calendar, fee and scholarship instructions, staff and establishment matters, inspections and affiliation, returns and data submissions, recruitment, transfers and promotions, budget and finance, training and placement, NBA/AICTE matters.
+Write up **every** one you are given, in the order given, including any that look routine. Return exactly one object per listingRank, echoing that same listingRank back. If a PDF genuinely will not open, still return its object with whatever the listed subject tells you, and say plainly in the summary that the document could not be read.
 
-**Err firmly on the side of including.** A circular addressed to all principals, all institutions, or the department generally belongs here even when it names no particular college — that is the normal case, not an exception. Do not narrow to any single institution, and do not drop an item merely because it looks routine. Only skip a circular with genuinely no bearing on polytechnics (for example, one solely about engineering degree colleges).
-
-If after real effort the listing truly holds fewer than ${MIN_DTEK_CIRCULARS} circulars in range, report what you found and say so in overviewEn — never invent items to reach the number.
+Never substitute a different circular, and never add one that is not in the list.
 
 ## PER CIRCULAR — FIELDS
-- date: the date printed on the circular as YYYY-MM-DD, ONLY if you actually read it; otherwise null.
-- dateText: that date in words, e.g. "18 September 2026"; "Undated" if none.
-- referenceNo: the government reference/order number exactly as printed (e.g. "TEC 45 TPE 2026"); empty string if the circular shows none.
+- listingRank: copy back the listingRank given for this circular in the message, unchanged. It is how your write-up is matched to the right document.
 - title: one plain English sentence saying what the circular directs, with the key fact in it.
 - titleKn: a natural Kannada rendering of title (proper Kannada script).
 - category: exactly one of ${DTEK_CATEGORIES.join(', ')}.
-- summary: 2-4 sentences of genuinely useful detail in English — what it directs, who must do it, and what changes compared to before. Written for a principal who has 20 seconds.
+- summary: 4-6 sentences of genuinely useful detail in English — what the circular directs, who must act, what changes compared to before, and the numbers, forms and process steps a principal would otherwise have to open the PDF to find. This is a proper briefing, not a one-line skim: someone who reads it should not need the original.
 - summaryKn: the same summary in natural Kannada (proper Kannada script), the way a Kannada-speaking officer would write it — a real rendering of the meaning, not a stiff word-for-word translation. Keep technical terms, portal names, form numbers and dates readable rather than forcing them into Kannada.
 - highlights: up to ${MAX_DTEK_HIGHLIGHTS} short bullet points carrying the concrete specifics — dates, amounts, form names, portal names, percentages, who must sign. Each a fragment, not a sentence. This is the most useful field; make every bullet carry a fact.
+- highlightsKn: the same bullets in natural Kannada, in the same order and the same number, so the two lists line up one-for-one. Leave numbers, portal names and form numbers readable rather than forcing them into Kannada.
 - affects: who must act, in a few words — e.g. "All polytechnic principals", "Exam branch", "Students (final year)", "Teaching staff".
 - actionRequired: true only when the circular asks the college to DO something by a date or in a form.
 - actionBy: the deadline as YYYY-MM-DD if the circular states one; otherwise null.
 - actionByText: the deadline in words with its basis, e.g. "Returns due 30 September 2026"; "No deadline stated" when there is none.
-- url: the exact link to that circular or its PDF.
 
 ## RULES
-- Every date, reference number, amount and deadline must come from a circular page you actually opened. Never invent, estimate or carry over last year's date as this year's. If you could not read a field, leave it empty or null rather than guessing.
-- Never list a circular you did not actually find on the sources — an honest short list is far better than a padded one.
-- Keep each field short and plain; English fields in English, Kannada script only in titleKn, summaryKn and overviewKn.
+- Every amount, deadline and condition must come from the PDF you actually opened. Never invent or estimate one, and never carry over a figure from a previous year. If you could not read something, leave it empty or null rather than guessing.
+- The circular's own date, order number and link are supplied to you and are already correct — do not repeat, second-guess or re-derive them.
+- actionBy is the one date you do supply: take it only from a deadline stated inside the document.
+- English fields in English, Kannada script only in titleKn, summaryKn, highlightsKn and overviewKn.
 - overviewEn: 1-2 sentences summarising what is new and what needs action. overviewKn: a natural Kannada rendering of overviewEn.
 
 ## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "circulars": [ { "date", "dateText", "referenceNo", "title", "titleKn", "category", "summary", "summaryKn", "highlights": string[], "affects", "actionRequired": boolean, "actionBy", "actionByText", "url" } ]}. No markdown fences, no explanation, no trailing text.`;
+Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "circulars": [ { "listingRank": number, "title", "titleKn", "category", "summary", "summaryKn", "highlights": string[], "highlightsKn": string[], "affects", "actionRequired": boolean, "actionBy", "actionByText" } ]}. No markdown fences, no explanation, no trailing text.`;
 
 /** Normalises one circular from the model (or the admin's edited form) into the
  *  stored shape; returns null if it has no usable title. */
@@ -1764,16 +1764,21 @@ function normalizeDtekCircular(value: unknown): DtekCircular | null {
   const dateRaw = cleanString(v.date, 20);
   const actionByRaw = cleanString(v.actionBy, 20);
   const actionBy = /^\d{4}-\d{2}-\d{2}$/.test(actionByRaw) ? actionByRaw : null;
+  const rank = typeof v.listingRank === 'number' && Number.isFinite(v.listingRank) && v.listingRank > 0
+    ? v.listingRank
+    : DTEK_UNRANKED;
   return {
+    listingRank: rank,
     date: /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null,
     dateText: cleanString(v.dateText, 60) || 'Undated',
     referenceNo: cleanString(v.referenceNo, 120),
     title,
     titleKn: cleanString(v.titleKn, 400),
     category: DTEK_CATEGORIES.includes(v.category as DtekCategory) ? (v.category as DtekCategory) : 'Circular',
-    summary: cleanString(v.summary, 1500),
-    summaryKn: cleanString(v.summaryKn, 1500),
+    summary: cleanString(v.summary, 3000),
+    summaryKn: cleanString(v.summaryKn, 3000),
     highlights: cleanStringList(v.highlights, MAX_DTEK_HIGHLIGHTS, 300),
+    highlightsKn: cleanStringList(v.highlightsKn, MAX_DTEK_HIGHLIGHTS, 300),
     affects: cleanString(v.affects, 200),
     // A stated deadline is what makes something actionable, whatever the model claimed.
     actionRequired: v.actionRequired === true || actionBy !== null,
@@ -1783,24 +1788,55 @@ function normalizeDtekCircular(value: unknown): DtekCircular | null {
   };
 }
 
-function normalizeDtekNews(value: unknown, today: string): Pick<DtekNewsDoc, 'overviewEn' | 'overviewKn' | 'circulars'> | null {
+/** There is deliberately no "too old" filter here. An earlier version dropped
+ *  anything past a date window, which could — and did — discard every entry and
+ *  leave the admin with a bare "no usable circulars". Listing rank is the
+ *  selector now, so the page's top entries are the answer whatever their dates;
+ *  a stale-looking one is for the admin to spot in the review step. */
+function normalizeDtekNews(value: unknown): Pick<DtekNewsDoc, 'overviewEn' | 'overviewKn' | 'circulars'> | null {
   if (!value || typeof value !== 'object') return null;
   const v = value as Record<string, unknown>;
   if (!Array.isArray(v.circulars)) return null;
   const circulars = v.circulars
     .map(normalizeDtekCircular)
     .filter((c): c is DtekCircular => c !== null)
-    // Undated items are kept (a real circular may carry no printed date) but
-    // sort last, since they can't be placed on the dashboard's date timeline.
-    .filter((c) => c.date === null || daysBetweenIsoDates(c.date, today) <= DTEK_RECENT_DAYS)
-    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
-    .slice(0, MAX_DTEK_CIRCULARS);
+    // Listing order picks the set: the page's top entries are what "latest"
+    // means here, and printed dates are too inconsistent between circulars to
+    // select on. Sorting on date instead is what let stale items through.
+    .sort((a, b) => a.listingRank - b.listingRank)
+    .slice(0, MAX_DTEK_CIRCULARS)
+    // Only now, within the chosen five, order by date for the dashboard's
+    // date grouping; undated ones fall to the end.
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
   if (circulars.length === 0) return null;
   return {
     overviewEn: cleanString(v.overviewEn, 600),
     overviewKn: cleanString(v.overviewKn, 600),
     circulars,
   };
+}
+
+/** Says why normalizeDtekNews rejected a payload. "No usable circulars" on its
+ *  own sends the admin round in circles — they need to know whether the model
+ *  returned nothing, returned a different shape, or returned entries that were
+ *  all unusable. */
+function describeDtekRejection(parsed: unknown, rawText: string): string {
+  if (!parsed || typeof parsed !== 'object') {
+    return 'the response was not a JSON object';
+  }
+  const v = parsed as Record<string, unknown>;
+  if (!Array.isArray(v.circulars)) {
+    const keys = Object.keys(v).slice(0, 8).join(', ') || 'none';
+    return `the response had no "circulars" array (top-level keys: ${keys})`;
+  }
+  if (v.circulars.length === 0) {
+    const why = cleanString(v.overviewEn, 300);
+    return why
+      ? `the model returned an empty list and said: "${why}"`
+      : 'the model returned an empty list of circulars — it may not have been able to read the listing page';
+  }
+  return `all ${v.circulars.length} entries were unusable (each needs a non-empty "title"). `
+    + `First 200 characters of the response: ${rawText.slice(0, 200)}`;
 }
 
 async function getDtekSources(): Promise<string[]> {
@@ -1811,8 +1847,111 @@ async function getDtekSources(): Promise<string[]> {
   return urls.length > 0 ? urls : DTEK_DEFAULT_SOURCES;
 }
 
-/** Settings › DTEK News › "Fetch latest": asks the admin's chosen provider
- *  (grounded) to read the department site and summarise its recent circulars.
+/** One row of the department's circulars table, straight from the HTML. */
+interface DtekListingRow {
+  listingRank: number;
+  date: string | null;
+  dateText: string;
+  referenceNo: string;
+  subject: string;
+  url: string;
+}
+
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&ndash;/gi, '–')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    // Ampersand last, so "&amp;lt;" can't decode twice into a tag.
+    .replace(/&amp;/gi, '&');
+}
+
+function htmlCellText(cell: string): string {
+  return decodeHtmlEntities(cell.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+/** The table prints "22.9.2026" and "22.09.2026" interchangeably. */
+function dtekDateToIso(raw: string): string | null {
+  const m = /^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const day = Number(d);
+  const month = Number(mo);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** GET with a couple of redirect hops. The listing page is ~2 MB of HTML. */
+function httpsGetText(url: string, redirectsLeft = 3): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      { headers: { 'user-agent': 'Mozilla/5.0 (compatible; SMP-Admissions/1.0)', accept: 'text/html' } },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if (status >= 300 && status < 400 && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) { reject(new Error('too many redirects')); return; }
+          resolve(httpsGetText(new URL(res.headers.location, url).toString(), redirectsLeft - 1));
+          return;
+        }
+        if (status !== 200) { res.resume(); reject(new Error(`HTTP ${status}`)); return; }
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => { raw += chunk; });
+        res.on('end', () => resolve(raw));
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(60_000, () => { req.destroy(new Error('timed out fetching the listing page')); });
+  });
+}
+
+/** Pulls the newest `limit` circulars out of the department's listing table.
+ *
+ *  Done in code rather than by asking the model to browse, because that page is
+ *  one ~2 MB table holding the entire archive (2,800+ rows) already sorted
+ *  newest-first. Every browsing model we tried either truncated it or gave up
+ *  ("the specific live portal links could not be accessed"), and the ones that
+ *  did answer picked circulars from years back. Taking the top rows here is
+ *  deterministic, and it also means the date, order number and PDF link are
+ *  read from the page rather than retyped by an LLM — those are the fields that
+ *  matter most and the ones a model is most likely to get subtly wrong. */
+function parseDtekListing(html: string, limit: number): DtekListingRow[] {
+  const rows: DtekListingRow[] = [];
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = rowRe.exec(html)) !== null && rows.length < limit) {
+    const cells = match[1].match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi);
+    if (!cells || cells.length < 4) continue;
+    const dateText = htmlCellText(cells[0]);
+    const date = dtekDateToIso(dateText);
+    // Skips the header row and any layout rows: a real entry always leads with
+    // a parseable date.
+    if (!date) continue;
+    const href = /href\s*=\s*["']([^"']+)["']/i.exec(cells[3]) ?? /href\s*=\s*["']([^"']+)["']/i.exec(match[1]);
+    const url = href ? decodeHtmlEntities(href[1]).trim() : '';
+    if (!/^https?:\/\//i.test(url)) continue;
+    rows.push({
+      listingRank: rows.length + 1,
+      date,
+      dateText,
+      referenceNo: htmlCellText(cells[1]),
+      subject: htmlCellText(cells[2]),
+      url,
+    });
+  }
+  return rows;
+}
+
+/** Settings › DTEK News › "Fetch latest": reads the newest circulars straight
+ *  out of the department's listing table, then asks the admin's chosen provider
+ *  to open those specific PDFs and write them up.
  *  Stateless — nothing is written until the admin publishes. */
 export const fetchDtekNews = onCall(
   { region: 'asia-south1', timeoutSeconds: 300 },
@@ -1828,14 +1967,43 @@ export const fetchDtekNews = onCall(
     const today = todayIST();
     const { dayLabel, dateLabel } = todayLabelsIST();
 
+    // Read the listing ourselves. Whichever configured source actually carries
+    // the circulars table wins; the others are typically the site's home page.
+    let listing: DtekListingRow[] = [];
+    let listingError = '';
+    for (const url of sourceUrls) {
+      try {
+        const rows = parseDtekListing(await httpsGetText(url), MAX_DTEK_CIRCULARS);
+        if (rows.length > 0) { listing = rows; break; }
+      } catch (err) {
+        listingError = err instanceof Error ? err.message : String(err);
+      }
+    }
+    if (listing.length === 0) {
+      throw new HttpsError(
+        'internal',
+        'Could not read the circulars table from any source page'
+        + `${listingError ? ` (${listingError})` : ''}. Check that a source points at the departmental-circulars `
+        + 'listing page, and that the page still shows circulars in a table of Date / Order Number / Subject / Link.',
+      );
+    }
+
     const userMessage = [
       `TODAY: ${dayLabel}, ${dateLabel} (${today}). Academic year in Karnataka runs June to May.`,
       '',
-      'SOURCES (open each one; on a circulars listing page, follow the individual circular links and read the PDFs themselves):',
-      ...sourceUrls.map((u) => `- ${u}`),
+      `These are the ${listing.length} newest circulars, taken in order from the top of the department's`
+      + ' circulars listing page. Open each PDF link and write that circular up. Do not look for any other'
+      + ' circulars, and do not change the dates or order numbers given here — they are read from the page.',
       '',
-      `Report circulars dated within the last ${DTEK_RECENT_DAYS} days, newest first — at least ${MIN_DTEK_CIRCULARS} of them if the listing holds that many, up to ${MAX_DTEK_CIRCULARS}.`,
-      'Include every circular addressed to polytechnics generally, not only ones naming a specific college. Give the reference number exactly as printed on each circular.',
+      ...listing.map((r) => [
+        `listingRank ${r.listingRank}:`,
+        `  date: ${r.date} (${r.dateText})`,
+        `  orderNumber: ${r.referenceNo || '(none printed)'}`,
+        `  subject as listed: ${r.subject}`,
+        `  pdf: ${r.url}`,
+      ].join('\n')),
+      '',
+      `Return exactly ${listing.length} objects, one per listingRank above, in that order.`,
     ].join('\n');
 
     let rawText = '';
@@ -1861,15 +2029,42 @@ export const fetchDtekNews = onCall(
     } catch {
       throw new HttpsError('internal', `The AI response was not valid JSON. It began: ${rawText.slice(0, 200)}`);
     }
-    const normalized = normalizeDtekNews(parsedJson, today);
+    const normalized = normalizeDtekNews(parsedJson);
     if (!normalized) {
       throw new HttpsError(
         'internal',
-        'The AI response contained no usable circulars. Try again, or pick a different provider/model above.',
+        `No usable circulars — ${describeDtekRejection(parsedJson, rawText)}. `
+        + `The listing gave ${listing.length} circulars and the model read ${groundedSources.length} pages. `
+        + 'If that read count is zero the provider could not open the PDFs — try Gemini or a stronger model.',
       );
     }
-    // Circulars the model left unlinked fall back to the pages it actually read.
-    const circulars = normalized.circulars.map((c) => (c.url ? c : { ...c, url: groundedSources[0] ?? '' }));
+
+    // The table is authoritative for date, order number and link; the model only
+    // supplies the prose. Merging this way means a misread date can't reach the
+    // admin — which is the single thing most worth getting right here.
+    const byRank = new Map(normalized.circulars.map((c) => [c.listingRank, c]));
+    const circulars: DtekCircular[] = listing.map((row) => {
+      const written = byRank.get(row.listingRank);
+      return {
+        listingRank: row.listingRank,
+        date: row.date,
+        dateText: row.dateText,
+        referenceNo: row.referenceNo,
+        url: row.url,
+        title: written?.title || row.subject,
+        titleKn: written?.titleKn ?? '',
+        category: written?.category ?? 'Circular',
+        summary: written?.summary ?? '',
+        summaryKn: written?.summaryKn ?? '',
+        highlights: written?.highlights ?? [],
+        highlightsKn: written?.highlightsKn ?? [],
+        affects: written?.affects ?? '',
+        actionRequired: written?.actionRequired ?? false,
+        actionBy: written?.actionBy ?? null,
+        actionByText: written?.actionByText || 'No deadline stated',
+      };
+    });
+
     return {
       ...normalized, circulars,
       themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString(),
@@ -1885,7 +2080,7 @@ export const publishDtekNews = onCall(
   async (request) => {
     requireAdmin(request);
     const data = (request.data ?? {}) as Record<string, unknown>;
-    const normalized = normalizeDtekNews(data, todayIST());
+    const normalized = normalizeDtekNews(data);
     if (!normalized) {
       throw new HttpsError('invalid-argument', 'At least one circular with a title is required.');
     }

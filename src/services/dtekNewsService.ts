@@ -33,6 +33,9 @@ export interface DtekCircular {
   summary: string;
   summaryKn: string;
   highlights: string[];
+  /** Same bullets as `highlights`, same order. Absent on records published
+   *  before bilingual highlights shipped, so always guard before rendering. */
+  highlightsKn: string[];
   affects: string;
   actionRequired: boolean;
   actionBy: string | null;
@@ -61,7 +64,7 @@ export const DEFAULT_DTEK_SOURCES = [
 
 export const EMPTY_DTEK_CIRCULAR: DtekCircular = {
   date: null, dateText: '', referenceNo: '', title: '', titleKn: '',
-  category: 'Circular', summary: '', summaryKn: '', highlights: [], affects: '',
+  category: 'Circular', summary: '', summaryKn: '', highlights: [], highlightsKn: [], affects: '',
   actionRequired: false, actionBy: null, actionByText: '', url: '',
 };
 

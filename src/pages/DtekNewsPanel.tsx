@@ -384,7 +384,7 @@ function CircularEditor({ circular, index, onChange, onRemove }: {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Highlights (one per line)</label>
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Highlights — English (one per line)</label>
         <textarea
           className={TEXTAREA_CLASS}
           rows={4}
@@ -392,6 +392,16 @@ function CircularEditor({ circular, index, onChange, onRemove }: {
           onChange={(e) => set('highlights', e.target.value.split('\n').map((h) => h.trim()).filter(Boolean))}
           placeholder={'Exam fee last date 30 Sep 2026\nLate fee ₹500 thereafter'}
         />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Highlights — Kannada (one per line)</label>
+        <textarea
+          className={TEXTAREA_CLASS}
+          rows={4}
+          value={(circular.highlightsKn ?? []).join('\n')}
+          onChange={(e) => set('highlightsKn', e.target.value.split('\n').map((h) => h.trim()).filter(Boolean))}
+        />
+        <p className="text-[11px] text-gray-400">Should line up one-for-one with the English bullets above.</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -449,6 +459,16 @@ function CircularView({ circular }: { circular: DtekCircular }) {
           {circular.highlights.map((h, i) => (
             <li key={i} className="text-xs text-gray-600 flex gap-1.5">
               <span className="text-emerald-500">•</span>
+              <span>{h}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(circular.highlightsKn ?? []).length > 0 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {(circular.highlightsKn ?? []).map((h, i) => (
+            <li key={i} className="text-xs text-gray-500 flex gap-1.5">
+              <span className="text-emerald-400">•</span>
               <span>{h}</span>
             </li>
           ))}
