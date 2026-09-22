@@ -302,6 +302,14 @@ service cloud.firestore {
       allow read: if isAdmin() || isStudentClaim();
       allow write: if false;
     }
+    // Department of Technical Education circular digest, shown on the admin
+    // Dashboard. Staff read it too — departmental circulars are exactly what
+    // office staff need — but no student claim, it is not student content.
+    // Written only by publishDtekNews via the Admin SDK.
+    match /dtekNews/{docId} {
+      allow read: if isActiveUser();
+      allow write: if false;
+    }
 
     // ── Student Portal Login Activity ("active users") ─────────────────────
     // Docs are created only by the studentLogin Cloud Function via the Admin SDK

@@ -33,6 +33,11 @@ export interface PendingCategoryIcon {
   /** Banner keys only: whether the AI-picked solid background colour is dark
    *  enough that the student app should render light/white text over it. */
   textIsLight?: boolean;
+  /** Tile keys only (circulars/notices/fees/certificates): the deep, legible
+   *  hex the student app should use for that tile's label/value text — the
+   *  match for whichever pastel background the AI randomly picked this
+   *  generation (see functions/src/index.ts's CATEGORY_ICON_TILE_PALETTES). */
+  labelColor?: string;
 }
 
 export type CategoryIcons = Partial<Record<CategoryIconKey, string>>;
@@ -45,17 +50,24 @@ export async function getCategoryIcons(): Promise<CategoryIcons> {
 
 /** Calls the generateCategoryIcon Cloud Function — returns image bytes only, nothing is persisted yet. */
 export async function generateCategoryIcon(key: CategoryIconKey): Promise<PendingCategoryIcon> {
-  const fn = httpsCallable<{ key: CategoryIconKey }, { imageBase64: string; mimeType: string; textIsLight?: boolean }>(
-    functions,
-    'generateCategoryIcon',
-  );
+  const fn = httpsCallable<
+    { key: CategoryIconKey },
+    { imageBase64: string; mimeType: string; textIsLight?: boolean; labelColor?: string }
+  >(functions, 'generateCategoryIcon');
   const result = await fn({ key });
-  return { base64: result.data.imageBase64, mimeType: result.data.mimeType, textIsLight: result.data.textIsLight };
+  return {
+    base64: result.data.imageBase64,
+    mimeType: result.data.mimeType,
+    textIsLight: result.data.textIsLight,
+    labelColor: result.data.labelColor,
+  };
 }
 
 /** Uploads an accepted AI-generated icon and saves its download URL onto the shared appConfig/categoryIcons doc.
- *  For a banner key, also saves `{key}TextIsLight` alongside the URL — the AI-picked solid background colour is
- *  random each generation, so the student app needs this to switch title/subtitle between dark and light text. */
+ *  For a banner key, also saves `{key}TextIsLight` alongside the URL. For a tile key, saves `{key}LabelColor`
+ *  instead. Both exist because the AI-picked background colour is random each generation, so the student app
+ *  needs to know which one was picked — a light/dark toggle for the banners' mixed-lightness pool, or the exact
+ *  matching text hex for the tiles' always-pastel pool. */
 export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategoryIcon): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
   // regenerated icon must get a new URL, not new bytes behind the old one.
@@ -65,6 +77,7 @@ export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategor
   const url = await getDownloadURL(sref);
   const patch: Record<string, string | boolean> = { [key]: url };
   if (BANNER_ICON_KEYS.includes(key)) patch[`${key}TextIsLight`] = icon.textIsLight ?? false;
+  if (icon.labelColor) patch[`${key}LabelColor`] = icon.labelColor;
   await setDoc(doc(db, 'appConfig', 'categoryIcons'), patch, { merge: true });
   return url;
 }

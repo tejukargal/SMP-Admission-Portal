@@ -10,9 +10,10 @@ import { StudentAppPanel, isStudentAppSection, type StudentAppSection } from './
 import { ImportPanel, isImportSection, type ImportSection } from './ImportPanel';
 import { GeneralPanel, isGeneralSection, type GeneralSection } from './GeneralPanel';
 import { BackupPanel, isBackupSection, type BackupSection } from './BackupPanel';
+import { DtekNewsPanel } from './DtekNewsPanel';
 import type { AcademicYear, StaffUser } from '../types';
 
-type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import' | 'staff' | 'messaging' | 'student-app' | 'backup';
+type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import' | 'staff' | 'messaging' | 'student-app' | 'dtek-news' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -22,6 +23,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'staff', label: 'Staff Accounts' },
   { id: 'messaging', label: 'Messaging' },
   { id: 'student-app', label: 'Student App' },
+  { id: 'dtek-news', label: 'DTEK News' },
   { id: 'backup', label: 'Backup & Restore' },
 ];
 
@@ -472,6 +474,9 @@ export function Settings() {
         {activeTab === 'student-app' && (
           <StudentAppPanel section={appSection} onSectionChange={setAppSection} />
         )}
+
+        {/* ── DTEK News (department circular digest shown on the Dashboard) ── */}
+        {activeTab === 'dtek-news' && <DtekNewsPanel />}
 
         {/* ── Backup & Restore (export, restore, data repair) ── */}
         {activeTab === 'backup' && (

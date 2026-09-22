@@ -30,6 +30,9 @@ import type { ThemeName } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
+import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
+import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
+import type { DtekCircular } from '../services/dtekNewsService';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -251,6 +254,7 @@ export function Dashboard() {
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
+  const [dtekCircular, setDtekCircular] = useState<DtekCircular | null>(null);
   const [resultsStudent, setResultsStudent] = useState<Student | null>(null);
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
@@ -2500,11 +2504,21 @@ const [barsReady, setBarsReady] = useState(false);
               </div>
             </div>
 
+            {/* DTEK News — the admin-published digest of department circulars */}
+            <div>
+              <SectionLabel accent={{ bar: 'bg-amber-500', text: 'text-amber-700' }}>DTEK News</SectionLabel>
+              <DtekNewsCard onOpen={setDtekCircular} isAdmin={role === 'admin'} />
+            </div>
+
           </div>
         </div>
       )}
 
     </div>
+
+    {dtekCircular && (
+      <DtekCircularModal circular={dtekCircular} onClose={() => setDtekCircular(null)} />
+    )}
 
     {feeHistoryStudent && (
       <StudentDetailModal

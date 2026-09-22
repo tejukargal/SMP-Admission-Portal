@@ -29,6 +29,10 @@ export interface PendingTabHeaderBackground {
   /** Home only: the deep same-hue hex the student app draws the greeting and
    *  name in over this image's pastel background. */
   textColor?: string;
+  /** Every tab: an identity for whichever background pool entry got picked
+   *  this generation, saved so a sibling tab's next regenerate can avoid
+   *  landing on the same pastel (see generateTabHeaderBackground). */
+  color?: string;
 }
 
 export type TabHeaderBackgrounds = Partial<Record<TabHeaderKey, string>>;
@@ -41,17 +45,23 @@ export async function getTabHeaderBackgrounds(): Promise<TabHeaderBackgrounds> {
 
 /** Calls the generateTabHeaderBackground Cloud Function — returns image bytes only, nothing is persisted yet. */
 export async function generateTabHeaderBackground(tabKey: TabHeaderKey): Promise<PendingTabHeaderBackground> {
-  const fn = httpsCallable<{ tabKey: TabHeaderKey }, { imageBase64: string; mimeType: string; textColor?: string }>(
-    functions,
-    'generateTabHeaderBackground',
-  );
+  const fn = httpsCallable<
+    { tabKey: TabHeaderKey },
+    { imageBase64: string; mimeType: string; textColor?: string; color?: string }
+  >(functions, 'generateTabHeaderBackground');
   const result = await fn({ tabKey });
-  return { base64: result.data.imageBase64, mimeType: result.data.mimeType, textColor: result.data.textColor };
+  return {
+    base64: result.data.imageBase64,
+    mimeType: result.data.mimeType,
+    textColor: result.data.textColor,
+    color: result.data.color,
+  };
 }
 
 /** Uploads an accepted AI-generated background and saves its download URL onto the shared appConfig/tabHeaders doc.
  *  For Home, also saves `homeTextColor` beside it — the pastel is random each generation, so the student app needs
- *  the matching deep tone to draw the greeting/name in. */
+ *  the matching deep tone to draw the greeting/name in. Every tab also saves `{tabKey}Color`, an identity for
+ *  which pastel got picked, purely so a sibling tab's next regenerate can avoid landing on the same one. */
 export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: PendingTabHeaderBackground): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
   // regenerated header must get a new URL, not new bytes behind the old one.
@@ -61,6 +71,7 @@ export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: P
   const url = await getDownloadURL(sref);
   const patch: Record<string, string> = { [tabKey]: url };
   if (tabKey === 'home' && background.textColor) patch.homeTextColor = background.textColor;
+  if (background.color) patch[`${tabKey}Color`] = background.color;
   await setDoc(doc(db, 'appConfig', 'tabHeaders'), patch, { merge: true });
   return url;
 }

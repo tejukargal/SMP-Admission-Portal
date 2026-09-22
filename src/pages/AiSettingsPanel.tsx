@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import {
   getAiSettingsConfig, saveAiSettingsConfig, type AiSettingsConfig, type ModelOption,
   GEMINI_IMAGE_MODELS, OPENAI_IMAGE_MODELS, OPENAI_IMAGE_QUALITIES, BUDGETPIXEL_IMAGE_MODELS,
+  GEMINI_TEXT_MODELS,
 } from '../services/adminConfigService';
 import { optimizeStoredImages, type OptimizeStoredImagesResult } from '../services/imageOptimizationService';
 import { Select } from '../components/common/Select';
@@ -16,6 +17,7 @@ export function AiSettingsPanel() {
   const [aiOpenaiKey, setAiOpenaiKey] = useState('');
   const [aiReplicateKey, setAiReplicateKey] = useState('');
   const [aiBudgetpixelKey, setAiBudgetpixelKey] = useState('');
+  const [aiAnthropicKey, setAiAnthropicKey] = useState('');
   const [aiGeminiTextModel, setAiGeminiTextModel] = useState('');
   const [aiGeminiImageModel, setAiGeminiImageModel] = useState('');
   const [aiOpenaiImageModel, setAiOpenaiImageModel] = useState('');
@@ -40,6 +42,7 @@ export function AiSettingsPanel() {
           setAiOpenaiKey(cfg.openaiApiKey);
           setAiReplicateKey(cfg.replicateApiKey);
           setAiBudgetpixelKey(cfg.budgetpixelApiKey);
+          setAiAnthropicKey(cfg.anthropicApiKey);
           setAiGeminiTextModel(cfg.geminiTextModel);
           setAiGeminiImageModel(cfg.geminiImageModel);
           setAiOpenaiImageModel(cfg.openaiImageModel);
@@ -79,7 +82,8 @@ export function AiSettingsPanel() {
         openaiApiKey: aiOpenaiKey.trim(),
         replicateApiKey: aiReplicateKey.trim(),
         budgetpixelApiKey: aiBudgetpixelKey.trim(),
-        geminiTextModel: aiGeminiTextModel.trim(),
+        anthropicApiKey: aiAnthropicKey.trim(),
+        geminiTextModel: aiGeminiTextModel,
         geminiImageModel: aiGeminiImageModel,
         openaiImageModel: aiOpenaiImageModel,
         budgetpixelImageModel: aiBudgetpixelImageModel,
@@ -218,19 +222,30 @@ export function AiSettingsPanel() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Gemini Text Model
+                Anthropic API Key
               </label>
               <input
-                type="text"
-                value={aiGeminiTextModel}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiGeminiTextModel(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
-                placeholder="gemini-3.5-flash-lite (default)"
+                type="password"
+                value={aiAnthropicKey}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => { setAiAnthropicKey(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
+                placeholder="Paste your Anthropic API key"
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Writes the Daily Briefing quote, note and highlights (always Gemini, whichever image provider is
-                selected). Leave blank for the default; a larger model such as gemini-3.5-flash gives more careful
-                highlights at a higher per-call cost.
+                Needed whenever Claude is picked as the provider for circular drafting, a Daily Briefing
+                feature, or DTEK News.
+              </p>
+            </div>
+            <div>
+              <Select
+                label="Draft Model (circulars & notices)"
+                value={aiGeminiTextModel || GEMINI_TEXT_MODELS[0].value}
+                onChange={(e) => { setAiGeminiTextModel(e.target.value); setAiSaveMsg(''); setAiSaveError(''); }}
+                options={GEMINI_TEXT_MODELS}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Used when circular or notice drafting is run with Gemini selected. The Daily Briefing and DTEK
+                News features each pick their own provider and model in their own panels.
               </p>
             </div>
             {aiSaveError && (

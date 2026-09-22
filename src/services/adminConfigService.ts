@@ -18,15 +18,37 @@ export async function saveMessagingConfig(config: MessagingConfig): Promise<void
   await setDoc(CONFIG_DOC, { ...config, updatedAt: new Date().toISOString() });
 }
 
+/** Providers that can generate text. BudgetPixel is deliberately absent — it is a
+ *  credit-metered image service with no LLM endpoint. */
+export type TextProvider = 'gemini' | 'claude' | 'openai';
+
+export const TEXT_PROVIDERS: TextProvider[] = ['gemini', 'claude', 'openai'];
+
+/** The features that pick their own text provider/model. Each maps to a
+ *  `{feature}Provider` / `{feature}Model` pair on the aiSettings doc. */
+export type TextFeature = 'quote' | 'scholarship' | 'briefing' | 'dtek';
+
 export interface AiSettingsConfig {
   imageProvider: 'gemini' | 'openai' | 'replicate' | 'budgetpixel';
   geminiApiKey: string;
   openaiApiKey: string;
   replicateApiKey: string;
   budgetpixelApiKey: string;
-  /** Gemini model for the Daily Briefing text (quote, note, highlights). Empty = the
-   *  function's default (gemini-3.5-flash-lite). */
+  anthropicApiKey: string;
+  /** Gemini model for circular/notice AI drafting (runDraftModel). Empty = the
+   *  function's default (gemini-3.5-flash-lite). The Daily Briefing features no
+   *  longer read this — they each carry their own provider/model pair below. */
   geminiTextModel: string;
+  /** Per-feature text provider + model. Empty = the Cloud Function's fallback,
+   *  which is the first entry of the matching *_TEXT_MODELS list. */
+  quoteProvider: string;
+  quoteModel: string;
+  scholarshipProvider: string;
+  scholarshipModel: string;
+  briefingProvider: string;
+  briefingModel: string;
+  dtekProvider: string;
+  dtekModel: string;
   /** Image model per provider — the Cloud Functions read these and fall back to
    *  the first entry of the matching *_IMAGE_MODELS list below when empty. */
   geminiImageModel: string;
@@ -75,7 +97,38 @@ export const BUDGETPIXEL_IMAGE_MODELS: ModelOption[] = [
   { value: 'seedream-5.0-lite', label: 'SeeDream 5.0 Lite — strong at layout/typography (check cost via the API before relying on it)' },
 ];
 
+// Curated text models, same rule as the image lists: first entry is exactly the
+// Cloud Function's fallback when nothing is saved. Prices are the providers'
+// published per-million-token rates as of Sep 2026 — treat them as approximate.
+export const GEMINI_TEXT_MODELS: ModelOption[] = [
+  { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite — cheapest, fine for short JSON (default)' },
+  { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash — more careful, better at web research' },
+  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro — strongest reasoning (preview, premium)' },
+];
+
+export const CLAUDE_TEXT_MODELS: ModelOption[] = [
+  { value: 'claude-sonnet-5', label: 'Claude Sonnet 5 — $2 / $10 per Mtok (balanced; drives circular drafting)' },
+  { value: 'claude-opus-5', label: 'Claude Opus 5 — $5 / $25 per Mtok (best reasoning, premium)' },
+  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 — $1 / $5 per Mtok (cheapest)' },
+];
+
+export const OPENAI_TEXT_MODELS: ModelOption[] = [
+  { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna — $0.20 / $1.20 per Mtok (cheapest)' },
+  { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — $2 / $12 per Mtok (balanced)' },
+  { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — $5 / $30 per Mtok (premium)' },
+];
+
+export function textModelsFor(provider: TextProvider): ModelOption[] {
+  return provider === 'claude' ? CLAUDE_TEXT_MODELS
+    : provider === 'openai' ? OPENAI_TEXT_MODELS
+    : GEMINI_TEXT_MODELS;
+}
+
 const AI_SETTINGS_DOC = doc(db, 'adminConfig', 'aiSettings');
+
+function asTextProvider(value: unknown, fallback: TextProvider = 'gemini'): TextProvider {
+  return TEXT_PROVIDERS.includes(value as TextProvider) ? (value as TextProvider) : fallback;
+}
 
 const IMAGE_PROVIDERS: AiSettingsConfig['imageProvider'][] = ['gemini', 'openai', 'replicate', 'budgetpixel'];
 
@@ -91,7 +144,16 @@ export async function getAiSettingsConfig(): Promise<AiSettingsConfig | null> {
     openaiApiKey: data.openaiApiKey ?? '',
     replicateApiKey: data.replicateApiKey ?? '',
     budgetpixelApiKey: data.budgetpixelApiKey ?? '',
+    anthropicApiKey: data.anthropicApiKey ?? '',
     geminiTextModel: data.geminiTextModel ?? '',
+    quoteProvider: asTextProvider(data.quoteProvider),
+    quoteModel: data.quoteModel ?? '',
+    scholarshipProvider: asTextProvider(data.scholarshipProvider),
+    scholarshipModel: data.scholarshipModel ?? '',
+    briefingProvider: asTextProvider(data.briefingProvider),
+    briefingModel: data.briefingModel ?? '',
+    dtekProvider: asTextProvider(data.dtekProvider),
+    dtekModel: data.dtekModel ?? '',
     geminiImageModel: data.geminiImageModel ?? '',
     openaiImageModel: data.openaiImageModel ?? '',
     budgetpixelImageModel: data.budgetpixelImageModel ?? '',
@@ -99,8 +161,24 @@ export async function getAiSettingsConfig(): Promise<AiSettingsConfig | null> {
   };
 }
 
-// This doc also holds anthropicApiKey/replicateImageModel fields managed outside
-// this tab (via Firebase Console) — merge so saving here never wipes them out.
-export async function saveAiSettingsConfig(config: AiSettingsConfig): Promise<void> {
+// Partial + merge: this doc also holds a Console-managed replicateImageModel and
+// the per-feature text choices written by saveAiTextChoice, and the AI Settings
+// panel owns only a subset of it — saving there must never wipe out the rest.
+export async function saveAiSettingsConfig(config: Partial<AiSettingsConfig>): Promise<void> {
   await setDoc(AI_SETTINGS_DOC, { ...config, updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+/** Writes just one feature's provider/model pair. The Daily Briefing and DTEK
+ *  News cards save on change rather than behind a form button, so they must not
+ *  round-trip (and risk clobbering) the rest of the doc. */
+export async function saveAiTextChoice(
+  feature: TextFeature,
+  provider: TextProvider,
+  model: string,
+): Promise<void> {
+  await setDoc(
+    AI_SETTINGS_DOC,
+    { [`${feature}Provider`]: provider, [`${feature}Model`]: model, updatedAt: new Date().toISOString() },
+    { merge: true },
+  );
 }

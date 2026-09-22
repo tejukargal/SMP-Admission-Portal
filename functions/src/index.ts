@@ -1019,9 +1019,9 @@ function isQuoteResult(value: unknown): value is QuoteResult {
   );
 }
 
-/** Asks Gemini for a fresh quote of the day, steering it away from the last
- *  30 saved quotes so consecutive days don't repeat. */
-async function generateQuoteText(apiKey: string, textModel: string): Promise<QuoteResult> {
+/** Asks the admin's chosen provider for a fresh quote of the day, steering it
+ *  away from the last 30 saved quotes so consecutive days don't repeat. */
+async function generateQuoteText(apiKeys: TextApiKeys, choice: TextChoice): Promise<QuoteResult> {
   const recentSnap = await db.collection('dailyQuote').orderBy('date', 'desc').limit(30).get();
   const recent = recentSnap.docs
     .map((d) => d.data() as DailyQuoteDoc)
@@ -1035,7 +1035,10 @@ async function generateQuoteText(apiKey: string, textModel: string): Promise<Quo
     ...(recent.length > 0 ? recent : ['(none yet)']),
   ].join('\n');
 
-  const rawText = await callGeminiTextForCircular(apiKey, textModel, QUOTE_SYSTEM, userMessage, 800, 'application/json');
+  const { text: rawText } = await callText({
+    provider: choice.provider, apiKeys, model: choice.model,
+    systemPrompt: QUOTE_SYSTEM, userMessage, maxTokens: 800, json: true,
+  });
   const parsed: unknown = JSON.parse(extractJsonObject(rawText));
   if (!isQuoteResult(parsed)) {
     throw new Error('The AI response was missing required quote fields.');
@@ -1093,32 +1096,46 @@ function isBriefingResult(value: unknown): value is BriefingResult {
   );
 }
 
-/** Reads adminConfig/aiSettings and validates the keys the daily briefing
- *  needs — shared by the on-demand callable below and the scheduled
- *  pre-generation job. Gemini's key is required unconditionally (it drives
- *  the text briefing whichever provider draws the image). */
-async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSettings: AiImageSettings }> {
+type TextFeature = 'quote' | 'scholarship' | 'briefing' | 'dtek';
+
+interface TextChoice {
+  provider: TextProvider;
+  model: string;
+}
+
+const TEXT_PROVIDERS: TextProvider[] = ['gemini', 'claude', 'openai'];
+
+/** Reads adminConfig/aiSettings: the API keys, each feature's chosen text
+ *  provider/model, and the image settings.
+ *
+ *  Key validation is deliberately lazy. Each feature may run on a different
+ *  provider now, so requiring one provider's key up front would lock out a
+ *  perfectly valid Claude-only or OpenAI-only setup; callText() raises the
+ *  same failed-precondition for whichever key is actually missing. The image
+ *  provider's key is still checked here, because the quote flow always draws a
+ *  background image whichever provider writes the text. */
+async function loadBriefingAiSettings(): Promise<{
+  apiKeys: TextApiKeys;
+  choice: (feature: TextFeature) => TextChoice;
+  imageSettings: AiImageSettings;
+}> {
   const configSnap = await db.doc('adminConfig/aiSettings').get();
   if (!configSnap.exists) {
     throw new HttpsError(
       'failed-precondition',
-      'AI not configured. Add a geminiApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
+      'AI not configured. Add a geminiApiKey, anthropicApiKey or openaiApiKey to adminConfig/aiSettings in Firestore.',
     );
   }
-  const { geminiApiKey, geminiTextModel, geminiImageModel, imageProvider, openaiApiKey, openaiImageModel, openaiImageQuality, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel } = configSnap.data() as {
-    geminiApiKey?: string;
-    geminiTextModel?: string;
-    geminiImageModel?: string;
-    imageProvider?: 'gemini' | 'openai' | 'replicate' | 'budgetpixel';
-    openaiApiKey?: string;
-    openaiImageModel?: string;
-    openaiImageQuality?: string;
-    replicateApiKey?: string;
-    replicateImageModel?: string;
-    budgetpixelApiKey?: string;
-    budgetpixelImageModel?: string;
-  };
-  if (!geminiApiKey?.trim()) {
+  const data = configSnap.data() as Record<string, string | undefined>;
+  const {
+    geminiApiKey, anthropicApiKey, geminiImageModel, openaiApiKey, openaiImageModel,
+    openaiImageQuality, replicateApiKey, replicateImageModel, budgetpixelApiKey, budgetpixelImageModel,
+  } = data;
+  const imageProvider = data.imageProvider as AiImageSettings['imageProvider'];
+
+  // Gemini is the default image provider, so its key is required unless the
+  // admin has explicitly switched image generation elsewhere.
+  if ((imageProvider ?? 'gemini') === 'gemini' && !geminiApiKey?.trim()) {
     throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
   }
   if (imageProvider === 'openai' && !openaiApiKey?.trim()) {
@@ -1130,11 +1147,21 @@ async function loadBriefingAiSettings(): Promise<{ textModel: string; imageSetti
   if (imageProvider === 'budgetpixel' && !budgetpixelApiKey?.trim()) {
     throw new HttpsError('failed-precondition', 'BudgetPixel API key is empty.');
   }
+
   return {
-    textModel: geminiTextModel?.trim() || 'gemini-3.5-flash-lite',
+    apiKeys: {
+      gemini: geminiApiKey?.trim(),
+      anthropic: anthropicApiKey?.trim(),
+      openai: openaiApiKey?.trim(),
+    },
+    choice: (feature) => {
+      const saved = data[`${feature}Provider`];
+      const provider = TEXT_PROVIDERS.includes(saved as TextProvider) ? (saved as TextProvider) : 'gemini';
+      return { provider, model: data[`${feature}Model`]?.trim() || DEFAULT_TEXT_MODEL[provider] };
+    },
     imageSettings: {
       imageProvider,
-      geminiApiKey: geminiApiKey.trim(),
+      geminiApiKey: geminiApiKey?.trim(),
       geminiImageModel: geminiImageModel?.trim() || 'gemini-3.1-flash-lite-image',
       openaiApiKey: openaiApiKey?.trim(),
       openaiImageModel: openaiImageModel?.trim(),
@@ -1165,13 +1192,12 @@ export const generateDailyQuotePreview = onCall(
     requireAdmin(request);
     const { scene: sceneOnly } = (request.data ?? {}) as { scene?: string };
 
-    const { textModel, imageSettings } = await loadBriefingAiSettings();
-    const geminiApiKey = imageSettings.geminiApiKey ?? '';
+    const { apiKeys, choice, imageSettings } = await loadBriefingAiSettings();
 
     try {
       const quote = sceneOnly?.trim()
         ? { quoteEn: '', quoteAuthor: '', quoteKn: '', theme: '', scene: sceneOnly.trim() }
-        : await generateQuoteText(geminiApiKey, textModel);
+        : await generateQuoteText(apiKeys, choice('quote'));
       const image = await generateAiImage(
         imageSettings,
         buildDailyQuoteImagePrompt(quote.scene, imageSettings.imageProvider),
@@ -1351,9 +1377,20 @@ Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "sch
 interface GeminiGroundedResponse {
   candidates?: {
     content?: { parts?: { text?: string }[] };
+    finishReason?: string;
     groundingMetadata?: { groundingChunks?: { web?: { uri?: string } }[] };
     urlContextMetadata?: { urlMetadata?: { retrievedUrl?: string }[] };
   }[];
+  // thoughtsTokenCount is the tell when a grounded call comes back empty: if it
+  // is close to maxOutputTokens, the model spent the whole budget reasoning and
+  // never got to the answer.
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
+    totalTokenCount?: number;
+  };
+  promptFeedback?: { blockReason?: string };
 }
 
 /** Like callGeminiTextForCircular, but with Gemini's built-in Google Search
@@ -1398,7 +1435,7 @@ function callGeminiGrounded(
             }
             const parsed = JSON.parse(raw) as GeminiGroundedResponse;
             const candidate = parsed.candidates?.[0];
-            const text = candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+            const text = (candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '').trim();
             const sources = new Set<string>();
             for (const chunk of candidate?.groundingMetadata?.groundingChunks ?? []) {
               if (chunk.web?.uri) sources.add(chunk.web.uri);
@@ -1406,7 +1443,25 @@ function callGeminiGrounded(
             for (const meta of candidate?.urlContextMetadata?.urlMetadata ?? []) {
               if (meta.retrievedUrl) sources.add(meta.retrievedUrl);
             }
-            resolve({ text: text.trim(), sources: [...sources] });
+            // Empty text used to resolve silently, so the caller reported an
+            // unhelpful "response was not valid JSON. It began:" with nothing
+            // after it. Say what actually went wrong instead.
+            if (!text) {
+              const u = parsed.usageMetadata ?? {};
+              const detail = [
+                `finishReason: ${candidate?.finishReason ?? 'none'}`,
+                parsed.promptFeedback?.blockReason ? `blockReason: ${parsed.promptFeedback.blockReason}` : '',
+                `thinking tokens: ${u.thoughtsTokenCount ?? 0} of ${maxTokens} budget`,
+                `answer tokens: ${u.candidatesTokenCount ?? 0}`,
+                `pages read: ${sources.size}`,
+              ].filter(Boolean).join(', ');
+              reject(new Error(
+                `${model} returned no text (${detail}). If the thinking tokens are near the budget, the model `
+                + 'spent it all reasoning — pick a stronger model, or reduce the number of source pages.',
+              ));
+              return;
+            }
+            resolve({ text, sources: [...sources] });
           } catch (err) {
             reject(err);
           }
@@ -1531,8 +1586,8 @@ export const fetchScholarshipUpdates = onCall(
     const requested = cleanStringList(((request.data ?? {}) as { sourceUrls?: unknown }).sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean);
     const sourceUrls = requested.length > 0 ? requested : DEFAULT_SCHOLARSHIP_SOURCES;
 
-    const { textModel, imageSettings } = await loadBriefingAiSettings();
-    const geminiApiKey = (imageSettings.geminiApiKey ?? '').trim();
+    const { apiKeys, choice } = await loadBriefingAiSettings();
+    const scholarshipChoice = choice('scholarship');
     const today = todayIST();
     const { dayLabel, dateLabel } = todayLabelsIST();
 
@@ -1548,7 +1603,12 @@ export const fetchScholarshipUpdates = onCall(
     let rawText = '';
     let groundedSources: string[] = [];
     try {
-      ({ text: rawText, sources: groundedSources } = await callGeminiGrounded(geminiApiKey, textModel, SCHOLARSHIP_SYSTEM, userMessage, 6000));
+      ({ text: rawText, sources: groundedSources } = await callText({
+        provider: scholarshipChoice.provider, apiKeys, model: scholarshipChoice.model,
+        // See the note in fetchDtekNews: grounded calls need headroom for the
+        // model's thinking phase on top of the answer.
+        systemPrompt: SCHOLARSHIP_SYSTEM, userMessage, maxTokens: 24000, grounded: true,
+      }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `AI fetch failed: ${msg}`);
@@ -1562,7 +1622,7 @@ export const fetchScholarshipUpdates = onCall(
     }
     const normalized = normalizeScholarshipUpdates(parsedJson, today);
     if (!normalized) {
-      throw new HttpsError('internal', 'The AI response contained no usable schemes. Try again, or switch the Gemini text model in AI Settings.');
+      throw new HttpsError('internal', 'The AI response contained no usable schemes. Try again, or pick a different provider/model above.');
     }
     // Schemes the model left unattributed fall back to the grounding URLs.
     const schemes = normalized.schemes.map((s) => (s.sources.length > 0 ? s : { ...s, sources: groundedSources.slice(0, 5) }));
@@ -1592,6 +1652,254 @@ export const publishScholarshipUpdates = onCall(
       publishedBy: request.auth?.uid ?? '',
     };
     await db.doc('scholarshipUpdates/current').set(doc);
+    return doc;
+  },
+);
+
+// ── DTEK News ─────────────────────────────────────────────────────────────
+// Structurally the Scholarship Updates feature pointed at the Department of
+// Technical Education Karnataka site: an admin fetches a grounded summary of
+// the latest departmental circulars, reviews and edits it, then publishes to
+// dtekNews/current for the admin Dashboard. Admin-only — students never see it.
+
+const DTEK_DEFAULT_SOURCES = [
+  'https://dtek.karnataka.gov.in/',
+  'https://dtek.karnataka.gov.in/72/departmental-circulars/en',
+];
+
+// Pins the web tools to the department's own hosts, so a search can't wander
+// off to a news aggregator and report second-hand dates as official ones.
+const DTEK_ALLOWED_DOMAINS = ['dtek.karnataka.gov.in', 'karnataka.gov.in'];
+
+const MAX_DTEK_CIRCULARS = 15;
+/** The model used to come back with only two or three items because the prompt
+ *  framed it as one college's assistant and told it to skip what didn't apply.
+ *  This is the floor it is now asked to reach. */
+const MIN_DTEK_CIRCULARS = 10;
+const MAX_DTEK_HIGHLIGHTS = 5;
+/** Circulars older than this are dropped — the dashboard section is a "what's
+ *  new" feed, not an archive. A year's window, because the department can go
+ *  quiet for weeks and a short one left too little to reach the floor above. */
+const DTEK_RECENT_DAYS = 365;
+
+const DTEK_CATEGORIES = [
+  'Circular', 'Exams', 'Admissions', 'Academics',
+  'Administration', 'Recruitment', 'Finance', 'Other',
+] as const;
+type DtekCategory = (typeof DTEK_CATEGORIES)[number];
+
+interface DtekCircular {
+  date: string | null;
+  dateText: string;
+  referenceNo: string;
+  title: string;
+  titleKn: string;
+  category: DtekCategory;
+  summary: string;
+  summaryKn: string;
+  highlights: string[];
+  affects: string;
+  actionRequired: boolean;
+  actionBy: string | null;
+  actionByText: string;
+  url: string;
+}
+
+interface DtekNewsDoc {
+  overviewEn: string;
+  overviewKn: string;
+  circulars: DtekCircular[];
+  sourceUrls: string[];
+  themeHue: number;
+  fetchedAt: string;
+  publishedAt: string;
+  publishedBy: string;
+}
+
+const DTEK_SYSTEM = `You are a technical-education desk officer in Karnataka, writing a digest of what the Department of Technical Education (DTE) has circulated recently for the polytechnic sector as a whole. Your readers are principals and office staff at government and aided polytechnics across the state.
+
+Your job: use your web tools to open the source URLs in the message — above all the departmental circulars listing page — then open the individual circulars themselves (they are often PDFs; read them), and write a structured, practical digest of what matters right now.
+
+## WHAT TO INCLUDE
+The ${MAX_DTEK_CIRCULARS} most recent circulars, newest first by the date printed on the circular. **Aim for at least ${MIN_DTEK_CIRCULARS}** — work steadily down the listing page until you have that many, going back further in time if the recent weeks are thin.
+
+Cover the whole polytechnic sector, not any one college: examinations and results, admissions and counselling, academic calendar, fee and scholarship instructions, staff and establishment matters, inspections and affiliation, returns and data submissions, recruitment, transfers and promotions, budget and finance, training and placement, NBA/AICTE matters.
+
+**Err firmly on the side of including.** A circular addressed to all principals, all institutions, or the department generally belongs here even when it names no particular college — that is the normal case, not an exception. Do not narrow to any single institution, and do not drop an item merely because it looks routine. Only skip a circular with genuinely no bearing on polytechnics (for example, one solely about engineering degree colleges).
+
+If after real effort the listing truly holds fewer than ${MIN_DTEK_CIRCULARS} circulars in range, report what you found and say so in overviewEn — never invent items to reach the number.
+
+## PER CIRCULAR — FIELDS
+- date: the date printed on the circular as YYYY-MM-DD, ONLY if you actually read it; otherwise null.
+- dateText: that date in words, e.g. "18 September 2026"; "Undated" if none.
+- referenceNo: the government reference/order number exactly as printed (e.g. "TEC 45 TPE 2026"); empty string if the circular shows none.
+- title: one plain English sentence saying what the circular directs, with the key fact in it.
+- titleKn: a natural Kannada rendering of title (proper Kannada script).
+- category: exactly one of ${DTEK_CATEGORIES.join(', ')}.
+- summary: 2-4 sentences of genuinely useful detail in English — what it directs, who must do it, and what changes compared to before. Written for a principal who has 20 seconds.
+- summaryKn: the same summary in natural Kannada (proper Kannada script), the way a Kannada-speaking officer would write it — a real rendering of the meaning, not a stiff word-for-word translation. Keep technical terms, portal names, form numbers and dates readable rather than forcing them into Kannada.
+- highlights: up to ${MAX_DTEK_HIGHLIGHTS} short bullet points carrying the concrete specifics — dates, amounts, form names, portal names, percentages, who must sign. Each a fragment, not a sentence. This is the most useful field; make every bullet carry a fact.
+- affects: who must act, in a few words — e.g. "All polytechnic principals", "Exam branch", "Students (final year)", "Teaching staff".
+- actionRequired: true only when the circular asks the college to DO something by a date or in a form.
+- actionBy: the deadline as YYYY-MM-DD if the circular states one; otherwise null.
+- actionByText: the deadline in words with its basis, e.g. "Returns due 30 September 2026"; "No deadline stated" when there is none.
+- url: the exact link to that circular or its PDF.
+
+## RULES
+- Every date, reference number, amount and deadline must come from a circular page you actually opened. Never invent, estimate or carry over last year's date as this year's. If you could not read a field, leave it empty or null rather than guessing.
+- Never list a circular you did not actually find on the sources — an honest short list is far better than a padded one.
+- Keep each field short and plain; English fields in English, Kannada script only in titleKn, summaryKn and overviewKn.
+- overviewEn: 1-2 sentences summarising what is new and what needs action. overviewKn: a natural Kannada rendering of overviewEn.
+
+## OUTPUT FORMAT — STRICT
+Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "circulars": [ { "date", "dateText", "referenceNo", "title", "titleKn", "category", "summary", "summaryKn", "highlights": string[], "affects", "actionRequired": boolean, "actionBy", "actionByText", "url" } ]}. No markdown fences, no explanation, no trailing text.`;
+
+/** Normalises one circular from the model (or the admin's edited form) into the
+ *  stored shape; returns null if it has no usable title. */
+function normalizeDtekCircular(value: unknown): DtekCircular | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const title = cleanString(v.title, 300);
+  if (!title) return null;
+  const dateRaw = cleanString(v.date, 20);
+  const actionByRaw = cleanString(v.actionBy, 20);
+  const actionBy = /^\d{4}-\d{2}-\d{2}$/.test(actionByRaw) ? actionByRaw : null;
+  return {
+    date: /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null,
+    dateText: cleanString(v.dateText, 60) || 'Undated',
+    referenceNo: cleanString(v.referenceNo, 120),
+    title,
+    titleKn: cleanString(v.titleKn, 400),
+    category: DTEK_CATEGORIES.includes(v.category as DtekCategory) ? (v.category as DtekCategory) : 'Circular',
+    summary: cleanString(v.summary, 1500),
+    summaryKn: cleanString(v.summaryKn, 1500),
+    highlights: cleanStringList(v.highlights, MAX_DTEK_HIGHLIGHTS, 300),
+    affects: cleanString(v.affects, 200),
+    // A stated deadline is what makes something actionable, whatever the model claimed.
+    actionRequired: v.actionRequired === true || actionBy !== null,
+    actionBy,
+    actionByText: cleanString(v.actionByText, 300) || (actionBy ?? 'No deadline stated'),
+    url: cleanUrl(v.url),
+  };
+}
+
+function normalizeDtekNews(value: unknown, today: string): Pick<DtekNewsDoc, 'overviewEn' | 'overviewKn' | 'circulars'> | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (!Array.isArray(v.circulars)) return null;
+  const circulars = v.circulars
+    .map(normalizeDtekCircular)
+    .filter((c): c is DtekCircular => c !== null)
+    // Undated items are kept (a real circular may carry no printed date) but
+    // sort last, since they can't be placed on the dashboard's date timeline.
+    .filter((c) => c.date === null || daysBetweenIsoDates(c.date, today) <= DTEK_RECENT_DAYS)
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+    .slice(0, MAX_DTEK_CIRCULARS);
+  if (circulars.length === 0) return null;
+  return {
+    overviewEn: cleanString(v.overviewEn, 600),
+    overviewKn: cleanString(v.overviewKn, 600),
+    circulars,
+  };
+}
+
+async function getDtekSources(): Promise<string[]> {
+  const snap = await db.doc('adminConfig/dtekSources').get();
+  const urls = cleanStringList((snap.data() as { urls?: unknown } | undefined)?.urls, 10, 1000)
+    .map(cleanUrl)
+    .filter(Boolean);
+  return urls.length > 0 ? urls : DTEK_DEFAULT_SOURCES;
+}
+
+/** Settings › DTEK News › "Fetch latest": asks the admin's chosen provider
+ *  (grounded) to read the department site and summarise its recent circulars.
+ *  Stateless — nothing is written until the admin publishes. */
+export const fetchDtekNews = onCall(
+  { region: 'asia-south1', timeoutSeconds: 300 },
+  async (request) => {
+    requireAdmin(request);
+    const requested = cleanStringList(((request.data ?? {}) as { sourceUrls?: unknown }).sourceUrls, 10, 1000)
+      .map(cleanUrl)
+      .filter(Boolean);
+    const sourceUrls = requested.length > 0 ? requested : await getDtekSources();
+
+    const { apiKeys, choice } = await loadBriefingAiSettings();
+    const dtekChoice = choice('dtek');
+    const today = todayIST();
+    const { dayLabel, dateLabel } = todayLabelsIST();
+
+    const userMessage = [
+      `TODAY: ${dayLabel}, ${dateLabel} (${today}). Academic year in Karnataka runs June to May.`,
+      '',
+      'SOURCES (open each one; on a circulars listing page, follow the individual circular links and read the PDFs themselves):',
+      ...sourceUrls.map((u) => `- ${u}`),
+      '',
+      `Report circulars dated within the last ${DTEK_RECENT_DAYS} days, newest first — at least ${MIN_DTEK_CIRCULARS} of them if the listing holds that many, up to ${MAX_DTEK_CIRCULARS}.`,
+      'Include every circular addressed to polytechnics generally, not only ones naming a specific college. Give the reference number exactly as printed on each circular.',
+    ].join('\n');
+
+    let rawText = '';
+    let groundedSources: string[] = [];
+    try {
+      ({ text: rawText, sources: groundedSources } = await callText({
+        provider: dtekChoice.provider, apiKeys, model: dtekChoice.model,
+        // Generous budget on purpose: a grounded call spends most of it on an
+        // internal thinking phase before writing a word, and a cap that only
+        // fits the answer comes back empty. Billing is on tokens actually
+        // produced, so a high ceiling costs nothing extra.
+        systemPrompt: DTEK_SYSTEM, userMessage, maxTokens: 32000,
+        grounded: true, allowedDomains: DTEK_ALLOWED_DOMAINS,
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError('internal', `AI fetch failed: ${msg}`);
+    }
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(extractJsonObject(rawText));
+    } catch {
+      throw new HttpsError('internal', `The AI response was not valid JSON. It began: ${rawText.slice(0, 200)}`);
+    }
+    const normalized = normalizeDtekNews(parsedJson, today);
+    if (!normalized) {
+      throw new HttpsError(
+        'internal',
+        'The AI response contained no usable circulars. Try again, or pick a different provider/model above.',
+      );
+    }
+    // Circulars the model left unlinked fall back to the pages it actually read.
+    const circulars = normalized.circulars.map((c) => (c.url ? c : { ...c, url: groundedSources[0] ?? '' }));
+    return {
+      ...normalized, circulars,
+      themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString(),
+    };
+  },
+);
+
+/** Settings › DTEK News › "Publish": stores the reviewed digest at
+ *  dtekNews/current (Admin SDK — clients can't write it). Re-runs the same
+ *  normaliser, so a hand-edited payload can't smuggle in unvalidated data. */
+export const publishDtekNews = onCall(
+  { region: 'asia-south1', timeoutSeconds: 30 },
+  async (request) => {
+    requireAdmin(request);
+    const data = (request.data ?? {}) as Record<string, unknown>;
+    const normalized = normalizeDtekNews(data, todayIST());
+    if (!normalized) {
+      throw new HttpsError('invalid-argument', 'At least one circular with a title is required.');
+    }
+    const doc: DtekNewsDoc = {
+      ...normalized,
+      sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean),
+      themeHue: Number.isInteger(data.themeHue) && (data.themeHue as number) >= 0 && (data.themeHue as number) < 360
+        ? (data.themeHue as number)
+        : randomHue(),
+      fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      publishedBy: request.auth?.uid ?? '',
+    };
+    await db.doc('dtekNews/current').set(doc);
     return doc;
   },
 );
@@ -1795,8 +2103,11 @@ async function collectStudentBriefingData(regNumber: string): Promise<{ primary:
   return { primary, dataBlock };
 }
 
-async function generateBriefingText(apiKey: string, textModel: string, dataBlock: string): Promise<BriefingResult> {
-  const rawText = await callGeminiTextForCircular(apiKey, textModel, BRIEFING_SYSTEM, dataBlock, 2400, 'application/json');
+async function generateBriefingText(apiKeys: TextApiKeys, choice: TextChoice, dataBlock: string): Promise<BriefingResult> {
+  const { text: rawText } = await callText({
+    provider: choice.provider, apiKeys, model: choice.model,
+    systemPrompt: BRIEFING_SYSTEM, userMessage: dataBlock, maxTokens: 2400, json: true,
+  });
   const parsedJson: unknown = JSON.parse(extractJsonObject(rawText));
   if (!isBriefingResult(parsedJson)) {
     throw new Error('The AI response was missing required fields.');
@@ -1827,8 +2138,7 @@ export const generateDailyBriefing = onCall(
       throw new HttpsError('failed-precondition', 'No registration number on this account yet.');
     }
 
-    const { textModel, imageSettings } = await loadBriefingAiSettings();
-    const geminiApiKey = imageSettings.geminiApiKey ?? '';
+    const { apiKeys, choice } = await loadBriefingAiSettings();
 
     const today = todayIST();
 
@@ -1848,7 +2158,7 @@ export const generateDailyBriefing = onCall(
     const { dataBlock } = await collectStudentBriefingData(regNumber);
 
     try {
-      const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
+      const result = await generateBriefingText(apiKeys, choice('briefing'), dataBlock);
       const generatedAt = new Date().toISOString();
       await db.collection('dailyBriefing').doc(regNumber).set({ date: today, ...result, generatedAt });
       return { date: today, quote, scholarships, ...result, generatedAt };
@@ -1873,8 +2183,7 @@ export const previewStudentBriefing = onCall(
       throw new HttpsError('invalid-argument', 'regNumber is required.');
     }
 
-    const { textModel, imageSettings } = await loadBriefingAiSettings();
-    const geminiApiKey = imageSettings.geminiApiKey ?? '';
+    const { apiKeys, choice } = await loadBriefingAiSettings();
 
     const [quote, scholarships, { dataBlock }] = await Promise.all([
       getLatestDailyQuote(),
@@ -1883,7 +2192,7 @@ export const previewStudentBriefing = onCall(
     ]);
 
     try {
-      const result = await generateBriefingText(geminiApiKey.trim(), textModel, dataBlock);
+      const result = await generateBriefingText(apiKeys, choice('briefing'), dataBlock);
       return { date: todayIST(), quote, scholarships, ...result, generatedAt: new Date().toISOString(), dataBlock };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2097,10 +2406,11 @@ function callClaudeForCircular(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number,
+  model: string = CLAUDE_DRAFT_MODEL,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
-      model: CLAUDE_DRAFT_MODEL,
+      model,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -2218,6 +2528,312 @@ function callGeminiTextForCircular(
     req.write(body);
     req.end();
   });
+}
+
+// ── Multi-provider text generation ────────────────────────────────────────
+// The Daily Briefing features and DTEK News each pick their own provider and
+// model (Settings). Everything below funnels into callText(), so the callables
+// stay provider-agnostic. Keys still live in adminConfig/aiSettings and every
+// request is hand-rolled node:https — this project ships no provider SDKs.
+
+type TextProvider = 'gemini' | 'claude' | 'openai';
+
+interface TextCallResult {
+  text: string;
+  /** URLs the model actually read. Empty for non-grounded calls. */
+  sources: string[];
+}
+
+interface TextApiKeys {
+  gemini?: string;
+  anthropic?: string;
+  openai?: string;
+}
+
+const DEFAULT_TEXT_MODEL: Record<TextProvider, string> = {
+  gemini: 'gemini-3.5-flash-lite',
+  claude: 'claude-sonnet-5',
+  openai: 'gpt-5.6-luna',
+};
+
+// Claude models whose thinking is adaptive-on by default, and which accept
+// output_config.effort. Haiku 4.5 accepts neither and 400s on effort.
+const CLAUDE_THINKING_MODELS = new Set(['claude-sonnet-5', 'claude-opus-5']);
+
+/** Adaptive thinking is drawn from max_tokens on Sonnet 5 / Opus 5, so a budget
+ *  sized for the visible answer alone gets the real output truncated partway
+ *  through the JSON. Haiku 4.5 does not think unless asked, so it keeps the
+ *  caller's number. */
+function claudeTokenBudget(model: string, maxTokens: number): number {
+  return CLAUDE_THINKING_MODELS.has(model) ? Math.max(maxTokens * 4, 8000) : maxTokens;
+}
+
+function claudeEffort(model: string, effort: 'low' | 'high'): Record<string, unknown> {
+  return CLAUDE_THINKING_MODELS.has(model) ? { output_config: { effort } } : {};
+}
+
+interface AnthropicContentBlock {
+  type: string;
+  text?: string;
+  // web_search_tool_result / web_fetch_tool_result: an array on success, a bare
+  // error object on failure — these server tools never raise, they return 200.
+  content?: unknown;
+}
+
+/** Claude with its server-side web_search + web_fetch tools switched on, the
+ *  Anthropic counterpart of callGeminiGrounded. Returns the same
+ *  { text, sources } shape so callers don't care which provider ran.
+ *
+ *  Three things a plain message call never has to handle:
+ *  1. server-tool failures arrive as HTTP 200 with an error object inside a
+ *     result block, so a "successful" call can silently have read nothing;
+ *  2. stop_reason 'pause_turn' means the model paused mid-research and the turn
+ *     must be handed back to it to continue;
+ *  3. sources have to be harvested out of the tool-result blocks. */
+async function callClaudeGrounded(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+  allowedDomains?: string[],
+): Promise<TextCallResult> {
+  const domainFilter = allowedDomains && allowedDomains.length > 0 ? { allowed_domains: allowedDomains } : {};
+  const tools = [
+    { type: 'web_search_20260209', name: 'web_search', max_uses: 10, ...domainFilter },
+    { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 16, ...domainFilter },
+  ];
+
+  const messages: { role: string; content: unknown }[] = [{ role: 'user', content: userMessage }];
+  const sources = new Set<string>();
+  const textParts: string[] = [];
+  const toolErrors: string[] = [];
+
+  // A research turn can pause more than once; cap the continuations so a
+  // pathological loop can't burn the whole function timeout.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const parsed = await anthropicRequest(apiKey, {
+      model,
+      max_tokens: claudeTokenBudget(model, maxTokens),
+      ...claudeEffort(model, 'high'),
+      system: systemPrompt,
+      tools,
+      messages,
+    });
+
+    const blocks = (parsed.content ?? []) as AnthropicContentBlock[];
+    for (const block of blocks) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        textParts.push(block.text);
+        continue;
+      }
+      if (block.type !== 'web_search_tool_result' && block.type !== 'web_fetch_tool_result') continue;
+      const content = block.content;
+      if (Array.isArray(content)) {
+        for (const entry of content as Record<string, unknown>[]) {
+          const url = typeof entry.url === 'string' ? entry.url : undefined;
+          if (url) sources.add(url);
+          // web_fetch wraps the page in a document block carrying the URL it got.
+          const doc = entry.document as { source?: { url?: string } } | undefined;
+          if (typeof doc?.source?.url === 'string') sources.add(doc.source.url);
+        }
+      } else if (content && typeof content === 'object') {
+        const code = (content as { error_code?: string }).error_code;
+        if (code) toolErrors.push(`${block.type}: ${code}`);
+      }
+    }
+
+    if (parsed.stop_reason !== 'pause_turn') break;
+    // Hand the partial turn back verbatim so the model resumes where it paused.
+    messages.push({ role: 'assistant', content: parsed.content });
+  }
+
+  const text = textParts.join('').trim();
+  if (!text) {
+    const why = toolErrors.length > 0 ? ` (web tools failed — ${toolErrors.join('; ')})` : '';
+    throw new Error(`empty response from Claude${why}`);
+  }
+  return { text, sources: [...sources] };
+}
+
+/** Shared POST to the Anthropic messages endpoint. Resolves the parsed body on
+ *  200 and rejects with the API's own message otherwise. */
+function anthropicRequest(
+  apiKey: string,
+  payload: Record<string, unknown>,
+): Promise<{ content?: unknown[]; stop_reason?: string }> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const req = https.request(
+      {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              let apiMsg = `HTTP ${res.statusCode}`;
+              try {
+                const errBody = JSON.parse(raw) as { error?: { message?: string } };
+                if (errBody.error?.message) apiMsg += `: ${errBody.error.message}`;
+              } catch { /* raw may not be JSON */ }
+              reject(new Error(apiMsg));
+              return;
+            }
+            resolve(JSON.parse(raw) as { content?: unknown[]; stop_reason?: string });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+interface OpenAiResponsesBody {
+  output?: {
+    type: string;
+    content?: { type: string; text?: string; annotations?: { type?: string; url?: string }[] }[];
+  }[];
+  output_text?: string;
+}
+
+/** OpenAI via the Responses API (/v1/responses), optionally with its hosted
+ *  web_search tool. Instructions go in the top-level `instructions` field and
+ *  the prompt in `input`; cited URLs come back as url_citation annotations on
+ *  the assistant message's output_text blocks. */
+function callOpenAiText(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number,
+  grounded: boolean,
+): Promise<TextCallResult> {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model,
+      instructions: systemPrompt,
+      input: userMessage,
+      max_output_tokens: maxTokens,
+      ...(grounded ? { tools: [{ type: 'web_search' }] } : {}),
+    });
+    const req = https.request(
+      {
+        hostname: 'api.openai.com',
+        path: '/v1/responses',
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk: Buffer) => { raw += chunk.toString(); });
+        res.on('end', () => {
+          try {
+            if (res.statusCode !== 200) {
+              let apiMsg = `HTTP ${res.statusCode}`;
+              try {
+                const errBody = JSON.parse(raw) as { error?: { message?: string } };
+                if (errBody.error?.message) apiMsg += `: ${errBody.error.message}`;
+              } catch { /* raw may not be JSON */ }
+              reject(new Error(apiMsg));
+              return;
+            }
+            const parsed = JSON.parse(raw) as OpenAiResponsesBody;
+            const sources = new Set<string>();
+            const textParts: string[] = [];
+            for (const item of parsed.output ?? []) {
+              if (item.type !== 'message') continue;
+              for (const block of item.content ?? []) {
+                if (block.type !== 'output_text') continue;
+                if (typeof block.text === 'string') textParts.push(block.text);
+                for (const ann of block.annotations ?? []) {
+                  if (ann.type === 'url_citation' && typeof ann.url === 'string') sources.add(ann.url);
+                }
+              }
+            }
+            // output_text is the SDK's convenience roll-up; fall back to it when
+            // the output array shape is not what we expect.
+            const text = (textParts.join('') || parsed.output_text || '').trim();
+            if (!text) {
+              reject(new Error('empty response from OpenAI'));
+              return;
+            }
+            resolve({ text, sources: [...sources] });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/** The one entry point every provider-agnostic text feature calls. `json` asks
+ *  for strict JSON where the provider allows it; note Gemini forbids JSON mode
+ *  alongside its web tools, which is why every caller parses the result with
+ *  extractJsonObject regardless. */
+async function callText(opts: {
+  provider: TextProvider;
+  apiKeys: TextApiKeys;
+  model: string;
+  systemPrompt: string;
+  userMessage: string;
+  maxTokens: number;
+  json?: boolean;
+  grounded?: boolean;
+  allowedDomains?: string[];
+}): Promise<TextCallResult> {
+  const { provider, apiKeys, systemPrompt, userMessage, maxTokens, json, grounded, allowedDomains } = opts;
+  const model = opts.model?.trim() || DEFAULT_TEXT_MODEL[provider];
+
+  if (provider === 'claude') {
+    const key = apiKeys.anthropic?.trim();
+    if (!key) throw new HttpsError('failed-precondition', 'Anthropic API key is empty.');
+    if (grounded) {
+      return callClaudeGrounded(key, model, systemPrompt, userMessage, maxTokens, allowedDomains);
+    }
+    const text = await callClaudeForCircular(
+      key, systemPrompt, userMessage, claudeTokenBudget(model, maxTokens), model,
+    );
+    return { text, sources: [] };
+  }
+
+  if (provider === 'openai') {
+    const key = apiKeys.openai?.trim();
+    if (!key) throw new HttpsError('failed-precondition', 'OpenAI API key is empty.');
+    return callOpenAiText(key, model, systemPrompt, userMessage, maxTokens, grounded === true);
+  }
+
+  const key = apiKeys.gemini?.trim();
+  if (!key) throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
+  if (grounded) {
+    return callGeminiGrounded(key, model, systemPrompt, userMessage, maxTokens);
+  }
+  const text = await callGeminiTextForCircular(
+    key, model, systemPrompt, userMessage, maxTokens, json ? 'application/json' : undefined,
+  );
+  return { text, sources: [] };
 }
 
 // Shared by the circular and notice drafting callables: reads the admin's AI
@@ -3293,7 +3909,20 @@ export const generateTabHeaderBackground = onCall(
       throw new HttpsError('failed-precondition', 'Gemini API key is empty.');
     }
 
-    const background = pickRandom(HEADER_BACKGROUND_PALETTES);
+    // Exclude whichever pastels are already saved on the OTHER 5 tab headers, so
+    // regenerating never lands a tab on the same background another tab is
+    // currently showing — falls back to the full pool if that ever leaves
+    // nothing to pick from (pool exhausted is never allowed to block
+    // generation), and gracefully ignores any sibling tab whose header
+    // predates this tracking (no `{key}Color` saved yet).
+    const tabHeadersSnap = await db.doc('appConfig/tabHeaders').get();
+    const tabHeadersData = (tabHeadersSnap.exists ? tabHeadersSnap.data() : {}) as Record<string, unknown>;
+    const inUse = new Set(
+      TAB_HEADER_KEYS.filter((k) => k !== tabKey).map((k) => tabHeadersData[`${k}Color`]).filter(Boolean),
+    );
+    const availablePalettes = HEADER_BACKGROUND_PALETTES.filter((p) => !inUse.has(p.textHex));
+    const background = pickRandom(availablePalettes.length > 0 ? availablePalettes : HEADER_BACKGROUND_PALETTES);
+
     const prompt =
       tabKey === 'home'
         ? buildHomeHeaderPrompt(settings.imageProvider, background)
@@ -3301,9 +3930,15 @@ export const generateTabHeaderBackground = onCall(
 
     try {
       const image = await generateAiImage(settings, prompt);
-      // Only Home needs the matching text colour — every other tab's title
-      // stays black, which reads fine against any of these light pastels.
-      return tabKey === 'home' ? { ...image, textColor: background.textHex } : image;
+      // Every tab reports back `color` (an identity for whichever pool entry got
+      // picked) so a sibling tab's next regenerate can exclude it, per above.
+      // Only Home additionally needs `textColor` — every other tab's title stays
+      // black, which reads fine against any of these light pastels.
+      return {
+        ...image,
+        color: background.textHex,
+        ...(tabKey === 'home' ? { textColor: background.textHex } : {}),
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
@@ -3350,18 +3985,39 @@ const CATEGORY_ICON_SCENES: Record<CategoryIconKey, string> = {
 };
 
 // Reference look: a course-catalogue style app card — one plain, solid soft
-// pastel background per card (peach / periwinkle / mint / lavender) with a
-// single colourful illustration sitting on it. The background is the *only*
-// pastel element; the character is deliberately vivid so it pops against it.
-// Four distinct hues keep the Overview tiles visually separate from each other.
-const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
-  circulars: 'soft pastel peach (a light, warm apricot)',
-  notices: 'soft pastel periwinkle blue (a light, lavender-tinted blue)',
-  fees: 'soft pastel mint (a light, minty aqua-green)',
-  certificates: 'soft pastel lilac (a light lavender-purple)',
-  dailyBriefing: 'soft pastel butter yellow (a light, warm sunrise yellow)',
-  scholarships: 'soft pastel sage (a light, gentle sage green)',
-};
+// pastel background per card with a single colourful illustration sitting on
+// it. The background is the *only* pastel element; the character is
+// deliberately vivid so it pops against it.
+//
+// Pool for the 4 Overview-tile categories (circulars/notices/fees/certificates) —
+// one is picked at random per generation (same `pickRandom` pattern as
+// CATEGORY_ICON_BANNER_PALETTES below), excluding whichever colours are
+// already saved on the *other* 3 tiles (see generateCategoryIcon below), so
+// regenerating gives real variety while the 4 tiles stay visually distinct
+// from each other. Each entry pairs the pastel background description with
+// its matching deep, saturated label-text hex (always the dark member of the
+// pair — the background is always light, so the label never needs to flip
+// to light text, unlike the banner pool below). The student app reads the
+// chosen `label` back via appConfig/categoryIcons.{key}LabelColor (threaded
+// through categoryIconService.ts's setCategoryIcon) to colour that tile's
+// text to match whichever pastel got picked.
+const CATEGORY_ICON_TILE_PALETTES: readonly { color: string; label: string }[] = [
+  { color: 'soft pastel blush pink (a light, warm rose pink)', label: '#C2517B' },
+  { color: 'soft pastel periwinkle blue (a light, lavender-tinted sky blue)', label: '#3E7CB1' },
+  { color: 'soft pastel mint (a light, minty aqua-green)', label: '#3F9463' },
+  { color: 'soft pastel lilac (a light lavender-purple)', label: '#8B5FBF' },
+  { color: 'soft pastel peach (a light, warm apricot)', label: '#C97E2E' },
+  { color: 'soft pastel butter yellow (a light, warm sunrise yellow)', label: '#A88A2E' },
+  { color: 'soft pastel sage (a light, gentle sage green)', label: '#4C7A4F' },
+  { color: 'soft pastel coral (a light, warm salmon-coral)', label: '#C15B41' },
+];
+
+const TILE_ICON_KEYS: readonly ('circulars' | 'notices' | 'fees' | 'certificates')[] = [
+  'circulars',
+  'notices',
+  'fees',
+  'certificates',
+];
 
 // Composition is pinned to what the student app's Overview tile needs: the
 // image is rendered full-bleed behind the tile, with the label/value text
@@ -3377,10 +4033,10 @@ const CATEGORY_ICON_COLORS: Record<CategoryIconKey, string> = {
 // built by buildBannerIconPrompt directly from generateCategoryIcon's
 // handler below, since that one needs the randomly-picked palette back out
 // to report `textIsLight` alongside the image.
-function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider']): string {
+function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings['imageProvider'], color: string): string {
   const character = drawRandomCharacter({ withProps: true });
   return [
-    `Flat vector illustration for a mobile app stat card, square 1:1 composition. The entire background is one single, solid, flat ${CATEGORY_ICON_COLORS[key]} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
+    `Flat vector illustration for a mobile app stat card, square 1:1 composition. The entire background is one single, solid, flat ${color} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no ground line, no shadows or texture on the background.`,
     `Depict ${withStudent(CATEGORY_ICON_SCENES[key], character.subject)}, positioned in the right two-thirds of the frame.`,
     `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.`,
     'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
@@ -3504,13 +4160,33 @@ export const generateCategoryIcon = onCall(
 
     const isBanner = CATEGORY_ICON_BANNER_KEYS.has(key as CategoryIconKey);
     const bannerPalette = isBanner ? pickRandom(CATEGORY_ICON_BANNER_PALETTES) : null;
+
+    // Tile keys (not banners): exclude whichever pastels are already saved on the
+    // OTHER 3 tiles, so the 4 Overview tiles never end up sharing a background at
+    // the same time — falls back to the full pool if that ever leaves nothing to
+    // pick from (pool exhausted is never allowed to block generation).
+    let tilePalette: { color: string; label: string } | null = null;
+    if (!isBanner) {
+      const iconsSnap = await db.doc('appConfig/categoryIcons').get();
+      const iconsData = (iconsSnap.exists ? iconsSnap.data() : {}) as Record<string, unknown>;
+      const inUse = new Set(
+        TILE_ICON_KEYS.filter((k) => k !== key).map((k) => iconsData[`${k}LabelColor`]).filter(Boolean),
+      );
+      const available = CATEGORY_ICON_TILE_PALETTES.filter((p) => !inUse.has(p.label));
+      tilePalette = pickRandom(available.length > 0 ? available : CATEGORY_ICON_TILE_PALETTES);
+    }
+
     const prompt = bannerPalette
       ? buildBannerIconPrompt(key as CategoryIconKey, settings.imageProvider, bannerPalette)
-      : buildCategoryIconPrompt(key as CategoryIconKey, settings.imageProvider);
+      : buildCategoryIconPrompt(key as CategoryIconKey, settings.imageProvider, tilePalette!.color);
 
     try {
       const image = await generateAiImage(settings, prompt, categoryIconAspect(key as CategoryIconKey));
-      return { ...image, textIsLight: bannerPalette?.textIsLight ?? false };
+      return {
+        ...image,
+        textIsLight: bannerPalette?.textIsLight ?? false,
+        labelColor: tilePalette?.label,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);

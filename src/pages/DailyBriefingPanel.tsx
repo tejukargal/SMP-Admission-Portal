@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
+import { TextModelPicker } from '../components/common/TextModelPicker';
+import { useTextModelChoice } from '../hooks/useTextModelChoice';
+import { todayIST, formatIsoDate, formatIsoDateTime, daysAgo } from '../utils/formatDates';
 import {
   getLatestDailyQuote, generateDailyQuotePreview, saveDailyQuote, previewStudentBriefing,
   getScholarshipSources, saveScholarshipSources, getPublishedScholarshipUpdates, fetchScholarshipUpdates, publishScholarshipUpdates,
@@ -12,15 +15,7 @@ import {
 const TEXTAREA_CLASS =
   'block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y';
 
-function todayIST(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 /** Today's shared quote: shows what students currently see (the latest saved
  *  quote, which may be from an earlier day), then a Generate → edit → Save
@@ -34,6 +29,7 @@ function QuoteCard() {
   const [generating, setGenerating] = useState<'all' | 'image' | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const quoteAi = useTextModelChoice('quote');
 
   useEffect(() => {
     getLatestDailyQuote()
@@ -111,7 +107,7 @@ function QuoteCard() {
           <div className="flex items-center gap-2">
             {saved ? (
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${savedIsToday ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                {savedIsToday ? 'Saved for today' : `Last saved ${formatDate(saved.date)} — students still see this`}
+                {savedIsToday ? 'Saved for today' : `Last saved ${formatIsoDate(saved.date)} — students still see this`}
               </span>
             ) : (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
@@ -172,6 +168,15 @@ function QuoteCard() {
 
           {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
 
+          <div className="max-w-md">
+            <TextModelPicker
+              provider={quoteAi.provider}
+              model={quoteAi.model}
+              onChange={quoteAi.setChoice}
+              disabled={quoteAi.loading || generating !== null}
+            />
+          </div>
+
           <div className="flex gap-2 flex-wrap">
             <Button
               type="button"
@@ -223,16 +228,7 @@ const STATUS_CLASS: Record<ScholarshipStatus, string> = {
   unknown: 'bg-gray-100 text-gray-600',
 };
 
-function daysAgo(iso: string): number {
-  return Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
-}
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
 
 /** One scheme's editable block inside the pending (unpublished) summary. */
 function SchemeEditor({
@@ -425,6 +421,7 @@ function ScholarshipsCard() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [showPublished, setShowPublished] = useState(false);
+  const scholarshipAi = useTextModelChoice('scholarship');
 
   useEffect(() => {
     Promise.all([getScholarshipSources(), getPublishedScholarshipUpdates()])
@@ -554,7 +551,7 @@ function ScholarshipsCard() {
           <div className="flex items-center gap-2 flex-wrap">
             {published ? (
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${(publishedAge ?? 0) > 21 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                Published {formatDateTime(published.publishedAt)}
+                Published {formatIsoDateTime(published.publishedAt)}
                 {publishedAge !== null && publishedAge > 0 ? ` (${publishedAge} day${publishedAge === 1 ? '' : 's'} ago)` : ' (today)'}
                 {' · '}{published.schemes.length} scheme{published.schemes.length === 1 ? '' : 's'}
                 {' · '}{(published.news ?? []).length} news
@@ -598,7 +595,7 @@ function ScholarshipsCard() {
           {pending && (
             <div className="space-y-4">
               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                Fetched {formatDateTime(pending.fetchedAt)} — check every date against the portal before publishing
+                Fetched {formatIsoDateTime(pending.fetchedAt)} — check every date against the portal before publishing
               </p>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Overview (English)</label>
@@ -635,6 +632,16 @@ function ScholarshipsCard() {
 
           {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
 
+          <div className="max-w-md">
+            <TextModelPicker
+              grounded
+              provider={scholarshipAi.provider}
+              model={scholarshipAi.model}
+              onChange={scholarshipAi.setChoice}
+              disabled={scholarshipAi.loading || fetching}
+            />
+          </div>
+
           <div className="flex gap-2 flex-wrap">
             <Button
               type="button"
@@ -661,9 +668,9 @@ function ScholarshipsCard() {
             <p className="text-xs text-gray-400">Reading the portals and their latest notices — this can take a minute or two.</p>
           )}
           <p className="text-[11px] text-gray-400">
-            Uses the Gemini text model from AI Settings with web access. If fetching fails with a tools/model error, pick a
-            model that supports Google Search grounding there. A newly published summary shows in the app immediately; the
-            reminder point in a student's highlights appears from their next daily generation.
+            If fetching fails with a tools/model error, pick a different provider or model above — not every model can
+            read live web pages. A newly published summary shows in the app immediately; the reminder point in a
+            student&apos;s highlights appears from their next daily generation.
           </p>
 
           {/* Currently published (read-only) */}
@@ -702,6 +709,7 @@ function StudentPreviewCard() {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<StudentBriefingPreview | null>(null);
   const [showData, setShowData] = useState(false);
+  const briefingAi = useTextModelChoice('briefing');
 
   async function handlePreview() {
     const reg = regNumber.trim();
@@ -732,6 +740,18 @@ function StudentPreviewCard() {
         </p>
       </div>
       <div className="px-6 py-5 space-y-4">
+        <div className="max-w-md">
+          <TextModelPicker
+            provider={briefingAi.provider}
+            model={briefingAi.model}
+            onChange={briefingAi.setChoice}
+            disabled={briefingAi.loading || loading}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            This choice also drives the real briefing every student generates each morning, not just this preview.
+          </p>
+        </div>
+
         <form
           className="flex items-end gap-2 max-w-md"
           onSubmit={(e) => { e.preventDefault(); void handlePreview(); }}
