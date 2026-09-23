@@ -6056,15 +6056,19 @@ function exportAdditionalFeeRegisterPdf(
       cellPadding: renderPad,
       valign: 'middle',
       overflow: 'ellipsize',
-      lineColor: [226, 232, 240],
-      lineWidth: 0.15,
+      // No fills on header / TOTAL — plain outlined cells, so borders are a
+      // darker grey than the Blue Register's to stay visible on their own.
+      lineColor: [120, 120, 120],
+      lineWidth: 0.2,
       textColor: [20, 20, 20] as [number, number, number],
     },
     headStyles: {
-      fillColor: [30, 64, 175],
-      textColor: 255,
+      fillColor: false,
+      textColor: [20, 20, 20],
       fontStyle: 'bold',
       fontSize: renderFontSize,
+      lineColor: [120, 120, 120],
+      lineWidth: 0.2,
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252],
@@ -6072,8 +6076,7 @@ function exportAdditionalFeeRegisterPdf(
     columnStyles,
     didParseCell(data) {
       if (data.section === 'body' && data.row.index === bodyRows.length) {
-        data.cell.styles.fillColor = [30, 64, 175];
-        data.cell.styles.textColor = 255;
+        data.cell.styles.fillColor = false;
         data.cell.styles.fontStyle = 'bold';
       }
     },
