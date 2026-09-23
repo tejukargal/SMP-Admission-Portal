@@ -11,23 +11,30 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { FeeRecord, FeeRecordFormData, AcademicYear, Course, Year, AdmCat } from '../types';
+import type { FeeRecord, FeeRecordFormData, FeeAdditionalHead, AcademicYear, Course, Year, AdmCat, Student } from '../types';
+import { SMP_FEE_HEADS } from '../types';
 
 const AIDED_COURSES = new Set<Course>(['CE', 'ME', 'EC', 'CS']);
 
 const COL = 'feeRecords';
 
+// Keyed by the SMP receipt when there is one (unchanged for every such record).
+// SVK-only / Additional-only payments have no SMP receipt, so they fall back to
+// their own receipt number — otherwise every such payment for a student would
+// share the id `${studentId}__${academicYear}__` and overwrite the previous one.
 function recordDocId(
-  studentId: string,
-  academicYear: AcademicYear,
-  receiptNumber: string
+  data: Pick<FeeRecordFormData, 'studentId' | 'academicYear' | 'receiptNumber' | 'svkReceiptNumber' | 'additionalReceiptNumber'>
 ): string {
-  return `${studentId}__${academicYear}__${receiptNumber}`;
+  const key =
+    data.receiptNumber ||
+    data.svkReceiptNumber ||
+    (data.additionalReceiptNumber ? `ADDL-${data.additionalReceiptNumber}` : '');
+  return `${data.studentId}__${data.academicYear}__${key}`;
 }
 
 /** Save a single payment installment as its own document. */
 export async function saveFeeRecord(data: FeeRecordFormData): Promise<void> {
-  const id = recordDocId(data.studentId, data.academicYear, data.receiptNumber);
+  const id = recordDocId(data);
   const now = new Date().toISOString();
   await setDoc(doc(db, COL, id), { ...data, createdAt: now, updatedAt: now });
 }
@@ -38,7 +45,7 @@ export async function updateFeeRecord(
   data: FeeRecordFormData,
   originalCreatedAt: string
 ): Promise<void> {
-  const newId = recordDocId(data.studentId, data.academicYear, data.receiptNumber);
+  const newId = recordDocId(data);
   const now = new Date().toISOString();
   if (oldId !== newId) {
     await deleteDoc(doc(db, COL, oldId));
@@ -334,6 +341,95 @@ export async function updateReceiptCounters(
 
     if (Object.keys(updates).length > 0) tx.update(ref, updates);
   });
+}
+
+export interface BulkAdditionalEntry {
+  student: Student;
+  heads: FeeAdditionalHead[];  // amounts being collected now (> 0 only)
+}
+
+/** Thrown when a later chunk fails — `savedRecords` were already committed. */
+export class BulkCollectError extends Error {
+  savedRecords: FeeRecord[];
+  constructor(message: string, savedRecords: FeeRecord[]) {
+    super(message);
+    this.name = 'BulkCollectError';
+    this.savedRecords = savedRecords;
+  }
+}
+
+// Keeps each transaction well under Firestore's 500-write limit
+// (one record write per student + one counter write).
+const BULK_CHUNK = 400;
+
+/**
+ * Bulk-collects pending Additional Fee heads (Red Cross, Insurance, …): one
+ * additional-only fee record + one Additional receipt number per student.
+ *
+ * Receipt numbers are reserved and the records written in the SAME transaction
+ * as the counter bump, so a concurrent single collection elsewhere can never be
+ * handed a number used here. Chunks commit independently; on failure a
+ * BulkCollectError carries the records that were already saved.
+ */
+export async function collectAdditionalFeesBulk(
+  academicYear: AcademicYear,
+  counterYear: AcademicYear,
+  entries: BulkAdditionalEntry[],
+  date: string,
+  mode: 'CASH' | 'UPI',
+  remarks: string,
+): Promise<FeeRecord[]> {
+  await _ensureCounterDoc(counterYear);
+  const counterRef = doc(db, RECEIPT_COUNTERS_COL, counterYear);
+  const saved: FeeRecord[] = [];
+
+  const zeroSmp = Object.fromEntries(SMP_FEE_HEADS.map(({ key }) => [key, 0])) as FeeRecord['smp'];
+
+  for (let i = 0; i < entries.length; i += BULK_CHUNK) {
+    const chunk = entries.slice(i, i + BULK_CHUNK);
+    try {
+      const chunkSaved = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef);
+        let next = (snap.data() as ReceiptCounterDoc).additional ?? 0;
+        const now = new Date().toISOString();
+        const out: FeeRecord[] = [];
+        for (const { student, heads } of chunk) {
+          next += 1;
+          const data: FeeRecordFormData = {
+            studentId: student.id,
+            studentName: student.studentNameSSLC,
+            fatherName: student.fatherName,
+            regNumber: student.regNumber,
+            course: student.course,
+            year: student.year,
+            admCat: student.admCat,
+            admType: student.admType,
+            academicYear,
+            date,
+            receiptNumber: '',
+            svkReceiptNumber: '',
+            additionalReceiptNumber: String(next).padStart(4, '0'),
+            paymentMode: mode,
+            additionalPaymentMode: mode,
+            remarks,
+            isDueFee: true,
+            smp: { ...zeroSmp },
+            svk: 0,
+            additionalPaid: heads,
+          };
+          const id = recordDocId(data);
+          tx.set(doc(db, COL, id), { ...data, createdAt: now, updatedAt: now });
+          out.push({ id, ...data, createdAt: now, updatedAt: now });
+        }
+        tx.update(counterRef, { additional: next });
+        return out;
+      });
+      saved.push(...chunkSaved);
+    } catch (err) {
+      throw new BulkCollectError(err instanceof Error ? err.message : 'Bulk collection failed', saved);
+    }
+  }
+  return saved;
 }
 
 /**
