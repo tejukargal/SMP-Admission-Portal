@@ -61,7 +61,7 @@ export function buildSeatCancellationLetterHTML(student: Student, opts: SeatCanc
   const name       = esc(student.studentNameSSLC.trim());
   const fatherName = esc(student.fatherName.trim());
   const regNo      = esc((student.regNumber ?? '').trim());
-  const courseEn   = esc(COURSE_NAMES_EN[student.course] ?? student.course);
+  const courseEn   = esc(COURSE_NAMES_EN[student.course] ? `${COURSE_NAMES_EN[student.course]} (${student.course})` : student.course);
   const yearEn     = esc(YEAR_LABELS_EN[student.year] ?? student.year);
   const ay         = esc(student.academicYear);
   const mobile     = esc(student.studentMobile || student.fatherMobile || '');
@@ -98,8 +98,7 @@ export function buildSeatCancellationLetterHTML(student: Student, opts: SeatCanc
   .date-cell { white-space: nowrap; }
   .from { margin-bottom: 14pt; }
 
-  .subject { margin: 0 0 14pt 40pt; line-height: 1.6; }
-  .sub-gap { display: inline-block; width: 28pt; }
+  .subject { margin: 0 0 14pt 72pt; line-height: 1.6; } /* two tab stops (2 × 0.5in) */
 
   .salutation { margin-bottom: 8pt; font-weight: bold; }
   .para { line-height: 1.8; text-align: justify; text-indent: 32pt; margin-bottom: 10pt; }
@@ -136,7 +135,7 @@ export function buildSeatCancellationLetterHTML(student: Student, opts: SeatCanc
 </div>
 
 <div class="subject">
-  <b>ವಿಷಯ:</b><span class="sub-gap"></span>ನನ್ನ ಡಿಪ್ಲೊಮಾ ಪ್ರವೇಶಾತಿಯನ್ನು ರದ್ದುಪಡಿಸಿಕೊಳ್ಳುವ ಬಗ್ಗೆ.
+  <b>ವಿಷಯ:</b> ನನ್ನ ಡಿಪ್ಲೊಮಾ ಪ್ರವೇಶಾತಿಯನ್ನು ರದ್ದುಪಡಿಸಿಕೊಳ್ಳುವ ಬಗ್ಗೆ.
 </div>
 
 <div class="salutation">ಮಾನ್ಯರೇ,</div>
