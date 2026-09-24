@@ -57,6 +57,15 @@ export interface AnsLetterRecord {
   statusUpdatedAt?: string;  // ISO, set whenever status changes
 }
 
+/** One print of the Kannada Seat Cancellation request letter — appended to seatCancelLetterHistory. */
+export interface SeatCancelLetterRecord {
+  id: string;
+  reason: string;
+  letterDate: string;        // YYYY-MM-DD, as printed on the letter
+  issuedAt: string;          // ISO timestamp
+  issuedBy: string;          // email of staff/admin who printed it
+}
+
 export interface Student {
   id: string;
   studentNameSSLC: string;
@@ -112,6 +121,7 @@ export interface Student {
   transferOutDate?: string;
   transferOutPolytechnic?: string;
   ansHistory?: AnsLetterRecord[];
+  seatCancelLetterHistory?: SeatCancelLetterRecord[];
   createdAt: string;
   updatedAt: string;
 }

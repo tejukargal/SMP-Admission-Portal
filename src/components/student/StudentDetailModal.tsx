@@ -6,6 +6,8 @@ import { getTcRecordsByStudent, getTcRecordsByRegNumber, getTcEditRecordsByStude
 import { getPcRecordsByStudent, getPcRecordsByRegNumber, type PCRecord } from '../../services/pcService';
 import { getAnsRecordsByStudent } from '../../services/ansLetterService';
 import { AnsLetterPreviewModal } from './AnsLetterPreviewModal';
+import { SeatCancellationLetterModal } from './SeatCancellationLetterModal';
+import { getSeatCancelLetterRecords, deleteSeatCancelLetterRecord } from '../../services/seatCancelLetterService';
 import {
   getRefundRecordsByStudent,
   deleteRefundRecord,
@@ -26,6 +28,7 @@ import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
 import type {
   Student, FeeRecord, AcademicYear,
   AdmType, AdmCat, DocRecord, ExamResult, AnsLetterRecord, AnsLetterStatus,
+  SeatCancelLetterRecord,
 } from '../../types';
 import { REQUIRED_DOCS, SMP_FEE_HEADS } from '../../types';
 import {
@@ -1233,6 +1236,115 @@ function refundIsoToDDMMYYYY(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+// ── Seat Cancellation request letter (Kannada) — button + issued-letters list ──
+function SeatCancelLetterSection({ student }: { student: Student }) {
+  const { role } = useAuth();
+  const [records, setRecords] = useState<SeatCancelLetterRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<{ initial?: SeatCancelLetterRecord } | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSeatCancelLetterRecords(student.id)
+      .then((r) => { if (!cancelled) setRecords(r); })
+      .catch(() => { /* non-fatal */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [student.id]);
+
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    try {
+      await deleteSeatCancelLetterRecord(student.id, id);
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+    } catch { /* keep row; user can retry */ }
+    finally {
+      setDeletingId(null);
+      setPendingDeleteId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/40 overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-amber-900">Seat Cancellation Letter <span className="font-normal text-amber-700">(ಕನ್ನಡ)</span></p>
+          <p className="text-[10px] text-amber-700/80">Student's request to cancel the seat, return original documents and refund the fee.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setModal({})}
+          className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-800 hover:bg-amber-100 cursor-pointer transition-colors"
+        >
+          📄 Cancellation Letter
+        </button>
+      </div>
+
+      {!loading && records.length > 0 && (
+        <div className="border-t border-amber-200 bg-white divide-y divide-gray-100">
+          {records.map((r) => (
+            <div key={r.id} className="px-4 py-2 flex items-center gap-3">
+              <span className="text-[10px] font-semibold text-gray-500 shrink-0 w-20">
+                {refundIsoToDDMMYYYY(r.letterDate)}
+              </span>
+              <span className="text-xs text-gray-700 truncate flex-1 min-w-0" title={r.reason}>{r.reason}</span>
+              <button
+                type="button"
+                onClick={() => setModal({ initial: r })}
+                className="text-[10px] font-semibold px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 cursor-pointer transition-colors shrink-0"
+              >
+                🖨 Reprint
+              </button>
+              {role === 'admin' && (
+                pendingDeleteId === r.id ? (
+                  <span className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(r.id)}
+                      disabled={deletingId === r.id}
+                      className="text-[10px] font-semibold px-2 py-1 rounded border border-red-300 bg-red-600 text-white hover:bg-red-700 cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === r.id ? 'Deleting…' : 'Confirm'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteId(null)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(r.id)}
+                    className="text-[10px] font-semibold px-2 py-1 rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 cursor-pointer transition-colors shrink-0"
+                    title="Delete this letter record"
+                  >
+                    Delete
+                  </button>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <SeatCancellationLetterModal
+          student={student}
+          initial={modal.initial ? { reason: modal.initial.reason, letterDate: modal.initial.letterDate } : undefined}
+          readOnly={!!modal.initial}
+          onSaved={(r) => setRecords((prev) => [r, ...prev])}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreated }: {
   student: Student;
   records: RefundRecord[];
@@ -1333,7 +1445,9 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
 
   if (records.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16 px-6">
+      <div className="px-5 pt-4">
+      <SeatCancelLetterSection student={student} />
+      <div className="flex flex-col items-center justify-center gap-3 py-12 px-6">
         <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-2xl">
           ↩
         </div>
@@ -1358,6 +1472,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
           />
         )}
       </div>
+      </div>
     );
   }
 
@@ -1365,6 +1480,8 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
 
   return (
     <div className="px-5 py-4 space-y-3">
+      <SeatCancelLetterSection student={student} />
+
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-red-50 text-red-700 border-red-200">
