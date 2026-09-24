@@ -130,11 +130,11 @@ export function SeatCancellationLetterModal({ student, onClose, onSaved, initial
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
-                placeholder="ಉದಾ: ನಾನು ಬೇರೆ ಕಾಲೇಜಿನಲ್ಲಿ ಪ್ರವೇಶ ಪಡೆದಿರುತ್ತೇನೆ"
+                placeholder="ಉದಾ: ನನಗೆ ಬೇರೆ ಕಾಲೇಜಿನಲ್ಲಿ ಪ್ರವೇಶಾತಿ ದೊರೆತಿರುವುದರಿಂದ"
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
               />
               <p className="text-[10px] text-gray-400 mt-1 leading-snug">
-                Reads in the letter as: “ಆದರೆ <em>[reason]</em>. ಆದ್ದರಿಂದ …”
+                Reads in the letter as: “ಪ್ರಸ್ತುತ <em>[reason]</em>, ಈ ಸಂಸ್ಥೆಯಲ್ಲಿ …”
               </p>
             </div>
 
