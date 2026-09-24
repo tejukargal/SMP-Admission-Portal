@@ -7,9 +7,9 @@ import type { Student } from '../types';
 const COURSE_NAMES_EN: Record<string, string> = {
   CE: 'Civil Engineering',
   ME: 'Mechanical Engineering',
-  EC: 'Electronics & Communication',
-  CS: 'Computer Science',
-  EE: 'Electrical & Electronics',
+  EC: 'Electronics & Communication Engineering',
+  CS: 'Computer Science & Engineering',
+  EE: 'Electrical & Electronics Engineering',
 };
 
 const YEAR_LABELS_EN: Record<string, string> = {
