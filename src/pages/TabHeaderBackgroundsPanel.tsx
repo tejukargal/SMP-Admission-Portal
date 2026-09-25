@@ -52,11 +52,21 @@ function TabHeaderRow({
 
   return (
     <div className="flex items-center gap-4 px-6 py-4">
-      <div className="w-32 h-20 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
+      <div className="relative w-32 h-20 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
         {previewSrc ? (
           <img src={previewSrc} alt={`${label} header background`} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[10px] text-gray-400">No image yet</span>
+        )}
+        {/* The tab's title in the ink the student app will use, over the
+            image's empty left side — so the match can be judged before Save. */}
+        {pending?.textColor && (
+          <span
+            className="absolute left-1.5 bottom-1.5 text-[11px] font-semibold leading-none"
+            style={{ color: pending.textColor }}
+          >
+            {label}
+          </span>
         )}
       </div>
       <div className="flex-1 min-w-0">

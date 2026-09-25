@@ -26,8 +26,9 @@ export const TAB_HEADER_TABS: { key: TabHeaderKey; label: string }[] = [
 export interface PendingTabHeaderBackground {
   base64: string;
   mimeType: string;
-  /** Home only: the deep same-hue hex the student app draws the greeting and
-   *  name in over this image's pastel background. */
+  /** The deep same-hue hex the student app draws the tab's title in (Home:
+   *  the greeting and name) — matched to the colour the image's background
+   *  actually came out in, not just the one the prompt asked for. */
   textColor?: string;
   /** Every tab: an identity for whichever background pool entry got picked
    *  this generation, saved so a sibling tab's next regenerate can avoid
@@ -59,8 +60,8 @@ export async function generateTabHeaderBackground(tabKey: TabHeaderKey): Promise
 }
 
 /** Uploads an accepted AI-generated background and saves its download URL onto the shared appConfig/tabHeaders doc.
- *  For Home, also saves `homeTextColor` beside it — the pastel is random each generation, so the student app needs
- *  the matching deep tone to draw the greeting/name in. Every tab also saves `{tabKey}Color`, an identity for
+ *  Also saves `{tabKey}TextColor` beside it (`homeTextColor` for Home) — the pastel is random each generation, so
+ *  the student app needs the matching deep tone to draw that tab's title in. Every tab also saves `{tabKey}Color`, an identity for
  *  which pastel got picked, purely so a sibling tab's next regenerate can avoid landing on the same one. */
 export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: PendingTabHeaderBackground): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
@@ -70,7 +71,7 @@ export async function setTabHeaderBackground(tabKey: TabHeaderKey, background: P
   await uploadString(sref, background.base64, 'base64', imageUploadMetadata(background.mimeType));
   const url = await getDownloadURL(sref);
   const patch: Record<string, string> = { [tabKey]: url };
-  if (tabKey === 'home' && background.textColor) patch.homeTextColor = background.textColor;
+  if (background.textColor) patch[`${tabKey}TextColor`] = background.textColor;
   if (background.color) patch[`${tabKey}Color`] = background.color;
   await setDoc(doc(db, 'appConfig', 'tabHeaders'), patch, { merge: true });
   return url;

@@ -3850,31 +3850,211 @@ const TAB_HEADER_SCENES: Record<TabHeaderKey, string> = {
   notices: '{student} looking up brightly at a small ringing bell overhead, one hand raised beside their ear',
 };
 
-// Every tab header (Home and the rest) now picks a fresh background at
-// random from this shared pool on each Generate, instead of one background
-// fixed per tab — the same "regenerate for real variety" behaviour Home
-// already had, extended to Circulars/Profile/Fees/Certificates/Notices so
-// their headers stop looking identical every time and on every reopen.
+// Every tab header (Home and the rest) picks a fresh background at random
+// from this shared pool on each Generate, so regenerating gives real variety
+// and no two tabs look alike.
 //
-// `textHex` is the deep, same-hue tone the student app draws the Home
-// greeting/name in over the picked pastel (pale sky blue → deep slate blue,
-// and so on — the "Saltwater Sky" / "Blue Surf" pairing), instead of plain
-// black; it's only read for tabKey 'home' (generateTabHeaderBackground's
-// handler), since every entry here is a light pastel and the other tabs'
-// black title text stays legible against any of them. It rides back out of
-// generateTabHeaderBackground and is saved next to the image URL by
-// tabHeaderService.ts as appConfig/tabHeaders.homeTextColor.
-const HEADER_BACKGROUND_PALETTES: readonly { color: string; textHex: string }[] = [
-  { color: 'soft pastel blush pink (a light, warm rose)', textHex: '#8A3B5C' },
-  { color: 'soft pastel peach (a light, warm apricot)', textHex: '#8A4B36' },
-  { color: 'soft pastel butter yellow (a light, creamy yellow)', textHex: '#8A6A2E' },
-  { color: 'soft pastel mint (a light, minty aqua-green)', textHex: '#2F6B5E' },
-  { color: 'soft pastel sky blue (a light, airy baby blue)', textHex: '#3B5B8A' },
-  { color: 'soft pastel periwinkle blue (a light, lavender-tinted blue)', textHex: '#544B8A' },
-  { color: 'soft pastel lilac (a light lavender-purple)', textHex: '#7A4A63' },
-  { color: 'soft pastel coral (a light, warm salmon pink)', textHex: '#8F3F3A' },
-  { color: 'soft pastel sage (a light, muted grey-green)', textHex: '#3F6B45' },
+// `bg` is the pastel the prompt asks for (by name and hex) and `ink` is a
+// deep same-hue tone for the tab's title/greeting over it, at least 7:1
+// contrast (WCAG AAA). The first 33 are the student app's hero-panel swatches
+// (smp-student-portal src/theme/palette.ts HERO_PANEL_SWATCHES), copied
+// verbatim so headers and the hero card share one colour language; the rest
+// fill the gaps that set leaves (peach, coral, sand, sage, mauve, …). Image
+// models only approximate a requested hex, so the ink that actually gets
+// saved is re-checked against the generated image (see inkForBackground).
+type HeaderSwatch = { name: string; bg: string; ink: string };
+
+const HEADER_BACKGROUND_SWATCHES: readonly HeaderSwatch[] = [
+  // Greens (hero)
+  { name: 'spearmint', bg: '#C6F2CF', ink: '#14432A' },
+  { name: 'pastel mint', bg: '#C1F4CD', ink: '#16432A' },
+  { name: 'pistachio', bg: '#D8F5C0', ink: '#23421A' },
+  { name: 'honeydew', bg: '#E4F8D2', ink: '#274A1C' },
+  { name: 'spring meadow', bg: '#CAFFA6', ink: '#204654' },
+  { name: 'tea green', bg: '#E2F0CB', ink: '#2E4418' },
+  { name: 'celadon', bg: '#D6EFE0', ink: '#1A4630' },
+  { name: 'seafoam', bg: '#B5EAD7', ink: '#0F4034' },
+  { name: 'mint frost', bg: '#C8F4E3', ink: '#0F4C3A' },
+  { name: 'aqua mist', bg: '#D2F7EC', ink: '#0E4A3E' },
+  // Yellows (hero)
+  { name: 'lemon chiffon', bg: '#FFF5BA', ink: '#3D3505' },
+  { name: 'butter cream', bg: '#FFF1B8', ink: '#3F3408' },
+  { name: 'vanilla', bg: '#FFF7CC', ink: '#403606' },
+  { name: 'cream', bg: '#FBF3D5', ink: '#43360A' },
+  { name: 'lime sorbet', bg: '#F1F5C4', ink: '#383F08' },
+  // Blues / cyans (hero)
+  { name: 'baby blue', bg: '#BDE0FE', ink: '#1B3A5C' },
+  { name: 'sky wash', bg: '#CDEEFF', ink: '#123A52' },
+  { name: 'powder cyan', bg: '#BFEFFF', ink: '#0B3D4F' },
+  { name: 'ice blue', bg: '#DDF6FF', ink: '#0D3E55' },
+  { name: 'lagoon', bg: '#C9F1F5', ink: '#0C4450' },
+  { name: 'glacial sky', bg: '#A9E0F1', ink: '#204654' },
+  { name: 'cloud blue', bg: '#DDEBFF', ink: '#1A3563' },
+  // Violets (hero)
+  { name: 'periwinkle', bg: '#C7CEEA', ink: '#232B5C' },
+  { name: 'lavender mist', bg: '#E3E0FF', ink: '#2C2468' },
+  { name: 'lavender haze', bg: '#D9CCF5', ink: '#2E2352' },
+  { name: 'lilac', bg: '#E0C3FC', ink: '#3A1C5C' },
+  { name: 'wisteria', bg: '#EDDDFB', ink: '#44205E' },
+  { name: 'orchid tint', bg: '#F3E8FF', ink: '#3D1F66' },
+  // Pinks (hero)
+  { name: 'blush petal', bg: '#FFD6E0', ink: '#5A1E33' },
+  { name: 'rose water', bg: '#FFE0E6', ink: '#5E1B2E' },
+  { name: 'cotton candy', bg: '#FFC8DD', ink: '#5C1A36' },
+  { name: 'pink orchid', bg: '#F9DAF2', ink: '#5A1A4D' },
+  { name: 'fairy floss', bg: '#FDE2F3', ink: '#5B1646' },
+  // Warm pastels (header-only)
+  { name: 'peach', bg: '#FFDAB9', ink: '#5A2E0E' },
+  { name: 'apricot', bg: '#FFE0C2', ink: '#5C300C' },
+  { name: 'coral blush', bg: '#FFD3C9', ink: '#5E2218' },
+  { name: 'salmon cream', bg: '#FFDCD2', ink: '#5A2418' },
+  { name: 'melon', bg: '#FFE5D0', ink: '#583012' },
+  { name: 'sorbet orange', bg: '#FFE4C4', ink: '#5A300A' },
+  { name: 'sand', bg: '#F5E6CC', ink: '#4A3612' },
+  { name: 'champagne', bg: '#F7E7D4', ink: '#4A3418' },
+  // Soft greens / teals / blue-greys (header-only)
+  { name: 'sage', bg: '#D5E8D4', ink: '#1F4221' },
+  { name: 'eucalyptus', bg: '#CFE8DE', ink: '#15432F' },
+  { name: 'pistachio sage', bg: '#DDEBC9', ink: '#2B4318' },
+  { name: 'teal wash', bg: '#C6EBE8', ink: '#0C4441' },
+  { name: 'steel mist', bg: '#D4E2F0', ink: '#1C3651' },
+  // Rosy violets (header-only)
+  { name: 'mauve', bg: '#EBD4E4', ink: '#4E2244' },
+  { name: 'dusty rose', bg: '#F2D5DA', ink: '#56202E' },
+  { name: 'heather', bg: '#E2D6EC', ink: '#3A2553' },
+  { name: 'apple blossom', bg: '#FCE4EC', ink: '#5B1A34' },
+  { name: 'lilac frost', bg: '#E8E0F7', ink: '#33235F' },
 ];
+
+/** The prompt's wording for a swatch's background colour — a name plus its
+ *  hex, since providers follow a named colour more loosely than a hex and
+ *  some ignore the hex entirely. */
+function describeSwatch(swatch: HeaderSwatch): string {
+  return `soft pastel ${swatch.name} (hex ${swatch.bg})`;
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = hex.replace('#', '');
+  return [0, 2, 4].map((i) => parseInt(m.substring(i, i + 2), 16)) as [number, number, number];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function relativeLuminance(hex: string): number {
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = hexToRgb(hex);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l * 100];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s * 100, l * 100];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.min(100, Math.max(0, s)) / 100;
+  const light = Math.min(100, Math.max(0, l)) / 100;
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = light - c / 2;
+  let [r, g, b] = [0, 0, 0];
+  if (hue < 60) [r, g, b] = [c, x, 0];
+  else if (hue < 120) [r, g, b] = [x, c, 0];
+  else if (hue < 180) [r, g, b] = [0, c, x];
+  else if (hue < 240) [r, g, b] = [0, x, c];
+  else if (hue < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return rgbToHex((r + m) * 255, (g + m) * 255, (b + m) * 255);
+}
+
+function hueDistance(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180);
+}
+
+/** The background colour the generated header actually came out in, read
+ *  from its left strip — the zone every header prompt keeps as plain
+ *  background for the title text. Median per channel, so the odd accent dot
+ *  or a stray edge of the scene doesn't skew it. */
+async function sampleHeaderBackground(imageBase64: string): Promise<string> {
+  const input = Buffer.from(imageBase64, 'base64');
+  const { width = 0, height = 0 } = await sharp(input).metadata();
+  if (width < 10 || height < 10) throw new Error('Image too small to sample');
+  const { data, info } = await sharp(input)
+    .extract({
+      left: Math.round(width * 0.02),
+      top: Math.round(height * 0.1),
+      width: Math.max(1, Math.round(width * 0.23)),
+      height: Math.max(1, Math.round(height * 0.8)),
+    })
+    .resize(48, 48, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const channels: number[][] = [[], [], []];
+  for (let i = 0; i < data.length; i += info.channels) {
+    channels[0].push(data[i]);
+    channels[1].push(data[i + 1]);
+    channels[2].push(data[i + 2]);
+  }
+  const median = (vs: number[]) => vs.sort((a, b) => a - b)[Math.floor(vs.length / 2)];
+  return rgbToHex(median(channels[0]), median(channels[1]), median(channels[2]));
+}
+
+const MIN_HEADER_INK_CONTRAST = 7;
+
+/** Title/greeting ink for the background the image really has. Keeps the
+ *  requested swatch's ink when the model got close enough; otherwise takes
+ *  the ink of whichever swatch the sampled colour is nearest to; failing
+ *  that, derives a deep same-hue tone dark enough to clear 7:1. */
+function inkForBackground(sampled: string, requested: HeaderSwatch): string {
+  const [sampledHue, sampledSat] = hexToHsl(sampled);
+  // Hue is meaningless for a near-grey sample, so only contrast counts there.
+  const nearlyGrey = sampledSat < 12;
+  if (
+    contrastRatio(sampled, requested.ink) >= MIN_HEADER_INK_CONTRAST &&
+    (nearlyGrey || hueDistance(sampledHue, hexToHsl(requested.bg)[0]) <= 30)
+  ) {
+    return requested.ink;
+  }
+
+  const [sr, sg, sb] = hexToRgb(sampled);
+  const distance = (s: HeaderSwatch) => {
+    const [r, g, b] = hexToRgb(s.bg);
+    return (r - sr) ** 2 + (g - sg) ** 2 + (b - sb) ** 2;
+  };
+  const nearest = HEADER_BACKGROUND_SWATCHES.reduce((best, s) => (distance(s) < distance(best) ? s : best));
+  if (contrastRatio(sampled, nearest.ink) >= MIN_HEADER_INK_CONTRAST) return nearest.ink;
+
+  const sat = Math.min(sampledSat, 60);
+  for (let l = 22; l >= 6; l -= 2) {
+    const ink = hslToHex(sampledHue, sat, l);
+    if (contrastRatio(sampled, ink) >= MIN_HEADER_INK_CONTRAST) return ink;
+  }
+  return '#1A1A1A';
+}
+
 
 const HOME_HEADER_POSES = [
   'standing and waving a friendly hello with one raised hand',
@@ -4026,13 +4206,13 @@ function withStudent(scene: string, subject: string): string {
 // report the matching text colour alongside the image.
 function buildHomeHeaderPrompt(
   provider: AiImageSettings['imageProvider'],
-  background: { color: string; textHex: string },
+  background: HeaderSwatch,
 ): string {
   const pose = pickRandom(HOME_HEADER_POSES);
   const backpack = pickRandom(CHARACTER_BACKPACK_COLOURS);
   const character = drawRandomCharacter();
   return [
-    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${background.color} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
+    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${describeSwatch(background)} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
     `Depict ${character.subject}, ${pose}, wearing a ${backpack} college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
     `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.`,
     'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.',
@@ -4053,7 +4233,7 @@ function buildHomeHeaderPrompt(
 function buildTabHeaderPrompt(
   tabKey: Exclude<TabHeaderKey, 'home'>,
   provider: AiImageSettings['imageProvider'],
-  background: { color: string; textHex: string },
+  background: HeaderSwatch,
 ): string {
   // Every non-Home tab now draws a character too, the same randomly drawn
   // look used everywhere else, named in the "Depict …" sentence itself.
@@ -4061,7 +4241,7 @@ function buildTabHeaderPrompt(
   const scene = withStudent(TAB_HEADER_SCENES[tabKey], character.subject);
   return [
     'Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, filling the entire frame edge-to-edge as one continuous illustration — no hard vertical seam, no two separate color blocks pasted together.',
-    `The entire background is one single, solid, flat ${background.color} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
+    `The entire background is one single, solid, flat ${describeSwatch(background)} across the whole frame — completely plain: no gradient, no sky, no ground line, no shadows or texture on the background, and never a dull grey pastel. No glow, no luminous or light-emitting effects, no bloom, no halos, no lens flares — just clean flat color.`,
     `Depict ${scene}, occupying roughly the right two-thirds of the frame and extending comfortably past the center, rendered in bright, medium-saturation flat colours so the scene stays cheerful and readable — never dark or heavy — and stands out clearly against the pale background. Only the leftmost quarter of the frame should stay free of strong shapes, lines, or objects — a calm zone for text — but keep it the same flat background colour, with just a few subtle flat background elements such as soft simple shapes fading in from the scene; do not make it a different or lighter wash.`,
     `${character.outfit} Give them a friendly expressive face.`,
     imageStyleDirective(provider, 'a soft pastel solid background with a colourful, medium-saturation flat-vector scene — bright and cheerful, not dull, dark, muddy, or photorealistic; no glow or luminous effects'),
@@ -4115,8 +4295,8 @@ export const generateTabHeaderBackground = onCall(
     const inUse = new Set(
       TAB_HEADER_KEYS.filter((k) => k !== tabKey).map((k) => tabHeadersData[`${k}Color`]).filter(Boolean),
     );
-    const availablePalettes = HEADER_BACKGROUND_PALETTES.filter((p) => !inUse.has(p.textHex));
-    const background = pickRandom(availablePalettes.length > 0 ? availablePalettes : HEADER_BACKGROUND_PALETTES);
+    const availableSwatches = HEADER_BACKGROUND_SWATCHES.filter((s) => !inUse.has(s.bg));
+    const background = pickRandom(availableSwatches.length > 0 ? availableSwatches : HEADER_BACKGROUND_SWATCHES);
 
     const prompt =
       tabKey === 'home'
@@ -4125,15 +4305,19 @@ export const generateTabHeaderBackground = onCall(
 
     try {
       const image = await generateAiImage(settings, prompt);
+      // Image models only approximate the requested pastel, so the title ink
+      // is matched to the colour the image actually came out in. A failed
+      // sample never blocks generation — the swatch's own ink is used then.
+      let textColor = background.ink;
+      try {
+        textColor = inkForBackground(await sampleHeaderBackground(image.imageBase64), background);
+      } catch (sampleErr) {
+        console.warn('Header background sampling failed; using the swatch ink', sampleErr);
+      }
       // Every tab reports back `color` (an identity for whichever pool entry got
-      // picked) so a sibling tab's next regenerate can exclude it, per above.
-      // Only Home additionally needs `textColor` — every other tab's title stays
-      // black, which reads fine against any of these light pastels.
-      return {
-        ...image,
-        color: background.textHex,
-        ...(tabKey === 'home' ? { textColor: background.textHex } : {}),
-      };
+      // picked) so a sibling tab's next regenerate can exclude it, per above,
+      // and `textColor` for its title (Home: the greeting and name).
+      return { ...image, color: background.bg, textColor };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new HttpsError('internal', `Image generation failed: ${msg}`);
@@ -4256,7 +4440,7 @@ function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings
 // enough to need light text.
 //
 // One is picked at random per generation (same `pickRandom` pattern as
-// HEADER_BACKGROUND_PALETTES above), independently per banner, so Regenerate
+// HEADER_BACKGROUND_SWATCHES above), independently per banner, so Regenerate
 // gives real variety instead of the same fixed colour every time. The
 // student app reads back `textIsLight` (see generateCategoryIcon below,
 // threaded through categoryIconService.ts's setCategoryIcon into
