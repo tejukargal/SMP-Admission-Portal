@@ -4211,15 +4211,23 @@ function buildHomeHeaderPrompt(
   const pose = pickRandom(HOME_HEADER_POSES);
   const backpack = pickRandom(CHARACTER_BACKPACK_COLOURS);
   const character = drawRandomCharacter();
+  // The student app shows this image at close to its natural width, anchored
+  // bottom-left (the right ~1/6 is cropped), fills the room above it by
+  // stretching the image's topmost strip, and draws the greeting and name over
+  // its left, lower part. Hence: a plain top edge, a calm left side, and the
+  // character kept inside 55–75% of the width.
   return [
-    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition. The entire background is one single, solid, flat ${describeSwatch(background)} filling the frame edge-to-edge — completely plain: no gradient, no scene, no sky, no clouds, no ground line, no shadows or texture on the background.`,
-    `Depict ${character.subject}, ${pose}, wearing a ${backpack} college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}, positioned in the right two-thirds of the frame.`,
-    `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character and their props are the only saturated elements in the picture and must stand out clearly against the pale background. Not abstract, not geometric, not faceless.`,
-    'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade.',
-    'Leave the left third of the frame completely empty, plain background colour only, so text can sit on it. Optionally add two or three tiny simple accent marks (small circles or dots) near the character in a slightly darker tint of the background colour — nothing else.',
+    `Flat vector illustration for a mobile app header banner, wide 16:9 landscape composition, one continuous scene filling the frame edge-to-edge.`,
+    `The background is a gentle college campus spread across the full width, left edge included: open sky in ${describeSwatch(background)} with a few soft rounded clouds and three to five tiny simple birds; in the middle distance a row of simple campus buildings (a main block with a small clock tower or dome, classroom wings with rows of windows) among rounded trees and shrubs; at the bottom a soft ground with a pathway and three to five tiny distant student figures walking or chatting.`,
+    `Every background element — sky, clouds, birds, buildings, trees, ground and the distant students — is drawn only in light, low-contrast tints and slightly deeper shades of that same ${background.name} pastel: a washed-out, monochrome-pastel backdrop with flat shapes, no outlines, no saturated colour and no dark shapes, so it reads as a faint, airy background.`,
+    'Keep the top eighth of the frame plain sky colour only — no cloud, bird, tree or building touches the top edge.',
+    'The left 40% of the frame is the palest, calmest part of the scene: only faint distant buildings and trees there, no figures and no busy detail, so dark text placed over it stays easy to read.',
+    `In front, depict ${character.subject}, ${pose}, wearing a ${backpack} college backpack on their back (its straps visible over the shoulders), with ${TAB_HEADER_SCENES.home}. Centre the student at about 55–75% of the frame width, standing on the ground near the bottom edge, full body and much larger than the background figures.`,
+    `${character.outfit} Draw the character in a colourful, modern flat-vector app-illustration style: full body, a friendly expressive face with simple eyes and a smile, the outfit in vivid medium-saturation colours, clean rounded shapes, soft flat cel-shading. The character, their props and the SMP building are the only saturated elements in the picture and must stand out clearly against the pale pastel campus. Not abstract, not geometric, not faceless.`,
+    'The building prop is compact and simple — a few flat rounded shapes, smaller than the character is tall — and its "SMP" signage must be the exact three capital letters S, M, P in a clean bold sans-serif, legible but modest in size, part of the building facade. The background campus buildings carry no signage or lettering at all.',
     imageStyleDirective(
       provider,
-      'a soft pastel solid background with a colourful flat-vector character — bright and cheerful, not dull, dark, muddy, or photorealistic',
+      `a soft monochrome-pastel campus backdrop in tints of ${background.name}, with one colourful flat-vector student in front — bright and cheerful, not dull, dark, muddy, or photorealistic`,
       '16:9',
       'SMP',
     ),
