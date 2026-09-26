@@ -64,10 +64,10 @@ export async function generateCategoryIcon(key: CategoryIconKey): Promise<Pendin
 }
 
 /** Uploads an accepted AI-generated icon and saves its download URL onto the shared appConfig/categoryIcons doc.
- *  For a banner key, also saves `{key}TextIsLight` alongside the URL. For a tile key, saves `{key}LabelColor`
- *  instead. Both exist because the AI-picked background colour is random each generation, so the student app
- *  needs to know which one was picked — a light/dark toggle for the banners' mixed-lightness pool, or the exact
- *  matching text hex for the tiles' always-pastel pool. */
+ *  For a banner key, also saves `{key}TextIsLight` alongside the URL, and for every key `{key}LabelColor`.
+ *  Both exist because the AI-picked background colour is random each generation, so the student app needs to
+ *  know which one was picked — a light/dark toggle for the banners' mixed-lightness pool, and the matching
+ *  deep ink hex (the tiles' label text; the banners' accent tint). */
 export async function setCategoryIcon(key: CategoryIconKey, icon: PendingCategoryIcon): Promise<string> {
   // Timestamped for the same reason as uploadCircularBackground: a
   // regenerated icon must get a new URL, not new bytes behind the old one.

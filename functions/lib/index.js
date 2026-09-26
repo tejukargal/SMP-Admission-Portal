@@ -3493,21 +3493,26 @@ function buildCategoryIconPrompt(key, provider, color) {
 // threaded through categoryIconService.ts's setCategoryIcon into
 // appConfig/categoryIcons.{key}TextIsLight) to switch its title/subtitle
 // between dark and light text to match whichever was picked.
+//
+// `label` is the deep ink of the colour's family — the deep member of each
+// pastel/deep pair, the same for both — saved as {key}LabelColor (like the
+// Overview tiles' label) so the student app can tint the banner's accents
+// (its eyebrow label and open button) to match the background's hue.
 const CATEGORY_ICON_BANNER_PALETTES = [
-    { color: 'a soft pastel powder blue (#D0E2F2)', textIsLight: false },
-    { color: 'a rich, deep slate blue (#3B5B8A)', textIsLight: true },
-    { color: 'a soft pastel mint (#D7ECE6)', textIsLight: false },
-    { color: 'a rich, deep teal-emerald (#2F6B5E)', textIsLight: true },
-    { color: 'a soft pastel dusty rose (#F3DDE2)', textIsLight: false },
-    { color: 'a rich, deep mauve-plum (#7A4A63)', textIsLight: true },
-    { color: 'a soft pastel warm sand (#F3E4D2)', textIsLight: false },
-    { color: 'a rich, deep terracotta (#8A4B36)', textIsLight: true },
-    { color: 'a soft pastel cool lilac (#E4DEF2)', textIsLight: false },
-    { color: 'a rich, deep indigo-violet (#544B8A)', textIsLight: true },
-    { color: 'a soft pastel sage (#DEEADB)', textIsLight: false },
-    { color: 'a rich, deep forest green (#3F6B45)', textIsLight: true },
-    { color: 'a soft pastel warm butter (#F5EAC9)', textIsLight: false },
-    { color: 'a rich, deep amber-bronze (#8A6A2E)', textIsLight: true },
+    { color: 'a soft pastel powder blue (#D0E2F2)', textIsLight: false, label: '#3B5B8A' },
+    { color: 'a rich, deep slate blue (#3B5B8A)', textIsLight: true, label: '#3B5B8A' },
+    { color: 'a soft pastel mint (#D7ECE6)', textIsLight: false, label: '#2F6B5E' },
+    { color: 'a rich, deep teal-emerald (#2F6B5E)', textIsLight: true, label: '#2F6B5E' },
+    { color: 'a soft pastel dusty rose (#F3DDE2)', textIsLight: false, label: '#7A4A63' },
+    { color: 'a rich, deep mauve-plum (#7A4A63)', textIsLight: true, label: '#7A4A63' },
+    { color: 'a soft pastel warm sand (#F3E4D2)', textIsLight: false, label: '#8A4B36' },
+    { color: 'a rich, deep terracotta (#8A4B36)', textIsLight: true, label: '#8A4B36' },
+    { color: 'a soft pastel cool lilac (#E4DEF2)', textIsLight: false, label: '#544B8A' },
+    { color: 'a rich, deep indigo-violet (#544B8A)', textIsLight: true, label: '#544B8A' },
+    { color: 'a soft pastel sage (#DEEADB)', textIsLight: false, label: '#3F6B45' },
+    { color: 'a rich, deep forest green (#3F6B45)', textIsLight: true, label: '#3F6B45' },
+    { color: 'a soft pastel warm butter (#F5EAC9)', textIsLight: false, label: '#8A6A2E' },
+    { color: 'a rich, deep amber-bronze (#8A6A2E)', textIsLight: true, label: '#8A6A2E' },
 ];
 // Banner variant: the student app crops the 16:9 result to a short, very
 // wide compact row (roughly 9:1 — considerably tighter than a standard
@@ -3538,7 +3543,7 @@ function buildBannerIconPrompt(key, provider, palette) {
     ].join(' ');
 }
 exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 120 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (((_b = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.token) === null || _b === void 0 ? void 0 : _b.admin) !== true) {
         throw new https_1.HttpsError('permission-denied', 'Admin sign-in required.');
     }
@@ -3588,7 +3593,7 @@ exports.generateCategoryIcon = (0, https_1.onCall)({ region: 'asia-south1', time
         : buildCategoryIconPrompt(key, settings.imageProvider, tilePalette.color);
     try {
         const image = await generateAiImage(settings, prompt, categoryIconAspect(key));
-        return Object.assign(Object.assign({}, image), { textIsLight: (_h = bannerPalette === null || bannerPalette === void 0 ? void 0 : bannerPalette.textIsLight) !== null && _h !== void 0 ? _h : false, labelColor: tilePalette === null || tilePalette === void 0 ? void 0 : tilePalette.label });
+        return Object.assign(Object.assign({}, image), { textIsLight: (_h = bannerPalette === null || bannerPalette === void 0 ? void 0 : bannerPalette.textIsLight) !== null && _h !== void 0 ? _h : false, labelColor: (_j = bannerPalette === null || bannerPalette === void 0 ? void 0 : bannerPalette.label) !== null && _j !== void 0 ? _j : tilePalette === null || tilePalette === void 0 ? void 0 : tilePalette.label });
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

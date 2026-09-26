@@ -4454,21 +4454,26 @@ function buildCategoryIconPrompt(key: CategoryIconKey, provider: AiImageSettings
 // threaded through categoryIconService.ts's setCategoryIcon into
 // appConfig/categoryIcons.{key}TextIsLight) to switch its title/subtitle
 // between dark and light text to match whichever was picked.
-const CATEGORY_ICON_BANNER_PALETTES: readonly { color: string; textIsLight: boolean }[] = [
-  { color: 'a soft pastel powder blue (#D0E2F2)', textIsLight: false },
-  { color: 'a rich, deep slate blue (#3B5B8A)', textIsLight: true },
-  { color: 'a soft pastel mint (#D7ECE6)', textIsLight: false },
-  { color: 'a rich, deep teal-emerald (#2F6B5E)', textIsLight: true },
-  { color: 'a soft pastel dusty rose (#F3DDE2)', textIsLight: false },
-  { color: 'a rich, deep mauve-plum (#7A4A63)', textIsLight: true },
-  { color: 'a soft pastel warm sand (#F3E4D2)', textIsLight: false },
-  { color: 'a rich, deep terracotta (#8A4B36)', textIsLight: true },
-  { color: 'a soft pastel cool lilac (#E4DEF2)', textIsLight: false },
-  { color: 'a rich, deep indigo-violet (#544B8A)', textIsLight: true },
-  { color: 'a soft pastel sage (#DEEADB)', textIsLight: false },
-  { color: 'a rich, deep forest green (#3F6B45)', textIsLight: true },
-  { color: 'a soft pastel warm butter (#F5EAC9)', textIsLight: false },
-  { color: 'a rich, deep amber-bronze (#8A6A2E)', textIsLight: true },
+//
+// `label` is the deep ink of the colour's family — the deep member of each
+// pastel/deep pair, the same for both — saved as {key}LabelColor (like the
+// Overview tiles' label) so the student app can tint the banner's accents
+// (its eyebrow label and open button) to match the background's hue.
+const CATEGORY_ICON_BANNER_PALETTES: readonly { color: string; textIsLight: boolean; label: string }[] = [
+  { color: 'a soft pastel powder blue (#D0E2F2)', textIsLight: false, label: '#3B5B8A' },
+  { color: 'a rich, deep slate blue (#3B5B8A)', textIsLight: true, label: '#3B5B8A' },
+  { color: 'a soft pastel mint (#D7ECE6)', textIsLight: false, label: '#2F6B5E' },
+  { color: 'a rich, deep teal-emerald (#2F6B5E)', textIsLight: true, label: '#2F6B5E' },
+  { color: 'a soft pastel dusty rose (#F3DDE2)', textIsLight: false, label: '#7A4A63' },
+  { color: 'a rich, deep mauve-plum (#7A4A63)', textIsLight: true, label: '#7A4A63' },
+  { color: 'a soft pastel warm sand (#F3E4D2)', textIsLight: false, label: '#8A4B36' },
+  { color: 'a rich, deep terracotta (#8A4B36)', textIsLight: true, label: '#8A4B36' },
+  { color: 'a soft pastel cool lilac (#E4DEF2)', textIsLight: false, label: '#544B8A' },
+  { color: 'a rich, deep indigo-violet (#544B8A)', textIsLight: true, label: '#544B8A' },
+  { color: 'a soft pastel sage (#DEEADB)', textIsLight: false, label: '#3F6B45' },
+  { color: 'a rich, deep forest green (#3F6B45)', textIsLight: true, label: '#3F6B45' },
+  { color: 'a soft pastel warm butter (#F5EAC9)', textIsLight: false, label: '#8A6A2E' },
+  { color: 'a rich, deep amber-bronze (#8A6A2E)', textIsLight: true, label: '#8A6A2E' },
 ];
 
 // Banner variant: the student app crops the 16:9 result to a short, very
@@ -4491,7 +4496,7 @@ const CATEGORY_ICON_BANNER_ART_SIDE: Record<'dailyBriefing' | 'scholarships', 'l
 function buildBannerIconPrompt(
   key: CategoryIconKey,
   provider: AiImageSettings['imageProvider'],
-  palette: { color: string; textIsLight: boolean },
+  palette: { color: string; textIsLight: boolean; label: string },
 ): string {
   const artSide = CATEGORY_ICON_BANNER_ART_SIDE[key as 'dailyBriefing' | 'scholarships'];
   const textSide = artSide === 'right' ? 'left' : 'right';
@@ -4572,7 +4577,7 @@ export const generateCategoryIcon = onCall(
       return {
         ...image,
         textIsLight: bannerPalette?.textIsLight ?? false,
-        labelColor: tilePalette?.label,
+        labelColor: bannerPalette?.label ?? tilePalette?.label,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
