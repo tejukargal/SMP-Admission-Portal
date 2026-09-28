@@ -26,6 +26,7 @@ import type {
   StudentFeeOverride,
 } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
+import { lookupFine } from '../../utils/feeCalc';
 
 function emptySMP(): SMPHeads {
   return {
@@ -44,14 +45,6 @@ function sumArr(arr: FeeAdditionalHead[]): number {
 
 function today(): string {
   return new Date().toISOString().split('T')[0];
-}
-
-/** Returns the fine amount for a given date from the schedule, or 0 if no period matches. */
-function lookupFine(date: string, schedule: FinePeriod[]): number {
-  for (const p of schedule) {
-    if (p.from && p.to && date >= p.from && date <= p.to) return p.amount;
-  }
-  return 0;
 }
 
 interface Props {

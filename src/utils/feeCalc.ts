@@ -1,4 +1,4 @@
-import type { AcademicYear, FeeAdditionalHead, FeeRecord, FeeStructure, SMPHeads, StudentFeeOverride } from '../types';
+import type { AcademicYear, FeeAdditionalHead, FeeRecord, FinePeriod, FeeStructure, SMPHeads, StudentFeeOverride } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
 // ─── Fee history helpers ──────────────────────────────────────────────────────
@@ -11,6 +11,15 @@ export function sumSMPRecord(smp: FeeRecord['smp']): number {
 
 export function calcRecordTotal(r: FeeRecord): number {
   return sumSMPRecord(r.smp) + r.svk + r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+}
+
+/** Returns the fine amount for a given date from the schedule, or 0 if no period matches.
+ *  First matching period wins, so the saved order of periods matters. */
+export function lookupFine(date: string, schedule: FinePeriod[]): number {
+  for (const p of schedule) {
+    if (p.from && p.to && date >= p.from && date <= p.to) return p.amount;
+  }
+  return 0;
 }
 
 export function calcEffectiveFine(smpFineAllotted: number, records: FeeRecord[]): number {

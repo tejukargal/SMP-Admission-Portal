@@ -12,7 +12,28 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   placeholder: string;
   options: Option<T>[];
   className?: string;
+  /** Accent colour; defaults to the app's emerald. */
+  tone?: 'emerald' | 'indigo';
 }
+
+const TONES = {
+  emerald: {
+    ring: 'focus:ring-emerald-400',
+    active: 'border-emerald-400 bg-emerald-50 text-emerald-700',
+    idle: 'border-emerald-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50',
+    allRow: 'text-emerald-700 bg-emerald-50/60',
+    checkedRow: 'text-emerald-700 bg-emerald-50',
+    checkbox: 'border-emerald-500 bg-emerald-500',
+  },
+  indigo: {
+    ring: 'focus:ring-indigo-400',
+    active: 'border-indigo-400 bg-indigo-50 text-indigo-700',
+    idle: 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/50',
+    allRow: 'text-indigo-700 bg-indigo-50/60',
+    checkedRow: 'text-indigo-700 bg-indigo-50',
+    checkbox: 'border-indigo-500 bg-indigo-500',
+  },
+} as const;
 
 export function MultiSelectFilterDropdown<T extends string>({
   value,
@@ -20,7 +41,9 @@ export function MultiSelectFilterDropdown<T extends string>({
   placeholder,
   options,
   className = '',
+  tone = 'emerald',
 }: MultiSelectFilterDropdownProps<T>) {
+  const t = TONES[tone];
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -71,10 +94,8 @@ export function MultiSelectFilterDropdown<T extends string>({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors shrink-0 ${
-          value.length > 0
-            ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-            : 'border-emerald-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50'
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium bg-white focus:outline-none focus:ring-1 ${t.ring} cursor-pointer transition-colors shrink-0 ${
+          value.length > 0 ? t.active : t.idle
         } ${className}`}
       >
         <span className="truncate">{label}</span>
@@ -99,7 +120,7 @@ export function MultiSelectFilterDropdown<T extends string>({
           {/* "All" / clear-all option */}
           <button
             className={`w-full text-left px-3 py-[5px] text-[12px] flex items-center gap-2 transition-colors duration-100 ${
-              value.length === 0 ? 'text-emerald-700 bg-emerald-50/60' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+              value.length === 0 ? t.allRow : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
             }`}
             onClick={() => { onChange([]); setOpen(false); }}
           >
@@ -119,11 +140,11 @@ export function MultiSelectFilterDropdown<T extends string>({
               <button
                 key={opt.value}
                 className={`w-full text-left px-3 py-[5px] text-[12px] flex items-center gap-2 transition-colors duration-100 ${
-                  checked ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  checked ? t.checkedRow : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
                 onClick={() => toggleValue(opt.value)}
               >
-                <span className={`w-3 h-3 flex items-center justify-center shrink-0 rounded-[3px] border ${checked ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}>
+                <span className={`w-3 h-3 flex items-center justify-center shrink-0 rounded-[3px] border ${checked ? t.checkbox : 'border-gray-300'}`}>
                   {checked && (
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />

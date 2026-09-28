@@ -4,7 +4,8 @@ import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUse
 import { auth } from '../config/firebase';
 import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
 import { Button } from '../components/common/Button';
-import { FeeStructurePage } from './FeeStructurePage';
+import { FeeStructurePanel } from './FeeStructurePanel';
+import { isFeeStructureSection, type FeeStructureSection } from './feeStructureShared';
 import { ExamFee } from './ExamFee';
 import { StudentAppPanel, isStudentAppSection, type StudentAppSection } from './StudentAppPanel';
 import { ImportPanel, isImportSection, type ImportSection } from './ImportPanel';
@@ -82,11 +83,13 @@ export function Settings() {
   const initialImportSection: ImportSection = legacyImportSection ?? (isImportSection(sectionParam) ? sectionParam : 'students');
   const initialGeneralSection: GeneralSection = isGeneralSection(sectionParam) ? sectionParam : 'academic-year';
   const initialBackupSection: BackupSection = isBackupSection(sectionParam) ? sectionParam : 'export';
+  const initialFeeSection: FeeStructureSection = isFeeStructureSection(sectionParam) ? sectionParam : 'structures';
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [appSection, setAppSection] = useState<StudentAppSection>(initialAppSection);
   const [importSection, setImportSection] = useState<ImportSection>(initialImportSection);
   const [generalSection, setGeneralSection] = useState<GeneralSection>(initialGeneralSection);
   const [backupSection, setBackupSection] = useState<BackupSection>(initialBackupSection);
+  const [feeSection, setFeeSection] = useState<FeeStructureSection>(initialFeeSection);
 
   // Mirror the tab (and its active section, if any) into the URL so a
   // refresh or a shared link lands on the same place.
@@ -96,8 +99,9 @@ export function Settings() {
     else if (activeTab === 'import') next.section = importSection;
     else if (activeTab === 'general') next.section = generalSection;
     else if (activeTab === 'backup') next.section = backupSection;
+    else if (activeTab === 'fee-structure') next.section = feeSection;
     setSearchParams(next, { replace: true });
-  }, [activeTab, appSection, importSection, generalSection, backupSection, setSearchParams]);
+  }, [activeTab, appSection, importSection, generalSection, backupSection, feeSection, setSearchParams]);
 
   // Messaging config state
   const [msgApiKey, setMsgApiKey] = useState('');
@@ -263,9 +267,7 @@ export function Settings() {
 
         {/* ── Fee Structure ── */}
         {activeTab === 'fee-structure' && (
-          <div className="h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <FeeStructurePage />
-          </div>
+          <FeeStructurePanel section={feeSection} onSectionChange={setFeeSection} />
         )}
 
         {/* ── Exam Fee ── */}
