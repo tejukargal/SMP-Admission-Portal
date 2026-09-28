@@ -295,6 +295,28 @@
   display: none; /* Chrome / Safari / Edge */
 }
 
+/* ── Pea-green table scrollbar (WP Students) ────────────────────────────── */
+.scroll-pea::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-pea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-pea::-webkit-scrollbar-thumb {
+  background: #CFE3BD;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-pea::-webkit-scrollbar-thumb:hover {
+  background: #9CC47C;
+  background-clip: padding-box;
+}
+.scroll-pea::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
 .scroll-indigo {
   scrollbar-width: thin;

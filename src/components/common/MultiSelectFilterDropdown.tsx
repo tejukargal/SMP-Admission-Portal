@@ -13,7 +13,7 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   options: Option<T>[];
   className?: string;
   /** Accent colour; defaults to the app's emerald. */
-  tone?: 'emerald' | 'indigo';
+  tone?: 'emerald' | 'indigo' | 'pea';
 }
 
 const TONES = {
@@ -32,6 +32,15 @@ const TONES = {
     allRow: 'text-indigo-700 bg-indigo-50/60',
     checkedRow: 'text-indigo-700 bg-indigo-50',
     checkbox: 'border-indigo-500 bg-indigo-500',
+  },
+  // Pea / pistachio green — WP Students revamp (student-portal look).
+  pea: {
+    ring: 'focus:ring-[#5B9A2F]/40',
+    active: 'border-[#5B9A2F] bg-[#F1F7EA] text-[#3F6E1F]',
+    idle: 'border-[#CFE3BD] text-[#3F4654] hover:border-[#5B9A2F]/60 hover:bg-[#F6FAF1]',
+    allRow: 'text-[#3F6E1F] bg-[#F1F7EA]/60',
+    checkedRow: 'text-[#3F6E1F] bg-[#F1F7EA]',
+    checkbox: 'border-[#5B9A2F] bg-[#5B9A2F]',
   },
 } as const;
 
