@@ -90,8 +90,15 @@ const MENU_SEP = <div className="my-1 h-px bg-[#E6F0F8] mx-2" />;
 // index.css (.scroll-students) for the scrollbar gutter beside the header.
 const TH =
   'h-9 px-3 py-0 align-middle text-left text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[#E6F1FA] border-b border-[#C3DCEF] text-[#075E93]';
-const TD = 'px-3 py-2 whitespace-nowrap';
-const TD_NUM = 'px-3 py-2 whitespace-nowrap text-[11.5px] font-medium text-black tabular-nums';
+// Fixed column widths (px) with table-layout: fixed, so columns never shift when
+// filters change the rows on screen. Spare width is shared proportionally.
+const COL_W = {
+  idx: 48, name: 300, reg: 112, course: 76, year: 96, gender: 80, category: 84,
+  admType: 104, admCat: 86, allotted: 100, mobile: 116, status: 200, receipt: 118, actions: 96,
+};
+
+const TD = 'px-3 py-2 whitespace-nowrap overflow-hidden';
+const TD_NUM = 'px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis text-[11.5px] font-medium text-black tabular-nums';
 
 /** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
 function RingAvatar({ name, course, size = 22 }: { name: string; course: string; size?: number }) {
@@ -538,6 +545,23 @@ export function Students() {
 
   const isLoading = settingsLoading || loading;
 
+  // Changes whenever the result set is re-filtered (search, chips, dropdowns,
+  // Recently Paid) — keys the rows so they replay a staggered entrance, and
+  // scrolls the list back to the top. Same behaviour as Collect Fee.
+  const filterSig = [
+    debouncedSearch, courseFilter.join(','), yearFilter.join(','), genderFilter.join(','),
+    categoryFilter.join(','), admTypeFilter.join(','), admCatFilter.join(','), String(sortByRecent),
+  ].join('|');
+  // Animate from the first filter change onward — including Clear, which
+  // returns to the initial signature — but not on the initial page load.
+  const [initialSig] = useState(filterSig);
+  const [animateRows, setAnimateRows] = useState(false);
+  if (!animateRows && filterSig !== initialSig) setAnimateRows(true);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+  }, [filterSig]);
+
   // Header chip strip: single line between two always-visible arrow buttons;
   // each arrow dims when there is nothing more to see on its side.
   const chipScrollRef = useRef<HTMLDivElement>(null);
@@ -579,6 +603,13 @@ export function Students() {
   }
 
   if (isLoading) return <LoadingGate />;
+
+  const tableCols = [
+    COL_W.idx, COL_W.name, COL_W.reg, COL_W.course, COL_W.year, COL_W.gender, COL_W.category,
+    COL_W.admType, COL_W.admCat, COL_W.allotted, COL_W.mobile, COL_W.status,
+    ...(sortByRecent ? [COL_W.receipt] : []),
+    ...(isAdmin ? [COL_W.actions] : []),
+  ];
 
   return (
     <>
@@ -984,47 +1015,53 @@ export function Students() {
         <EmptyState title="No students found." />
       ) : (
         <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CFE3F2] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(11,60,94,0.06)]">
-          <div className="scroll-students flex-1 min-h-0 overflow-auto">
-          <table className="w-full text-xs border-separate border-spacing-0">
+          <div ref={tableScrollRef} className="scroll-students flex-1 min-h-0 overflow-auto">
+          <table
+            className="w-full text-xs border-separate border-spacing-0"
+            style={{ tableLayout: 'fixed', minWidth: tableCols.reduce((a, w) => a + w, 0) }}
+          >
+            <colgroup>
+              {tableCols.map((w, i) => <col key={i} style={{ width: w }} />)}
+            </colgroup>
             <thead className="sticky top-0 z-10">
               <tr>
-                <th className={`${TH} w-8`}>#</th>
+                <th className={TH}>#</th>
                 <th className={TH}>Name (SSLC)</th>
-                <th className={`${TH} w-24`}>Reg No</th>
-                <th className={`${TH} w-14`}>Course</th>
-                <th className={`${TH} w-20`}>Year</th>
-                <th className={`${TH} w-14`}>Gender</th>
-                <th className={`${TH} w-14`}>Category</th>
-                <th className={`${TH} w-20`}>Adm Type</th>
-                <th className={`${TH} w-16`}>Adm Cat</th>
-                <th className={`${TH} w-20`}>Allotted Cat</th>
-                <th className={`${TH} w-28`}>Mobile</th>
-                <th className={`${TH} w-24`}>Status</th>
+                <th className={TH}>Reg No</th>
+                <th className={TH}>Course</th>
+                <th className={TH}>Year</th>
+                <th className={TH}>Gender</th>
+                <th className={TH}>Category</th>
+                <th className={TH}>Adm Type</th>
+                <th className={TH}>Adm Cat</th>
+                <th className={TH}>Allotted Cat</th>
+                <th className={TH}>Mobile</th>
+                <th className={TH}>Status</th>
                 {sortByRecent && (
-                  <th className={`${TH} w-24`}>Receipt Date</th>
+                  <th className={TH}>Receipt Date</th>
                 )}
                 {isAdmin && (
-                  <th className={`${TH} w-48`}>Actions</th>
+                  <th className={TH}>Actions</th>
                 )}
               </tr>
             </thead>
             <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EAF2F9]">
               {visibleStudents.map((student, idx) => (
                 <tr
-                  key={`${student.id}-${debouncedSearch}`}
+                  key={`${student.id}-${filterSig}`}
                   className={`transition-colors cursor-context-menu ${
                     contextMenu?.student.id === student.id
                       ? 'bg-[#0B7BC0]/[0.10]'
                       : 'hover:bg-[#F3F9FD]'
                   }`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
-                  style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
+                  style={animateRows ? { animation: `content-enter 0.24s ease-out ${Math.min(idx * 0.025, 0.3)}s both` } : undefined}
                 >
                   <td className="px-3 py-2 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
                   <td className={TD}>
                     <div className="flex items-center gap-2.5 min-w-0">
                       <RingAvatar name={student.studentNameSSLC} course={student.course} />
-                      <span className="text-[12.5px] font-medium text-[#075E93]">{student.studentNameSSLC}</span>
+                      <span className="text-[12.5px] font-medium text-[#075E93] truncate min-w-0" title={student.studentNameSSLC}>{student.studentNameSSLC}</span>
                     </div>
                   </td>
                   <td className={TD_NUM}>{student.regNumber || '—'}</td>
