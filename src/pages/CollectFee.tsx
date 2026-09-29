@@ -11,6 +11,7 @@ import type { RefundRecord } from '../services/refundService';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
+import { prefetchCollectFee, prefetchFeeHistory, invalidateFeePrefetch } from '../components/fee/feeModalPrefetch';
 import type {
   Student,
   Course,
@@ -136,9 +137,11 @@ function LinePill({ value, color, minWidth }: { value?: string; color?: string; 
 }
 
 /** Compact boxy outline button for row actions (Collect Fee / Collect Dues / No Dues / Fee Details). */
-function ActionPill({ color, onClick, disabled, width, children }: {
+function ActionPill({ color, onClick, onIntent, disabled, width, children }: {
   color: string;
   onClick?: () => void;
+  /** Fired when the pointer reaches the button or it gains focus — used to prefetch the modal's data. */
+  onIntent?: () => void;
   disabled?: boolean;
   /** Fixed width (px) so every button in a column lines up; otherwise fits content. */
   width?: number;
@@ -148,6 +151,8 @@ function ActionPill({ color, onClick, disabled, width, children }: {
     <button
       type="button"
       onClick={onClick}
+      onPointerEnter={disabled ? undefined : onIntent}
+      onFocus={disabled ? undefined : onIntent}
       disabled={disabled}
       className="inline-flex items-center justify-center gap-1 rounded-[7px] border bg-white px-2 py-[7px] whitespace-nowrap text-[11px] font-medium leading-none transition-[background-color,box-shadow] duration-150 enabled:cursor-pointer enabled:hover:bg-[var(--tint)] enabled:hover:shadow-[0_2px_8px_rgba(18,20,26,0.06)] disabled:bg-[var(--tint)] disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
       style={{ '--tint': `${color}14`, '--ring': `${color}40`, borderColor: `${color}73`, color: inkOf(color), width } as React.CSSProperties}
@@ -865,6 +870,9 @@ export function CollectFee() {
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, student, hasFeeRecord, isFullyPaid });
+                      // The menu's two actions open these modals — start loading their data now.
+                      if (academicYear && !isFullyPaid) prefetchCollectFee(student, academicYear, academicYear);
+                      prefetchFeeHistory(student);
                     }}
                   >
                     <td className="px-3 py-2 text-[11px] font-medium text-black tabular-nums whitespace-nowrap">{idx + 1}</td>
@@ -887,7 +895,11 @@ export function CollectFee() {
                       />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <ActionPill color={TEAL} onClick={() => setFeeHistoryStudent({ student, noDues: isFullyPaid })}>
+                      <ActionPill
+                        color={TEAL}
+                        onIntent={() => prefetchFeeHistory(student)}
+                        onClick={() => setFeeHistoryStudent({ student, noDues: isFullyPaid })}
+                      >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                         Fee Details
                       </ActionPill>
@@ -902,6 +914,7 @@ export function CollectFee() {
                         <ActionPill
                           width={ACTION_W}
                           color={hasFeeRecord ? ACTION_COLOR.dues : ACTION_COLOR.collect}
+                          onIntent={() => academicYear && prefetchCollectFee(student, academicYear, academicYear)}
                           onClick={() => setSelectedStudent(student)}
                         >
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>
@@ -943,8 +956,8 @@ export function CollectFee() {
         <FeeCollectionModal
           student={selectedStudent}
           academicYear={academicYear}
-          onClose={() => setSelectedStudent(null)}
-          onSaved={() => { refetchFees(); setSelectedStudent(null); }}
+          onClose={() => { invalidateFeePrefetch(selectedStudent.id); setSelectedStudent(null); }}
+          onSaved={() => { invalidateFeePrefetch(selectedStudent.id); refetchFees(); setSelectedStudent(null); }}
         />
       )}
 
@@ -953,7 +966,7 @@ export function CollectFee() {
         <FeeHistoryModal
           student={feeHistoryStudent.student}
           initialNoDues={feeHistoryStudent.noDues}
-          onClose={() => setFeeHistoryStudent(null)}
+          onClose={() => { invalidateFeePrefetch(feeHistoryStudent.student.id); setFeeHistoryStudent(null); }}
         />
       )}
     </div>

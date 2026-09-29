@@ -259,17 +259,23 @@ async function _buildCounterFromRecords(academicYear: AcademicYear): Promise<Rec
  * If the document is missing OR has the old single-series format, it is rebuilt
  * by scanning all existing fee records for this academic year.
  */
-async function _ensureCounterDoc(academicYear: AcademicYear): Promise<void> {
+/**
+ * Makes sure the counter doc exists in the current format. Returns the data it
+ * read when the doc was already current (so callers can skip a second read), or
+ * null when it had to initialise the doc.
+ */
+async function _ensureCounterDoc(academicYear: AcademicYear): Promise<ReceiptCounterDoc | null> {
   const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
   const snap = await getDoc(ref);
   const isCurrentFormat = (data: Record<string, unknown> | undefined) =>
     data?.smpAided !== undefined && data?.svk !== undefined;
-  if (snap.exists() && isCurrentFormat(snap.data())) return;
+  if (snap.exists() && isCurrentFormat(snap.data())) return snap.data() as ReceiptCounterDoc;
   const initial = await _buildCounterFromRecords(academicYear);
   await runTransaction(db, async (tx) => {
     const check = await tx.get(ref);
     if (!check.exists() || !isCurrentFormat(check.data())) tx.set(ref, initial);
   });
+  return null;
 }
 
 /**
@@ -281,9 +287,9 @@ export async function peekNextReceiptNumbers(
   academicYear: AcademicYear,
   course: Course,
 ): Promise<{ smp: string; svk: string; additional: string }> {
-  await _ensureCounterDoc(academicYear);
-  const snap = await getDoc(doc(db, RECEIPT_COUNTERS_COL, academicYear));
-  const d = snap.data() as ReceiptCounterDoc;
+  // Reuse the read _ensureCounterDoc already made; only re-read after it initialised the doc.
+  const d = (await _ensureCounterDoc(academicYear))
+    ?? ((await getDoc(doc(db, RECEIPT_COUNTERS_COL, academicYear))).data() as ReceiptCounterDoc);
   const aided = AIDED_COURSES.has(course);
 
   const smpMax = aided ? (d.smpAided   ?? 0) : (d.smpUnaided ?? 0);

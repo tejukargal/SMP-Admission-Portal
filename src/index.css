@@ -134,6 +134,17 @@
   to   { transform: scaleY(1); }
 }
 
+/* Fee Details modal: summary ring sweeps in from empty (reads --ring-len off
+   the circle), year progress bars grow from the left. */
+@keyframes fee-ring-fill {
+  from { stroke-dashoffset: var(--ring-len); }
+}
+
+@keyframes fee-bar-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
 @keyframes l19 {
   100% { transform: rotate(1turn); }
 }

@@ -1,17 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getFeeStructure } from '../../services/feeStructureService';
 import {
-  getFeeRecordsByStudent,
   saveFeeRecord,
-  peekNextReceiptNumbers,
   updateReceiptCounters,
   isPlausibleReceiptJump,
 } from '../../services/feeRecordService';
-import { getFeeOverride, saveFeeOverride } from '../../services/feeOverrideService';
-import { getFineSchedule } from '../../services/fineScheduleService';
+import { saveFeeOverride } from '../../services/feeOverrideService';
 import { createStudentNotification } from '../../services/studentNotificationService';
-import { Button } from '../common/Button';
 import type {
   Student,
   FeeStructure,
@@ -27,6 +22,8 @@ import type {
 } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 import { lookupFine } from '../../utils/feeCalc';
+import { takeCollectFee } from './feeModalPrefetch';
+import type { CollectFeeData } from './feeModalPrefetch';
 
 function emptySMP(): SMPHeads {
   return {
@@ -57,8 +54,183 @@ interface Props {
   onSaved: () => void;
 }
 
+// ── Design tokens — teal student-portal look (matches Collect Fee / Fee Details) ──
+const TEAL = '#0F8B8D';
+const TEAL_INK = '#0B6567';
+const SKY = '#0284C7';     // SMP
+const VIOLET = '#7C3AED';  // SVK
+const MINT = '#0FA968';    // Additional / cleared
+const CORAL = '#E11D48';
+const AMBER = '#D97706';
+const FALLBACK_COLOR = '#8A93A3';
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+const ADM_TYPE_COLOR: Record<string, string> = {
+  REGULAR: '#1D6FD8', REPEATER: '#D97706', LATERAL: '#7C3AED', EXTERNAL: TEAL, SNQ: '#10B981',
+};
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+/** Per-section accent as CSS variables, picked up by the inputs' focus ring/border and row hover. */
+const accVars = (c: string) => ({ '--acc': c, '--acc-ink': inkOf(c), '--acc-ring': `${c}33`, '--acc-row': `${c}0A` } as React.CSSProperties);
+
+// Number input for fee tables — focus takes the enclosing section's accent.
 const ni =
-  'w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors';
+  'w-full rounded-lg border border-[#D5E6E6] px-2 py-1 text-xs text-right tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-[var(--acc-ring,rgba(15,139,141,0.2))] focus:border-[var(--acc,#0F8B8D)] transition-colors';
+// Number input while editing the custom allotted fee.
+const niAmber =
+  'w-full rounded-lg border border-amber-300 px-2 py-1 text-xs text-right tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-colors';
+const TXT_IN =
+  'flex-1 min-w-0 rounded-lg border border-[#D5E6E6] px-2.5 py-1.5 text-xs font-medium text-[#262B35] bg-white placeholder:text-[#A9B0BB] placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[var(--acc-ring)] focus:border-[var(--acc)] transition-colors';
+const SPLIT_BOX =
+  'flex flex-1 items-center gap-2 text-[10.5px] font-medium text-[#5B6371] rounded-xl border border-[#0F8B8D]/20 bg-[#0F8B8D]/[0.05] px-2.5 py-1.5';
+const SPLIT_IN =
+  'w-24 rounded-lg border border-[#0F8B8D]/35 px-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/25 focus:border-[#0F8B8D] bg-white';
+const FEE_CARD = 'rounded-2xl overflow-hidden border bg-white';
+const feeCardStyle = (c: string) => ({ ...accVars(c), borderColor: `${c}33`, boxShadow: `0 4px 14px ${c}0F` } as React.CSSProperties);
+const FTH = 'px-3 py-2 text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap text-[color:var(--acc-ink)]';
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course }: { name: string; course: string }) {
+  const h = DEPT_HUE[course] ?? 210;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-[14px] font-medium"
+      style={{
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 2px #fff, 0 0 0 3.5px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Highlighted student detail: tiny label over an accent-ink value, on a tinted tile. */
+function InfoTile({ label, value, color, mono }: { label: string; value?: string; color?: string; mono?: boolean }) {
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <div
+      className="flex flex-col justify-center rounded-xl border px-2.5 py-1.5 min-w-[64px]"
+      style={{ background: `linear-gradient(135deg, ${c}17, ${c}08)`, borderColor: `${c}4D` }}
+    >
+      <span className="flex items-center gap-1 text-[8.5px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none whitespace-nowrap">
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c }} />
+        {label}
+      </span>
+      <span
+        className={`mt-1 text-[13px] font-semibold leading-none whitespace-nowrap ${mono ? 'tabular-nums' : ''}`}
+        style={{ color: inkOf(c) }}
+      >
+        {value || '—'}
+      </span>
+    </div>
+  );
+}
+
+/** White outline pill with a tinted hairline, dot and ink. */
+function OutlinePill({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border bg-white/85 px-2.5 py-[4px] text-[10.5px] font-medium leading-none shrink-0 whitespace-nowrap tabular-nums"
+      style={{ borderColor: `${color}73`, color: inkOf(color) }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+      {children}
+    </span>
+  );
+}
+
+/** Fee-table section title: accent dot + accent-ink label. */
+function SectionTitle({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-2 pl-1">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 0 3px ${color}26` }} />
+      <span className="text-[11px] font-semibold uppercase tracking-[0.8px]" style={{ color: inkOf(color) }}>
+        {children}
+      </span>
+    </div>
+  );
+}
+
+/** Pastel totals tile (Allotted / Paid So Far / Paying / Total After / Balance). */
+function SumTile({ label, value, color, emphasis }: { label: string; value: number; color: string; emphasis?: boolean }) {
+  return (
+    <div
+      className="flex-1 min-w-[90px] rounded-xl border px-3 py-2"
+      style={{
+        background: `linear-gradient(135deg, ${color}${emphasis ? '24' : '14'}, ${color}06)`,
+        borderColor: `${color}${emphasis ? '66' : '40'}`,
+        boxShadow: emphasis ? `0 3px 12px ${color}1F` : undefined,
+      }}
+    >
+      <div className="text-[9px] font-medium uppercase tracking-[0.8px]" style={{ color: inkOf(color) }}>
+        {label}
+      </div>
+      <div className={`mt-0.5 font-semibold tabular-nums ${emphasis ? 'text-[16px]' : 'text-[14px]'}`} style={{ color: inkOf(color) }}>
+        ₹{value.toLocaleString()}
+      </div>
+    </div>
+  );
+}
+
+/** CASH / UPI / SPLIT segmented pill group; the selected mode fills with the section accent (SPLIT in teal). */
+function ModeToggle({ value, color, onSelect }: { value: PaymentMode; color: string; onSelect: (mode: PaymentMode) => void }) {
+  return (
+    <div className="flex items-center gap-0.5 shrink-0 w-[144px] rounded-full border border-[#D5E6E6] bg-white p-0.5">
+      {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => {
+        const selected = value === mode;
+        const c = mode === 'SPLIT' ? TEAL : color;
+        return (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onSelect(mode)}
+            className={`flex-1 py-[5px] rounded-full text-[9.5px] font-semibold tracking-[0.3px] text-center leading-none transition-colors cursor-pointer ${
+              selected ? 'text-white' : 'text-[#8A93A3] hover:bg-[#F4FAFA]'
+            }`}
+            style={selected ? { background: c, boxShadow: `0 2px 6px ${c}40` } : undefined}
+          >
+            {mode}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Split-payment match indicator: mint when cash + UPI equals the section total, coral otherwise. */
+function SplitCheck({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+  const c = ok ? MINT : CORAL;
+  return (
+    <span
+      className="shrink-0 rounded-full px-2 py-[3px] font-semibold tabular-nums"
+      style={{ background: `${c}14`, color: inkOf(c) }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ErrorStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="text-[12px] font-medium rounded-xl border px-3 py-2"
+      style={{ background: `${CORAL}0D`, borderColor: `${CORAL}40`, color: inkOf(CORAL) }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function FeeCollectionModal({ student, academicYear, receiptCounterYear, onClose, onSaved }: Props) {
   const { user } = useAuth();
@@ -123,70 +295,70 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
     return map;
   }, [priorPayments]);
 
-  useEffect(() => {
-    Promise.all([
-      getFeeStructure(
-        academicYear,
-        student.course,
-        student.year,
-        student.admType,
-        student.admCat
-      ),
-      getFeeRecordsByStudent(student.id, academicYear),
-      peekNextReceiptNumbers(counterYear, student.course),
-      getFineSchedule(academicYear, student.year),
-      getFeeOverride(student.id, academicYear),
-    ])
-      .then(([struct, prior, receipts, schedule, override]) => {
-        setStructure(struct);
-        setPriorPayments(prior);
-        setReceiptNo(receipts.smp);
-        setSuggestedSmpReceipt(receipts.smp);
-        setSvkReceiptNo(receipts.svk);
-        setAdditionalReceiptNo(receipts.additional);
-        setFineSchedule(schedule);
-        setLoadedOverride(override);
+  // Loads structure, prior payments, next receipt numbers, fine schedule and override
+  // (see feeModalPrefetch). A layout effect so an already-prefetched result renders
+  // before the first paint — the modal opens filled, with no skeleton.
+  useLayoutEffect(() => {
+    let cancelled = false;
+    const applyLoaded = ([struct, prior, receipts, schedule, override]: CollectFeeData) => {
+      setStructure(struct);
+      setPriorPayments(prior);
+      setReceiptNo(receipts.smp);
+      setSuggestedSmpReceipt(receipts.smp);
+      setSvkReceiptNo(receipts.svk);
+      setAdditionalReceiptNo(receipts.additional);
+      setFineSchedule(schedule);
+      setLoadedOverride(override);
 
-        // Effective allotted: override takes precedence over structure
-        const effSmp = override ? override.smp : struct?.smp;
-        const effSvk = override ? override.svk : struct?.svk;
-        const effAdditional = override ? override.additionalHeads : struct?.additionalHeads;
+      // Effective allotted: override takes precedence over structure
+      const effSmp = override ? override.smp : struct?.smp;
+      const effSvk = override ? override.svk : struct?.svk;
+      const effAdditional = override ? override.additionalHeads : struct?.additionalHeads;
 
-        if (effSmp !== undefined) {
-          // Compute cumulative from prior payments
-          const cumSmp = emptySMP();
-          for (const r of prior) {
-            for (const { key } of SMP_FEE_HEADS) cumSmp[key] += r.smp[key];
-          }
-          const cumSvk = prior.reduce((s, r) => s + r.svk, 0);
-
-          // Pre-fill with remaining balance (allotted − already paid)
-          const fineExempt =
-            (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
-            (student.year === '2ND YEAR' && student.admType === 'LATERAL');
-          const remaining = emptySMP();
-          for (const { key } of SMP_FEE_HEADS) {
-            remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, effSmp[key] - cumSmp[key]);
-          }
-          setSmpNow(remaining);
-          setSvkNow(Math.max(0, (effSvk ?? 0) - cumSvk));
-          setAdditionalNow(
-            (effAdditional ?? []).map((h) => {
-              const prevPaid = prior.reduce(
-                (s, r) =>
-                  s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
-                0
-              );
-              return { label: h.label, amount: Math.max(0, h.amount - prevPaid) };
-            })
-          );
+      if (effSmp !== undefined) {
+        // Compute cumulative from prior payments
+        const cumSmp = emptySMP();
+        for (const r of prior) {
+          for (const { key } of SMP_FEE_HEADS) cumSmp[key] += r.smp[key];
         }
-        // If neither structure nor override: everything stays 0
-      })
+        const cumSvk = prior.reduce((s, r) => s + r.svk, 0);
+
+        // Pre-fill with remaining balance (allotted − already paid)
+        const fineExempt =
+          (student.year === '1ST YEAR' && (student.admType === 'REGULAR' || student.admType === 'SNQ')) ||
+          (student.year === '2ND YEAR' && student.admType === 'LATERAL');
+        const remaining = emptySMP();
+        for (const { key } of SMP_FEE_HEADS) {
+          remaining[key] = key === 'fine' && fineExempt ? 0 : Math.max(0, effSmp[key] - cumSmp[key]);
+        }
+        setSmpNow(remaining);
+        setSvkNow(Math.max(0, (effSvk ?? 0) - cumSvk));
+        setAdditionalNow(
+          (effAdditional ?? []).map((h) => {
+            const prevPaid = prior.reduce(
+              (s, r) =>
+                s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0),
+              0
+            );
+            return { label: h.label, amount: Math.max(0, h.amount - prevPaid) };
+          })
+        );
+      }
+      // If neither structure nor override: everything stays 0
+    };
+    const load = takeCollectFee(student, academicYear, counterYear);
+    if (load.data) {
+      applyLoaded(load.data);
+      setLoadingData(false);
+      return;
+    }
+    load.promise
+      .then((data) => { if (!cancelled) applyLoaded(data); })
       .catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err.message : 'Failed to load fee data');
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load fee data');
       })
-      .finally(() => setLoadingData(false));
+      .finally(() => { if (!cancelled) setLoadingData(false); });
+    return () => { cancelled = true; };
   }, [academicYear, student.course, student.id, student.year, student.admType, student.admCat]);
 
   // Fine is exempt for: 1st Year Regular/SNQ (all courses), 2nd Year Lateral (all courses).
@@ -447,94 +619,111 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
   const isUpdate = priorPayments.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+    <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-[#0B2A2B]/45 backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"
-        style={{ animation: 'modal-enter 0.25s ease-out' }}
+        className="relative bg-white rounded-[22px] border border-[#CDE6E6] w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"
+        style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: '0 24px 60px rgba(11,42,43,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}
       >
 
         {/* Header */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-start justify-between shrink-0">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 text-xs font-bold text-white shrink-0">
-                ₹
-              </span>
-              {isUpdate ? 'Add Payment Installment' : 'Collect Fee'}
-              {isUpdate && !loadingData && grandAllotted > 0 && (
-                <span className="inline-flex items-center rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5">
-                  Due: ₹{(grandAllotted - totalPrevious).toLocaleString()}
-                </span>
-              )}
-            </h3>
-            <p className="text-[11px] text-blue-100 mt-0.5">
+        <div
+          className="relative overflow-hidden px-5 py-3.5 flex items-center justify-between shrink-0 border-b border-[#0F8B8D]/20"
+          style={{ background: `linear-gradient(135deg, ${TEAL}24 0%, ${TEAL}0D 55%, #FFFFFF 100%)` }}
+        >
+          <span
+            className="pointer-events-none absolute -top-20 -right-10 w-44 h-44 rounded-full border-[22px]"
+            style={{ borderColor: `${TEAL}14` }}
+            aria-hidden="true"
+          />
+          <div className="relative min-w-0 flex items-center gap-2.5 flex-wrap">
+            <span
+              className="inline-flex items-center justify-center w-8 h-8 rounded-[10px] text-white text-[15px] font-semibold shrink-0"
+              style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_INK})`, boxShadow: `0 3px 10px ${TEAL}40` }}
+            >
+              ₹
+            </span>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">Fee Collection</span>
+              <h3 className="mt-1 text-[17px] font-bold text-[#0B6567] leading-none tracking-[-0.2px]">
+                {isUpdate ? 'Add Payment Installment' : 'Collect Fee'}
+              </h3>
+            </div>
+            <span className="rounded-full border border-[#0F8B8D]/45 bg-white/80 text-[#0B6567] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
               {academicYear}
-              {isUpdate && (
-                <span className="ml-2 text-amber-300 font-medium">
-                  · {priorPayments.length} prior payment{priorPayments.length > 1 ? 's' : ''} on record
-                </span>
-              )}
-            </p>
+            </span>
+            {isUpdate && (
+              <OutlinePill color={AMBER}>
+                {priorPayments.length} prior payment{priorPayments.length > 1 ? 's' : ''} on record
+              </OutlinePill>
+            )}
+            {isUpdate && !loadingData && grandAllotted > 0 && (
+              <OutlinePill color={CORAL}>
+                Due: ₹{(grandAllotted - totalPrevious).toLocaleString()}
+              </OutlinePill>
+            )}
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 mt-0.5"
+            className="relative flex items-center justify-center w-8 h-8 rounded-full border border-[#0F8B8D]/35 bg-white text-[#0B6567] hover:bg-[#EFF8F8] hover:border-[#0F8B8D]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"
+            aria-label="Close"
           >
-            ×
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
         {/* Student info bar */}
-        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 shrink-0">
-          <div className="flex flex-wrap gap-x-5 gap-y-1">
-            {[
-              { label: 'Student', value: student.studentNameSSLC, bold: true },
-              { label: 'Father', value: student.fatherName },
-              { label: 'Reg No', value: student.regNumber || '—' },
-              { label: 'Year', value: student.year },
-              { label: 'Course', value: student.course },
-              { label: 'Cat', value: student.admCat },
-              { label: 'Adm Type', value: student.admType },
-            ].map(({ label, value, bold }) => (
-              <div key={label} className="flex flex-col min-w-0">
-                <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">{label}</span>
-                <span className={`text-xs truncate ${bold ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                  {value}
-                </span>
+        <div className="px-5 py-3 bg-white border-b border-[#E3F0F0] shrink-0">
+          <div className="flex items-center gap-x-4 gap-y-2.5 flex-wrap">
+            <div className="min-w-[200px] flex-1 flex items-center gap-3">
+              <RingAvatar name={student.studentNameSSLC} course={student.course} />
+              <div className="min-w-0">
+                <p className="text-[16px] font-semibold truncate leading-tight tracking-[-0.1px]" style={{ color: TEAL }} title={student.studentNameSSLC}>
+                  {student.studentNameSSLC}
+                </p>
+                <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-[#8A93A3] min-w-0">
+                  <span className="uppercase tracking-[0.5px] text-[9px]">Father</span>
+                  <span className="text-[#5B6371] truncate">{student.fatherName}</span>
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="flex items-stretch gap-1.5 flex-wrap">
+              <InfoTile label="Reg No" value={student.regNumber || '—'} color={TEAL} mono />
+              <InfoTile label="Course" value={student.course} color={DEPT_DOT[student.course]} />
+              <InfoTile label="Year" value={student.year} color={YEAR_COLOR[student.year]} />
+              <InfoTile label="Adm Type" value={student.admType} color={ADM_TYPE_COLOR[student.admType]} />
+              <InfoTile label="Adm Cat" value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} />
+            </div>
           </div>
 
           {/* Override allotted controls */}
           {!loadingData && !loadError && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
               {loadedOverride && !editingAllotted && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                  ✎ Custom allotted fee active
-                </span>
+                <OutlinePill color={AMBER}>✎ Custom allotted fee active</OutlinePill>
               )}
               {!editingAllotted && (structure || loadedOverride) && (
                 <button
                   onClick={startEditAllotted}
-                  className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-full border border-[#0F8B8D]/40 bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer"
                 >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                   {loadedOverride ? 'Edit Custom Allotted' : 'Override Allotted Fee'}
                 </button>
               )}
               {editingAllotted && (
                 <>
-                  <span className="text-[10px] font-semibold text-amber-700">
+                  <span className="text-[10.5px] font-medium" style={{ color: inkOf(AMBER) }}>
                     Editing allotted fee — save separately below
                   </span>
                   <button
                     onClick={cancelEditAllotted}
-                    className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-500 hover:bg-gray-50 cursor-pointer"
+                    className="rounded-full border border-[#D5E6E6] bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"
                   >
                     Cancel
                   </button>
@@ -545,23 +734,26 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 flex-1 min-h-0 overflow-y-auto">
+        <div
+          className="scroll-teal px-5 py-4 flex-1 min-h-0 overflow-y-auto"
+          style={{ background: 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)' }}
+        >
           {loadingData ? (
             <div className="space-y-5">
               {/* SMP table skeleton */}
               <div>
                 <div className="skeleton h-3 w-36 mb-3 rounded" />
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-3 py-2 flex gap-4 border-b border-gray-200">
+                <div className="border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden">
+                  <div className="bg-[#EDF7F7] px-3 py-2 flex gap-4 border-b border-[#E3F0F0]">
                     <div className="skeleton h-3 flex-1" />
                     <div className="skeleton h-3 w-20" />
                     <div className="skeleton h-3 w-24" />
                   </div>
                   {Array.from({ length: 14 }).map((_, i) => (
-                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-gray-100 last:border-0">
+                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0">
                       <div className="skeleton h-3 flex-1" style={{ width: `${45 + (i % 4) * 10}%` }} />
                       <div className="skeleton h-3 w-20" />
-                      <div className="skeleton h-6 w-24 rounded" />
+                      <div className="skeleton h-6 w-24 !rounded-lg" />
                     </div>
                   ))}
                 </div>
@@ -569,65 +761,71 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               {/* SVK skeleton */}
               <div>
                 <div className="skeleton h-3 w-28 mb-3 rounded" />
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden">
                   {Array.from({ length: 2 }).map((_, i) => (
-                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-gray-100 last:border-0">
+                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0">
                       <div className="skeleton h-3 flex-1" />
                       <div className="skeleton h-3 w-20" />
-                      <div className="skeleton h-6 w-24 rounded" />
+                      <div className="skeleton h-6 w-24 !rounded-lg" />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           ) : loadError ? (
-            <div className="flex items-center justify-center py-10 text-sm text-red-500">
-              {loadError}
+            <div className="flex flex-col items-center justify-center py-12 gap-3 text-center" style={{ animation: 'content-enter 0.26s ease-out' }}>
+              <div className="w-14 h-14 rounded-2xl border flex items-center justify-center" style={{ borderColor: `${CORAL}40`, background: `${CORAL}0F`, color: CORAL }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <span className="text-[13px] font-medium" style={{ color: inkOf(CORAL) }}>{loadError}</span>
             </div>
           ) : (
             <div className="space-y-5" style={{ animation: 'content-enter 0.3s ease-out' }}>
               {!structure && !loadedOverride && (
-                <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3 text-xs text-yellow-800">
-                  No fee structure configured for{' '}
-                  <strong>
-                    {student.course} / {student.year} / {student.admType} / {student.admCat}
-                  </strong>{' '}
-                  — <strong>{academicYear}</strong>. Set it up in the{' '}
-                  <strong>Fee Structure</strong> page first, or use <strong>Override Allotted Fee</strong> above.
+                <div
+                  className="rounded-2xl border px-4 py-3 flex items-start gap-3 text-[12px] font-medium leading-relaxed"
+                  style={{ background: `${AMBER}0F`, borderColor: `${AMBER}4D`, color: inkOf(AMBER) }}
+                >
+                  <span className="w-7 h-7 rounded-[9px] flex items-center justify-center text-white shrink-0" style={{ background: AMBER }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </span>
+                  <div>
+                    No fee structure configured for{' '}
+                    <strong className="font-semibold">
+                      {student.course} / {student.year} / {student.admType} / {student.admCat}
+                    </strong>{' '}
+                    — <strong className="font-semibold">{academicYear}</strong>. Set it up in the{' '}
+                    <strong className="font-semibold">Fee Structure</strong> page first, or use <strong className="font-semibold">Override Allotted Fee</strong> above.
+                  </div>
                 </div>
               )}
 
               {/* ── SMP Fee Table ──────────────────────────────────────── */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1 h-4 rounded-full bg-blue-500 shrink-0" />
-                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
-                    SMP Fee — Government
-                  </span>
-                </div>
-                <div className="rounded-xl overflow-hidden border border-blue-100 shadow-sm">
+                <SectionTitle color={SKY}>SMP Fee — Government</SectionTitle>
+                <div className={FEE_CARD} style={feeCardStyle(SKY)}>
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-blue-600 text-white">
-                        <th className="text-left px-3 py-2 font-semibold">Head</th>
-                        <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
+                      <tr style={{ background: `${SKY}12`, boxShadow: `inset 0 -1px 0 ${SKY}33` }}>
+                        <th className={`${FTH} text-left`}>Head</th>
+                        <th className={`${FTH} text-right w-24`}>Allotted (₹)</th>
                         {isUpdate && (
-                          <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                          <th className={`${FTH} text-right w-24`}>
                             Paid (₹)
                           </th>
                         )}
-                        <th className="text-right px-3 py-2 font-semibold w-28 bg-blue-700">
+                        <th className={`${FTH} text-right w-28`} style={{ background: `${SKY}1F` }}>
                           {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-blue-50">
+                    <tbody className="divide-y divide-[#EEF4F6]">
                       {SMP_FEE_HEADS.map(({ key, label }) => (
                         <tr
                           key={key}
-                          className={editingAllotted ? 'bg-amber-50' : 'hover:bg-blue-50/40 transition-colors'}
+                          className={editingAllotted ? 'bg-amber-50/70' : 'hover:bg-[var(--acc-row)] transition-colors'}
                         >
-                          <td className="px-3 py-1.5 text-gray-700">{label}</td>
+                          <td className="px-3 py-1.5 text-[12px] font-medium text-[#262B35]">{label}</td>
                           <td className="px-2 py-1.5">
                             {editingAllotted ? (
                               <input
@@ -640,13 +838,13 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                                     [key]: Math.max(0, parseInt(e.target.value) || 0),
                                   }))
                                 }
-                                className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                                className={niAmber}
                                 placeholder="0"
                               />
                             ) : (
                               <span
-                                className={`block text-right pr-2 ${
-                                  loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                                className={`block text-right pr-2 tabular-nums ${
+                                  loadedOverride ? 'text-amber-700 font-medium' : 'text-[#8A93A3]'
                                 }`}
                               >
                                 {hasAllotted ? effSmpValues[key].toLocaleString() : '—'}
@@ -654,11 +852,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                             )}
                           </td>
                           {isUpdate && (
-                            <td className="px-3 py-1.5 text-right text-gray-400">
+                            <td className="px-3 py-1.5 text-right text-[#8A93A3] tabular-nums">
                               {cumulativeSmp[key].toLocaleString()}
                             </td>
                           )}
-                          <td className="px-2 py-1.5 bg-blue-50/60">
+                          <td className="px-2 py-1.5" style={{ background: `${SKY}0A` }}>
                             <input
                               type="number"
                               min="0"
@@ -672,17 +870,17 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-blue-50 border-t-2 border-blue-200 font-semibold">
-                        <td className="px-3 py-2 text-blue-800">Total SMP</td>
-                        <td className="px-3 py-2 text-right text-blue-700">
+                      <tr style={{ background: `${SKY}0F`, boxShadow: `inset 0 1px 0 ${SKY}33` }}>
+                        <td className="px-3 py-2 text-[12px] font-semibold" style={{ color: inkOf(SKY) }}>Total SMP</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: inkOf(SKY) }}>
                           {smpAllotted.toLocaleString()}
                         </td>
                         {isUpdate && (
-                          <td className="px-3 py-2 text-right text-gray-500">
+                          <td className="px-3 py-2 text-right font-medium text-[#5B6371] tabular-nums">
                             {smpPreviousTotal.toLocaleString()}
                           </td>
                         )}
-                        <td className="px-3 py-2 text-right text-blue-700 font-bold bg-blue-100">
+                        <td className="px-3 py-2 text-right text-[13px] font-bold tabular-nums" style={{ color: inkOf(SKY), background: `${SKY}1F` }}>
                           {smpNowTotal.toLocaleString()}
                         </td>
                       </tr>
@@ -693,35 +891,30 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
               {/* ── SVK Fee Table ──────────────────────────────────────── */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1 h-4 rounded-full bg-purple-500 shrink-0" />
-                  <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
-                    SVK Fee — Management
-                  </span>
-                </div>
-                <div className="rounded-xl overflow-hidden border border-purple-100 shadow-sm">
+                <SectionTitle color={VIOLET}>SVK Fee — Management</SectionTitle>
+                <div className={FEE_CARD} style={feeCardStyle(VIOLET)}>
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-purple-600 text-white">
-                        <th className="text-left px-3 py-2 font-semibold">Head</th>
-                        <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
+                      <tr style={{ background: `${VIOLET}12`, boxShadow: `inset 0 -1px 0 ${VIOLET}33` }}>
+                        <th className={`${FTH} text-left`}>Head</th>
+                        <th className={`${FTH} text-right w-24`}>Allotted (₹)</th>
                         {isUpdate && (
-                          <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                          <th className={`${FTH} text-right w-24`}>
                             Paid (₹)
                           </th>
                         )}
-                        <th className="text-right px-3 py-2 font-semibold w-28 bg-purple-700">
+                        <th className={`${FTH} text-right w-28`} style={{ background: `${VIOLET}1F` }}>
                           {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-purple-50">
+                    <tbody className="divide-y divide-[#EEF4F6]">
                       <tr
                         className={
-                          editingAllotted ? 'bg-amber-50' : 'hover:bg-purple-50/40 transition-colors'
+                          editingAllotted ? 'bg-amber-50/70' : 'hover:bg-[var(--acc-row)] transition-colors'
                         }
                       >
-                        <td className="px-3 py-1.5 text-gray-700">SVK</td>
+                        <td className="px-3 py-1.5 text-[12px] font-medium text-[#262B35]">SVK</td>
                         <td className="px-2 py-1.5">
                           {editingAllotted ? (
                             <input
@@ -731,13 +924,13 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                               onChange={(e) =>
                                 setOverrideSvk(Math.max(0, parseInt(e.target.value) || 0))
                               }
-                              className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                              className={niAmber}
                               placeholder="0"
                             />
                           ) : (
                             <span
-                              className={`block text-right pr-2 ${
-                                loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                              className={`block text-right pr-2 tabular-nums ${
+                                loadedOverride ? 'text-amber-700 font-medium' : 'text-[#8A93A3]'
                               }`}
                             >
                               {hasAllotted ? effSvkValue.toLocaleString() : '—'}
@@ -745,11 +938,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                           )}
                         </td>
                         {isUpdate && (
-                          <td className="px-3 py-1.5 text-right text-gray-400">
+                          <td className="px-3 py-1.5 text-right text-[#8A93A3] tabular-nums">
                             {cumulativeSvk.toLocaleString()}
                           </td>
                         )}
-                        <td className="px-2 py-1.5 bg-purple-50/60">
+                        <td className="px-2 py-1.5" style={{ background: `${VIOLET}0A` }}>
                           <input
                             type="number"
                             min="0"
@@ -764,17 +957,17 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                       </tr>
                     </tbody>
                     <tfoot>
-                      <tr className="bg-purple-50 border-t-2 border-purple-200 font-semibold">
-                        <td className="px-3 py-2 text-purple-800">Total SVK</td>
-                        <td className="px-3 py-2 text-right text-purple-700">
+                      <tr style={{ background: `${VIOLET}0F`, boxShadow: `inset 0 1px 0 ${VIOLET}33` }}>
+                        <td className="px-3 py-2 text-[12px] font-semibold" style={{ color: inkOf(VIOLET) }}>Total SVK</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: inkOf(VIOLET) }}>
                           {svkAllotted.toLocaleString()}
                         </td>
                         {isUpdate && (
-                          <td className="px-3 py-2 text-right text-gray-500">
+                          <td className="px-3 py-2 text-right font-medium text-[#5B6371] tabular-nums">
                             {svkPreviousTotal.toLocaleString()}
                           </td>
                         )}
-                        <td className="px-3 py-2 text-right text-purple-700 font-bold bg-purple-100">
+                        <td className="px-3 py-2 text-right text-[13px] font-bold tabular-nums" style={{ color: inkOf(VIOLET), background: `${VIOLET}1F` }}>
                           {svkNowTotal.toLocaleString()}
                         </td>
                       </tr>
@@ -786,29 +979,24 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               {/* ── Additional Fee Table ───────────────────────────────── */}
               {(additionalNow.length > 0 || (editingAllotted && effAdditionalHeads.length > 0)) && (
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1 h-4 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
-                      Additional Fee
-                    </span>
-                  </div>
-                  <div className="rounded-xl overflow-hidden border border-emerald-100 shadow-sm">
+                  <SectionTitle color={MINT}>Additional Fee</SectionTitle>
+                  <div className={FEE_CARD} style={feeCardStyle(MINT)}>
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-emerald-600 text-white">
-                          <th className="text-left px-3 py-2 font-semibold">Head</th>
-                          <th className="text-right px-3 py-2 font-semibold w-24">Allotted (₹)</th>
+                        <tr style={{ background: `${MINT}12`, boxShadow: `inset 0 -1px 0 ${MINT}33` }}>
+                          <th className={`${FTH} text-left`}>Head</th>
+                          <th className={`${FTH} text-right w-24`}>Allotted (₹)</th>
                           {isUpdate && (
-                            <th className="text-right px-3 py-2 font-semibold w-24 opacity-85">
+                            <th className={`${FTH} text-right w-24`}>
                               Paid (₹)
                             </th>
                           )}
-                          <th className="text-right px-3 py-2 font-semibold w-28 bg-emerald-700">
+                          <th className={`${FTH} text-right w-28`} style={{ background: `${MINT}1F` }}>
                             {isUpdate ? 'Now Paying (₹)' : 'Paying (₹)'}
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-emerald-50">
+                      <tbody className="divide-y divide-[#EEF4F6]">
                         {effAdditionalHeads.map((ah, idx) => {
                           const nowEntry = additionalNow.find((h) => h.label === ah.label);
                           const nowIdx = additionalNow.findIndex((h) => h.label === ah.label);
@@ -817,11 +1005,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                               key={ah.label}
                               className={
                                 editingAllotted
-                                  ? 'bg-amber-50'
-                                  : 'hover:bg-emerald-50/40 transition-colors'
+                                  ? 'bg-amber-50/70'
+                                  : 'hover:bg-[var(--acc-row)] transition-colors'
                               }
                             >
-                              <td className="px-3 py-1.5 text-gray-700">{ah.label}</td>
+                              <td className="px-3 py-1.5 text-[12px] font-medium text-[#262B35]">{ah.label}</td>
                               <td className="px-2 py-1.5">
                                 {editingAllotted ? (
                                   <input
@@ -844,13 +1032,13 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                                         )
                                       )
                                     }
-                                    className={`${ni} border-amber-300 focus:ring-amber-400 focus:border-amber-400`}
+                                    className={niAmber}
                                     placeholder="0"
                                   />
                                 ) : (
                                   <span
-                                    className={`block text-right pr-2 ${
-                                      loadedOverride ? 'text-amber-700 font-medium' : 'text-gray-400'
+                                    className={`block text-right pr-2 tabular-nums ${
+                                      loadedOverride ? 'text-amber-700 font-medium' : 'text-[#8A93A3]'
                                     }`}
                                   >
                                     {ah.amount.toLocaleString()}
@@ -858,11 +1046,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                                 )}
                               </td>
                               {isUpdate && (
-                                <td className="px-3 py-1.5 text-right text-gray-400">
+                                <td className="px-3 py-1.5 text-right text-[#8A93A3] tabular-nums">
                                   {(cumulativeAdditional.get(ah.label) ?? 0).toLocaleString()}
                                 </td>
                               )}
-                              <td className="px-2 py-1.5 bg-emerald-50/60">
+                              <td className="px-2 py-1.5" style={{ background: `${MINT}0A` }}>
                                 {nowIdx !== -1 ? (
                                   <input
                                     type="number"
@@ -873,7 +1061,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                                     placeholder="0"
                                   />
                                 ) : (
-                                  <span className="block text-right pr-2 text-gray-300">—</span>
+                                  <span className="block text-right pr-2 text-[#C4C8D0]">—</span>
                                 )}
                               </td>
                             </tr>
@@ -881,17 +1069,17 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-emerald-50 border-t-2 border-emerald-200 font-semibold">
-                          <td className="px-3 py-2 text-emerald-800">Total Additional</td>
-                          <td className="px-3 py-2 text-right text-emerald-700">
+                        <tr style={{ background: `${MINT}0F`, boxShadow: `inset 0 1px 0 ${MINT}33` }}>
+                          <td className="px-3 py-2 text-[12px] font-semibold" style={{ color: inkOf(MINT) }}>Total Additional</td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums" style={{ color: inkOf(MINT) }}>
                             {additionalAllotted.toLocaleString()}
                           </td>
                           {isUpdate && (
-                            <td className="px-3 py-2 text-right text-gray-500">
+                            <td className="px-3 py-2 text-right font-medium text-[#5B6371] tabular-nums">
                               {additionalPreviousTotal.toLocaleString()}
                             </td>
                           )}
-                          <td className="px-3 py-2 text-right text-emerald-700 font-bold bg-emerald-100">
+                          <td className="px-3 py-2 text-right text-[13px] font-bold tabular-nums" style={{ color: inkOf(MINT), background: `${MINT}1F` }}>
                             {additionalNowTotal.toLocaleString()}
                           </td>
                         </tr>
@@ -903,22 +1091,26 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
               {/* ── Save override panel (editing allotted) ─────────────── */}
               {editingAllotted && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="text-xs text-amber-800">
-                    <strong>Editing custom allotted fee.</strong> These values override the fee
+                <div
+                  className="rounded-2xl border px-4 py-3 flex items-center justify-between gap-3"
+                  style={{ background: `${AMBER}0F`, borderColor: `${AMBER}4D` }}
+                >
+                  <div className="text-[12px] font-medium leading-relaxed" style={{ color: inkOf(AMBER) }}>
+                    <strong className="font-semibold">Editing custom allotted fee.</strong> These values override the fee
                     structure for this student only. Save before collecting payment.
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={cancelEditAllotted}
-                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="rounded-full border border-[#D5E6E6] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => void handleSaveOverride()}
                       disabled={savingOverride}
-                      className="rounded-lg border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs text-white font-medium hover:bg-amber-600 cursor-pointer transition-colors disabled:opacity-50"
+                      className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-white hover:brightness-95 cursor-pointer transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: AMBER, boxShadow: `0 3px 10px ${AMBER}40` }}
                     >
                       {savingOverride ? 'Saving…' : 'Save Custom Allotted'}
                     </button>
@@ -926,103 +1118,57 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                 </div>
               )}
               {overrideSaveError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  {overrideSaveError}
-                </div>
+                <ErrorStrip>{overrideSaveError}</ErrorStrip>
               )}
 
               {/* ── Grand Total Summary Cards ──────────────────────────── */}
               <div className="flex flex-wrap gap-2">
-                <div className="flex-1 min-w-[90px] rounded-xl bg-gray-50 border border-gray-200 px-3 py-2">
-                  <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">
-                    Allotted
-                  </div>
-                  <div className="text-sm font-bold text-gray-800 mt-0.5">
-                    ₹{grandAllotted.toLocaleString()}
-                  </div>
-                </div>
+                <SumTile label="Allotted" value={grandAllotted} color="#5B6371" />
                 {isUpdate && (
-                  <div className="flex-1 min-w-[90px] rounded-xl bg-blue-50 border border-blue-100 px-3 py-2">
-                    <div className="text-[9px] text-blue-400 font-semibold uppercase tracking-wider">
-                      Paid So Far
-                    </div>
-                    <div className="text-sm font-bold text-blue-700 mt-0.5">
-                      ₹{totalPrevious.toLocaleString()}
-                    </div>
-                  </div>
+                  <SumTile label="Paid So Far" value={totalPrevious} color={SKY} />
                 )}
-                <div className="flex-1 min-w-[90px] rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-2">
-                  <div className="text-[9px] text-indigo-400 font-semibold uppercase tracking-wider">
-                    {isUpdate ? 'Now Paying' : 'Paying'}
-                  </div>
-                  <div className="text-sm font-bold text-indigo-700 mt-0.5">
-                    ₹{grandNow.toLocaleString()}
-                  </div>
-                </div>
+                <SumTile label={isUpdate ? 'Now Paying' : 'Paying'} value={grandNow} color={TEAL} emphasis />
                 {isUpdate && (
-                  <div className="flex-1 min-w-[90px] rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
-                    <div className="text-[9px] text-emerald-400 font-semibold uppercase tracking-wider">
-                      Total After
-                    </div>
-                    <div className="text-sm font-bold text-emerald-700 mt-0.5">
-                      ₹{grandTotal.toLocaleString()}
-                    </div>
-                  </div>
+                  <SumTile label="Total After" value={grandTotal} color={MINT} />
                 )}
-                <div
-                  className={`flex-1 min-w-[90px] rounded-xl px-3 py-2 border ${
-                    balance > 0
-                      ? 'bg-red-50 border-red-200'
-                      : 'bg-emerald-50 border-emerald-100'
-                  }`}
-                >
-                  <div
-                    className={`text-[9px] font-semibold uppercase tracking-wider ${
-                      balance > 0 ? 'text-red-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    Balance
-                  </div>
-                  <div
-                    className={`text-sm font-bold mt-0.5 ${
-                      balance > 0 ? 'text-red-600' : 'text-emerald-600'
-                    }`}
-                  >
-                    ₹{balance.toLocaleString()}
-                  </div>
-                </div>
+                <SumTile label="Balance" value={balance} color={balance > 0 ? CORAL : MINT} />
               </div>
 
               {/* ── Payment Details ────────────────────────────────────── */}
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="rounded-2xl border border-[#CDE6E6] bg-white overflow-hidden shadow-[0_4px_14px_rgba(15,139,141,0.06)]">
                 {/* Section header */}
-                <div className="px-4 py-2 bg-gray-100/80 border-b border-gray-200">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                <div
+                  className="px-4 py-2.5 border-b border-[#E3F0F0] flex items-center gap-2"
+                  style={{ background: 'linear-gradient(90deg, #E3F2F2 0%, #EDF7F7 55%, #F6FBFB 100%)' }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: TEAL }} />
+                  <span className="text-[10px] font-medium text-[#0B6567] uppercase tracking-[0.8px]">
                     Payment Details
                   </span>
                 </div>
 
-                <div className="divide-y divide-gray-100 bg-gray-50/40">
+                <div className="divide-y divide-[#EEF4F6]">
 
                   {/* Date */}
-                  <div className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="w-36 shrink-0 text-[11px] font-semibold text-gray-500">
-                      Date <span className="text-red-400">*</span>
+                  <div className="flex items-center gap-3 px-4 py-2.5" style={accVars(TEAL)}>
+                    <span className="w-36 shrink-0 text-[11.5px] font-medium text-[#5B6371]">
+                      Date <span style={{ color: CORAL }}>*</span>
                     </span>
                     <input
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                      className={TXT_IN}
                     />
                     <div className="w-[144px] shrink-0" />
                   </div>
 
                   {/* SMP Receipt + mode + optional split */}
                   {smpNowTotal > 0 && (
-                    <div>
+                    <div style={accVars(SKY)}>
                       <div className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="w-36 shrink-0 text-[11px] font-semibold text-blue-600/80">
+                        <span className="w-36 shrink-0 flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: inkOf(SKY) }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SKY }} />
                           SMP Receipt No
                         </span>
                         <input
@@ -1030,53 +1176,36 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                           value={receiptNo}
                           onChange={(e) => setReceiptNo(e.target.value)}
                           placeholder="Auto-incremented"
-                          className="flex-1 rounded-md border border-blue-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                          className={TXT_IN}
                         />
-                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
-                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() => setSmpPaymentMode(mode)}
-                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
-                                smpPaymentMode === mode
-                                  ? mode === 'SPLIT'
-                                    ? 'bg-teal-600 text-white border-teal-600'
-                                    : 'bg-blue-600 text-white border-blue-600'
-                                  : 'bg-white text-gray-400 border-gray-200 hover:border-blue-400 hover:text-blue-600'
-                              }`}
-                            >
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
+                        <ModeToggle value={smpPaymentMode} color={SKY} onSelect={(mode) => setSmpPaymentMode(mode)} />
                       </div>
                       {smpPaymentMode === 'SPLIT' && (
-                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                        <div className="flex items-center gap-3 px-4 pb-2.5 pt-0.5">
                           <div className="w-36 shrink-0" />
-                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                          <div className={SPLIT_BOX}>
                             <span className="shrink-0">Cash ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={smpSplit.cash === 0 ? '' : smpSplit.cash}
                               onChange={(e) => setSmpSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
-                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <span className="shrink-0 text-[#8A93A3]">+ UPI ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={smpSplit.upi === 0 ? '' : smpSplit.upi}
                               onChange={(e) => setSmpSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
                             {(smpSplit.cash > 0 || smpSplit.upi > 0) && (
-                              <span className={`shrink-0 font-semibold ${smpSplit.cash + smpSplit.upi === smpNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                              <SplitCheck ok={smpSplit.cash + smpSplit.upi === smpNowTotal}>
                                 {smpSplit.cash + smpSplit.upi === smpNowTotal ? `= ₹${smpNowTotal.toLocaleString()} ✓` : `≠ ₹${smpNowTotal.toLocaleString()}`}
-                              </span>
+                              </SplitCheck>
                             )}
                           </div>
                           <div className="w-[144px] shrink-0" />
@@ -1087,9 +1216,10 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
                   {/* SVK Receipt + mode + optional split */}
                   {svkNowTotal > 0 && (
-                    <div>
+                    <div style={accVars(VIOLET)}>
                       <div className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="w-36 shrink-0 text-[11px] font-semibold text-purple-600/80">
+                        <span className="w-36 shrink-0 flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: inkOf(VIOLET) }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: VIOLET }} />
                           SVK Receipt No
                         </span>
                         <input
@@ -1097,53 +1227,36 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                           value={svkReceiptNo}
                           onChange={(e) => setSvkReceiptNo(e.target.value)}
                           placeholder="Auto-incremented"
-                          className="flex-1 rounded-md border border-purple-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 bg-white transition-colors"
+                          className={TXT_IN}
                         />
-                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
-                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() => setSvkPaymentMode(mode)}
-                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
-                                svkPaymentMode === mode
-                                  ? mode === 'SPLIT'
-                                    ? 'bg-teal-600 text-white border-teal-600'
-                                    : 'bg-purple-600 text-white border-purple-600'
-                                  : 'bg-white text-gray-400 border-gray-200 hover:border-purple-400 hover:text-purple-600'
-                              }`}
-                            >
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
+                        <ModeToggle value={svkPaymentMode} color={VIOLET} onSelect={(mode) => setSvkPaymentMode(mode)} />
                       </div>
                       {svkPaymentMode === 'SPLIT' && (
-                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                        <div className="flex items-center gap-3 px-4 pb-2.5 pt-0.5">
                           <div className="w-36 shrink-0" />
-                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                          <div className={SPLIT_BOX}>
                             <span className="shrink-0">Cash ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={svkSplit.cash === 0 ? '' : svkSplit.cash}
                               onChange={(e) => setSvkSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
-                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <span className="shrink-0 text-[#8A93A3]">+ UPI ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={svkSplit.upi === 0 ? '' : svkSplit.upi}
                               onChange={(e) => setSvkSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
                             {(svkSplit.cash > 0 || svkSplit.upi > 0) && (
-                              <span className={`shrink-0 font-semibold ${svkSplit.cash + svkSplit.upi === svkNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                              <SplitCheck ok={svkSplit.cash + svkSplit.upi === svkNowTotal}>
                                 {svkSplit.cash + svkSplit.upi === svkNowTotal ? `= ₹${svkNowTotal.toLocaleString()} ✓` : `≠ ₹${svkNowTotal.toLocaleString()}`}
-                              </span>
+                              </SplitCheck>
                             )}
                           </div>
                           <div className="w-[144px] shrink-0" />
@@ -1154,9 +1267,10 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
                   {/* Additional Receipt + mode + optional split */}
                   {additionalNowTotal > 0 && (
-                    <div>
+                    <div style={accVars(MINT)}>
                       <div className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="w-36 shrink-0 text-[11px] font-semibold text-emerald-600/80">
+                        <span className="w-36 shrink-0 flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: inkOf(MINT) }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: MINT }} />
                           Additional Receipt
                         </span>
                         <input
@@ -1164,53 +1278,36 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                           value={additionalReceiptNo}
                           onChange={(e) => setAdditionalReceiptNo(e.target.value)}
                           placeholder="Auto-incremented"
-                          className="flex-1 rounded-md border border-emerald-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-colors"
+                          className={TXT_IN}
                         />
-                        <div className="flex items-center gap-1 shrink-0 w-[144px]">
-                          {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() => setAdditionalPaymentMode(mode)}
-                              className={`flex-1 py-1 rounded-md text-[9px] font-bold text-center transition-colors cursor-pointer border ${
-                                additionalPaymentMode === mode
-                                  ? mode === 'SPLIT'
-                                    ? 'bg-teal-600 text-white border-teal-600'
-                                    : 'bg-emerald-600 text-white border-emerald-600'
-                                  : 'bg-white text-gray-400 border-gray-200 hover:border-emerald-400 hover:text-emerald-600'
-                              }`}
-                            >
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
+                        <ModeToggle value={additionalPaymentMode} color={MINT} onSelect={(mode) => setAdditionalPaymentMode(mode)} />
                       </div>
                       {additionalPaymentMode === 'SPLIT' && (
-                        <div className="flex items-center gap-3 px-4 pb-2.5 bg-teal-50/50">
+                        <div className="flex items-center gap-3 px-4 pb-2.5 pt-0.5">
                           <div className="w-36 shrink-0" />
-                          <div className="flex flex-1 items-center gap-2 text-[10px] text-gray-600">
+                          <div className={SPLIT_BOX}>
                             <span className="shrink-0">Cash ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={additionalSplit.cash === 0 ? '' : additionalSplit.cash}
                               onChange={(e) => setAdditionalSplit((p) => ({ ...p, cash: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
-                            <span className="shrink-0 text-gray-400">+ UPI ₹</span>
+                            <span className="shrink-0 text-[#8A93A3]">+ UPI ₹</span>
                             <input
                               type="number"
                               min="0"
                               value={additionalSplit.upi === 0 ? '' : additionalSplit.upi}
                               onChange={(e) => setAdditionalSplit((p) => ({ ...p, upi: Math.max(0, parseInt(e.target.value) || 0) }))}
-                              className="w-24 rounded border border-teal-300 px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                              className={SPLIT_IN}
                               placeholder="0"
                             />
                             {(additionalSplit.cash > 0 || additionalSplit.upi > 0) && (
-                              <span className={`shrink-0 font-semibold ${additionalSplit.cash + additionalSplit.upi === additionalNowTotal ? 'text-emerald-600' : 'text-red-500'}`}>
+                              <SplitCheck ok={additionalSplit.cash + additionalSplit.upi === additionalNowTotal}>
                                 {additionalSplit.cash + additionalSplit.upi === additionalNowTotal ? `= ₹${additionalNowTotal.toLocaleString()} ✓` : `≠ ₹${additionalNowTotal.toLocaleString()}`}
-                              </span>
+                              </SplitCheck>
                             )}
                           </div>
                           <div className="w-[144px] shrink-0" />
@@ -1221,19 +1318,19 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
 
                   {/* Split note preview (auto-generated, saved to remarks) */}
                   {splitNote && (
-                    <div className="flex items-start gap-3 px-4 py-2 bg-teal-50/60 border-teal-100">
+                    <div className="flex items-start gap-3 px-4 py-2" style={{ background: `${TEAL}0A` }}>
                       <div className="w-36 shrink-0" />
-                      <div className="flex-1 text-[10px] text-teal-700 font-medium leading-relaxed">
-                        <span className="text-teal-400 font-semibold mr-1">Split:</span>{splitNote}
-                        <span className="text-teal-400 ml-1 font-normal">(auto-added to remarks)</span>
+                      <div className="flex-1 text-[10.5px] text-[#0B6567] font-medium leading-relaxed">
+                        <span className="font-semibold mr-1" style={{ color: TEAL }}>Split:</span>{splitNote}
+                        <span className="text-[#8A93A3] ml-1 font-normal">(auto-added to remarks)</span>
                       </div>
                       <div className="w-[144px] shrink-0" />
                     </div>
                   )}
 
                   {/* Remarks */}
-                  <div className="flex items-center gap-3 px-4 py-2.5">
-                    <span className="w-36 shrink-0 text-[11px] font-semibold text-gray-500">
+                  <div className="flex items-center gap-3 px-4 py-2.5" style={accVars(TEAL)}>
+                    <span className="w-36 shrink-0 text-[11.5px] font-medium text-[#5B6371]">
                       Remarks
                     </span>
                     <input
@@ -1241,7 +1338,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                       value={remarks}
                       onChange={(e) => setRemarks(e.target.value)}
                       placeholder={splitNote ? 'Optional additional notes' : 'Optional notes'}
-                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                      className={TXT_IN}
                     />
                     <div className="w-[144px] shrink-0" />
                   </div>
@@ -1250,28 +1347,37 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               </div>
 
               {saveError && (
-                <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                  {saveError}
-                </div>
+                <ErrorStrip>{saveError}</ErrorStrip>
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 flex justify-end gap-2.5 shrink-0">
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => void handleSave()}
-            loading={saving}
-            disabled={loadingData || !!loadError || !date || grandNow === 0 || !isSplitValid}
+        <div className="px-5 py-3 border-t border-[#CDE6E6] bg-white flex justify-end gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-full border border-[#0F8B8D]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={(loadingData || !!loadError || !date || grandNow === 0 || !isSplitValid) || saving}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-medium text-white enabled:hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/40 focus-visible:ring-offset-2 enabled:cursor-pointer transition-[filter,opacity] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_INK})`, boxShadow: `0 3px 10px ${TEAL}40` }}
+          >
+            {saving && (
+              <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
             {isUpdate ? 'Save Installment' : 'Save Fee Record'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>

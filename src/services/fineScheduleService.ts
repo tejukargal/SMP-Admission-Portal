@@ -14,13 +14,16 @@ export async function getFineSchedule(
   academicYear: AcademicYear,
   year: Year
 ): Promise<FinePeriod[]> {
-  const perYearSnap = await getDoc(doc(db, COL, `${academicYear}__${year}`));
+  // Both docs are read in parallel (one round trip); the per-year doc still wins.
+  const [perYearSnap, legacySnap] = await Promise.all([
+    getDoc(doc(db, COL, `${academicYear}__${year}`)),
+    getDoc(doc(db, COL, academicYear)),
+  ]);
   if (perYearSnap.exists()) {
     const data = perYearSnap.data() as { periods?: FinePeriod[] };
     return data.periods ?? [];
   }
 
-  const legacySnap = await getDoc(doc(db, COL, academicYear));
   if (!legacySnap.exists()) return [];
   const legacyData = legacySnap.data() as { periods?: FinePeriod[] };
   return legacyData.periods ?? [];
