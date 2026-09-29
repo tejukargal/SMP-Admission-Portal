@@ -436,6 +436,40 @@
   background: transparent;
 }
 
+/* ── Students table — thin ocean scrollbar starting below the 36px sticky
+   header; the gutter beside the header is painted in the header band colours
+   (#E6F1FA / #C3DCEF, see Students.tsx) so the band runs edge to edge.
+   Static values: Chrome may not apply CSS variables inside scrollbar styles. ── */
+.scroll-students::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-students::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-students::-webkit-scrollbar-track:vertical {
+  margin-top: 36px;
+}
+.scroll-students::-webkit-scrollbar:vertical {
+  background: linear-gradient(to bottom, #E6F1FA 0 35px, #C3DCEF 35px 36px, transparent 36px);
+}
+.scroll-students::-webkit-scrollbar-thumb {
+  background: #BBD7EC;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-students::-webkit-scrollbar-thumb:horizontal {
+  border-width: 3px;
+}
+.scroll-students::-webkit-scrollbar-thumb:hover {
+  background: #86B7DB;
+  background-clip: padding-box;
+}
+.scroll-students::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
 .scroll-indigo {
   scrollbar-width: thin;

@@ -6,7 +6,6 @@ import { useStudents } from '../hooks/useStudents';
 import { updateStudentAllottedCategory, updateStudentTransferOut } from '../services/studentService';
 import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
-import { Button } from '../components/common/Button';
 import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilterDropdown';
 import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,11 +36,126 @@ const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
 
+// ── Design tokens — student-portal look, ocean blue ───────────────────────────
+const OCEAN = '#0B7BC0';
+const OCEAN_INK = '#075E93';
+const MINT = '#0FA968';
+const CORAL = '#E11D48';
+const AMBER = '#D97706';
+const FALLBACK_COLOR = '#8A93A3';
+
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+const ADM_TYPE_COLOR: Record<string, string> = {
+  REGULAR: '#1D6FD8', REPEATER: '#D97706', LATERAL: '#7C3AED', EXTERNAL: '#0F8B8D', SNQ: '#10B981',
+};
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
+const CATEGORY_COLOR: Record<string, string> = {
+  GM: '#64748B', SC: '#0EA5E9', ST: '#14B8A6', C1: '#F59E0B', '2A': '#8B5CF6', '2B': '#EC4899', '3A': '#6366F1', '3B': '#10B981',
+};
+const GENDER_COLOR: Record<string, string> = { BOY: '#0EA5E9', GIRL: '#EC4899' };
+const STATUS_COLOR: Record<string, string> = { CONFIRMED: MINT, CANCELLED: CORAL };
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+// Outline chip: white fill + tinted hairline and ink; solid colour when selected.
+function chipStyle(color: string, selected: boolean): React.CSSProperties {
+  return selected
+    ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
+}
+
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#CFE3F2] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] hover:border-[#0B7BC0]/40 hover:bg-[#0B7BC0]/[0.06] hover:text-[#075E93] focus:outline-none focus:ring-2 focus:ring-[#0B7BC0]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const CHIP_ARROW =
+  'shrink-0 w-6 h-6 rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] flex items-center justify-center shadow-[0_1px_4px_rgba(18,20,26,0.06)] enabled:hover:bg-[#EEF6FC] enabled:cursor-pointer disabled:opacity-35 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7BC0]/30 transition-[opacity,background-color]';
+// Icon-only variant of the toolbar actions, used while the filter row is open
+// so the dropdowns fit on the same line (label moves to the tooltip).
+const ICON_PILL_BTN =
+  'shrink-0 w-[30px] h-[30px] inline-flex items-center justify-center rounded-full border border-[#CFE3F2] bg-white text-[#075E93] hover:border-[#0B7BC0]/40 hover:bg-[#0B7BC0]/[0.06] focus:outline-none focus:ring-2 focus:ring-[#0B7BC0]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+
+const MENU_ITEM =
+  'group w-full text-left px-2 py-1.5 rounded-[10px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F3F9FD] hover:text-[#262B35] cursor-pointer flex items-center gap-2.5 transition-colors duration-100';
+const MENU_ICON =
+  'w-6 h-6 rounded-[8px] bg-[#EEF6FC] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
+const MENU_SEP = <div className="my-1 h-px bg-[#E6F0F8] mx-2" />;
+
+// Main table: sticky header band + cells. The band colours are mirrored in
+// index.css (.scroll-students) for the scrollbar gutter beside the header.
+const TH =
+  'h-9 px-3 py-0 align-middle text-left text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[#E6F1FA] border-b border-[#C3DCEF] text-[#075E93]';
+const TD = 'px-3 py-2 whitespace-nowrap';
+const TD_NUM = 'px-3 py-2 whitespace-nowrap text-[11.5px] font-medium text-black tabular-nums';
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course, size = 22 }: { name: string; course: string; size?: number }) {
+  const h = DEPT_HUE[course] ?? 205;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="rounded-full flex items-center justify-center shrink-0 font-medium tracking-[0.3px]"
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.43),
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text. */
+function LinePill({ value, color, minWidth, title }: { value?: string | null; color?: string; minWidth?: number; title?: string }) {
+  if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none whitespace-nowrap"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+      title={title}
+    >
+      {value}
+    </span>
+  );
+}
+
+function EmptyState({ title, tone = 'muted' }: { title: string; tone?: 'muted' | 'error' }) {
+  const isError = tone === 'error';
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div
+        className="w-14 h-14 rounded-2xl border flex items-center justify-center"
+        style={isError
+          ? { borderColor: `${CORAL}40`, background: `${CORAL}0F`, color: CORAL }
+          : { borderColor: '#CFE3F2', background: '#EEF6FC', color: '#8A93A3' }}
+      >
+        {isError ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        )}
+      </div>
+      <p className="text-[14px] font-medium" style={{ color: isError ? inkOf(CORAL) : '#5B6371' }}>{title}</p>
+    </div>
+  );
+}
+
 function AnimNum({ value }: { value: number }) {
   return (
     <span
       key={value}
-      className="font-bold tabular-nums"
+      className="font-medium tabular-nums"
       style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}
     >
       {value}
@@ -424,122 +538,163 @@ export function Students() {
 
   const isLoading = settingsLoading || loading;
 
+  // Header chip strip: single line between two always-visible arrow buttons;
+  // each arrow dims when there is nothing more to see on its side.
+  const chipScrollRef = useRef<HTMLDivElement>(null);
+  const [chipOverflow, setChipOverflow] = useState({ left: false, right: false });
+  const hasStats = !!stats;
+  useLayoutEffect(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setChipOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [hasStats, isLoading, hasActiveFilters]);
+
+  // Animated by hand rather than scrollBy({ behavior: 'smooth' }), which some
+  // browser setups ignore.
+  const chipAnimRef = useRef(0);
+  function scrollChips(dir: -1 | 1) {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    cancelAnimationFrame(chipAnimRef.current);
+    const from = el.scrollLeft;
+    const to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, from + dir * Math.max(160, el.clientWidth * 0.6)));
+    const start = performance.now();
+    const DURATION = 260;
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - start) / DURATION));
+      el.scrollLeft = from + (to - from) * (1 - Math.pow(1 - t, 3));
+      if (t < 1) chipAnimRef.current = requestAnimationFrame(step);
+    };
+    chipAnimRef.current = requestAnimationFrame(step);
+  }
+
   if (isLoading) return <LoadingGate />;
 
   return (
     <>
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F5FAFE 0%, #FCFEFF 45%, #F0F7FC 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
 
       {/* Page header + stats chips */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
+      <div className="flex-shrink-0 flex items-center gap-4 min-w-0 relative">
         <div className="shrink-0">
-          <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Students</h2>
-          {academicYear && (
-            <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
-          )}
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Students
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold text-[#075E93] leading-none tracking-[-0.3px]">Students</h2>
+            {academicYear && (
+              <span className="rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
+                {academicYear}
+              </span>
+            )}
+          </div>
         </div>
 
         {!isLoading && stats && (
           <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              {/* Total chip */}
-              <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-emerald-500 font-semibold">Total</span>
-                <AnimNum value={stats.total} />
+            <span className="w-px h-8 bg-[#CFE3F2] shrink-0 self-center" />
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {/* Total tile */}
+              <div className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border border-[#0B7BC0]/20 bg-[#EAF3FB] px-3.5 py-1 min-w-[58px]">
+                <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#4C87B3] leading-tight">Total</span>
+                <span className="text-[16px] font-medium text-[#075E93] leading-tight">
+                  <AnimNum value={stats.total} />
+                </span>
               </div>
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {/* Study-year chips */}
-              {YEARS.map((yr) => {
-                const count = stats.yearCount[yr] ?? 0;
-                const isSelected = yearFilter.includes(yr);
-                const isDimmed = (yearFilter.length > 0 && !isSelected) || count === 0;
-                const label = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
-                return (
-                  <button
-                    key={yr}
-                    onClick={() => toggleYearFilter(yr)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : isDimmed
-                        ? 'bg-white/50 border-gray-100'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {label}
-                    </span>
-                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
-                      <AnimNum value={count} />
-                    </span>
-                  </button>
-                );
-              })}
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {/* Course chips */}
-              {COURSES.map((c) => {
-                const count = stats.courseCount[c] ?? 0;
-                const isSelected = courseFilter.includes(c);
-                const isDimmed = (courseFilter.length > 0 && !isSelected) || count === 0;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => toggleCourseFilter(c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : isDimmed
-                        ? 'bg-white/50 border-gray-100'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {c}
-                    </span>
-                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
-                      <AnimNum value={count} />
-                    </span>
-                  </button>
-                );
-              })}
 
               {/* Filtered count */}
               {hasActiveFilters && (
-                <>
-                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-emerald-600 font-semibold">Filtered</span>
-                    <AnimNum value={filteredStudents.length} />
-                  </div>
-                </>
+                <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
+                  <span>Filtered</span>
+                  <AnimNum value={filteredStudents.length} />
+                </div>
               )}
 
-              {/* Recently Paid toggle + Admitted/Not Admitted filter */}
-              {!isLoading && allStudents.length > 0 && (
-                <>
-                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                  <button
-                    onClick={() => setSortByRecent((v) => !v)}
-                    className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors font-medium whitespace-nowrap flex items-center gap-1 ${
-                      sortByRecent
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300'
-                    }`}
-                    title="Sort by most recent fee payment date"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20V4M12 4l-6 6M12 4l6 6"/>
-                    </svg>
-                    Recently Paid
-                  </button>
-                </>
-              )}
+              {/* Arrows stay put on both sides; the chips between them scroll */}
+              <button type="button" onClick={() => scrollChips(-1)} disabled={!chipOverflow.left} className={`${CHIP_ARROW} ml-1`} aria-label="Scroll chips left">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div ref={chipScrollRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-1">
+
+                {/* Study-year chips */}
+                {YEARS.map((yr) => {
+                  const count = stats.yearCount[yr] ?? 0;
+                  const isSelected = yearFilter.includes(yr);
+                  const isDimmed = (yearFilter.length > 0 && !isSelected) || count === 0;
+                  const label = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                  return (
+                    <button
+                      key={yr}
+                      onClick={() => toggleYearFilter(yr)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                        isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
+                      }`}
+                      style={chipStyle(YEAR_COLOR[yr], isSelected)}
+                    >
+                      {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: YEAR_COLOR[yr] }} />}
+                      <span>{label}</span>
+                      <AnimNum value={count} />
+                    </button>
+                  );
+                })}
+
+                <span className="w-1 h-1 rounded-full bg-[#BBD7EC] shrink-0 mx-0.5" />
+
+                {/* Course chips */}
+                {COURSES.map((c) => {
+                  const count = stats.courseCount[c] ?? 0;
+                  const isSelected = courseFilter.includes(c);
+                  const isDimmed = (courseFilter.length > 0 && !isSelected) || count === 0;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => toggleCourseFilter(c)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                        isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
+                      }`}
+                      style={chipStyle(DEPT_DOT[c], isSelected)}
+                    >
+                      {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />}
+                      <span>{c}</span>
+                      <AnimNum value={count} />
+                    </button>
+                  );
+                })}
+
+                {/* Recently Paid toggle */}
+                {!isLoading && allStudents.length > 0 && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-[#BBD7EC] shrink-0 mx-0.5" />
+                    <button
+                      onClick={() => setSortByRecent((v) => !v)}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97]"
+                      style={chipStyle(OCEAN, sortByRecent)}
+                      title="Sort by most recent fee payment date"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20V4M12 4l-6 6M12 4l6 6"/>
+                      </svg>
+                      Recently Paid
+                    </button>
+                  </>
+                )}
+              </div>
+              <button type="button" onClick={() => scrollChips(1)} disabled={!chipOverflow.right} className={CHIP_ARROW} aria-label="Scroll chips right">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
           </>
         )}
@@ -547,30 +702,40 @@ export function Students() {
         {/* Success toast — centred in the header bar */}
         {toastMsg && (
           <div
-            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap pointer-events-auto"
-            style={{ animation: 'toast-in 0.2s ease-out' }}
+            className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium whitespace-nowrap pointer-events-auto bg-white"
+            style={{ animation: 'toast-in 0.2s ease-out', borderColor: `${MINT}66`, color: inkOf(MINT), boxShadow: `0 4px 14px ${MINT}26` }}
           >
-            <span className="text-green-500 leading-none">✓</span>
+            <span className="w-4 h-4 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: MINT }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
             {toastMsg}
             <button
               onClick={() => setToastMsg('')}
-              className="text-green-400 hover:text-green-600 leading-none ml-1"
+              className="ml-1 leading-none opacity-60 hover:opacity-100 cursor-pointer"
+              aria-label="Dismiss"
             >
               ×
             </button>
           </div>
         )}
 
-        <Button onClick={() => void navigate('/enroll')} className="ml-auto shrink-0">Enroll Student</Button>
+        <button
+          onClick={() => void navigate('/enroll')}
+          className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium text-white hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7BC0]/40 focus-visible:ring-offset-2 cursor-pointer transition-[filter]"
+          style={{ background: `linear-gradient(135deg, ${OCEAN}, ${OCEAN_INK})`, boxShadow: `0 3px 10px ${OCEAN}40` }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Enroll Student
+        </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}>
-        <div className="flex items-center gap-2 px-3 py-2">
+      {/* Toolbar card — search + filters + actions */}
+      <div className="flex-shrink-0 rounded-2xl border border-[#CFE3F2] bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(11,60,94,0.05)]">
+        <div className="flex items-center gap-2 px-2.5 py-2">
 
-          {/* Search — rounded-full with icon + amber clear */}
-          <div className="relative shrink-0 w-52">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          {/* Search */}
+          <div className="relative shrink-0 w-56">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#075E93] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -578,17 +743,17 @@ export function Students() {
               placeholder="Search name / reg / mobile…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-[#0B7BC0]/40 bg-[#F3F9FD] py-2 text-[14px] font-medium text-[#075E93] placeholder:text-[#075E93]/55 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#0B7BC0] focus:ring-2 focus:ring-[#0B7BC0]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                 </svg>
               </button>
             )}
@@ -599,7 +764,7 @@ export function Students() {
             <div
               className="grid"
               style={{
-                gridTemplateColumns: showFilters ? '1fr' : '0fr',
+                gridTemplateColumns: showFilters ? 'minmax(0, 1fr)' : '0fr',
                 opacity: showFilters ? 1 : 0,
                 transition: 'grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
@@ -607,6 +772,7 @@ export function Students() {
               <div className="overflow-hidden">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
                   <MultiSelectFilterDropdown<Course>
+                    tone="ocean"
                     value={courseFilter}
                     onChange={setCourseFilter}
                     placeholder="Course"
@@ -619,6 +785,7 @@ export function Students() {
                     ]}
                   />
                   <MultiSelectFilterDropdown<Year>
+                    tone="ocean"
                     value={yearFilter}
                     onChange={setYearFilter}
                     placeholder="Study Yr"
@@ -629,6 +796,7 @@ export function Students() {
                     ]}
                   />
                   <MultiSelectFilterDropdown<Gender>
+                    tone="ocean"
                     value={genderFilter}
                     onChange={setGenderFilter}
                     placeholder="Gender"
@@ -638,6 +806,7 @@ export function Students() {
                     ]}
                   />
                   <MultiSelectFilterDropdown<Category>
+                    tone="ocean"
                     value={categoryFilter}
                     onChange={setCategoryFilter}
                     placeholder="Cat"
@@ -653,6 +822,7 @@ export function Students() {
                     ]}
                   />
                   <MultiSelectFilterDropdown<AdmType>
+                    tone="ocean"
                     value={admTypeFilter}
                     onChange={setAdmTypeFilter}
                     placeholder="Adm Type"
@@ -664,6 +834,7 @@ export function Students() {
                     ]}
                   />
                   <MultiSelectFilterDropdown<AdmCat>
+                    tone="ocean"
                     value={admCatFilter}
                     onChange={setAdmCatFilter}
                     placeholder="Adm Cat"
@@ -681,11 +852,12 @@ export function Students() {
           {/* Clear — only when filters active */}
           {hasActiveFilters && (
             <>
-              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <span className="w-px h-5 bg-[#CFE3F2] shrink-0" />
               <button
                 onClick={clearFilters}
-                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap"
               >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Clear
               </button>
             </>
@@ -695,33 +867,44 @@ export function Students() {
           {!isLoading && allStudents.length > 0 && (
             <button
               onClick={() => setShowMissingDocs(true)}
-              className="shrink-0 rounded-full border border-violet-200 px-2.5 py-1 text-[12px] text-violet-700 bg-white hover:bg-violet-50 hover:border-violet-300 focus:outline-none focus:ring-1 focus:ring-violet-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
+              className={showFilters ? ICON_PILL_BTN : OUTLINE_PILL_BTN}
+              title={showFilters ? 'Doc Status' : undefined}
+              aria-label="Doc Status"
             >
-              Doc Status
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              {!showFilters && 'Doc Status'}
             </button>
           )}
           <button
             onClick={() => setShowManualCert(true)}
-            title="Issue a Study/Provisional Certificate for a student with no database record (Evening College / Working Professional)"
-            className="shrink-0 rounded-full border border-indigo-200 px-2.5 py-1 text-[12px] text-indigo-700 bg-white hover:bg-indigo-50 hover:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer transition-colors font-medium whitespace-nowrap"
+            title={`${showFilters ? 'Manual Certificate — ' : ''}Issue a Study/Provisional Certificate for a student with no database record (Evening College / Working Professional)`}
+            aria-label="Manual Certificate"
+            className={showFilters ? ICON_PILL_BTN : OUTLINE_PILL_BTN}
           >
-            Manual Certificate
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            {!showFilters && 'Manual Certificate'}
           </button>
           {!isLoading && filteredStudents.length > 0 && (
             <>
               <button
                 onClick={handleSavePdf}
                 disabled={savingPdf}
-                className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className={`${showFilters ? ICON_PILL_BTN : OUTLINE_PILL_BTN} ${savingPdf ? 'animate-pulse' : ''}`}
+                title={showFilters ? (savingPdf ? 'Generating…' : 'Save PDF') : undefined}
+                aria-label="Save PDF"
               >
-                {savingPdf ? 'Generating…' : 'Save PDF'}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                {!showFilters && (savingPdf ? 'Generating…' : 'Save PDF')}
               </button>
               <button
                 onClick={handleSaveExcel}
                 disabled={savingExcel}
-                className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className={`${showFilters ? ICON_PILL_BTN : OUTLINE_PILL_BTN} ${savingExcel ? 'animate-pulse' : ''}`}
+                title={showFilters ? (savingExcel ? 'Exporting…' : 'Export Excel') : undefined}
+                aria-label="Export Excel"
               >
-                {savingExcel ? 'Exporting…' : 'Export Excel'}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/></svg>
+                {!showFilters && (savingExcel ? 'Exporting…' : 'Export Excel')}
               </button>
             </>
           )}
@@ -730,10 +913,10 @@ export function Students() {
           <button
             type="button"
             onClick={() => setShowFilters((v) => { const next = !v; localStorage.setItem('smp_students_filters_visible', String(next)); return next; })}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+            className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
-                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
-                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+                ? 'bg-[#0B7BC0]/10 border-[#0B7BC0]/30 text-[#0B7BC0]'
+                : 'border-[#CFE3F2] text-[#5B6371] hover:bg-[#EEF6FC] hover:text-[#262B35]'
             }`}
             title="Toggle filters"
           >
@@ -747,172 +930,158 @@ export function Students() {
         </div>
       </div>
 
-      {/* Recently Enrolled strip — filter-independent quick-access section */}
+      {/* Recently Enrolled — filter-independent quick-access cards */}
       {recentlyEnrolled.length > 0 && (
         <div
-          className="flex-shrink-0 rounded-2xl border border-emerald-200 overflow-hidden"
-          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
+          className="flex-shrink-0 rounded-2xl border border-[#CFE3F2] bg-white px-3 py-2.5"
+          style={{ background: 'linear-gradient(135deg, #EEF6FC 0%, #FFFFFF 60%)', animation: 'content-enter 0.26s ease-out' }}
         >
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500">
-            <span className="text-white text-xs font-bold tracking-wide">Recently Enrolled</span>
-            <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: MINT, boxShadow: `0 0 0 3px ${MINT}26` }} />
+            <span className="text-[10px] font-medium uppercase tracking-[0.8px] text-[#075E93]">Recently Enrolled</span>
+            <span className="rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] px-2 py-[2px] text-[10px] font-medium leading-none tabular-nums">
               {recentlyEnrolled.length}
             </span>
-            <span className="ml-auto text-emerald-100 text-[10px]">Today · {todayStr}</span>
+            <span className="ml-auto text-[10.5px] font-medium text-[#8A93A3] tabular-nums">Today · {todayStr}</span>
           </div>
-          <div className="overflow-x-auto" style={{ background: 'rgba(236,253,245,0.4)' }}>
-            <table className="min-w-full divide-y divide-emerald-100 text-xs">
-              <thead>
-                <tr style={{ background: 'linear-gradient(90deg, #d1fae5, #ecfdf5)' }}>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-8">#</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap">Name (SSLC)</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-24">Reg No</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-14">Course</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap w-20">Year</th>
-                  <th className="px-3 py-1.5 text-left font-semibold text-emerald-700 whitespace-nowrap">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-emerald-100/60">
-                {recentlyEnrolled.map((student, idx) => (
-                  <tr
-                    key={student.id}
-                    className={`transition-colors cursor-context-menu ${
-                      contextMenu?.student.id === student.id
-                        ? 'bg-emerald-200/80'
-                        : 'hover:bg-emerald-200/60'
-                    }`}
-                    onContextMenu={(e) => handleContextMenu(e, student)}
-                  >
-                    <td className="px-3 py-1.5 text-emerald-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-1.5 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
-                    <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
-                    <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{student.course}</td>
-                    <td className="px-3 py-1.5 text-gray-700 whitespace-nowrap">{student.year}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                        Recently Enrolled
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex items-stretch gap-2 overflow-x-auto no-scrollbar">
+            {recentlyEnrolled.map((student) => {
+              const active = contextMenu?.student.id === student.id;
+              return (
+                <div
+                  key={student.id}
+                  className={`shrink-0 min-w-[260px] max-w-[340px] flex items-center gap-3 rounded-xl border bg-white px-3 py-2 cursor-context-menu transition-[box-shadow,border-color] duration-150 hover:shadow-[0_4px_14px_rgba(11,60,94,0.08)] ${
+                    active ? 'border-[#0B7BC0] shadow-[0_0_0_3px_rgba(11,123,192,0.15)]' : 'border-[#CFE3F2] hover:border-[#0B7BC0]/45'
+                  }`}
+                  onContextMenu={(e) => handleContextMenu(e, student)}
+                  title="Right-click for actions"
+                >
+                  <RingAvatar name={student.studentNameSSLC} course={student.course} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-[12.5px] font-semibold text-[#075E93] truncate">{student.studentNameSSLC}</p>
+                      <LinePill value="New" color={MINT} />
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[11px] font-medium text-black tabular-nums">{student.regNumber || '—'}</span>
+                      <LinePill value={student.course} color={DEPT_DOT[student.course]} />
+                      <LinePill value={student.year} color={YEAR_COLOR[student.year]} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Table area — the only thing that scrolls */}
       {error ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+        <EmptyState tone="error" title={error} />
       ) : !academicYear ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Please configure an academic year in Settings first.
-        </div>
+        <EmptyState title="Please configure an academic year in Settings first." />
       ) : filteredStudents.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No students found.</div>
+        <EmptyState title="No students found." />
       ) : (
-        <div className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col" style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
-          <table className="min-w-full divide-y divide-emerald-50 text-xs">
-            <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CFE3F2] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(11,60,94,0.06)]">
+          <div className="scroll-students flex-1 min-h-0 overflow-auto">
+          <table className="w-full text-xs border-separate border-spacing-0">
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Year</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Category</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
+                <th className={`${TH} w-8`}>#</th>
+                <th className={TH}>Name (SSLC)</th>
+                <th className={`${TH} w-24`}>Reg No</th>
+                <th className={`${TH} w-14`}>Course</th>
+                <th className={`${TH} w-20`}>Year</th>
+                <th className={`${TH} w-14`}>Gender</th>
+                <th className={`${TH} w-14`}>Category</th>
+                <th className={`${TH} w-20`}>Adm Type</th>
+                <th className={`${TH} w-16`}>Adm Cat</th>
+                <th className={`${TH} w-20`}>Allotted Cat</th>
+                <th className={`${TH} w-28`}>Mobile</th>
+                <th className={`${TH} w-24`}>Status</th>
                 {sortByRecent && (
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Receipt Date</th>
+                  <th className={`${TH} w-24`}>Receipt Date</th>
                 )}
                 {isAdmin && (
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-48">Actions</th>
+                  <th className={`${TH} w-48`}>Actions</th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-emerald-50/60">
+            <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EAF2F9]">
               {visibleStudents.map((student, idx) => (
                 <tr
                   key={`${student.id}-${debouncedSearch}`}
                   className={`transition-colors cursor-context-menu ${
                     contextMenu?.student.id === student.id
-                      ? 'bg-emerald-200/80'
-                      : 'hover:bg-emerald-200/60'
+                      ? 'bg-[#0B7BC0]/[0.10]'
+                      : 'hover:bg-[#F3F9FD]'
                   }`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
                   style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
                 >
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.year}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.gender}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.category || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admType || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admCat || '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
+                  <td className="px-3 py-2 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
+                  <td className={TD}>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <RingAvatar name={student.studentNameSSLC} course={student.course} />
+                      <span className="text-[12.5px] font-medium text-[#075E93]">{student.studentNameSSLC}</span>
+                    </div>
+                  </td>
+                  <td className={TD_NUM}>{student.regNumber || '—'}</td>
+                  <td className={TD}><LinePill value={student.course} color={DEPT_DOT[student.course]} minWidth={34} /></td>
+                  <td className={TD}><LinePill value={student.year} color={YEAR_COLOR[student.year]} minWidth={66} /></td>
+                  <td className={TD}><LinePill value={student.gender} color={GENDER_COLOR[student.gender]} minWidth={40} /></td>
+                  <td className={TD}><LinePill value={student.category} color={CATEGORY_COLOR[student.category]} minWidth={30} /></td>
+                  <td className={TD}><LinePill value={student.admType} color={ADM_TYPE_COLOR[student.admType]} minWidth={70} /></td>
+                  <td className={TD}><LinePill value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} minWidth={56} /></td>
+                  <td className={TD}>
                     {student.allottedCategory ? (
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          student.allottedCategory !== student.category
-                            ? 'bg-amber-50 border-amber-200 text-amber-700'
-                            : 'bg-gray-50 border-gray-200 text-gray-600'
-                        }`}
+                      <LinePill
+                        value={student.allottedCategory}
+                        color={student.allottedCategory !== student.category ? AMBER : FALLBACK_COLOR}
+                        minWidth={30}
                         title={student.allottedCategory !== student.category ? `Claimed: ${student.category}` : undefined}
-                      >
-                        {student.allottedCategory}
-                      </span>
+                      />
                     ) : (
                       isAdmin ? (
                         <button
                           onClick={() => setAllottedCatStudent(student)}
-                          className="text-[10px] text-blue-500 hover:text-blue-700 font-medium underline underline-offset-2 cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#0B7BC0]/55 bg-white px-2 py-[3px] text-[10.5px] font-medium leading-none text-[#075E93] hover:bg-[#0B7BC0]/[0.07] cursor-pointer transition-colors"
                         >
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                           Set
                         </button>
                       ) : (
-                        <span className="text-gray-300 text-[10px]">—</span>
+                        <span className="text-[#C4C8D0] text-[10px]">—</span>
                       )
                     )}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.studentMobile}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        student.admissionStatus === 'CONFIRMED'
-                          ? 'bg-green-100 text-green-700'
-                          : student.admissionStatus === 'CANCELLED'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}
-                    >
-                      {student.admissionStatus || '—'}
-                    </span>
-                    {student.transferOut && (
-                      <span
-                        className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700 border border-sky-200"
-                        title={student.transferOutPolytechnic ? `To: ${student.transferOutPolytechnic}` : undefined}
-                      >
-                        TRF OUT
-                      </span>
-                    )}
-                    {student.transferredIn && (
-                      <span
-                        className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700 border border-violet-200"
-                        title={student.transferInPolytechnic ? `From: ${student.transferInPolytechnic}` : undefined}
-                      >
-                        TRF IN
-                      </span>
-                    )}
+                  <td className={TD_NUM}>{student.studentMobile}</td>
+                  <td className={TD}>
+                    <div className="flex items-center gap-1">
+                      <LinePill
+                        value={student.admissionStatus || '—'}
+                        color={STATUS_COLOR[student.admissionStatus] ?? AMBER}
+                        minWidth={80}
+                      />
+                      {student.transferOut && (
+                        <LinePill
+                          value="TRF OUT"
+                          color="#0284C7"
+                          title={student.transferOutPolytechnic ? `To: ${student.transferOutPolytechnic}` : undefined}
+                        />
+                      )}
+                      {student.transferredIn && (
+                        <LinePill
+                          value="TRF IN"
+                          color="#7C3AED"
+                          title={student.transferInPolytechnic ? `From: ${student.transferInPolytechnic}` : undefined}
+                        />
+                      )}
+                    </div>
                   </td>
                   {sortByRecent && (
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                    <td className={TD_NUM}>
                       {(() => {
                         const paid = firstPaymentByStudent.get(student.id);
                         return paid
@@ -922,14 +1091,15 @@ export function Students() {
                     </td>
                   )}
                   {isAdmin && (
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <Button
-                        variant="secondary"
-                        size="sm"
+                    <td className={TD}>
+                      <button
+                        type="button"
                         onClick={() => void navigate(`/enroll?edit=${student.id}`, { state: { student } })}
+                        className="inline-flex items-center justify-center gap-1 rounded-[7px] border border-[#0B7BC0]/45 bg-white px-2.5 py-[6px] text-[11px] font-medium leading-none text-[#075E93] transition-[background-color,box-shadow] duration-150 hover:bg-[#0B7BC0]/[0.08] hover:shadow-[0_2px_8px_rgba(18,20,26,0.06)] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7BC0]/30"
                       >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                         Edit
-                      </Button>
+                      </button>
                     </td>
                   )}
                 </tr>
@@ -937,9 +1107,9 @@ export function Students() {
 
               {hasMore && (
                 <tr>
-                  <td colSpan={(isAdmin ? 12 : 11) + (sortByRecent ? 1 : 0)} className="px-4 py-2.5 text-center">
+                  <td colSpan={(isAdmin ? 12 : 11) + (sortByRecent ? 1 : 0)} className="px-4 py-3 text-center">
                     <button
-                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                      className={OUTLINE_PILL_BTN}
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                     >
                       Load more ({filteredStudents.length - visibleCount} remaining)
@@ -949,11 +1119,12 @@ export function Students() {
               )}
             </tbody>
           </table>
+          </div>
 
-          <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length}
+          <div className="flex-shrink-0 px-4 py-2 border-t border-[#CFE3F2] bg-[#F3F9FD] text-[11px] font-medium text-[#8A93A3]">
+            Showing <span className="text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredStudents.length)}</span> of <span className="text-[#262B35] tabular-nums">{filteredStudents.length}</span>
             {stats && filteredStudents.length < stats.total && (
-              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+              <span> (filtered from {stats.total} total)</span>
             )}
           </div>
         </div>
@@ -973,151 +1144,152 @@ export function Students() {
         {/* Menu — initially hidden; useLayoutEffect repositions then reveals */}
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[205px]"
-          style={{ left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="font-wp fixed z-50 bg-white border border-[#CFE3F2] rounded-2xl overflow-hidden min-w-[232px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(11,60,94,0.14), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="px-3 pt-2 pb-1.5 border-b border-gray-100 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold flex items-center justify-center flex-shrink-0">
-              {contextMenu.student.studentNameSSLC.charAt(0)}
-            </span>
-            <span className="text-[11px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
+          <div className="px-3 py-2.5 border-b border-[#CFE3F2] bg-[#EEF6FC] flex items-center gap-3">
+            <RingAvatar name={contextMenu.student.studentNameSSLC} course={contextMenu.student.course} />
+            <div className="min-w-0">
+              <p className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none">
+                {contextMenu.student.course} · {contextMenu.student.year}
+              </p>
+              <p className="mt-1 text-[12px] font-medium text-[#262B35] truncate leading-none">{contextMenu.student.studentNameSSLC}</p>
+            </div>
           </div>
           {/* Items */}
-          <div className="py-1">
+          <div className="p-1">
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setDetailStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
               </span>
               View Details
             </button>
             {isAdmin && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => { setAllottedCatStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#6366F1]/10 group-hover:text-[#6366F1]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
                 </span>
                 <span>Allotted Category</span>
-                {contextMenu.student.allottedCategory ? (
-                  <span className="ml-auto text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
-                    {contextMenu.student.allottedCategory}
-                  </span>
-                ) : (
-                  <span className="ml-auto text-[10px] font-semibold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">
-                    Not set
-                  </span>
-                )}
+                <span className="ml-auto">
+                  {contextMenu.student.allottedCategory ? (
+                    <LinePill value={contextMenu.student.allottedCategory} color={FALLBACK_COLOR} />
+                  ) : (
+                    <LinePill value="Not set" color={AMBER} />
+                  )}
+                </span>
               </button>
             )}
-            <div className="my-0.5 h-px bg-gray-100 mx-2.5" />
+            {MENU_SEP}
             {isAdmin && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => { navigate('/fees', { state: { prefillStudent: contextMenu.student.studentNameSSLC } }); setContextMenu(null); }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 group-hover:text-amber-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#D97706]/10 group-hover:text-[#D97706]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 </span>
                 Collect Fee
               </button>
             )}
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setDocsModalStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0FA968]/10 group-hover:text-[#0FA968]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
               </span>
               Manage Documents
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setPrintProfileStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0FA968]/10 group-hover:text-[#0FA968]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               </span>
               Print Profile
             </button>
-            <div className="my-0.5 h-px bg-gray-100 mx-2.5" />
+            {MENU_SEP}
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setAnsLetterStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               </span>
               ANS Letter
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setAdmOrderStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#1D6FD8]/10 group-hover:text-[#1D6FD8]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
               </span>
               Admission Order
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setStudyCertStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               </span>
               Study Certificate
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+              className={MENU_ITEM}
               onClick={() => { setTcStudent(contextMenu.student); setContextMenu(null); }}
             >
-              <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </span>
               Transfer Certificate
             </button>
             {contextMenu.student.year === '3RD YEAR' && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => { setPcStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                 </span>
                 Provisional Certificate
               </button>
             )}
             {contextMenu.student.year === '3RD YEAR' && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => { setCccStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-100 group-hover:text-violet-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#7C3AED]/10 group-hover:text-[#7C3AED]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
                 </span>
                 Course Completion Certificate
               </button>
             )}
             {isAdmin && contextMenu.student.admCat === 'SNQ' && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => { setRefundStudent(contextMenu.student); setContextMenu(null); }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 group-hover:text-red-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#E11D48]/10 group-hover:text-[#E11D48]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
                 </span>
                 SNQ Refund
               </button>
             )}
             {isAdmin && (contextMenu.student.year === '2ND YEAR' || contextMenu.student.year === '3RD YEAR') && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-sky-50 hover:text-sky-900 flex items-center gap-2 transition-colors duration-100"
+                className={MENU_ITEM}
                 onClick={() => {
                   if (contextMenu.student.transferOut) {
                     void handleClearTransferOut(contextMenu.student);
@@ -1128,8 +1300,8 @@ export function Students() {
                   }
                 }}
               >
-                <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-100 group-hover:text-sky-600 transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span className={`${MENU_ICON} group-hover:bg-[#0284C7]/10 group-hover:text-[#0284C7]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </span>
                 {contextMenu.student.transferOut ? 'Clear Transfer Out' : 'Mark Transfer Out'}
               </button>
@@ -1241,7 +1413,7 @@ export function Students() {
             value={transferOutPolytechnicInput}
             onChange={(e) => setTransferOutPolytechnicInput(e.target.value.toUpperCase())}
             placeholder="Polytechnic name (optional)"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-sky-400 focus:border-sky-400"
+            className="w-full rounded-xl border border-[#CFE3F2] bg-[#F3F9FD] px-3 py-2 text-sm font-medium text-[#262B35] placeholder:text-[#A9B0BB] placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#0B7BC0] focus:ring-2 focus:ring-[#0B7BC0]/20 transition-colors"
           />
         </div>
       }

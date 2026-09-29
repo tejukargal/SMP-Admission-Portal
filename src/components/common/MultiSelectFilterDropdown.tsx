@@ -13,7 +13,7 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   options: Option<T>[];
   className?: string;
   /** Accent colour; defaults to the app's emerald. */
-  tone?: 'emerald' | 'indigo' | 'pea';
+  tone?: 'emerald' | 'indigo' | 'pea' | 'ocean';
 }
 
 const TONES = {
@@ -43,6 +43,16 @@ const TONES = {
     allRow: 'text-[#3F6E1F] bg-[#F1F7EA]/60',
     checkedRow: 'text-[#3F6E1F] bg-[#F1F7EA]',
     checkbox: 'border-[#5B9A2F] bg-[#5B9A2F]',
+    font: 'font-wp',
+  },
+  // Ocean blue — Students revamp (student-portal look).
+  ocean: {
+    ring: 'focus:ring-[#0B7BC0]/40',
+    active: 'border-[#0B7BC0] bg-[#EEF6FC] text-[#075E93]',
+    idle: 'border-[#0B7BC0]/30 text-[#075E93] hover:border-[#0B7BC0]/55 hover:bg-[#F3F9FD]',
+    allRow: 'text-[#075E93] bg-[#EEF6FC]/60',
+    checkedRow: 'text-[#075E93] bg-[#EEF6FC]',
+    checkbox: 'border-[#0B7BC0] bg-[#0B7BC0]',
     font: 'font-wp',
   },
 } as const;
