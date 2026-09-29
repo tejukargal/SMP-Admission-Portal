@@ -81,10 +81,10 @@ const ICON_PILL_BTN =
   'shrink-0 w-[30px] h-[30px] inline-flex items-center justify-center rounded-full border border-[#CFE3F2] bg-white text-[#075E93] hover:border-[#0B7BC0]/40 hover:bg-[#0B7BC0]/[0.06] focus:outline-none focus:ring-2 focus:ring-[#0B7BC0]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
 const MENU_ITEM =
-  'group w-full text-left px-2 py-1.5 rounded-[10px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F3F9FD] hover:text-[#262B35] cursor-pointer flex items-center gap-2.5 transition-colors duration-100';
+  'group w-full text-left px-2 py-[5px] rounded-[9px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F3F9FD] hover:text-[#262B35] cursor-pointer flex items-center gap-2.5 transition-colors duration-100';
 const MENU_ICON =
-  'w-6 h-6 rounded-[8px] bg-[#EEF6FC] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
-const MENU_SEP = <div className="my-1 h-px bg-[#E6F0F8] mx-2" />;
+  'w-[22px] h-[22px] rounded-[7px] bg-[#EEF6FC] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors [&>svg]:w-[12px] [&>svg]:h-[12px]';
+const MENU_SEP = <div className="my-0.5 h-px bg-[#E6F0F8] mx-2" />;
 
 // Main table: sticky header band + cells. The band colours are mirrored in
 // index.css (.scroll-students) for the scrollbar gutter beside the header.
@@ -94,7 +94,7 @@ const TH =
 // filters change the rows on screen. Spare width is shared proportionally.
 const COL_W = {
   idx: 48, name: 300, reg: 112, course: 76, year: 96, gender: 80, category: 84,
-  admType: 104, admCat: 86, allotted: 100, mobile: 116, status: 200, receipt: 118, actions: 96,
+  admType: 104, admCat: 86, allotted: 100, mobile: 116, status: 150, receipt: 118, actions: 96,
 };
 
 const TD = 'px-3 py-2 whitespace-nowrap overflow-hidden';
@@ -1181,18 +1181,18 @@ export function Students() {
         {/* Menu — initially hidden; useLayoutEffect repositions then reveals */}
         <div
           ref={contextMenuRef}
-          className="font-wp fixed z-50 bg-white border border-[#CFE3F2] rounded-2xl overflow-hidden min-w-[232px]"
+          className="font-wp fixed z-50 bg-white border border-[#CFE3F2] rounded-2xl overflow-hidden min-w-[220px]"
           style={{ left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(11,60,94,0.14), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="px-3 py-2.5 border-b border-[#CFE3F2] bg-[#EEF6FC] flex items-center gap-3">
-            <RingAvatar name={contextMenu.student.studentNameSSLC} course={contextMenu.student.course} />
+          <div className="px-3 py-2 border-b border-[#CFE3F2] bg-[#EEF6FC] flex items-center gap-2.5">
+            <RingAvatar name={contextMenu.student.studentNameSSLC} course={contextMenu.student.course} size={22} />
             <div className="min-w-0">
-              <p className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none">
+              <p className="text-[8.5px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none">
                 {contextMenu.student.course} · {contextMenu.student.year}
               </p>
-              <p className="mt-1 text-[12px] font-medium text-[#262B35] truncate leading-none">{contextMenu.student.studentNameSSLC}</p>
+              <p className="mt-0.5 text-[12px] font-medium text-[#262B35] truncate leading-tight">{contextMenu.student.studentNameSSLC}</p>
             </div>
           </div>
           {/* Items */}
