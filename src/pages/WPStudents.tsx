@@ -49,19 +49,23 @@ function certCounts(s: Student): { tc: number; pc: number } {
 const DEPT_DOT: Record<string, string> = {
   CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
 };
-// Colour-coded accents for the thin-line table pills.
+// Colour-coded accents for the filter chips and the thin-line pills.
 const YEAR_COLOR: Record<string, string> = {
   '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
 };
-const GENDER_COLOR: Record<string, string> = { BOY: '#3B82F6', GIRL: '#EC4899' };
 const CATEGORY_COLOR: Record<string, string> = {
-  GM: '#64748B', SC: '#F97316', ST: '#EAB308', C1: '#14B8A6',
+  GM: '#5B9A2F', SC: '#F97316', ST: '#EAB308', C1: '#14B8A6',
   '2A': '#6366F1', '2B': '#A855F7', '3A': '#06B6D4', '3B': '#84CC16',
 };
-const ADM_CAT_COLOR: Record<string, string> = { GM: '#64748B', SNQ: '#10B981', OTHERS: '#F59E0B' };
+const GENDER_COLOR: Record<string, string> = { BOY: '#3B82F6', GIRL: '#EC4899' };
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
 const STATUS_COLOR: Record<string, string> = { CONFIRMED: '#0FA968', CANCELLED: '#E11D48' };
 const STATUS_COLOR_DEFAULT = '#D97706';
 const FALLBACK_COLOR = '#8A93A3';
+// Per-column pill widths (px) — sized to each column's longest value.
+const PILL_W = {
+  course: 34, year: 66, gender: 42, category: 32, admCat: 56, status: 80, trfIn: 46, cert: 36,
+};
 const TH =
   'h-9 px-3 py-0 align-middle text-left text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#4F6B3A] whitespace-nowrap';
 const OUTLINE_PILL_BTN =
@@ -72,10 +76,12 @@ const MENU_ICON =
   'w-6 h-6 rounded-[8px] bg-[#EEF5E6] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
 
 // Outline chip: white fill + tinted hairline; solid colour when selected.
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
 function chipStyle(color: string, selected: boolean): React.CSSProperties {
   return selected
     ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
-    : { background: '#fff', borderColor: `${color}59`, color: '#3F4654' };
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
 }
 
 // Hue of each department colour — drives the pastel monogram gradient.
@@ -105,25 +111,26 @@ function RingAvatar({ name, course }: { name: string; course: string }) {
 }
 
 /**
- * Thin-line pill in the style of the filter chips: white fill, 1px border
- * tinted with the accent colour, a colour dot and (optionally) tinted text.
+ * Compact thin-line pill: light accent-tinted fill, 1px border and dot in the
+ * accent colour; text in the accent deepened so light hues stay legible.
  */
-function LinePill({ value, color, dot = true, tintText = false, title }: {
+function LinePill({ value, color, dot = true, minWidth, title }: {
   value?: string;
   color?: string;
   dot?: boolean;
-  tintText?: boolean;
+  /** Fixed minimum width (px) so every pill in a table column lines up; text centres. */
+  minWidth?: number;
   title?: string;
 }) {
   if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
   const c = color ?? FALLBACK_COLOR;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[5px] text-[11px] font-medium tracking-[0.1px] leading-none"
-      style={{ background: '#fff', borderColor: `${c}59`, color: tintText ? c : '#3F4654' }}
+      className="inline-flex items-center justify-center gap-[5px] rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
       title={title}
     >
-      {dot && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c }} />}
+      {dot && <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: c }} />}
       {value}
     </span>
   );
@@ -480,9 +487,9 @@ export function WPStudents() {
             SMP Admissions · Working Professional
           </p>
           <div className="mt-1.5 flex items-center gap-2">
-            <h2 className="text-[22px] font-bold text-[#262B35] leading-none tracking-[-0.3px]">WP Students</h2>
+            <h2 className="text-[22px] font-bold text-[#426F22] leading-none tracking-[-0.3px]">WP Students</h2>
             {academicYear && (
-              <span className="rounded-full border border-[#DCEBCD] bg-white text-[#5B6371] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
+              <span className="rounded-full border border-[#5B9A2F]/45 bg-white text-[#426F22] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
                 {academicYear}
               </span>
             )}
@@ -523,7 +530,7 @@ export function WPStudents() {
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: YEAR_COLOR[yr] }} />
                     )}
                     <span>{label}</span>
-                    <span className={isSelected ? 'text-white' : 'text-[#262B35]'}>
+                    <span className={isSelected ? 'text-white' : undefined}>
                       <AnimNum value={count} />
                     </span>
                   </button>
@@ -550,7 +557,7 @@ export function WPStudents() {
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />
                     )}
                     <span>{c}</span>
-                    <span className={isSelected ? 'text-white' : 'text-[#262B35]'}>
+                    <span className={isSelected ? 'text-white' : undefined}>
                       <AnimNum value={count} />
                     </span>
                   </button>
@@ -561,7 +568,7 @@ export function WPStudents() {
               {hasActiveFilters && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-[#C9DDB6] shrink-0 mx-0.5" />
-                  <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#5B9A2F]/40 bg-white text-[#5B9A2F] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
+                  <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#5B9A2F]/45 bg-white text-[#426F22] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
                     <span>Filtered</span>
                     <AnimNum value={filteredStudents.length} />
                   </div>
@@ -605,7 +612,7 @@ export function WPStudents() {
 
           {/* Search — reference search bar */}
           <div className="relative shrink-0 w-60">
-            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8A93A3] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#426F22] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -613,7 +620,7 @@ export function WPStudents() {
               placeholder="Search name / reg / mobile…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-full border border-[#DCEBCD] bg-[#F6FAF1] py-2 text-[14px] font-medium text-[#262B35] placeholder:text-[#8A93A3] placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#5B9A2F] focus:ring-2 focus:ring-[#5B9A2F]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-[#5B9A2F]/45 bg-[#F6FAF1] py-2 text-[14px] font-medium text-[#426F22] placeholder:text-[#426F22]/60 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#5B9A2F] focus:ring-2 focus:ring-[#5B9A2F]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
             />
             {searchTerm && (
               <button
@@ -837,59 +844,47 @@ export function WPStudents() {
             </thead>
             <tbody className="divide-y divide-[#EEF4E7]">
               {visibleStudents.map((student, idx) => {
-                const isMenuRow = contextMenu?.student.id === student.id;
                 return (
                 <tr
                   key={`${student.id}-${debouncedSearch}`}
-                  className={`group transition-colors cursor-context-menu ${
-                    isMenuRow
-                      ? 'bg-[#5B9A2F]/[0.09]'
-                      : 'hover:bg-[#5B9A2F]/[0.05]'
-                  }`}
+                  className="cursor-context-menu"
                   onContextMenu={(e) => handleContextMenu(e, student)}
                   style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
                 >
-                  <td className="relative px-3 py-2 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">
-                    <span
-                      className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-[#5B9A2F] transition-opacity ${
-                        isMenuRow ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                    />
+                  <td className="px-3 py-2 text-[11px] font-medium text-black tabular-nums whitespace-nowrap">
                     {idx + 1}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-2.5">
                       <RingAvatar name={student.studentNameSSLC} course={student.course} />
-                      <span className="text-[12.5px] font-normal text-[#262B35]">{student.studentNameSSLC}</span>
+                      <span className="text-[12.5px] font-medium text-[#3D6B1E]">{student.studentNameSSLC}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-[11.5px] font-medium text-[#5B6371] tabular-nums whitespace-nowrap">{student.regNumber || '—'}</td>
+                  <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{student.regNumber || '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <LinePill value={student.course} color={DEPT_DOT[student.course]} />
+                    <LinePill dot={false} minWidth={PILL_W.course} value={student.course} color={DEPT_DOT[student.course]} />
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap"><LinePill value={student.year} color={YEAR_COLOR[student.year]} /></td>
-                  <td className="px-3 py-2 whitespace-nowrap"><LinePill value={student.gender} color={GENDER_COLOR[student.gender]} /></td>
-                  <td className="px-3 py-2 whitespace-nowrap"><LinePill value={student.category} color={CATEGORY_COLOR[student.category]} /></td>
-                  <td className="px-3 py-2 whitespace-nowrap"><LinePill value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap"><LinePill dot={false} minWidth={PILL_W.year} value={student.year} color={YEAR_COLOR[student.year]} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap"><LinePill dot={false} minWidth={PILL_W.gender} value={student.gender} color={GENDER_COLOR[student.gender]} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap"><LinePill dot={false} minWidth={PILL_W.category} value={student.category} color={CATEGORY_COLOR[student.category]} /></td>
+                  <td className="px-3 py-2 whitespace-nowrap"><LinePill dot={false} minWidth={PILL_W.admCat} value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} /></td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {student.allottedCategory ? (
                       student.allottedCategory !== student.category ? (
-                        <LinePill
+                        <LinePill dot={false} minWidth={PILL_W.category}
                           value={student.allottedCategory}
                           color="#D97706"
-                          tintText
                           title={`Claimed: ${student.category}`}
                         />
                       ) : (
-                        <LinePill value={student.allottedCategory} color={CATEGORY_COLOR[student.allottedCategory]} />
+                        <LinePill dot={false} minWidth={PILL_W.category} value={student.allottedCategory} color={CATEGORY_COLOR[student.allottedCategory]} />
                       )
                     ) : (
                       isAdmin ? (
                         <button
                           onClick={() => setAllottedCatStudent(student)}
-                          className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#5B9A2F]/50 bg-white text-[#5B9A2F] hover:bg-[#5B9A2F]/[0.06] hover:border-solid px-2 py-[3px] text-[10px] font-medium leading-none cursor-pointer transition-colors"
+                          className="text-[11px] font-medium text-[#3D6B1E] hover:underline cursor-pointer"
                         >
-                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                           Set
                         </button>
                       ) : (
@@ -897,20 +892,17 @@ export function WPStudents() {
                       )
                     )}
                   </td>
-                  <td className="px-3 py-2 text-[11.5px] font-medium text-[#5B6371] tabular-nums whitespace-nowrap">{student.studentMobile}</td>
+                  <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{student.studentMobile}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1">
-                      <LinePill
+                      <LinePill dot={false} minWidth={PILL_W.status}
                         value={student.admissionStatus}
                         color={STATUS_COLOR[student.admissionStatus] ?? STATUS_COLOR_DEFAULT}
-                        tintText
                       />
                       {student.transferredIn && (
-                        <LinePill
+                        <LinePill dot={false} minWidth={PILL_W.trfIn}
                           value="TRF IN"
                           color="#7C3AED"
-                          dot={false}
-                          tintText
                           title={student.transferInPolytechnic ? `From: ${student.transferInPolytechnic}` : undefined}
                         />
                       )}
@@ -923,20 +915,16 @@ export function WPStudents() {
                       return (
                         <span className="flex items-center gap-1">
                           {tc > 0 && (
-                            <LinePill
+                            <LinePill dot={false} minWidth={PILL_W.cert}
                               value={`TC${tc > 1 ? ` ×${tc}` : ''}`}
                               color="#4F46E5"
-                              dot={false}
-                              tintText
                               title={`${tc} Transfer Certificate${tc > 1 ? 's' : ''} issued`}
                             />
                           )}
                           {pc > 0 && (
-                            <LinePill
+                            <LinePill dot={false} minWidth={PILL_W.cert}
                               value={`PC${pc > 1 ? ` ×${pc}` : ''}`}
                               color="#7C3AED"
-                              dot={false}
-                              tintText
                               title={`${pc} Provisional Certificate${pc > 1 ? 's' : ''} issued`}
                             />
                           )}
@@ -1041,7 +1029,7 @@ export function WPStudents() {
                   </span>
                 ) : (
                   <span className="ml-auto">
-                    <LinePill value="Not set" color="#D97706" dot={false} tintText />
+                    <LinePill value="Not set" color="#D97706" dot={false} />
                   </span>
                 )}
               </button>

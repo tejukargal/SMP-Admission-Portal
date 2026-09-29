@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useSettings } from '../hooks/useSettings';
@@ -8,7 +8,6 @@ import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/refundService';
 import type { RefundRecord } from '../services/refundService';
-import { Button } from '../components/common/Button';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
@@ -35,12 +34,145 @@ const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
+// Table columns with fixed widths (px). Both the header strip and the body
+// table use table-layout: fixed with these widths, so columns never shift
+// when filters change the rows on screen. Spare width is shared proportionally.
+const TABLE_COLUMNS: { label: string; width: number }[] = [
+  { label: '#', width: 52 },
+  { label: 'Name (SSLC)', width: 300 },
+  { label: 'Reg No', width: 112 },
+  { label: 'Course', width: 76 },
+  { label: 'Year', width: 96 },
+  { label: 'Adm Type', width: 104 },
+  { label: 'Adm Cat', width: 86 },
+  { label: 'Adm Status', width: 110 },
+  { label: 'Fee Details', width: 124 },
+  { label: 'Actions', width: 122 },
+];
+const TABLE_MIN_WIDTH = TABLE_COLUMNS.reduce((a, c) => a + c.width, 0);
+const TABLE_COLGROUP = (
+  <colgroup>
+    {TABLE_COLUMNS.map((c) => <col key={c.label} style={{ width: c.width }} />)}
+  </colgroup>
+);
+// Uniform width for the row action buttons (fits "Collect Dues" + icon).
+const ACTION_W = 98;
+
+// ── Design tokens — WP Students revamp look, re-tinted to teal ─────────────
+const TEAL = '#0F8B8D';
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+// Colour-coded accents for the stat chips and the thin-line table pills.
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+const ADM_TYPE_COLOR: Record<string, string> = {
+  REGULAR: '#1D6FD8', REPEATER: '#D97706', LATERAL: '#7C3AED', EXTERNAL: TEAL, SNQ: '#10B981',
+};
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
+const STATUS_COLOR: Record<string, string> = { CONFIRMED: '#0FA968', CANCELLED: '#E11D48' };
+const STATUS_COLOR_DEFAULT = '#D97706';
+const FEE_STATUS_COLOR = { PAID: '#0FA968', NOT_PAID: '#E11D48', FEE_DUES: '#D97706', NO_FEE_DUES: TEAL };
+// Row actions: Collect Fee / Collect Dues / No Dues.
+const ACTION_COLOR = { collect: '#1D6FD8', dues: '#D97706', noDues: '#0FA968' };
+const FALLBACK_COLOR = '#8A93A3';
+// Per-column pill widths (px) — sized to each column's longest value.
+const PILL_W = { course: 34, year: 66, admType: 70, admCat: 56, status: 80 };
+
+const TH =
+  'h-9 px-3 py-0 align-middle text-left text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#0B6567] whitespace-nowrap';
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#CDE6E6] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] hover:text-[#0B6567] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const CHIP_ARROW =
+  'shrink-0 w-6 h-6 rounded-full border border-[#0F8B8D]/45 bg-white text-[#0B6567] flex items-center justify-center shadow-[0_1px_4px_rgba(18,20,26,0.06)] enabled:hover:bg-[#EFF8F8] enabled:cursor-pointer disabled:opacity-35 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-[opacity,background-color]';
+const MENU_ITEM =
+  'group w-full text-left px-2 py-1.5 rounded-[10px] text-[12px] font-medium text-[#5B6371] enabled:hover:bg-[#F4FAFA] enabled:hover:text-[#262B35] enabled:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2.5 transition-colors duration-100';
+const MENU_ICON =
+  'w-6 h-6 rounded-[8px] bg-[#EAF4F4] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+// Outline chip: white fill + tinted hairline and ink; solid colour when selected.
+function chipStyle(color: string, selected: boolean): React.CSSProperties {
+  return selected
+    ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
+}
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course }: { name: string; course: string }) {
+  const h = DEPT_HUE[course] ?? 210;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="w-[22px] h-[22px] rounded-full flex items-center justify-center shrink-0 text-[9.5px] font-medium tracking-[0.3px]"
+      style={{
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text; fixed min width per column. */
+function LinePill({ value, color, minWidth }: { value?: string; color?: string; minWidth?: number }) {
+  if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+    >
+      {value}
+    </span>
+  );
+}
+
+/** Compact boxy outline button for row actions (Collect Fee / Collect Dues / No Dues / Fee Details). */
+function ActionPill({ color, onClick, disabled, width, children }: {
+  color: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  /** Fixed width (px) so every button in a column lines up; otherwise fits content. */
+  width?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center justify-center gap-1 rounded-[7px] border bg-white px-2 py-[7px] whitespace-nowrap text-[11px] font-medium leading-none transition-[background-color,box-shadow] duration-150 enabled:cursor-pointer enabled:hover:bg-[var(--tint)] enabled:hover:shadow-[0_2px_8px_rgba(18,20,26,0.06)] disabled:bg-[var(--tint)] disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+      style={{ '--tint': `${color}14`, '--ring': `${color}40`, borderColor: `${color}73`, color: inkOf(color), width } as React.CSSProperties}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div className="w-14 h-14 rounded-2xl border border-[#CDE6E6] bg-[#EFF8F8] flex items-center justify-center text-[#8A93A3]">
+        {icon}
+      </div>
+      <p className="text-[14px] font-medium text-[#5B6371]">{title}</p>
+    </div>
+  );
+}
 
 function AnimNum({ value }: { value: number }) {
   return (
     <span
       key={value}
-      className="font-bold tabular-nums"
+      className="font-medium tabular-nums"
       style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}
     >
       {value}
@@ -48,10 +180,11 @@ function AnimNum({ value }: { value: number }) {
   );
 }
 
-
 function LoadingGate() {
   return <PageSpinner />;
 }
+
+const DOT_SEP = <span className="w-1 h-1 rounded-full bg-[#BFDDDD] shrink-0 mx-0.5" />;
 
 export function CollectFee() {
 
@@ -99,19 +232,31 @@ export function CollectFee() {
   const ctxRef = useRef<HTMLDivElement>(null);
   const closeCtx = useCallback(() => setCtxMenu(null), []);
 
+  // Outside clicks are caught by an invisible backdrop; Escape closes too.
   useEffect(() => {
     if (!ctxMenu) return;
-    function onDown(e: MouseEvent) {
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) closeCtx();
-    }
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeCtx(); }
-    document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [ctxMenu, closeCtx]);
+
+  // Measure the menu and clamp it to the viewport — direct DOM mutation avoids
+  // a state-update re-render loop.
+  useLayoutEffect(() => {
+    const el = ctxRef.current;
+    if (!el || !ctxMenu) return;
+    const GAP = 6;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    let x = ctxMenu.x;
+    let y = ctxMenu.y;
+    if (x + w > window.innerWidth  - GAP) x = window.innerWidth  - w - GAP;
+    if (y + h > window.innerHeight - GAP) y = window.innerHeight - h - GAP;
+    if (x < GAP) x = GAP;
+    if (y < GAP) y = GAP;
+    el.style.left       = `${x}px`;
+    el.style.top        = `${y}px`;
+    el.style.visibility = 'visible';
+  }, [ctxMenu]);
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
   const { records: feeRecords, loading: feeLoading, refetch: refetchFees } =
@@ -290,6 +435,7 @@ export function CollectFee() {
 
   function clearFilters() {
     setSearchTerm('');
+    setDebouncedSearch(''); // skip the debounce so the list re-animates once, not twice
     setCourseFilter('');
     setYearFilter('');
     setGenderFilter('');
@@ -326,107 +472,170 @@ export function CollectFee() {
     return { yearCount, courseCount, total: confirmedStudents.length, paidCount, unpaidCount, duesCount, noDuesCount };
   }, [confirmedStudents, feeRecords, getAllotted, totalPaidByStudent]);
 
+  // ── Fixed table header ────────────────────────────────────────────────────
+  // The header lives outside the scroll container so the scrollbar starts
+  // below it; both tables share TABLE_COLUMNS widths, horizontal scroll is synced.
+  const headScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+
   const isLoading = settingsLoading || studentsLoading || feeLoading;
+
+  // Changes whenever the result set is re-filtered — keys the rows so they
+  // replay a subtle staggered entrance, and scrolls the list back to the top.
+  const filterSig = [
+    debouncedSearch, courseFilter, yearFilter, genderFilter, admTypeFilter, admCatFilter, feeStatusFilter,
+  ].join('|');
+  // Animate from the first filter change onward — including Clear, which
+  // returns to the initial signature — but not on the initial page load.
+  const [initialSig] = useState(filterSig);
+  const [animateRows, setAnimateRows] = useState(false);
+  if (!animateRows && filterSig !== initialSig) setAnimateRows(true);
+  useEffect(() => {
+    if (bodyScrollRef.current) bodyScrollRef.current.scrollTop = 0;
+  }, [filterSig]);
+
+  // Header chip strip: single line between two always-visible arrow buttons;
+  // each arrow dims when there is nothing more to see on its side.
+  const chipScrollRef = useRef<HTMLDivElement>(null);
+  const [chipOverflow, setChipOverflow] = useState({ left: false, right: false });
+  const hasStats = !!stats;
+
+  useLayoutEffect(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setChipOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [hasStats, isLoading, hasActiveFilters]);
+
+  // Animated by hand rather than scrollBy({ behavior: 'smooth' }), which some
+  // browser setups ignore, leaving the arrows apparently dead.
+  const chipAnimRef = useRef(0);
+  function scrollChips(dir: -1 | 1) {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    cancelAnimationFrame(chipAnimRef.current);
+    const from = el.scrollLeft;
+    const to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, from + dir * Math.max(160, el.clientWidth * 0.6)));
+    const start = performance.now();
+    const DURATION = 260;
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - start) / DURATION));
+      el.scrollLeft = from + (to - from) * (1 - Math.pow(1 - t, 3));
+      if (t < 1) chipAnimRef.current = requestAnimationFrame(step);
+    };
+    chipAnimRef.current = requestAnimationFrame(step);
+  }
 
   if (isLoading) return <LoadingGate />;
 
-  return (
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+  const feeStatusChips = stats ? [
+    { key: 'PAID' as const,        label: 'Paid',     count: stats.paidCount },
+    { key: 'NOT_PAID' as const,    label: 'Not Paid', count: stats.unpaidCount },
+    { key: 'FEE_DUES' as const,    label: 'Fee Dues', count: stats.duesCount },
+    { key: 'NO_FEE_DUES' as const, label: 'No Dues',  count: stats.noDuesCount },
+  ] : [];
 
-      {/* Header + stats chips */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
+  return (
+    <>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
+
+      {/* Page header + stat chips */}
+      <div className="flex-shrink-0 flex items-center gap-4 min-w-0">
         <div className="shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 leading-tight">Collect Fee</h2>
-          {academicYear && (
-            <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
-          )}
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Fee Collection
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold text-[#0B6567] leading-none tracking-[-0.3px]">Collect Fee</h2>
+            {academicYear && (
+              <span className="rounded-full border border-[#0F8B8D]/45 bg-white text-[#0B6567] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
+                {academicYear}
+              </span>
+            )}
+          </div>
         </div>
 
         {stats && (
           <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
+            <span className="w-px h-8 bg-[#CDE6E6] shrink-0 self-center" />
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {/* Total tile */}
+            <div className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border border-[#0F8B8D]/20 bg-[#EAF5F5] px-3.5 py-1 min-w-[58px]">
+              <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#4F8C8D] leading-tight">Total</span>
+              <span className="text-[16px] font-medium text-[#0B6567] leading-tight">
+                <AnimNum value={stats.total} />
+              </span>
+            </div>
 
-              {/* Total */}
-              <div className="flex items-center gap-1 bg-white/80 border border-emerald-100 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-gray-500 font-semibold">Total</span>
-                <span className="font-bold tabular-nums text-gray-800"><AnimNum value={stats.total} /></span>
+            {/* Filtered count */}
+            {hasActiveFilters && (
+              <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#0F8B8D]/45 bg-white text-[#0B6567] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
+                <span>Filtered</span>
+                <AnimNum value={filteredStudents.length} />
               </div>
+            )}
 
-              {/* Filtered count */}
-              {hasActiveFilters && (
-                <>
-                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-emerald-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums text-emerald-800"><AnimNum value={filteredStudents.length} /></span>
-                  </div>
-                </>
-              )}
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+            {/* Arrows stay put on both sides; the chips between them scroll */}
+            <button type="button" onClick={() => scrollChips(-1)} disabled={!chipOverflow.left} className={`${CHIP_ARROW} ml-1`} aria-label="Scroll chips left">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div ref={chipScrollRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-1">
 
               {/* Fee status chips */}
-              <button
-                onClick={() => setFeeStatusFilter(feeStatusFilter === 'PAID' ? 'ALL' : 'PAID')}
-                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                  feeStatusFilter === 'PAID' ? 'bg-green-500 border-green-500' : 'bg-white/80 border-emerald-100 hover:border-green-300 hover:bg-green-50'
-                }`}
-              >
-                <span className={`font-semibold ${feeStatusFilter === 'PAID' ? 'text-white' : 'text-gray-600'}`}>Paid</span>
-                <span className={`font-bold tabular-nums ${feeStatusFilter === 'PAID' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.paidCount} /></span>
-              </button>
-              <button
-                onClick={() => setFeeStatusFilter(feeStatusFilter === 'NOT_PAID' ? 'ALL' : 'NOT_PAID')}
-                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                  feeStatusFilter === 'NOT_PAID' ? 'bg-red-500 border-red-500' : 'bg-white/80 border-emerald-100 hover:border-red-300 hover:bg-red-50'
-                }`}
-              >
-                <span className={`font-semibold ${feeStatusFilter === 'NOT_PAID' ? 'text-white' : 'text-gray-600'}`}>Not Paid</span>
-                <span className={`font-bold tabular-nums ${feeStatusFilter === 'NOT_PAID' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.unpaidCount} /></span>
-              </button>
-              <button
-                onClick={() => setFeeStatusFilter(feeStatusFilter === 'FEE_DUES' ? 'ALL' : 'FEE_DUES')}
-                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                  feeStatusFilter === 'FEE_DUES' ? 'bg-amber-500 border-amber-500' : 'bg-white/80 border-emerald-100 hover:border-amber-300 hover:bg-amber-50'
-                }`}
-              >
-                <span className={`font-semibold ${feeStatusFilter === 'FEE_DUES' ? 'text-white' : 'text-gray-600'}`}>Fee Dues</span>
-                <span className={`font-bold tabular-nums ${feeStatusFilter === 'FEE_DUES' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.duesCount} /></span>
-              </button>
-              <button
-                onClick={() => setFeeStatusFilter(feeStatusFilter === 'NO_FEE_DUES' ? 'ALL' : 'NO_FEE_DUES')}
-                className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                  feeStatusFilter === 'NO_FEE_DUES' ? 'bg-emerald-500 border-emerald-500' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                }`}
-              >
-                <span className={`font-semibold ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-white' : 'text-gray-600'}`}>No Dues</span>
-                <span className={`font-bold tabular-nums ${feeStatusFilter === 'NO_FEE_DUES' ? 'text-white' : 'text-gray-800'}`}><AnimNum value={stats.noDuesCount} /></span>
-              </button>
+              {feeStatusChips.map(({ key, label, count }) => {
+                const isSelected = feeStatusFilter === key;
+                const color = FEE_STATUS_COLOR[key];
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setFeeStatusFilter(isSelected ? 'ALL' : key)}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97]"
+                    style={chipStyle(color, isSelected)}
+                  >
+                    {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />}
+                    <span>{label}</span>
+                    <AnimNum value={count} />
+                  </button>
+                );
+              })}
 
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+              {DOT_SEP}
 
               {/* Study-year chips */}
               {YEARS.map((yr) => {
                 const count = stats.yearCount[yr] ?? 0;
                 const isSelected = yearFilter === yr;
                 const isDimmed = (!!yearFilter && !isSelected) || count === 0;
-                const label = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
+                const label = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
                 return (
                   <button
                     key={yr}
                     onClick={() => setYearFilter(isSelected ? '' : yr)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      isSelected ? 'bg-emerald-500 border-emerald-500' : isDimmed ? 'bg-white/50 border-gray-100' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                      isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
                     }`}
+                    style={chipStyle(YEAR_COLOR[yr], isSelected)}
                   >
-                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>{label}</span>
-                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}><AnimNum value={count} /></span>
+                    {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: YEAR_COLOR[yr] }} />}
+                    <span>{label}</span>
+                    <AnimNum value={count} />
                   </button>
                 );
               })}
 
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
+              {DOT_SEP}
 
               {/* Course chips */}
               {COURSES.map((c) => {
@@ -437,46 +646,51 @@ export function CollectFee() {
                   <button
                     key={c}
                     onClick={() => setCourseFilter(isSelected ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      isSelected ? 'bg-emerald-500 border-emerald-500' : isDimmed ? 'bg-white/50 border-gray-100' : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                      isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
                     }`}
+                    style={chipStyle(DEPT_DOT[c], isSelected)}
                   >
-                    <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}><AnimNum value={count} /></span>
+                    {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />}
+                    <span>{c}</span>
+                    <AnimNum value={count} />
                   </button>
                 );
               })}
-
+            </div>
+            <button type="button" onClick={() => scrollChips(1)} disabled={!chipOverflow.right} className={CHIP_ARROW} aria-label="Scroll chips right">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
             </div>
           </>
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}>
-        <div className="flex items-center gap-2 px-3 py-2">
+      {/* Toolbar card — search + filters */}
+      <div className="flex-shrink-0 rounded-2xl border border-[#CDE6E6] bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(18,20,26,0.05)]">
+        <div className="flex items-center gap-2 px-2.5 py-2">
 
-          {/* Search — rounded-full with icon + amber clear */}
-          <div className="relative shrink-0 w-52">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          {/* Search */}
+          <div className="relative shrink-0 w-60">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#0B6567] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
               type="text"
-              placeholder="Search name / mobile…"
+              placeholder="Search name / reg / mobile…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-[#0F8B8D]/45 bg-[#F4FAFA] py-2 text-[14px] font-medium text-[#0B6567] placeholder:text-[#0B6567]/60 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#0F8B8D] focus:ring-2 focus:ring-[#0F8B8D]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                 </svg>
               </button>
             )}
@@ -495,12 +709,14 @@ export function CollectFee() {
               <div className="overflow-hidden">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
                   <FilterDropdown<Course | ''>
+                    color="teal"
                     value={courseFilter}
                     onChange={(v) => setCourseFilter(v as Course | '')}
                     placeholder="Course"
                     options={COURSES.map((c) => ({ value: c, label: c }))}
                   />
                   <FilterDropdown<Year | ''>
+                    color="teal"
                     value={yearFilter}
                     onChange={(v) => setYearFilter(v as Year | '')}
                     placeholder="Study Yr"
@@ -511,6 +727,7 @@ export function CollectFee() {
                     ]}
                   />
                   <FilterDropdown<Gender | ''>
+                    color="teal"
                     value={genderFilter}
                     onChange={(v) => setGenderFilter(v as Gender | '')}
                     placeholder="Gender"
@@ -520,6 +737,7 @@ export function CollectFee() {
                     ]}
                   />
                   <FilterDropdown<AdmType | ''>
+                    color="teal"
                     value={admTypeFilter}
                     onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
                     placeholder="Adm Type"
@@ -531,6 +749,7 @@ export function CollectFee() {
                     ]}
                   />
                   <FilterDropdown<AdmCat | ''>
+                    color="teal"
                     value={admCatFilter}
                     onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
                     placeholder="Adm Cat"
@@ -541,6 +760,7 @@ export function CollectFee() {
                     ]}
                   />
                   <FilterDropdown<'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES'>
+                    color="teal"
                     value={feeStatusFilter === 'ALL' ? '' : feeStatusFilter}
                     onChange={(v) => setFeeStatusFilter((v || 'ALL') as 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES')}
                     placeholder="Fee Status"
@@ -559,11 +779,12 @@ export function CollectFee() {
           {/* Clear — only when filters active */}
           {hasActiveFilters && (
             <>
-              <span className="w-px h-5 bg-emerald-200 shrink-0" />
+              <span className="w-px h-5 bg-[#CDE6E6] shrink-0" />
               <button
                 onClick={clearFilters}
-                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap"
               >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Clear
               </button>
             </>
@@ -573,10 +794,10 @@ export function CollectFee() {
           <button
             type="button"
             onClick={() => setShowFilters((v) => { const next = !v; localStorage.setItem('smp_collectfee_filters_visible', String(next)); return next; })}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+            className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
-                ? 'bg-emerald-100 border-emerald-300 text-emerald-600'
-                : 'border-emerald-200 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600'
+                ? 'bg-[#0F8B8D]/10 border-[#0F8B8D]/30 text-[#0F8B8D]'
+                : 'border-[#CDE6E6] text-[#5B6371] hover:bg-[#EFF8F8] hover:text-[#262B35]'
             }`}
             title="Toggle filters"
           >
@@ -590,33 +811,47 @@ export function CollectFee() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table area — the only thing that scrolls */}
       {!academicYear ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Please configure an academic year in Settings first.
-        </div>
+        <EmptyState
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+          title="Please configure an academic year in Settings first."
+        />
       ) : filteredStudents.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-          No students found.
-        </div>
+        <EmptyState
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>}
+          title="No students found."
+        />
       ) : (
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 text-xs">
-            <thead className="bg-gray-50 sticky top-0 z-10">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Year</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Adm Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Adm Status</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Fee Details</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-36">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE6E6] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(18,20,26,0.05)]">
+          {/* Fixed header strip — outside the scroller, so the scrollbar starts below it */}
+          <div
+            ref={headScrollRef}
+            className="flex-shrink-0 overflow-hidden"
+            style={{ scrollbarGutter: 'stable', background: 'linear-gradient(90deg, #E3F2F2 0%, #EDF7F7 55%, #E6F3F1 100%)', boxShadow: 'inset 0 -1px 0 #C7E2E2' }}
+          >
+            <table className="w-full text-xs" style={{ tableLayout: 'fixed', minWidth: TABLE_MIN_WIDTH }}>
+              {TABLE_COLGROUP}
+              <thead>
+                <tr>
+                  {TABLE_COLUMNS.map((c) => <th key={c.label} className={TH}>{c.label}</th>)}
+                </tr>
+              </thead>
+            </table>
+          </div>
+
+          {/* Scrolling body */}
+          <div
+            ref={bodyScrollRef}
+            className="scroll-teal flex-1 min-h-0 overflow-auto"
+            style={{ scrollbarGutter: 'stable' }}
+            onScroll={(e) => {
+              if (headScrollRef.current) headScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+            }}
+          >
+          <table className="w-full text-xs" style={{ tableLayout: 'fixed', minWidth: TABLE_MIN_WIDTH }}>
+            {TABLE_COLGROUP}
+            <tbody className="divide-y divide-[#EAF3F3]">
               {visibleStudents.map((student, idx) => {
                 const hasFeeRecord = paidStudents.has(student.id);
                 const totalPaid = totalPaidByStudent.get(student.id) ?? 0;
@@ -624,73 +859,54 @@ export function CollectFee() {
                 const isFullyPaid = allotted !== null && totalPaid >= allotted;
                 return (
                   <tr
-                    key={`${student.id}-${debouncedSearch}`}
-                    className="hover:bg-gray-50 transition-colors cursor-context-menu"
-                    style={debouncedSearch ? { animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` } : undefined}
+                    key={`${student.id}-${filterSig}`}
+                    className="cursor-context-menu"
+                    style={animateRows ? { animation: `content-enter 0.24s ease-out ${Math.min(idx * 0.025, 0.3)}s both` } : undefined}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, student, hasFeeRecord, isFullyPaid });
                     }}
                   >
-                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      {student.studentNameSSLC}
+                    <td className="px-3 py-2 text-[11px] font-medium text-black tabular-nums whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <RingAvatar name={student.studentNameSSLC} course={student.course} />
+                        <span className="text-[12.5px] font-medium text-[#0B6567] truncate" title={student.studentNameSSLC}>{student.studentNameSSLC}</span>
+                      </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
-                      {student.regNumber || '—'}
-                    </td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.year}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                      {student.admType || '—'}
-                    </td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                      {student.admCat || '—'}
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{student.regNumber || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.course} value={student.course} color={DEPT_DOT[student.course]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.year} value={student.year} color={YEAR_COLOR[student.year]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.admType} value={student.admType} color={ADM_TYPE_COLOR[student.admType]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.admCat} value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <LinePill
+                        minWidth={PILL_W.status}
+                        value={student.admissionStatus}
+                        color={STATUS_COLOR[student.admissionStatus] ?? STATUS_COLOR_DEFAULT}
+                      />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                          student.admissionStatus === 'CONFIRMED'
-                            ? 'bg-green-100 text-green-700'
-                            : student.admissionStatus === 'CANCELLED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-yellow-100 text-yellow-700'
-                        }`}
-                      >
-                        {student.admissionStatus || '—'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setFeeHistoryStudent({ student, noDues: isFullyPaid })}
-                      >
+                      <ActionPill color={TEAL} onClick={() => setFeeHistoryStudent({ student, noDues: isFullyPaid })}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                         Fee Details
-                      </Button>
+                      </ActionPill>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {isFullyPaid ? (
-                        <button
-                          disabled
-                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-green-600 text-white border-green-600 cursor-default opacity-100"
-                        >
-                          ✓ No Dues
-                        </button>
-                      ) : hasFeeRecord ? (
-                        <button
-                          onClick={() => setSelectedStudent(student)}
-                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-amber-500 hover:bg-amber-600 text-white border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 cursor-pointer"
-                        >
-                          Collect Dues
-                        </button>
+                        <ActionPill color={ACTION_COLOR.noDues} width={ACTION_W} disabled>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          No Dues
+                        </ActionPill>
                       ) : (
-                        <button
+                        <ActionPill
+                          width={ACTION_W}
+                          color={hasFeeRecord ? ACTION_COLOR.dues : ACTION_COLOR.collect}
                           onClick={() => setSelectedStudent(student)}
-                          className="inline-flex items-center justify-center w-28 px-3 py-1.5 text-sm font-medium rounded-md border bg-blue-600 hover:bg-blue-700 text-white border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer"
                         >
-                          Collect Fee
-                        </button>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>
+                          {hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
+                        </ActionPill>
                       )}
                     </td>
                   </tr>
@@ -699,9 +915,9 @@ export function CollectFee() {
 
               {hasMore && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-2.5 text-center">
+                  <td colSpan={TABLE_COLUMNS.length} className="px-4 py-3 text-center">
                     <button
-                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                      className={OUTLINE_PILL_BTN}
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                     >
                       Load more ({filteredStudents.length - visibleCount} remaining)
@@ -711,13 +927,12 @@ export function CollectFee() {
               )}
             </tbody>
           </table>
+          </div>
 
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length}
-            {filteredStudents.length < allStudents.length && (
-              <span className="text-gray-400">
-                {' '}(filtered from {allStudents.length} total)
-              </span>
+          <div className="flex-shrink-0 px-4 py-2 border-t border-[#C7E2E2] bg-[#F2F9F9] text-[11px] font-medium text-[#8A93A3]">
+            Showing <span className="font-medium text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredStudents.length)}</span> of <span className="font-medium text-[#262B35] tabular-nums">{filteredStudents.length}</span>
+            {stats && filteredStudents.length < stats.total && (
+              <span> (filtered from {stats.total} total)</span>
             )}
           </div>
         </div>
@@ -741,48 +956,65 @@ export function CollectFee() {
           onClose={() => setFeeHistoryStudent(null)}
         />
       )}
+    </div>
 
-      {/* Context menu */}
-      {ctxMenu && (
+    {/* ── Context menu — rendered outside the animated div to avoid the transform containing-block bug ── */}
+    {ctxMenu && (() => {
+      const actionColor = ctxMenu.isFullyPaid ? ACTION_COLOR.noDues : ctxMenu.hasFeeRecord ? ACTION_COLOR.dues : ACTION_COLOR.collect;
+      return (
+      <>
+        {/* Invisible backdrop — catches all clicks/right-clicks outside the menu */}
+        <div
+          className="fixed inset-0 z-40"
+          onClick={closeCtx}
+          onContextMenu={(e) => { e.preventDefault(); closeCtx(); }}
+        />
+        {/* Menu — initially hidden; useLayoutEffect repositions then reveals */}
         <div
           ref={ctxRef}
-          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[195px]"
-          style={{ top: ctxMenu.y, left: ctxMenu.x, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="font-wp fixed z-50 bg-white border border-[#CDE6E6] rounded-2xl overflow-hidden min-w-[220px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(18,20,26,0.12), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
-            <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${ctxMenu.isFullyPaid ? 'bg-emerald-100 text-emerald-700' : ctxMenu.hasFeeRecord ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-              {ctxMenu.student.studentNameSSLC.charAt(0)}
-            </span>
-            <span className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.student.studentNameSSLC}</span>
+          <div className="px-3 py-2.5 border-b border-[#C7E2E2] bg-[#EEF7F7] flex items-center gap-3">
+            <RingAvatar name={ctxMenu.student.studentNameSSLC} course={ctxMenu.student.course} />
+            <div className="min-w-0">
+              <p className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none">
+                {ctxMenu.student.course} · {ctxMenu.student.year}
+              </p>
+              <p className="mt-1 text-[12px] font-medium text-[#262B35] truncate leading-none">{ctxMenu.student.studentNameSSLC}</p>
+            </div>
           </div>
           {/* Items */}
-          <div className="py-1.5">
+          <div className="p-1">
             <button
               disabled={ctxMenu.isFullyPaid}
-              className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-blue-50/70 enabled:hover:text-blue-800 enabled:cursor-pointer"
+              className={MENU_ITEM}
               onClick={() => { setSelectedStudent(ctxMenu.student); closeCtx(); }}
             >
-              <span className={`w-[18px] h-[18px] rounded-[5px] flex items-center justify-center flex-shrink-0 transition-colors ${ctxMenu.isFullyPaid ? 'bg-emerald-100 text-emerald-500' : ctxMenu.hasFeeRecord ? 'bg-amber-100 text-amber-500 group-hover:bg-amber-200 group-hover:text-amber-700' : 'bg-blue-100 text-blue-500 group-hover:bg-blue-200 group-hover:text-blue-700'}`}>
+              <span className={MENU_ICON} style={{ background: `${actionColor}1A`, color: actionColor }}>
                 {ctxMenu.isFullyPaid
-                  ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>
+                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>
                 }
               </span>
               {ctxMenu.isFullyPaid ? 'No Dues' : ctxMenu.hasFeeRecord ? 'Collect Dues' : 'Collect Fee'}
             </button>
             <button
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
+              className={MENU_ITEM}
               onClick={() => { setFeeHistoryStudent({ student: ctxMenu.student, noDues: ctxMenu.isFullyPaid }); closeCtx(); }}
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span className={`${MENU_ICON} group-hover:bg-[#0F8B8D]/10 group-hover:text-[#0F8B8D]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               </span>
               Fee Details
             </button>
           </div>
         </div>
-      )}
-    </div>
+      </>
+      );
+    })()}
+    </>
   );
 }

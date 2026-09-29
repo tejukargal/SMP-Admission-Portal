@@ -7,10 +7,19 @@ interface Option<T extends string> {
 }
 
 const COLOR_CLASSES = {
-  emerald: { active: 'border-emerald-400 bg-emerald-50 text-emerald-700', idle: 'border-emerald-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50', ring: 'focus:ring-emerald-400' },
-  blue:    { active: 'border-blue-400 bg-blue-50 text-blue-700',         idle: 'border-blue-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/50',         ring: 'focus:ring-blue-400' },
-  violet:  { active: 'border-violet-400 bg-violet-50 text-violet-700',   idle: 'border-violet-200 text-gray-600 hover:border-violet-300 hover:bg-violet-50/50',   ring: 'focus:ring-violet-400' },
-  rose:    { active: 'border-rose-400 bg-rose-50 text-rose-700',         idle: 'border-rose-200 text-gray-600 hover:border-rose-300 hover:bg-rose-50/50',         ring: 'focus:ring-rose-400' },
+  emerald: { active: 'border-emerald-400 bg-emerald-50 text-emerald-700', idle: 'border-emerald-200 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50', ring: 'focus:ring-emerald-400', allRow: 'text-emerald-700 bg-emerald-50/60', selRow: 'text-emerald-700 bg-emerald-50', font: '' },
+  blue:    { active: 'border-blue-400 bg-blue-50 text-blue-700',         idle: 'border-blue-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/50',         ring: 'focus:ring-blue-400', allRow: 'text-emerald-700 bg-emerald-50/60', selRow: 'text-emerald-700 bg-emerald-50', font: '' },
+  violet:  { active: 'border-violet-400 bg-violet-50 text-violet-700',   idle: 'border-violet-200 text-gray-600 hover:border-violet-300 hover:bg-violet-50/50',   ring: 'focus:ring-violet-400', allRow: 'text-emerald-700 bg-emerald-50/60', selRow: 'text-emerald-700 bg-emerald-50', font: '' },
+  rose:    { active: 'border-rose-400 bg-rose-50 text-rose-700',         idle: 'border-rose-200 text-gray-600 hover:border-rose-300 hover:bg-rose-50/50',         ring: 'focus:ring-rose-400', allRow: 'text-emerald-700 bg-emerald-50/60', selRow: 'text-emerald-700 bg-emerald-50', font: '' },
+  // Teal — Collect Fee revamp (student-portal look, Outfit font).
+  teal: {
+    active: 'border-[#0F8B8D] bg-[#EFF8F8] text-[#0B6567]',
+    idle: 'border-[#0F8B8D]/35 text-[#0B6567] hover:border-[#0F8B8D]/60 hover:bg-[#F4FAFA]',
+    ring: 'focus:ring-[#0F8B8D]/40',
+    allRow: 'text-[#0B6567] bg-[#EFF8F8]/60',
+    selRow: 'text-[#0B6567] bg-[#EFF8F8]',
+    font: 'font-wp',
+  },
 } as const;
 
 interface FilterDropdownProps<T extends string> {
@@ -91,7 +100,7 @@ export function FilterDropdown<T extends string>({
       {open && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden py-1"
+          className={`fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden py-1 ${COLOR_CLASSES[color].font}`}
           style={{
             boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
             animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)',
@@ -102,7 +111,7 @@ export function FilterDropdown<T extends string>({
             <>
               <button
                 className={`w-full text-left px-3 py-[5px] text-[12px] flex items-center gap-2 transition-colors duration-100 ${
-                  !value ? 'text-emerald-700 bg-emerald-50/60' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                  !value ? COLOR_CLASSES[color].allRow : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
                 }`}
                 onClick={() => { onChange('' as T | ''); setOpen(false); }}
               >
@@ -124,7 +133,7 @@ export function FilterDropdown<T extends string>({
                 key={opt.value}
                 className={`w-full text-left px-3 py-[5px] text-[12px] flex items-center gap-2 transition-colors duration-100 ${
                   value === opt.value
-                    ? 'text-emerald-700 bg-emerald-50'
+                    ? COLOR_CLASSES[color].selRow
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
                 onClick={() => { onChange(opt.value); setOpen(false); }}
