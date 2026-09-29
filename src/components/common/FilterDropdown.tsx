@@ -20,6 +20,15 @@ const COLOR_CLASSES = {
     selRow: 'text-[#0B6567] bg-[#EFF8F8]',
     font: 'font-wp',
   },
+  // Plum — Results revamp (student-portal look, Outfit font).
+  plum: {
+    active: 'border-[#9333EA] bg-[#F6EEFD] text-[#6B21A8]',
+    idle: 'border-[#9333EA]/30 text-[#6B21A8] hover:border-[#9333EA]/55 hover:bg-[#FAF5FE]',
+    ring: 'focus:ring-[#9333EA]/40',
+    allRow: 'text-[#6B21A8] bg-[#F6EEFD]/60',
+    selRow: 'text-[#6B21A8] bg-[#F6EEFD]',
+    font: 'font-wp',
+  },
   // Indigo — Student Reports revamp (student-portal look, Outfit font).
   indigo: {
     active: 'border-[#4F46E5] bg-[#EEF0FE] text-[#3730A3]',

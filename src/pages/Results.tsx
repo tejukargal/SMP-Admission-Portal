@@ -1,11 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResults } from '../hooks/useResults';
 import { useAuth } from '../contexts/AuthContext';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { ResultColumnPickerDropdown } from '../components/common/ResultColumnPickerDropdown';
 import { ResultDetailModal } from '../components/results/ResultDetailModal';
-import { Button } from '../components/common/Button';
 import { RESULT_COLUMNS, DEFAULT_RESULT_COLUMNS, formatResultColumnValue, type ResultColumnKey } from '../utils/resultColumns';
 import { mergeStudentResults } from '../utils/resultMerge';
 import { PageSpinner } from '../components/common/PageSpinner';
@@ -21,11 +20,109 @@ const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   right: 'text-right',
 };
 
+// ── Design tokens — student-portal look, plum / berry ───────────────────────
+const PLUM = '#9333EA';
+const PLUM_INK = '#6B21A8';
+const FALLBACK_COLOR = '#8A93A3';
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+/** Outcome colour for an overall result (used by chips, pills and the detail modal). */
+function resultOutcomeColor(result: string): string {
+  if (result === 'Distinction') return '#0FA968';
+  if (result === 'First Class') return '#0284C7';
+  if (result === 'Second Class') return '#D97706';
+  if (result === 'FAILS' || result === 'FAIL') return '#E11D48';
+  if (result === 'AB') return '#D97706';
+  return FALLBACK_COLOR;
+}
+// Outcome chips in the header (label shown → the Result filter value it sets).
+const OUTCOME_CHIPS: { value: string; label: string }[] = [
+  { value: 'Distinction', label: 'Distinction' },
+  { value: 'First Class', label: 'First Class' },
+  { value: 'Second Class', label: 'Second Class' },
+  { value: 'FAILS', label: 'Fails' },
+];
+// Columns rendered as black tabular figures.
+const NUMERIC_KEYS = new Set<string>(['regNumber', 'cgpa', 'percentageConversion', 'creditsEarnedCumulative', 'collegeCode']);
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+// Outline chip: white fill + tinted hairline and ink; solid colour when selected.
+function chipStyle(color: string, selected: boolean): React.CSSProperties {
+  return selected
+    ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
+}
+
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#E9D8F7] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] hover:border-[#9333EA]/40 hover:bg-[#9333EA]/[0.06] hover:text-[#6B21A8] focus:outline-none focus:ring-2 focus:ring-[#9333EA]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const CHIP_ARROW =
+  'shrink-0 w-6 h-6 rounded-full border border-[#9333EA]/40 bg-white text-[#6B21A8] flex items-center justify-center shadow-[0_1px_4px_rgba(18,20,26,0.06)] enabled:hover:bg-[#F6EEFD] enabled:cursor-pointer disabled:opacity-35 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9333EA]/30 transition-[opacity,background-color]';
+// Header band colours are mirrored in index.css (.scroll-results) for the scrollbar gutter.
+const TH =
+  'h-9 px-3 py-0 align-middle text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[#F2E8FC] border-b border-[#DDC7F3] text-[#6B21A8]';
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course }: { name: string; course: string }) {
+  const h = DEPT_HUE[course] ?? 275;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="w-[22px] h-[22px] rounded-full flex items-center justify-center shrink-0 text-[9.5px] font-medium tracking-[0.3px]"
+      style={{
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text. */
+function LinePill({ value, color, minWidth }: { value?: string | null; color?: string; minWidth?: number }) {
+  if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none whitespace-nowrap"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+    >
+      {value}
+    </span>
+  );
+}
+
+function EmptyState({ title, tone = 'muted' }: { title: string; tone?: 'muted' | 'error' }) {
+  const isError = tone === 'error';
+  const c = isError ? '#E11D48' : PLUM;
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center px-6" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div className="w-14 h-14 rounded-2xl border flex items-center justify-center" style={{ borderColor: `${c}33`, background: `${c}0D`, color: c }}>
+        {isError ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 13.5L17 22l-5-3-5 3 1.5-8.5"/></svg>
+        )}
+      </div>
+      <p className="text-[14px] font-medium max-w-md" style={{ color: isError ? inkOf(c) : '#5B6371' }}>{title}</p>
+    </div>
+  );
+}
+
 function AnimNum({ value }: { value: number }) {
   return (
     <span
       key={value}
-      className="font-bold tabular-nums"
+      className="font-medium tabular-nums"
       style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}
     >
       {value}
@@ -95,7 +192,10 @@ export function Results() {
   const stats = useMemo(() => {
     const courseCount: Record<string, number> = {};
     for (const r of results) courseCount[r.course] = (courseCount[r.course] ?? 0) + 1;
-    return { courseCount, total: results.length };
+    // Outcome counts for the header result chips.
+    const resultCount: Record<string, number> = {};
+    for (const r of results) resultCount[r.overallResult] = (resultCount[r.overallResult] ?? 0) + 1;
+    return { courseCount, resultCount, total: results.length };
   }, [results]);
 
   const hasActiveFilters = !!searchTerm || !!courseFilter || !!yearFilter || !!examSessionFilter || !!resultFilter;
@@ -111,77 +211,155 @@ export function Results() {
 
   const columns = RESULT_COLUMNS.filter((c) => selectedColumns.has(c.key));
 
+  // Header chip strip: single line between two always-visible arrow buttons;
+  // each arrow dims when there is nothing more to see on its side.
+  const chipScrollRef = useRef<HTMLDivElement>(null);
+  const [chipOverflow, setChipOverflow] = useState({ left: false, right: false });
+  useLayoutEffect(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setChipOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [loading, stats.total, hasActiveFilters]);
+
+  // Animated by hand rather than scrollBy({ behavior: 'smooth' }), which some
+  // browser setups ignore.
+  const chipAnimRef = useRef(0);
+  function scrollChips(dir: -1 | 1) {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    cancelAnimationFrame(chipAnimRef.current);
+    const from = el.scrollLeft;
+    const to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, from + dir * Math.max(160, el.clientWidth * 0.6)));
+    const start = performance.now();
+    const DURATION = 260;
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - start) / DURATION));
+      el.scrollLeft = from + (to - from) * (1 - Math.pow(1 - t, 3));
+      if (t < 1) chipAnimRef.current = requestAnimationFrame(step);
+    };
+    chipAnimRef.current = requestAnimationFrame(step);
+  }
+
   if (loading) return <PageSpinner />;
 
   return (
     <>
-      <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+      <div
+        className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+        style={{ background: 'linear-gradient(160deg, #FAF6FE 0%, #FDFCFF 45%, #F6F0FD 100%)', animation: 'page-enter 0.22s ease-out' }}
+      >
 
         {/* Page header + stats chips */}
-        <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
+        <div className="flex-shrink-0 flex items-center gap-4 min-w-0">
           <div className="shrink-0">
-            <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Results</h2>
+            <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+              SMP Admissions · Results
+            </p>
+            <h2 className="mt-1.5 text-[22px] font-bold text-[#6B21A8] leading-none tracking-[-0.3px]">Results</h2>
           </div>
 
           {stats.total > 0 && (
             <>
-              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-              <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-                <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                  <span className="text-emerald-500 font-semibold">Total</span>
-                  <AnimNum value={stats.total} />
+              <span className="w-px h-8 bg-[#E9D8F7] shrink-0 self-center" />
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                {/* Total tile */}
+                <div className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border border-[#9333EA]/20 bg-[#F4ECFD] px-3.5 py-1 min-w-[58px]">
+                  <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#8E5BC0] leading-tight">Total</span>
+                  <span className="text-[16px] font-medium text-[#6B21A8] leading-tight">
+                    <AnimNum value={stats.total} />
+                  </span>
                 </div>
-                <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                {COURSES.map((c) => {
-                  const count = stats.courseCount[c] ?? 0;
-                  const isSelected = courseFilter === c;
-                  const isDimmed = (!!courseFilter && !isSelected) || count === 0;
-                  return (
-                    <button
-                      key={c}
-                      onClick={() => setCourseFilter(isSelected ? '' : c)}
-                      className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : isDimmed
-                          ? 'bg-white/50 border-gray-100'
-                          : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                      }`}
-                    >
-                      <span className={`font-semibold ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {c}
-                      </span>
-                      <span className={`font-bold tabular-nums ${isSelected ? 'text-white' : isDimmed ? 'text-gray-300' : 'text-gray-800'}`}>
-                        <AnimNum value={count} />
-                      </span>
-                    </button>
-                  );
-                })}
+
                 {hasActiveFilters && (
-                  <>
-                    <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                    <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                      <span className="text-emerald-600 font-semibold">Filtered</span>
-                      <AnimNum value={filteredResults.length} />
-                    </div>
-                  </>
+                  <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#9333EA]/40 bg-white text-[#6B21A8] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
+                    <span>Filtered</span>
+                    <AnimNum value={filteredResults.length} />
+                  </div>
                 )}
+
+                <button type="button" onClick={() => scrollChips(-1)} disabled={!chipOverflow.left} className={`${CHIP_ARROW} ml-1`} aria-label="Scroll chips left">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <div ref={chipScrollRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-1">
+                  {/* Outcome chips — set the same Result filter as the dropdown */}
+                  {OUTCOME_CHIPS.map(({ value, label }) => {
+                    const count = stats.resultCount[value] ?? 0;
+                    const isSelected = resultFilter === value;
+                    const isDimmed = (!!resultFilter && !isSelected) || count === 0;
+                    const color = resultOutcomeColor(value);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setResultFilter(isSelected ? '' : value)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                          isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
+                        }`}
+                        style={chipStyle(color, isSelected)}
+                      >
+                        {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />}
+                        <span>{label}</span>
+                        <AnimNum value={count} />
+                      </button>
+                    );
+                  })}
+
+                  <span className="w-1 h-1 rounded-full bg-[#DCC4F2] shrink-0 mx-0.5" />
+
+                  {/* Course chips */}
+                  {COURSES.map((c) => {
+                    const count = stats.courseCount[c] ?? 0;
+                    const isSelected = courseFilter === c;
+                    const isDimmed = (!!courseFilter && !isSelected) || count === 0;
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setCourseFilter(isSelected ? '' : c)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                          isDimmed && !isSelected ? 'opacity-[0.5] hover:opacity-100' : ''
+                        }`}
+                        style={chipStyle(DEPT_DOT[c], isSelected)}
+                      >
+                        {!isSelected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />}
+                        <span>{c}</span>
+                        <AnimNum value={count} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={() => scrollChips(1)} disabled={!chipOverflow.right} className={CHIP_ARROW} aria-label="Scroll chips right">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
               </div>
             </>
           )}
 
           {isAdmin && (
-            <Button onClick={() => void navigate('/settings?tab=import-results')} className="ml-auto shrink-0">
+            <button
+              onClick={() => void navigate('/settings?tab=import-results')}
+              className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium text-white hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9333EA]/40 focus-visible:ring-offset-2 cursor-pointer transition-[filter]"
+              style={{ background: `linear-gradient(135deg, ${PLUM}, ${PLUM_INK})`, boxShadow: `0 3px 10px ${PLUM}40` }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Import Results
-            </Button>
+            </button>
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden" style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}>
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="relative shrink-0 w-52">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        {/* Toolbar card — search + filters */}
+        <div className="flex-shrink-0 rounded-2xl border border-[#E9D8F7] bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(59,7,100,0.05)]">
+          <div className="flex items-center gap-2 px-2.5 py-2">
+            <div className="relative shrink-0 w-56">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#6B21A8] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
               <input
@@ -189,42 +367,46 @@ export function Results() {
                 placeholder="Search reg no / name…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full rounded-full border border-emerald-300 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+                className={`w-full rounded-full border border-[#9333EA]/40 bg-[#FAF5FE] py-2 text-[14px] font-medium text-[#6B21A8] placeholder:text-[#6B21A8]/55 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#9333EA] focus:ring-2 focus:ring-[#9333EA]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
                   aria-label="Clear search"
                 >
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                   </svg>
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5 min-w-0">
               <FilterDropdown<Course | ''>
+                color="plum"
                 value={courseFilter}
                 onChange={(v) => setCourseFilter(v as Course | '')}
                 placeholder="Course"
                 options={COURSES.map((c) => ({ value: c, label: c }))}
               />
               <FilterDropdown<Year | ''>
+                color="plum"
                 value={yearFilter}
                 onChange={(v) => setYearFilter(v as Year | '')}
                 placeholder="Year"
                 options={YEARS.map((y) => ({ value: y, label: y }))}
               />
               <FilterDropdown<string>
+                color="plum"
                 value={examSessionFilter}
                 onChange={setExamSessionFilter}
                 placeholder="Exam Session"
                 options={examSessionOptions.map((s) => ({ value: s, label: s }))}
               />
               <FilterDropdown<string>
+                color="plum"
                 value={resultFilter}
                 onChange={setResultFilter}
                 placeholder="Result"
@@ -234,11 +416,12 @@ export function Results() {
 
             {hasActiveFilters && (
               <>
-                <span className="w-px h-5 bg-emerald-200 shrink-0" />
+                <span className="w-px h-5 bg-[#E9D8F7] shrink-0" />
                 <button
                   onClick={clearFilters}
-                  className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap"
                 >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   Clear
                 </button>
               </>
@@ -246,6 +429,7 @@ export function Results() {
 
             <div className="ml-auto shrink-0">
               <ResultColumnPickerDropdown
+                color="plum"
                 columns={RESULT_COLUMNS}
                 selected={selectedColumns}
                 onChange={setSelectedColumns}
@@ -256,60 +440,65 @@ export function Results() {
 
         {/* Table area */}
         {error ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+          <EmptyState tone="error" title={error} />
         ) : results.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            No results imported yet. Admins can import a Result Ledger PDF from Settings → Import Results.
-          </div>
+          <EmptyState title="No results imported yet. Admins can import a Result Ledger PDF from Settings → Import Results." />
         ) : filteredResults.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No results found.</div>
+          <EmptyState title="No results found." />
         ) : (
-          <div className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col" style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}>
-            <table className="min-w-full divide-y divide-emerald-50 text-xs">
-              <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#E9D8F7] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(59,7,100,0.06)]">
+            <div className="scroll-results flex-1 min-h-0 overflow-auto">
+            <table className="w-full text-xs border-separate border-spacing-0">
+              <thead className="sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
+                  <th className={`${TH} text-left w-8`}>#</th>
                   {columns.map((col) => (
-                    <th
-                      key={col.key}
-                      className={`px-3 py-2 font-semibold text-gray-500 whitespace-nowrap ${ALIGN_CLASS[col.align]}`}
-                    >
+                    <th key={col.key} className={`${TH} ${ALIGN_CLASS[col.align]}`}>
                       {col.label}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Details</th>
+                  <th className={`${TH} text-left w-20`}>Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-emerald-50/60">
+              <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#F1E8FA]">
                 {visibleResults.map((r, idx) => (
-                  <tr key={r.id} className="hover:bg-emerald-100/70 transition-colors">
-                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={`px-3 py-2 whitespace-nowrap ${ALIGN_CLASS[col.align]} ${
-                          col.key === 'overallResult'
-                            ? r.overallResult === 'FAILS'
-                              ? 'text-red-600 font-semibold'
-                              : r.overallResult === 'Distinction'
-                              ? 'text-emerald-700 font-semibold'
-                              : 'text-gray-700'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        {formatResultColumnValue(col, r)}
-                        {col.key === 'studentName' && r.semesterCount > 1 && (
-                          <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-50 text-sky-600 border border-sky-200 px-1.5 py-0.5 text-[10px] font-semibold align-middle">
-                            {r.semesterCount} sems
-                          </span>
-                        )}
-                      </td>
-                    ))}
+                  <tr key={r.id} className="hover:bg-[#FAF5FE] transition-colors">
+                    <td className="px-3 py-2 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
+                    {columns.map((col) => {
+                      const value = formatResultColumnValue(col, r);
+                      let content: React.ReactNode;
+                      let cls = 'text-[11.5px] font-medium text-[#4B5068]';
+                      if (col.key === 'studentName') {
+                        content = (
+                          <div className={`flex items-center gap-2.5 min-w-0 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : ''}`}>
+                            <RingAvatar name={r.studentName} course={r.course} />
+                            <span className="text-[12.5px] font-medium text-[#6B21A8]">{value}</span>
+                            {r.semesterCount > 1 && <LinePill value={`${r.semesterCount} sems`} color={PLUM} />}
+                          </div>
+                        );
+                        cls = '';
+                      } else if (col.key === 'course') {
+                        content = <LinePill value={value} color={DEPT_DOT[r.course]} minWidth={34} />;
+                      } else if (col.key === 'year') {
+                        content = <LinePill value={value} color={YEAR_COLOR[r.year]} minWidth={66} />;
+                      } else if (col.key === 'overallResult') {
+                        content = <LinePill value={value} color={resultOutcomeColor(r.overallResult)} minWidth={80} />;
+                      } else {
+                        content = value;
+                        if (NUMERIC_KEYS.has(col.key)) cls = 'text-[11.5px] font-medium text-black tabular-nums';
+                      }
+                      return (
+                        <td key={col.key} className={`px-3 py-2 whitespace-nowrap ${ALIGN_CLASS[col.align]} ${cls}`}>
+                          {content}
+                        </td>
+                      );
+                    })}
                     <td className="px-3 py-2 whitespace-nowrap">
                       <button
                         onClick={() => setDetailResult(r)}
-                        className="text-[11px] text-blue-500 hover:text-blue-700 font-medium underline underline-offset-2 cursor-pointer"
+                        className="inline-flex items-center justify-center gap-1 rounded-[7px] border border-[#9333EA]/45 bg-white px-2.5 py-[6px] text-[11px] font-medium leading-none text-[#6B21A8] transition-[background-color,box-shadow] duration-150 hover:bg-[#9333EA]/[0.08] hover:shadow-[0_2px_8px_rgba(18,20,26,0.06)] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9333EA]/30"
                       >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                         View
                       </button>
                     </td>
@@ -318,9 +507,9 @@ export function Results() {
 
                 {hasMore && (
                   <tr>
-                    <td colSpan={columns.length + 2} className="px-4 py-2.5 text-center">
+                    <td colSpan={columns.length + 2} className="px-4 py-3 text-center">
                       <button
-                        className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
+                        className={OUTLINE_PILL_BTN}
                         onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                       >
                         Load more ({filteredResults.length - visibleCount} remaining)
@@ -330,11 +519,12 @@ export function Results() {
                 )}
               </tbody>
             </table>
+            </div>
 
-            <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-              Showing {Math.min(visibleCount, filteredResults.length)} of {filteredResults.length}
+            <div className="flex-shrink-0 px-4 py-2 border-t border-[#E9D8F7] bg-[#FAF6FE] text-[11px] font-medium text-[#8A93A3]">
+              Showing <span className="text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredResults.length)}</span> of <span className="text-[#262B35] tabular-nums">{filteredResults.length}</span>
               {filteredResults.length < stats.total && (
-                <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+                <span> (filtered from {stats.total} total)</span>
               )}
             </div>
           </div>

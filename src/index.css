@@ -470,6 +470,39 @@
   background: transparent;
 }
 
+/* ── Results table — thin plum scrollbar starting below the 36px sticky header;
+   the gutter beside the header is painted in the header band colours
+   (#F2E8FC / #DDC7F3, see Results.tsx). Static values on purpose. ────────── */
+.scroll-results::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-results::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-results::-webkit-scrollbar-track:vertical {
+  margin-top: 36px;
+}
+.scroll-results::-webkit-scrollbar:vertical {
+  background: linear-gradient(to bottom, #F2E8FC 0 35px, #DDC7F3 35px 36px, transparent 36px);
+}
+.scroll-results::-webkit-scrollbar-thumb {
+  background: #DCC4F2;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-results::-webkit-scrollbar-thumb:horizontal {
+  border-width: 3px;
+}
+.scroll-results::-webkit-scrollbar-thumb:hover {
+  background: #B98BE6;
+  background-clip: padding-box;
+}
+.scroll-results::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
 .scroll-indigo {
   scrollbar-width: thin;
