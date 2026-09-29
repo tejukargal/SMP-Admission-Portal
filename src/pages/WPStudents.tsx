@@ -46,8 +46,6 @@ function certCounts(s: Student): { tc: number; pc: number } {
 
 // ── Design tokens — ported from the SMP Student Portal app (light theme) ────
 // Department dot colours match the portal's departments.ts.
-// Inter (already loaded in index.css) — a crisp, professional UI face.
-const PAGE_FONT = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
 const DEPT_DOT: Record<string, string> = {
   CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
 };
@@ -471,8 +469,8 @@ export function WPStudents() {
   return (
     <>
     <div
-      className="-m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
-      style={{ fontFamily: PAGE_FONT, background: 'linear-gradient(160deg, #F9FCF5 0%, #FCFDFA 45%, #F6FAF0 100%)', animation: 'page-enter 0.22s ease-out' }}
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F9FCF5 0%, #FCFDFA 45%, #F6FAF0 100%)', animation: 'page-enter 0.22s ease-out' }}
     >
 
       {/* Page header + stat chips */}
@@ -482,7 +480,7 @@ export function WPStudents() {
             SMP Admissions · Working Professional
           </p>
           <div className="mt-1.5 flex items-center gap-2">
-            <h2 className="text-[22px] font-semibold text-[#262B35] leading-none tracking-[-0.3px]">WP Students</h2>
+            <h2 className="text-[22px] font-bold text-[#262B35] leading-none tracking-[-0.3px]">WP Students</h2>
             {academicYear && (
               <span className="rounded-full border border-[#DCEBCD] bg-white text-[#5B6371] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
                 {academicYear}
@@ -1000,8 +998,8 @@ export function WPStudents() {
         {/* Menu — initially hidden; useLayoutEffect repositions then reveals */}
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-white border border-[#DCEBCD] rounded-2xl overflow-hidden min-w-[232px]"
-          style={{ fontFamily: PAGE_FONT, left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(18,20,26,0.12), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="font-wp fixed z-50 bg-white border border-[#DCEBCD] rounded-2xl overflow-hidden min-w-[232px]"
+          style={{ left: contextMenu.x, top: contextMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(18,20,26,0.12), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}

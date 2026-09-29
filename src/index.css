@@ -10,6 +10,11 @@
    app keeps its Segoe UI / Inter stack untouched. */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
+/* Revamped pages — Outfit, the SMP Student Portal app's typeface (see its
+   theme/tokens.ts). Scoped to .font-wp so the rest of the admin app is
+   untouched until the revamp rolls out further. */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 :root {
   font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -19,6 +24,18 @@
 
 .font-portal {
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.font-wp {
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: normal;
+  letter-spacing: 0.1px;
+}
+/* Outfit has no tabular figures — keep counts, reg nos and mobiles on Inter
+   so digit columns stay aligned. */
+.font-wp .tabular-nums {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'tnum';
 }
 
 /* Hides the CircularModal's scrollbar only when opened from the student

@@ -24,6 +24,7 @@ const TONES = {
     allRow: 'text-emerald-700 bg-emerald-50/60',
     checkedRow: 'text-emerald-700 bg-emerald-50',
     checkbox: 'border-emerald-500 bg-emerald-500',
+    font: '',
   },
   indigo: {
     ring: 'focus:ring-indigo-400',
@@ -32,6 +33,7 @@ const TONES = {
     allRow: 'text-indigo-700 bg-indigo-50/60',
     checkedRow: 'text-indigo-700 bg-indigo-50',
     checkbox: 'border-indigo-500 bg-indigo-500',
+    font: '',
   },
   // Pea / pistachio green — WP Students revamp (student-portal look).
   pea: {
@@ -41,6 +43,7 @@ const TONES = {
     allRow: 'text-[#3F6E1F] bg-[#F1F7EA]/60',
     checkedRow: 'text-[#3F6E1F] bg-[#F1F7EA]',
     checkbox: 'border-[#5B9A2F] bg-[#5B9A2F]',
+    font: 'font-wp',
   },
 } as const;
 
@@ -120,7 +123,7 @@ export function MultiSelectFilterDropdown<T extends string>({
       {open && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden py-1"
+          className={`fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden py-1 ${t.font}`}
           style={{
             boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
             animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)',
