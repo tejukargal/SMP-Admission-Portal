@@ -20,6 +20,15 @@ const COLOR_CLASSES = {
     selRow: 'text-[#0B6567] bg-[#EFF8F8]',
     font: 'font-wp',
   },
+  // Indigo — Student Reports revamp (student-portal look, Outfit font).
+  indigo: {
+    active: 'border-[#4F46E5] bg-[#EEF0FE] text-[#3730A3]',
+    idle: 'border-[#4F46E5]/30 text-[#3730A3] hover:border-[#4F46E5]/55 hover:bg-[#F5F6FE]',
+    ring: 'focus:ring-[#4F46E5]/40',
+    allRow: 'text-[#3730A3] bg-[#EEF0FE]/60',
+    selRow: 'text-[#3730A3] bg-[#EEF0FE]',
+    font: 'font-wp',
+  },
 } as const;
 
 interface FilterDropdownProps<T extends string> {

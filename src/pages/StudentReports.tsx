@@ -55,7 +55,7 @@ const REPORT_OPTIONS: { value: ReportType; label: string }[] = [
   { value: 'custom',             label: 'Custom Report'           },
 ];
 
-const fs = 'rounded-full border border-emerald-100 px-3 py-1.5 text-xs bg-white/80 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 cursor-pointer text-gray-700';
+const fs = 'rounded-full border border-[#4F46E5]/30 bg-white px-3 py-1 text-[12px] font-medium text-[#3730A3] hover:border-[#4F46E5]/55 focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/25 focus:border-[#4F46E5] cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed';
 
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   left: 'text-left', center: 'text-center', right: 'text-right',
@@ -271,6 +271,262 @@ function exportAllottedCategoryPdf(students: Student[], filters: {
   if (filters.courseFilter) parts.push(filters.courseFilter);
   if (filters.yearFilter)   parts.push(filters.yearFilter.replace(/\s+/g, ''));
   doc.save(parts.join('_') + '.pdf');
+}
+
+// ── Design tokens — student-portal look, indigo / periwinkle ──────────────────
+const INDIGO = '#4F46E5';
+const CORAL = '#E11D48';
+const MINT = '#0FA968';
+const AMBER = '#D97706';
+const FALLBACK_COLOR = '#8A93A3';
+
+// Each report keeps a small identifying tint (table header band + count chips).
+const REPORT_TINT: Record<ReportType, string> = {
+  'snq-allotment':     '#D97706',
+  'whatsapp-numbers':  '#16A34A',
+  'tc-issued':         '#2563EB',
+  'pc-issued':         '#7C3AED',
+  'allotted-category': '#C026D3',
+  'student-list':      INDIGO,
+  'not-admitted':      CORAL,
+  'transfer-students': '#0284C7',
+  'refund-students':   '#DB2777',
+  'custom':            '#6366F1',
+};
+
+// Header band + divider colours per report (tint mixed 11% / 30% with white).
+// Mirrored exactly in index.css (.scroll-report--<report>) for the scrollbar gutter.
+const REPORT_BAND: Record<ReportType, { band: string; line: string }> = {
+  'snq-allotment':      { band: '#FBF0E4', line: '#F4D6B4' },
+  'whatsapp-numbers':   { band: '#E5F5EB', line: '#B9E3C9' },
+  'tc-issued':          { band: '#E7EEFD', line: '#BED0F9' },
+  'pc-issued':          { band: '#F1E9FD', line: '#D8C4FA' },
+  'allotted-category':  { band: '#F8E7FA', line: '#ECBEF2' },
+  'student-list':       { band: '#ECEBFC', line: '#CAC8F7' },
+  'not-admitted':       { band: '#FCE6EB', line: '#F6BBC8' },
+  'transfer-students':  { band: '#E3F1F9', line: '#B3DAEE' },
+  'refund-students':    { band: '#FBE7F0', line: '#F4BED6' },
+  'custom':             { band: '#EEEEFD', line: '#D0D1FB' },
+};
+
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+const ADM_TYPE_COLOR: Record<string, string> = {
+  REGULAR: '#1D6FD8', REPEATER: '#D97706', LATERAL: '#7C3AED', EXTERNAL: '#0F8B8D', SNQ: '#10B981',
+};
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
+const CATEGORY_COLOR: Record<string, string> = {
+  GM: '#64748B', SC: '#0EA5E9', ST: '#14B8A6', C1: '#F59E0B', '2A': '#8B5CF6', '2B': '#EC4899', '3A': '#6366F1', '3B': '#10B981',
+};
+const GENDER_COLOR: Record<string, string> = { BOY: '#0EA5E9', GIRL: '#EC4899' };
+const STATUS_COLOR: Record<string, string> = { CONFIRMED: MINT, CANCELLED: CORAL };
+const REFUND_CAT_COLOR: Record<string, string> = { SNQ: '#2563EB', GENERAL: MINT, SEAT_CANCELLATION: AMBER };
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+// Outline chip: white fill + tinted hairline and ink; solid colour when selected.
+function chipStyle(color: string, selected: boolean): React.CSSProperties {
+  return selected
+    ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
+}
+
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#DCDDFB] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] hover:border-[#4F46E5]/40 hover:bg-[#4F46E5]/[0.06] hover:text-[#3730A3] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const CHIP_ARROW =
+  'shrink-0 w-6 h-6 rounded-full border border-[#4F46E5]/40 bg-white text-[#3730A3] flex items-center justify-center shadow-[0_1px_4px_rgba(18,20,26,0.06)] enabled:hover:bg-[#F3F4FE] enabled:cursor-pointer disabled:opacity-35 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]/30 transition-[opacity,background-color]';
+const SELECT_PILL =
+  'rounded-full border border-[#4F46E5]/30 bg-white px-3 py-1 text-[12px] font-medium text-[#3730A3] hover:border-[#4F46E5]/55 focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/25 focus:border-[#4F46E5] cursor-pointer transition-colors disabled:opacity-45 disabled:cursor-not-allowed';
+const FIELD_LABEL = 'text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#8A8FA8] whitespace-nowrap select-none';
+const TOOLBAR_SEP = <span className="w-px h-5 bg-[#DCDDFB] shrink-0" />;
+const MENU_ITEM =
+  'group w-full text-left px-2 py-1.5 rounded-[10px] text-[12px] font-medium text-[#5B6371] enabled:hover:bg-[#F5F6FE] enabled:hover:text-[#262B35] enabled:cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed flex items-center gap-2.5 transition-colors duration-100';
+const MENU_ICON =
+  'w-6 h-6 rounded-[8px] bg-[#EEF0FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
+
+// Report table cells. Header cells read the report tint from CSS variables set on
+// the table's scroller (see ReportTable), so every table shares these classes.
+const RTH =
+  'h-9 px-3 py-0 align-middle text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[color:var(--band)] border-b border-[color:var(--band-line)] text-[color:var(--band-ink)]';
+const RTBODY = '[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EEEFFC]';
+const RROW = 'transition-colors hover:bg-[#F7F7FE]';
+const TD = 'px-3 py-2 whitespace-nowrap';
+const TD_IDX = 'px-3 py-2 whitespace-nowrap text-[11px] font-medium text-[#8A8FA8] tabular-nums';
+const TD_TXT = 'px-3 py-2 whitespace-nowrap text-[11.5px] font-medium text-[#4B5068]';
+const TD_NUM = 'px-3 py-2 whitespace-nowrap text-[11.5px] font-medium text-black tabular-nums';
+const DASH = <span className="text-[#C4C8D0]">—</span>;
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course, size = 22 }: { name: string; course: string; size?: number }) {
+  const h = DEPT_HUE[course] ?? 235;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="rounded-full flex items-center justify-center shrink-0 font-medium tracking-[0.3px]"
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.43),
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text. */
+function LinePill({ value, color, minWidth, title }: { value?: string | null; color?: string; minWidth?: number; title?: string }) {
+  if (!value) return DASH;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none whitespace-nowrap"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+      title={title}
+    >
+      {value}
+    </span>
+  );
+}
+
+/** Name cell body: ring avatar + indigo-ink name + optional trailing tags. */
+function NameCell({ name, course, children }: { name: string; course: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <RingAvatar name={name} course={course} />
+      <span className="text-[12.5px] font-medium text-[#3730A3]">{name}</span>
+      {children}
+    </div>
+  );
+}
+
+function EmptyState({ title, tone = 'muted' }: { title: string; tone?: 'muted' | 'error' }) {
+  const isError = tone === 'error';
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div
+        className="w-14 h-14 rounded-2xl border flex items-center justify-center"
+        style={isError
+          ? { borderColor: `${CORAL}40`, background: `${CORAL}0F`, color: CORAL }
+          : { borderColor: '#DCDDFB', background: '#F3F4FE', color: '#8A8FA8' }}
+      >
+        {isError ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        )}
+      </div>
+      <p className="text-[14px] font-medium" style={{ color: isError ? inkOf(CORAL) : '#5B6371' }}>{title}</p>
+    </div>
+  );
+}
+
+function AnimNum({ value }: { value: number }) {
+  return (
+    <span key={value} className="font-medium tabular-nums" style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}>
+      {value}
+    </span>
+  );
+}
+
+/**
+ * Report table card: the header cells read the report's band colours from CSS
+ * variables on the scroller; the scrollbar gutter beside the header uses the
+ * matching static class (.scroll-report--<report> in index.css). The "Showing…"
+ * footer sits below the scroller so it is always visible.
+ */
+function ReportTable({ report, footer, children }: { report: ReportType; footer: React.ReactNode; children: React.ReactNode }) {
+  const tint = REPORT_TINT[report];
+  const { band, line } = REPORT_BAND[report];
+  return (
+    <div
+      className="flex-1 min-h-0 bg-white rounded-2xl border border-[#DCDDFB] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(30,27,75,0.06)]"
+      style={{ animation: 'content-enter 0.26s ease-out' }}
+    >
+      <div
+        className={`scroll-report scroll-report--${report} flex-1 min-h-0 overflow-auto`}
+        style={{ '--band': band, '--band-line': line, '--band-ink': inkOf(tint) } as React.CSSProperties}
+      >
+        <table className="w-full text-xs border-separate border-spacing-0">{children}</table>
+      </div>
+      <div className="flex-shrink-0 px-4 py-2 border-t border-[#DCDDFB] bg-[#F7F7FE] text-[11px] font-medium text-[#8A8FA8] flex items-center justify-between gap-3">
+        {footer}
+      </div>
+    </div>
+  );
+}
+
+/** "Load more" row spanning the table. */
+function LoadMoreRow({ colSpan, remaining, onClick }: { colSpan: number; remaining: number; onClick: () => void }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-3 text-center border-t border-[#EEEFFC]">
+        <button className={OUTLINE_PILL_BTN} onClick={onClick}>
+          Load more ({remaining} remaining)
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+const WP_TAG = <LinePill value="WP" color={AMBER} title="Working Professional (Evening College)" />;
+const DUP_TAG = <LinePill value="DUP" color="#B45309" />;
+
+// ── Clear-history modals (TC / PC) ───────────────────────────────────────────
+const PASSKEY_INPUT =
+  'block w-full rounded-xl border bg-[#F5F6FE] px-3 py-2 text-[13px] font-medium text-[#262B35] placeholder:text-[#A9ACC4] placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#E11D48] focus:ring-2 focus:ring-[#E11D48]/20 transition-colors';
+const MODAL_CANCEL_BTN =
+  'inline-flex items-center justify-center rounded-full border border-[#4F46E5]/40 bg-white px-4 py-1.5 text-[12px] font-medium text-[#3730A3] hover:bg-[#4F46E5]/[0.06] hover:border-[#4F46E5]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const MODAL_DANGER_BTN =
+  'inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[12px] font-medium text-white bg-[#E11D48] enabled:hover:bg-[#BE123C] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E11D48]/40 enabled:cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed';
+
+/** Coral-tinted header for the destructive clear-history modals. */
+function ClearModalHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <div
+      className="relative overflow-hidden px-5 py-3.5 flex items-center gap-2.5 border-b"
+      style={{ background: `linear-gradient(135deg, ${CORAL}1F 0%, ${CORAL}0A 55%, #FFFFFF 100%)`, borderColor: `${CORAL}26` }}
+    >
+      <span
+        className="pointer-events-none absolute -top-16 -right-8 w-36 h-36 rounded-full border-[18px]"
+        style={{ borderColor: `${CORAL}10` }}
+        aria-hidden="true"
+      />
+      <span
+        className="relative inline-flex items-center justify-center w-8 h-8 rounded-[10px] text-white shrink-0"
+        style={{ background: `linear-gradient(135deg, ${CORAL}, #BE123C)`, boxShadow: `0 3px 10px ${CORAL}40` }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </span>
+      <div className="relative flex flex-col">
+        <span className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A8FA8] leading-none">{eyebrow}</span>
+        <h3 className="mt-1 text-[16px] font-bold leading-none tracking-[-0.2px]" style={{ color: inkOf(CORAL) }}>{title}</h3>
+      </div>
+    </div>
+  );
+}
+
+/** Student tile shown in the clear-history modals. */
+function ClearModalStudent({ name, course, meta }: { name: string; course: string; meta: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-[#DCDDFB] bg-[#F7F7FE] px-3 py-2.5">
+      <RingAvatar name={name} course={course} size={32} />
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold text-[#3730A3] truncate">{name}</p>
+        <p className="text-[11px] font-medium text-[#8A8FA8] mt-0.5 truncate">{meta}</p>
+      </div>
+    </div>
+  );
 }
 
 export function StudentReports() {
@@ -536,12 +792,12 @@ export function StudentReports() {
   }
 
   const STATUS_TAG_META: Record<EffectiveNotAdmittedStatus, { label: string; row: string; badge: string }> = {
-    ADMITTED:     { label: 'Admitted',     row: 'bg-emerald-50/70 hover:bg-emerald-100/60', badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
-    NOT_ADMITTED: { label: 'Not Admitted', row: 'bg-red-50/70 hover:bg-red-100/60',          badge: 'bg-red-100 text-red-700 border border-red-200' },
-    ANS:          { label: 'ANS',          row: 'bg-amber-50/70 hover:bg-amber-100/60',      badge: 'bg-amber-100 text-amber-700 border border-amber-200' },
-    LEFTOUT:      { label: 'Left Out',     row: 'bg-slate-100/70 hover:bg-slate-200/60',     badge: 'bg-slate-200 text-slate-700 border border-slate-300' },
-    TRANSFERRED:  { label: 'Transferred',  row: 'bg-sky-50/70 hover:bg-sky-100/60',          badge: 'bg-sky-100 text-sky-700 border border-sky-200' },
-    TC_ISSUED:    { label: 'TC Issued',    row: 'bg-violet-50/70 hover:bg-violet-100/60',    badge: 'bg-violet-100 text-violet-700 border border-violet-200' },
+    ADMITTED:     { label: 'Admitted',     row: 'bg-[#0FA968]/[0.05] hover:bg-[#0FA968]/[0.10]', badge: 'bg-[#0FA968]/[0.08] text-[#0B7A4D] border border-[#0FA968]/45' },
+    NOT_ADMITTED: { label: 'Not Admitted', row: 'bg-[#E11D48]/[0.04] hover:bg-[#E11D48]/[0.08]', badge: 'bg-[#E11D48]/[0.08] text-[#A3153A] border border-[#E11D48]/45' },
+    ANS:          { label: 'ANS',          row: 'bg-[#D97706]/[0.05] hover:bg-[#D97706]/[0.10]', badge: 'bg-[#D97706]/[0.08] text-[#9C5605] border border-[#D97706]/45' },
+    LEFTOUT:      { label: 'Left Out',     row: 'bg-[#64748B]/[0.06] hover:bg-[#64748B]/[0.11]', badge: 'bg-[#64748B]/[0.10] text-[#475569] border border-[#64748B]/45' },
+    TRANSFERRED:  { label: 'Transferred',  row: 'bg-[#0284C7]/[0.05] hover:bg-[#0284C7]/[0.10]', badge: 'bg-[#0284C7]/[0.08] text-[#02608F] border border-[#0284C7]/45' },
+    TC_ISSUED:    { label: 'TC Issued',    row: 'bg-[#7C3AED]/[0.05] hover:bg-[#7C3AED]/[0.10]', badge: 'bg-[#7C3AED]/[0.08] text-[#5A2AAB] border border-[#7C3AED]/45' },
   };
 
   const notAdmittedSummary = useMemo(() => {
@@ -798,6 +1054,22 @@ export function StudentReports() {
   }, [reportType, allRefunds]);
 
   const hasActiveSort = sortLevels.some((l) => !!l.field);
+
+  // Collapsible filter row (UI only). The badge on the toggle counts active
+  // filters that live in the collapsed row, so they are never silently hidden.
+  const [showFilters, setShowFilters] = useState(false);
+  const hiddenFilterCount = [
+    courseFilter, yearFilter,
+    reportType !== 'refund-students' && genderFilter,
+    reportType !== 'refund-students' && categoryFilter,
+    reportType !== 'refund-students' && categoryGroupFilter,
+    reportType !== 'refund-students' && admTypeFilter,
+    reportType !== 'refund-students' && admCatFilter,
+    reportType === 'not-admitted' && notAdmittedStatusFilter,
+    reportType === 'transfer-students' && transferDirectionFilter,
+    reportType === 'snq-allotment' && (dateFrom || dateTo),
+    reportType === 'custom' && hasActiveSort,
+  ].filter(Boolean).length;
 
   const hasActiveFilters =
     !!searchTerm || !!courseFilter || !!yearFilter || !!genderFilter ||
@@ -1349,6 +1621,46 @@ export function StudentReports() {
   }
 
   const isLoading = settingsLoading || loading || feeLoading || ((reportType === 'tc-issued' || reportType === 'pc-issued') && tcLoading) || (reportType === 'not-admitted' && prevYearLoading) || (reportType === 'refund-students' && refundsLoading);
+
+  // Header chip strip: single line between two always-visible arrow buttons;
+  // each arrow dims when there is nothing more to see on its side.
+  const chipScrollRef = useRef<HTMLDivElement>(null);
+  const [chipOverflow, setChipOverflow] = useState({ left: false, right: false });
+  useLayoutEffect(() => {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setChipOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, [isLoading, reportType, hasActiveFilters]);
+
+  // Animated by hand rather than scrollBy({ behavior: 'smooth' }), which some
+  // browser setups ignore.
+  const chipAnimRef = useRef(0);
+  function scrollChips(dir: -1 | 1) {
+    const el = chipScrollRef.current;
+    if (!el) return;
+    cancelAnimationFrame(chipAnimRef.current);
+    const from = el.scrollLeft;
+    const to = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, from + dir * Math.max(160, el.clientWidth * 0.6)));
+    const start = performance.now();
+    const DURATION = 260;
+    const step = (now: number) => {
+      const t = Math.max(0, Math.min(1, (now - start) / DURATION));
+      el.scrollLeft = from + (to - from) * (1 - Math.pow(1 - t, 3));
+      if (t < 1) chipAnimRef.current = requestAnimationFrame(step);
+    };
+    chipAnimRef.current = requestAnimationFrame(step);
+  }
+
   if (isLoading) return <PageSpinner />;
 
   const activeCount = reportType === 'tc-issued' ? tcRows.length
@@ -1356,312 +1668,159 @@ export function StudentReports() {
     : reportType === 'refund-students' ? refundRows.length
     : filteredStudents.length;
 
+  const tint = REPORT_TINT[reportType];
+
+  // Header subtitle — same conditions as before, now shown as a pill.
+  const subtitle =
+    reportType === 'tc-issued' || reportType === 'pc-issued' || reportType === 'refund-students'
+      ? 'All Academic Years'
+      : reportType === 'not-admitted'
+      ? (previousAcademicYear && academicYear ? `${previousAcademicYear} → ${academicYear}` : 'No previous academic year')
+      : academicYear;
+
+  // Header count chips — one data shape for the five per-report chip sets.
+  type HeaderStats = {
+    label: string;
+    total: number;
+    amount?: number;
+    byYear?: Partial<Record<string, number>>;
+    byCourse: Partial<Record<string, number>>;
+    filtered: number;
+  };
+  let headerStats: HeaderStats | null = null;
+  if (reportType === 'tc-issued') {
+    if (tcStats && tcStats.totalTCs > 0) headerStats = { label: 'TCs Issued', total: tcStats.totalTCs, byCourse: tcStats.byCourse, filtered: tcRows.length };
+  } else if (reportType === 'pc-issued') {
+    if (pcStats && pcStats.totalPCs > 0) headerStats = { label: 'PCs Issued', total: pcStats.totalPCs, byCourse: pcStats.byCourse, filtered: pcRows.length };
+  } else if (reportType === 'refund-students') {
+    if (refundStats && refundStats.totalRefunds > 0) headerStats = { label: 'Refunds', total: refundStats.totalRefunds, amount: refundStats.totalAmount, byCourse: refundStats.byCourse, filtered: refundRows.length };
+  } else if (reportType === 'not-admitted') {
+    if (notAdmittedStats.total > 0) headerStats = { label: 'Total', total: notAdmittedStats.total, byYear: notAdmittedStats.byYear, byCourse: notAdmittedStats.byCourse, filtered: notAdmittedSummaryPool.length };
+  } else if (stats.total > 0) {
+    headerStats = { label: 'Total', total: stats.total, byYear: stats.byYear, byCourse: stats.byCourse, filtered: filteredStudents.length };
+  }
+
+  const hs = headerStats;
+
+  const showingStudents = (
+    <span>
+      Showing <span className="text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredStudents.length)}</span> of{' '}
+      <span className="text-[#262B35] tabular-nums">{filteredStudents.length}</span> student{filteredStudents.length !== 1 ? 's' : ''}
+      {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
+        <span> (filtered from {stats.total} total)</span>
+      )}
+    </span>
+  );
+
   return (
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F7F7FE 0%, #FCFCFF 45%, #F3F4FE 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
+      <div className="flex-shrink-0 flex items-center gap-4 min-w-0">
         <div className="shrink-0">
-          <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">Student Reports</h2>
-          {academicYear && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && reportType !== 'refund-students' && (
-            <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
-          )}
-          {(reportType === 'tc-issued' || reportType === 'pc-issued' || reportType === 'refund-students') && (
-            <p className="text-[10px] text-gray-400 leading-tight">All Academic Years</p>
-          )}
-          {reportType === 'not-admitted' && (
-            <p className="text-[10px] text-gray-400 leading-tight">
-              {previousAcademicYear && academicYear ? `${previousAcademicYear} → ${academicYear}` : 'No previous academic year'}
-            </p>
-          )}
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A8FA8] leading-none">
+            SMP Admissions · Reports
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold text-[#3730A3] leading-none tracking-[-0.3px]">Student Reports</h2>
+            {subtitle && (
+              <span className="rounded-full border border-[#4F46E5]/40 bg-white text-[#3730A3] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums whitespace-nowrap">
+                {subtitle}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Stats chips — SNQ Allotment & WhatsApp Numbers */}
-        {reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'not-admitted' && reportType !== 'refund-students' && !isLoading && stats.total > 0 && (
+        {hs && (
           <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-emerald-500 font-semibold">Total</span>
-                <span className="font-bold tabular-nums">{stats.total}</span>
+            <span className="w-px h-8 bg-[#DCDDFB] shrink-0 self-center" />
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {/* Total tile — in the report's tint */}
+              <div
+                className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border px-3.5 py-1 min-w-[58px]"
+                style={{ background: `${tint}12`, borderColor: `${tint}33` }}
+              >
+                <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] leading-tight whitespace-nowrap" style={{ color: inkOf(tint) }}>{hs.label}</span>
+                <span className="text-[16px] font-medium leading-tight" style={{ color: inkOf(tint) }}>
+                  <AnimNum value={hs.total} />
+                </span>
               </div>
 
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {YEARS.map((yr) => {
-                const count  = stats.byYear[yr] ?? 0;
-                const label  = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
-                const active = yearFilter === yr;
-                return (
-                  <button
-                    key={yr}
-                    onClick={() => setYearFilter(active ? '' : yr)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{label}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {COURSES.map((c) => {
-                const count  = stats.byCourse[c] ?? 0;
-                const active = courseFilter === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCourseFilter(active ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
+              {hs.amount !== undefined && (
+                <div
+                  className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border px-3.5 py-1"
+                  style={{ background: `${tint}0D`, borderColor: `${tint}33` }}
+                >
+                  <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] leading-tight whitespace-nowrap" style={{ color: inkOf(tint) }}>Total Amount</span>
+                  <span className="text-[16px] font-medium leading-tight tabular-nums whitespace-nowrap" style={{ color: inkOf(tint) }}>
+                    ₹{hs.amount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
 
               {hasActiveFilters && (
-                <>
-                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-emerald-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums">{filteredStudents.length}</span>
-                  </div>
-                </>
+                <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#4F46E5]/40 bg-white text-[#3730A3] px-3 py-[6px] text-[11px] font-medium whitespace-nowrap">
+                  <span>Filtered</span>
+                  <AnimNum value={hs.filtered} />
+                </div>
               )}
-            </div>
-          </>
-        )}
 
-        {/* Stats chips — TC Issued List */}
-        {reportType === 'tc-issued' && !isLoading && tcStats && tcStats.totalTCs > 0 && (
-          <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              <div className="flex items-center gap-1 bg-white/80 border border-blue-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-blue-600 font-semibold">TCs Issued</span>
-                <span className="font-bold tabular-nums">{tcStats.totalTCs}</span>
+              <button type="button" onClick={() => scrollChips(-1)} disabled={!chipOverflow.left} className={`${CHIP_ARROW} ml-1`} aria-label="Scroll chips left">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div ref={chipScrollRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0 flex-1 py-1">
+                {hs.byYear && (
+                  <>
+                    {YEARS.map((yr) => {
+                      const count = hs.byYear?.[yr] ?? 0;
+                      const label = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
+                      const active = yearFilter === yr;
+                      const dimmed = (!!yearFilter && !active) || count === 0;
+                      return (
+                        <button
+                          key={yr}
+                          onClick={() => setYearFilter(active ? '' : yr)}
+                          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                            dimmed && !active ? 'opacity-[0.5] hover:opacity-100' : ''
+                          }`}
+                          style={chipStyle(YEAR_COLOR[yr], active)}
+                        >
+                          {!active && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: YEAR_COLOR[yr] }} />}
+                          <span>{label}</span>
+                          <AnimNum value={count} />
+                        </button>
+                      );
+                    })}
+                    <span className="w-1 h-1 rounded-full bg-[#C9CBF6] shrink-0 mx-0.5" />
+                  </>
+                )}
+                {COURSES.map((c) => {
+                  const count = hs.byCourse[c] ?? 0;
+                  const active = courseFilter === c;
+                  const dimmed = (!!courseFilter && !active) || count === 0;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setCourseFilter(active ? '' : c)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                        dimmed && !active ? 'opacity-[0.5] hover:opacity-100' : ''
+                      }`}
+                      style={chipStyle(DEPT_DOT[c], active)}
+                    >
+                      {!active && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />}
+                      <span>{c}</span>
+                      <AnimNum value={count} />
+                    </button>
+                  );
+                })}
               </div>
-
-              <span className="text-blue-200 text-xs select-none shrink-0">·</span>
-
-              {COURSES.map((c) => {
-                const count  = tcStats.byCourse[c] ?? 0;
-                const active = courseFilter === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCourseFilter(active ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-blue-100 hover:border-blue-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              {hasActiveFilters && (
-                <>
-                  <span className="text-blue-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-blue-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums">{tcRows.length}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Stats chips — PC Issued List */}
-        {reportType === 'pc-issued' && !isLoading && pcStats && pcStats.totalPCs > 0 && (
-          <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              <div className="flex items-center gap-1 bg-white/80 border border-violet-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-violet-600 font-semibold">PCs Issued</span>
-                <span className="font-bold tabular-nums">{pcStats.totalPCs}</span>
-              </div>
-
-              <span className="text-violet-200 text-xs select-none shrink-0">·</span>
-
-              {COURSES.map((c) => {
-                const count  = pcStats.byCourse[c] ?? 0;
-                const active = courseFilter === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCourseFilter(active ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-violet-600 border-violet-600 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-violet-100 hover:border-violet-300 hover:bg-violet-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              {hasActiveFilters && (
-                <>
-                  <span className="text-violet-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-violet-50 border border-violet-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-violet-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums">{pcRows.length}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Stats chips — Refund Students List */}
-        {reportType === 'refund-students' && !isLoading && refundStats && refundStats.totalRefunds > 0 && (
-          <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              <div className="flex items-center gap-1 bg-white/80 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-rose-600 font-semibold">Refunds</span>
-                <span className="font-bold tabular-nums">{refundStats.totalRefunds}</span>
-              </div>
-
-              <span className="text-rose-200 text-xs select-none shrink-0">·</span>
-
-              <div className="flex items-center gap-1 bg-white/80 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-rose-600 font-semibold">Total Amount</span>
-                <span className="font-bold tabular-nums">₹{refundStats.totalAmount.toLocaleString('en-IN')}</span>
-              </div>
-
-              <span className="text-rose-200 text-xs select-none shrink-0">·</span>
-
-              {COURSES.map((c) => {
-                const count  = refundStats.byCourse[c] ?? 0;
-                const active = courseFilter === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCourseFilter(active ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-rose-600 border-rose-600 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-rose-100 hover:border-rose-300 hover:bg-rose-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              {hasActiveFilters && (
-                <>
-                  <span className="text-rose-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-rose-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums">{refundRows.length}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Stats chips — Not Admitted List */}
-        {reportType === 'not-admitted' && !isLoading && notAdmittedStats.total > 0 && (
-          <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-
-              <div className="flex items-center gap-1 bg-white/80 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                <span className="text-emerald-500 font-semibold">Total</span>
-                <span className="font-bold tabular-nums">{notAdmittedStats.total}</span>
-              </div>
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {YEARS.map((yr) => {
-                const count  = notAdmittedStats.byYear[yr] ?? 0;
-                const label  = yr === '1ST YEAR' ? '1st' : yr === '2ND YEAR' ? '2nd' : '3rd';
-                const active = yearFilter === yr;
-                return (
-                  <button
-                    key={yr}
-                    onClick={() => setYearFilter(active ? '' : yr)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{label}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-
-              {COURSES.map((c) => {
-                const count  = notAdmittedStats.byCourse[c] ?? 0;
-                const active = courseFilter === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setCourseFilter(active ? '' : c)}
-                    className={`flex items-center gap-1 border rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
-                      active
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : count === 0
-                        ? 'bg-white/50 border-gray-100 text-gray-300'
-                        : 'bg-white/80 border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <span className={`font-semibold ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-600'}`}>{c}</span>
-                    <span className={`font-bold tabular-nums ${active ? 'text-white' : count === 0 ? 'text-gray-300' : 'text-gray-800'}`}>{count}</span>
-                  </button>
-                );
-              })}
-
-              {hasActiveFilters && (
-                <>
-                  <span className="text-emerald-200 text-xs select-none shrink-0">·</span>
-                  <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-                    <span className="text-emerald-600 font-semibold">Filtered</span>
-                    <span className="font-bold tabular-nums">{notAdmittedSummaryPool.length}</span>
-                  </div>
-                </>
-              )}
+              <button type="button" onClick={() => scrollChips(1)} disabled={!chipOverflow.right} className={CHIP_ARROW} aria-label="Scroll chips right">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
           </>
         )}
@@ -1669,36 +1828,30 @@ export function StudentReports() {
 
       {/* ── Not Admitted summary — updates live with the active filters ─────── */}
       {reportType === 'not-admitted' && notAdmittedSummary && (
-        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white/70 px-3 py-2 text-[12px] leading-snug text-gray-600">
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-            {notAdmittedSummary.admitted} Admitted
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
-            {notAdmittedSummary.pending} Not Admitted
-          </span>
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 rounded-2xl border border-[#DCDDFB] bg-white px-3.5 py-2.5 text-[12px] font-medium leading-snug text-[#5B6371]">
+          <LinePill value={`${notAdmittedSummary.admitted} Admitted`} color={MINT} />
+          <LinePill value={`${notAdmittedSummary.pending} Not Admitted`} color={CORAL} />
           <span>
-            <span className="font-bold text-emerald-600">{notAdmittedSummary.admitted}</span> of{' '}
-            <span className="font-semibold text-gray-800">{notAdmittedSummary.total}</span>{' '}
+            <span className="font-semibold" style={{ color: inkOf(MINT) }}>{notAdmittedSummary.admitted}</span> of{' '}
+            <span className="font-semibold text-[#262B35]">{notAdmittedSummary.total}</span>{' '}
             {notAdmittedSummary.desc && <>{notAdmittedSummary.desc} </>}
-            students from <span className="font-semibold">{previousAcademicYear} (Last Year)</span> have admitted to{' '}
-            <span className="font-semibold">{notAdmittedSummary.promoText}</span> in{' '}
-            <span className="font-semibold">{academicYear} (Current Year)</span> —{' '}
-            <span className="font-bold text-red-600">{notAdmittedSummary.pending}</span> still pending.
+            students from <span className="font-semibold text-[#3730A3]">{previousAcademicYear} (Last Year)</span> have admitted to{' '}
+            <span className="font-semibold text-[#3730A3]">{notAdmittedSummary.promoText}</span> in{' '}
+            <span className="font-semibold text-[#3730A3]">{academicYear} (Current Year)</span> —{' '}
+            <span className="font-semibold" style={{ color: inkOf(CORAL) }}>{notAdmittedSummary.pending}</span> still pending.
           </span>
         </div>
       )}
 
-      {/* ── Filters panel ──────────────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 rounded-2xl border border-emerald-100 overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
-      >
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+      {/* ── Toolbar card — report selector, search, filters, exports ───────── */}
+      <div className="flex-shrink-0 rounded-2xl border border-[#DCDDFB] bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(30,27,75,0.05)]">
+        <div className="flex flex-wrap items-center gap-2 px-2.5 py-2">
 
           {/* Report type selector */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap select-none">Report</span>
+            <span className={FIELD_LABEL}>Report</span>
             <FilterDropdown<ReportType>
+              color="indigo"
               value={reportType}
               onChange={(v) => setReportType(v as ReportType)}
               placeholder="Report"
@@ -1707,13 +1860,13 @@ export function StudentReports() {
             />
           </div>
 
-          <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+          {TOOLBAR_SEP}
 
           {/* TC Year filter — only for TC Issued List */}
           {reportType === 'tc-issued' && (
             <>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">TC Year</span>
+                <span className={FIELD_LABEL}>TC Year</span>
                 <FilterDropdown<string>
                   value={tcYearFilter}
                   onChange={(v) => setTcYearFilter(v || 'ALL')}
@@ -1726,7 +1879,7 @@ export function StudentReports() {
                   ]}
                 />
               </div>
-              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+              {TOOLBAR_SEP}
             </>
           )}
 
@@ -1734,7 +1887,7 @@ export function StudentReports() {
           {reportType === 'pc-issued' && (
             <>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">PC Year</span>
+                <span className={FIELD_LABEL}>PC Year</span>
                 <FilterDropdown<string>
                   value={pcYearFilter}
                   onChange={(v) => setPcYearFilter(v || 'ALL')}
@@ -1747,7 +1900,7 @@ export function StudentReports() {
                   ]}
                 />
               </div>
-              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+              {TOOLBAR_SEP}
             </>
           )}
 
@@ -1755,7 +1908,7 @@ export function StudentReports() {
           {reportType === 'refund-students' && (
             <>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap select-none">Refund Year</span>
+                <span className={FIELD_LABEL}>Refund Year</span>
                 <FilterDropdown<string>
                   value={refundYearFilter}
                   onChange={(v) => setRefundYearFilter(v || 'ALL')}
@@ -1772,7 +1925,7 @@ export function StudentReports() {
                 <select
                   value={refundCategoryFilter}
                   onChange={(e) => setRefundCategoryFilter(e.target.value as RefundCategory | '')}
-                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-800 focus:outline-none focus:ring-1 focus:ring-rose-400 focus:border-rose-400 cursor-pointer"
+                  className="rounded-full border border-[#DB2777]/35 bg-white px-3 py-1 text-[12px] font-medium text-[#9D174D] hover:border-[#DB2777]/60 focus:outline-none focus:ring-2 focus:ring-[#DB2777]/25 focus:border-[#DB2777] cursor-pointer transition-colors"
                 >
                   <option value="">All Categories</option>
                   <option value="SNQ">SNQ</option>
@@ -1780,13 +1933,13 @@ export function StudentReports() {
                   <option value="GENERAL">General Refund</option>
                 </select>
               </div>
-              <span className="text-gray-200 text-sm select-none shrink-0">|</span>
+              {TOOLBAR_SEP}
             </>
           )}
 
-          {/* Search — rounded-full with icon + amber clear, matching Students page */}
+          {/* Search */}
           <div className="relative shrink-0 w-56">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3730A3] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -1794,212 +1947,45 @@ export function StudentReports() {
               placeholder={reportType === 'tc-issued' ? 'Search name / reg / TC no…' : reportType === 'pc-issued' ? 'Search name / reg / exam period…' : reportType === 'refund-students' ? 'Search name / reg / reference no…' : 'Search name / reg / mobile…'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-full border border-emerald-300 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-[#4F46E5]/40 bg-[#F5F6FE] py-1.5 text-[13px] font-medium text-[#3730A3] placeholder:text-[#3730A3]/55 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#4F46E5] focus:ring-2 focus:ring-[#4F46E5]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                 </svg>
               </button>
             )}
           </div>
 
-          {/* Standard dropdowns — FilterDropdown, matching Students page */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
-            <FilterDropdown<Course | ''>
-              value={courseFilter}
-              onChange={(v) => setCourseFilter(v as Course | '')}
-              placeholder="Course"
-              options={COURSES.map((c) => ({ value: c, label: c }))}
-            />
-            <FilterDropdown<Year | ''>
-              value={yearFilter}
-              onChange={(v) => setYearFilter(v as Year | '')}
-              placeholder="Study Yr"
-              options={YEARS.map((yr) => ({ value: yr, label: yr }))}
-            />
-            {reportType !== 'refund-students' && (
-              <FilterDropdown<Gender | ''>
-                value={genderFilter}
-                onChange={(v) => setGenderFilter(v as Gender | '')}
-                placeholder="Gender"
-                options={[
-                  { value: 'BOY', label: 'BOY' },
-                  { value: 'GIRL', label: 'GIRL' },
-                ]}
-              />
-            )}
-            {reportType !== 'refund-students' && (
-              <FilterDropdown<Category | ''>
-                value={categoryFilter}
-                onChange={(v) => setCategoryFilter(v as Category | '')}
-                placeholder="Cat"
-                options={[
-                  { value: 'GM', label: 'GM' },
-                  { value: 'SC', label: 'SC' },
-                  { value: 'ST', label: 'ST' },
-                  { value: 'C1', label: 'C1' },
-                  { value: '2A', label: '2A' },
-                  { value: '2B', label: '2B' },
-                  { value: '3A', label: '3A' },
-                  { value: '3B', label: '3B' },
-                ]}
-              />
-            )}
-            {reportType !== 'refund-students' && (
-              <FilterDropdown<CategoryGroup | ''>
-                value={categoryGroupFilter}
-                onChange={(v) => setCategoryGroupFilter(v as CategoryGroup | '')}
-                placeholder="Cat Group"
-                options={[
-                  { value: 'GM', label: CATEGORY_GROUP_LABELS.GM },
-                  { value: 'OBC', label: CATEGORY_GROUP_LABELS.OBC },
-                  { value: 'SC_ST', label: CATEGORY_GROUP_LABELS.SC_ST },
-                ]}
-              />
-            )}
-            {reportType !== 'refund-students' && (
-              <FilterDropdown<AdmType | ''>
-                value={admTypeFilter}
-                onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
-                placeholder="Adm Type"
-                options={[
-                  { value: 'REGULAR', label: 'REGULAR' },
-                  { value: 'REPEATER', label: 'REPEATER' },
-                  { value: 'LATERAL', label: 'LATERAL' },
-                  { value: 'EXTERNAL', label: 'EXTERNAL' },
-                ]}
-              />
-            )}
-            {reportType !== 'refund-students' && (
-              <FilterDropdown<AdmCat | ''>
-                value={admCatFilter}
-                onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
-                placeholder="Adm Cat"
-                options={[
-                  { value: 'GM', label: 'GM' },
-                  { value: 'SNQ', label: 'SNQ' },
-                  { value: 'OTHERS', label: 'OTHERS' },
-                ]}
-              />
-            )}
-            {reportType === 'not-admitted' && (
-              <FilterDropdown<EffectiveNotAdmittedStatus>
-                value={notAdmittedStatusFilter}
-                onChange={(v) => setNotAdmittedStatusFilter(v)}
-                placeholder="Status"
-                options={[
-                  { value: 'ADMITTED', label: 'Admitted' },
-                  { value: 'NOT_ADMITTED', label: 'Not Admitted' },
-                  { value: 'ANS', label: 'ANS' },
-                  { value: 'LEFTOUT', label: 'Left Out' },
-                  { value: 'TRANSFERRED', label: 'Transferred' },
-                  { value: 'TC_ISSUED', label: 'TC Issued' },
-                ]}
-              />
-            )}
-            {reportType === 'transfer-students' && (
-              <FilterDropdown<'IN' | 'OUT'>
-                value={transferDirectionFilter}
-                onChange={(v) => setTransferDirectionFilter(v)}
-                placeholder="Direction"
-                options={[
-                  { value: 'IN', label: 'Transfer In' },
-                  { value: 'OUT', label: 'Transfer Out' },
-                ]}
-              />
-            )}
-          </div>
-
-          {/* Date range — only relevant for SNQ Allotment (fee paid date) */}
-          {reportType === 'snq-allotment' && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Fee Paid Date</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
-              />
-              <span className="text-gray-300 text-xs">→</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="rounded-full border border-emerald-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 bg-white/80 text-gray-700 cursor-pointer"
-              />
-            </div>
-          )}
-
-          {/* Column picker + sort — only for Custom Report */}
+          {/* Column picker — Custom Report only (sort lives in the filter row) */}
           {reportType === 'custom' && (
-            <>
-              <ColumnPickerDropdown
-                columns={STUDENT_COLUMNS}
-                selected={customColumns}
-                onChange={setCustomColumns}
-              />
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Sort by</span>
-                {sortLevels.map((level, idx) => {
-                  const prevChosen = idx === 0 || !!sortLevels[idx - 1].field;
-                  const usedByOthers = sortLevels.filter((_, i) => i !== idx).map((l) => l.field);
-                  return (
-                    <div key={idx} className="flex items-center gap-1.5">
-                      {idx > 0 && <span className="text-[10px] text-gray-400 whitespace-nowrap">then</span>}
-                      <select
-                        className={fs}
-                        value={level.field}
-                        disabled={!prevChosen}
-                        onChange={(e) => setSortLevel(idx, { field: e.target.value as SortableField | '' })}
-                      >
-                        <option value="">{idx === 0 ? 'Default' : '—'}</option>
-                        {SORT_FIELD_OPTIONS.filter((o) => !usedByOthers.includes(o.value)).map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <select
-                        className={fs}
-                        value={level.direction}
-                        disabled={!level.field}
-                        onChange={(e) => setSortLevel(idx, { direction: e.target.value as 'asc' | 'desc' })}
-                      >
-                        <option value="asc">Asc</option>
-                        <option value="desc">Desc</option>
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <ColumnPickerDropdown
+              color="indigo"
+              columns={STUDENT_COLUMNS}
+              selected={customColumns}
+              onChange={setCustomColumns}
+            />
           )}
 
-          {/* Action buttons */}
-          {hasActiveFilters && (
-            <>
-              <span className="w-px h-5 bg-emerald-200 shrink-0" />
-              <button
-                onClick={clearFilters}
-                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
-              >
-                Clear
-              </button>
-            </>
-          )}
+          <div className="flex-1" />
 
+          {reportType === 'custom' && orderedCustomColumns.length === 0 && (
+            <span className="text-[11px] font-medium shrink-0" style={{ color: inkOf(AMBER) }}>Select at least one column to preview/export.</span>
+          )}
           {activeCount > 0 && (reportType !== 'custom' || orderedCustomColumns.length > 0) && (
             <>
               <button
                 onClick={handleExportPdf}
                 disabled={savingPdf}
-                className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className={OUTLINE_PILL_BTN}
               >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 {savingPdf ? 'Generating…' : 'Save PDF'}
               </button>
 
@@ -2007,807 +1993,802 @@ export function StudentReports() {
                 <button
                   onClick={handleExportExcel}
                   disabled={savingExcel}
-                  className="shrink-0 rounded-full border border-emerald-200 px-2.5 py-1 text-[12px] text-emerald-700 bg-white hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className={OUTLINE_PILL_BTN}
                 >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/></svg>
                   {savingExcel ? 'Exporting…' : 'Export Excel'}
                 </button>
               )}
             </>
           )}
 
-          {reportType === 'custom' && orderedCustomColumns.length === 0 && (
-            <span className="text-[11px] text-amber-600 font-medium shrink-0">Select at least one column to preview/export.</span>
+          {hasActiveFilters && (
+            <>
+              {TOOLBAR_SEP}
+              <button
+                onClick={clearFilters}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Clear
+              </button>
+            </>
           )}
+
+          {/* Filter toggle — shows/hides the filter row below */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            className={`relative shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              showFilters || hiddenFilterCount > 0
+                ? 'bg-[#4F46E5]/10 border-[#4F46E5]/30 text-[#4F46E5]'
+                : 'border-[#DCDDFB] text-[#5B6371] hover:bg-[#F3F4FE] hover:text-[#262B35]'
+            }`}
+            title={showFilters ? 'Hide filters' : 'Show filters'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+              <line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+            {!showFilters && hiddenFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[#4F46E5] text-white text-[9px] font-semibold leading-[15px] text-center tabular-nums shadow-[0_0_0_2px_#fff]">
+                {hiddenFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Collapsible filter row — expands below the search bar */}
+        <div
+          className="grid"
+          style={{
+            gridTemplateRows: showFilters ? '1fr' : '0fr',
+            opacity: showFilters ? 1 : 0,
+            transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <div className="overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2 px-2.5 py-2 border-t border-[#EEEFFC]">
+              {/* Standard dropdowns */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <FilterDropdown<Course | ''>
+                  color="indigo"
+                  value={courseFilter}
+                  onChange={(v) => setCourseFilter(v as Course | '')}
+                  placeholder="Course"
+                  options={COURSES.map((c) => ({ value: c, label: c }))}
+                />
+                <FilterDropdown<Year | ''>
+                  color="indigo"
+                  value={yearFilter}
+                  onChange={(v) => setYearFilter(v as Year | '')}
+                  placeholder="Study Yr"
+                  options={YEARS.map((yr) => ({ value: yr, label: yr }))}
+                />
+                {reportType !== 'refund-students' && (
+                  <FilterDropdown<Gender | ''>
+                    color="indigo"
+                    value={genderFilter}
+                    onChange={(v) => setGenderFilter(v as Gender | '')}
+                    placeholder="Gender"
+                    options={[
+                      { value: 'BOY', label: 'BOY' },
+                      { value: 'GIRL', label: 'GIRL' },
+                    ]}
+                  />
+                )}
+                {reportType !== 'refund-students' && (
+                  <FilterDropdown<Category | ''>
+                    color="indigo"
+                    value={categoryFilter}
+                    onChange={(v) => setCategoryFilter(v as Category | '')}
+                    placeholder="Cat"
+                    options={[
+                      { value: 'GM', label: 'GM' },
+                      { value: 'SC', label: 'SC' },
+                      { value: 'ST', label: 'ST' },
+                      { value: 'C1', label: 'C1' },
+                      { value: '2A', label: '2A' },
+                      { value: '2B', label: '2B' },
+                      { value: '3A', label: '3A' },
+                      { value: '3B', label: '3B' },
+                    ]}
+                  />
+                )}
+                {reportType !== 'refund-students' && (
+                  <FilterDropdown<CategoryGroup | ''>
+                    color="indigo"
+                    value={categoryGroupFilter}
+                    onChange={(v) => setCategoryGroupFilter(v as CategoryGroup | '')}
+                    placeholder="Cat Group"
+                    options={[
+                      { value: 'GM', label: CATEGORY_GROUP_LABELS.GM },
+                      { value: 'OBC', label: CATEGORY_GROUP_LABELS.OBC },
+                      { value: 'SC_ST', label: CATEGORY_GROUP_LABELS.SC_ST },
+                    ]}
+                  />
+                )}
+                {reportType !== 'refund-students' && (
+                  <FilterDropdown<AdmType | ''>
+                    color="indigo"
+                    value={admTypeFilter}
+                    onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                    placeholder="Adm Type"
+                    options={[
+                      { value: 'REGULAR', label: 'REGULAR' },
+                      { value: 'REPEATER', label: 'REPEATER' },
+                      { value: 'LATERAL', label: 'LATERAL' },
+                      { value: 'EXTERNAL', label: 'EXTERNAL' },
+                    ]}
+                  />
+                )}
+                {reportType !== 'refund-students' && (
+                  <FilterDropdown<AdmCat | ''>
+                    color="indigo"
+                    value={admCatFilter}
+                    onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                    placeholder="Adm Cat"
+                    options={[
+                      { value: 'GM', label: 'GM' },
+                      { value: 'SNQ', label: 'SNQ' },
+                      { value: 'OTHERS', label: 'OTHERS' },
+                    ]}
+                  />
+                )}
+                {reportType === 'not-admitted' && (
+                  <FilterDropdown<EffectiveNotAdmittedStatus>
+                    color="indigo"
+                    value={notAdmittedStatusFilter}
+                    onChange={(v) => setNotAdmittedStatusFilter(v)}
+                    placeholder="Status"
+                    options={[
+                      { value: 'ADMITTED', label: 'Admitted' },
+                      { value: 'NOT_ADMITTED', label: 'Not Admitted' },
+                      { value: 'ANS', label: 'ANS' },
+                      { value: 'LEFTOUT', label: 'Left Out' },
+                      { value: 'TRANSFERRED', label: 'Transferred' },
+                      { value: 'TC_ISSUED', label: 'TC Issued' },
+                    ]}
+                  />
+                )}
+                {reportType === 'transfer-students' && (
+                  <FilterDropdown<'IN' | 'OUT'>
+                    color="indigo"
+                    value={transferDirectionFilter}
+                    onChange={(v) => setTransferDirectionFilter(v)}
+                    placeholder="Direction"
+                    options={[
+                      { value: 'IN', label: 'Transfer In' },
+                      { value: 'OUT', label: 'Transfer Out' },
+                    ]}
+                  />
+                )}
+              </div>
+
+              {/* Date range — only relevant for SNQ Allotment (fee paid date) */}
+              {reportType === 'snq-allotment' && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={FIELD_LABEL}>Fee Paid Date</span>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className={SELECT_PILL}
+                  />
+                  <span className="text-[#A5A8E8] text-xs">→</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className={SELECT_PILL}
+                  />
+                </div>
+              )}
+
+              {/* Sort — Custom Report only */}
+              {reportType === 'custom' && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={FIELD_LABEL}>Sort by</span>
+                  {sortLevels.map((level, idx) => {
+                    const prevChosen = idx === 0 || !!sortLevels[idx - 1].field;
+                    const usedByOthers = sortLevels.filter((_, i) => i !== idx).map((l) => l.field);
+                    return (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        {idx > 0 && <span className="text-[10px] font-medium text-[#8A8FA8] whitespace-nowrap">then</span>}
+                        <select
+                          className={fs}
+                          value={level.field}
+                          disabled={!prevChosen}
+                          onChange={(e) => setSortLevel(idx, { field: e.target.value as SortableField | '' })}
+                        >
+                          <option value="">{idx === 0 ? 'Default' : '—'}</option>
+                          {SORT_FIELD_OPTIONS.filter((o) => !usedByOthers.includes(o.value)).map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <select
+                          className={fs}
+                          value={level.direction}
+                          disabled={!level.field}
+                          onChange={(e) => setSortLevel(idx, { direction: e.target.value as 'asc' | 'desc' })}
+                        >
+                          <option value="asc">Asc</option>
+                          <option value="desc">Desc</option>
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       {tcError && (reportType === 'tc-issued' || reportType === 'pc-issued') ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{tcError}</div>
+        <EmptyState tone="error" title={tcError} />
       ) : refundsError && reportType === 'refund-students' ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{refundsError}</div>
+        <EmptyState tone="error" title={refundsError} />
       ) : error && reportType !== 'tc-issued' && reportType !== 'pc-issued' && reportType !== 'refund-students' ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+        <EmptyState tone="error" title={error} />
       ) : reportType === 'tc-issued' ? (
         tcRows.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            No TC records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
-          </div>
+          <EmptyState title={`No TC records found${hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}`} />
         ) : (
           /* ── TC Issued List table ──────────────────────────────────────── */
-          <div
-            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-blue-100 overflow-auto flex flex-col"
-            style={{ boxShadow: '0 1px 4px 0 rgba(29,78,216,0.06)' }}
+          <ReportTable key="tc-issued" report="tc-issued"
+            footer={
+              <>
+                <span>
+                  Showing <span className="text-[#262B35] tabular-nums">{tcRows.length}</span> TC record{tcRows.length !== 1 ? 's' : ''}
+                  {hasActiveFilters && tcStats && tcStats.totalTCs > 0 && tcRows.length < tcStats.totalTCs && (
+                    <span> (filtered from {tcStats.totalTCs} total)</span>
+                  )}
+                </span>
+                <div className="flex items-center gap-3">
+                  {tcClearModalMsg && (
+                    <span style={{ color: inkOf(MINT) }}>{tcClearModalMsg}</span>
+                  )}
+                  {tcRows.length > 0 && (
+                    <span className="text-[#A9ACC4] select-none">Right-click to preview · Double-click to clear TC history</span>
+                  )}
+                </div>
+              </>
+            }
           >
-            <table className="min-w-full divide-y divide-blue-50 text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr style={{ background: 'linear-gradient(90deg, #eff6ff, #dbeafe)' }}>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-blue-200">#</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-blue-200">Student Name</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-blue-200">Course</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-blue-200">Reg No</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">TC Number</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Date of Leaving</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Semester</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-blue-200">Result</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-blue-200">TC Year</th>
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className={`${RTH} text-center w-9`}>#</th>
+                <th className={`${RTH} text-left`}>Student Name</th>
+                <th className={`${RTH} text-center w-14`}>Course</th>
+                <th className={`${RTH} text-left w-24`}>Reg No</th>
+                <th className={`${RTH} text-left w-28`}>TC Number</th>
+                <th className={`${RTH} text-left w-28`}>Date of Leaving</th>
+                <th className={`${RTH} text-left w-28`}>Semester</th>
+                <th className={`${RTH} text-left w-28`}>Result</th>
+                <th className={`${RTH} text-center w-20`}>TC Year</th>
+              </tr>
+            </thead>
+            <tbody className={RTBODY}>
+              {tcRows.map((r, idx) => (
+                <tr
+                  key={`${r.studentId}-${r.tcId}`}
+                  onDoubleClick={() => { setTcClearModal(r); setTcClearModalMsg(''); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
+                  onContextMenu={(e) => { e.preventDefault(); setTcPreviewRow(r); }}
+                  title="Double-click to clear TC history · Right-click to preview"
+                  className={`${RROW} cursor-pointer`}
+                >
+                  <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                  <td className={TD}>
+                    <NameCell name={r.studentName} course={r.course}>
+                      {r.admType === 'EXTERNAL' && WP_TAG}
+                      {r.isDuplicate && DUP_TAG}
+                    </NameCell>
+                  </td>
+                  <td className={`${TD} text-center`}><LinePill value={r.course} color={DEPT_DOT[r.course]} minWidth={34} /></td>
+                  <td className={TD_NUM}>{r.regNumber || '—'}</td>
+                  <td className={`${TD} text-[11.5px] font-semibold text-[#3730A3] tabular-nums`}>{r.tcNumber}</td>
+                  <td className={TD_TXT}>{r.dateOfLeaving || '—'}</td>
+                  <td className={TD_TXT}>{r.semester || '—'}</td>
+                  <td className={TD_TXT}>{r.result || '—'}</td>
+                  <td className={`${TD} text-center`}><LinePill value={r.tcAcademicYear} color={tint} /></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-blue-50/60">
-                {tcRows.map((r, idx) => (
-                  <tr
-                    key={`${r.studentId}-${r.tcId}`}
-                    onDoubleClick={() => { setTcClearModal(r); setTcClearModalMsg(''); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
-                    onContextMenu={(e) => { e.preventDefault(); setTcPreviewRow(r); }}
-                    title="Double-click to clear TC history · Right-click to preview"
-                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-blue-50/40 cursor-pointer`}
-                  >
-                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      {r.studentName}
-                      {r.admType === 'EXTERNAL' && (
-                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 border border-amber-300 text-amber-800 leading-none" title="Working Professional (Evening College)">
-                          WP
-                        </span>
-                      )}
-                      {r.isDuplicate && (
-                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
-                          DUP
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
-                    <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap tabular-nums">{r.tcNumber}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.dateOfLeaving || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.semester || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.result || '—'}</td>
-                    <td className="px-3 py-2 text-center whitespace-nowrap">
-                      {r.tcAcademicYear ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 border border-blue-100 text-blue-700">
-                          {r.tcAcademicYear}
-                        </span>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 border-t border-blue-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
-              <span>
-                Showing {tcRows.length} TC record{tcRows.length !== 1 ? 's' : ''}
-                {hasActiveFilters && tcStats && tcStats.totalTCs > 0 && tcRows.length < tcStats.totalTCs && (
-                  <span className="text-gray-400"> (filtered from {tcStats.totalTCs} total)</span>
-                )}
-              </span>
-              <div className="flex items-center gap-3">
-                {tcClearModalMsg && (
-                  <span className="text-green-600 font-medium">{tcClearModalMsg}</span>
-                )}
-                {tcRows.length > 0 && (
-                  <span className="text-gray-300 select-none">Right-click to preview · Double-click to clear TC history</span>
-                )}
-              </div>
-            </div>
-          </div>
+              ))}
+            </tbody>
+          </ReportTable>
         )
       ) : reportType === 'pc-issued' ? (
         pcRows.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            No PC records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
-          </div>
+          <EmptyState title={`No PC records found${hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}`} />
         ) : (
           /* ── PC Issued List table ──────────────────────────────────────── */
-          <div
-            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-violet-100 overflow-auto flex flex-col"
-            style={{ boxShadow: '0 1px 4px 0 rgba(109,40,217,0.06)' }}
+          <ReportTable key="pc-issued" report="pc-issued"
+            footer={
+              <>
+                <span>
+                  Showing <span className="text-[#262B35] tabular-nums">{pcRows.length}</span> PC record{pcRows.length !== 1 ? 's' : ''}
+                  {hasActiveFilters && pcStats && pcStats.totalPCs > 0 && pcRows.length < pcStats.totalPCs && (
+                    <span> (filtered from {pcStats.totalPCs} total)</span>
+                  )}
+                </span>
+                <div className="flex items-center gap-3">
+                  {pcClearModalMsg && (
+                    <span style={{ color: inkOf(MINT) }}>{pcClearModalMsg}</span>
+                  )}
+                  {pcRows.length > 0 && (
+                    <span className="text-[#A9ACC4] select-none">Double-click a row to clear PC history</span>
+                  )}
+                </div>
+              </>
+            }
           >
-            <table className="min-w-full divide-y divide-violet-50 text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr style={{ background: 'linear-gradient(90deg, #f5f3ff, #ede9fe)' }}>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-violet-200">#</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-violet-200">Student Name</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-violet-200">Course</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-violet-200">Reg No</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-36 border-b border-violet-200">Exam Period</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-violet-200">Result Class</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-violet-200">Date of Issue</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-violet-200">PC Year</th>
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className={`${RTH} text-center w-9`}>#</th>
+                <th className={`${RTH} text-left`}>Student Name</th>
+                <th className={`${RTH} text-center w-14`}>Course</th>
+                <th className={`${RTH} text-left w-24`}>Reg No</th>
+                <th className={`${RTH} text-left w-36`}>Exam Period</th>
+                <th className={`${RTH} text-left w-32`}>Result Class</th>
+                <th className={`${RTH} text-left w-28`}>Date of Issue</th>
+                <th className={`${RTH} text-center w-20`}>PC Year</th>
+              </tr>
+            </thead>
+            <tbody className={RTBODY}>
+              {pcRows.map((r, idx) => (
+                <tr
+                  key={`${r.studentId}-${r.pcId}`}
+                  onDoubleClick={() => { setPcClearModal(r); setPcClearModalMsg(''); setPcClearPasskey(''); setPcClearPasskeyError(''); }}
+                  title="Double-click to clear PC history"
+                  className={`${RROW} cursor-pointer`}
+                >
+                  <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                  <td className={TD}>
+                    <NameCell name={r.studentName} course={r.course}>
+                      {r.admType === 'EXTERNAL' && WP_TAG}
+                      {r.isDuplicate && DUP_TAG}
+                    </NameCell>
+                  </td>
+                  <td className={`${TD} text-center`}><LinePill value={r.course} color={DEPT_DOT[r.course]} minWidth={34} /></td>
+                  <td className={TD_NUM}>{r.regNumber || '—'}</td>
+                  <td className={`${TD} text-[11.5px] font-semibold text-[#3730A3]`}>{r.examPeriod || '—'}</td>
+                  <td className={TD_TXT}>{r.resultClass || '—'}</td>
+                  <td className={TD_TXT}>{r.dateOfIssue || '—'}</td>
+                  <td className={`${TD} text-center`}><LinePill value={r.pcAcademicYear} color={tint} /></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-violet-50/60">
-                {pcRows.map((r, idx) => (
-                  <tr
-                    key={`${r.studentId}-${r.pcId}`}
-                    onDoubleClick={() => { setPcClearModal(r); setPcClearModalMsg(''); setPcClearPasskey(''); setPcClearPasskeyError(''); }}
-                    title="Double-click to clear PC history"
-                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-violet-50/40 cursor-pointer`}
-                  >
-                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
-                      {r.studentName}
-                      {r.admType === 'EXTERNAL' && (
-                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 border border-amber-300 text-amber-800 leading-none" title="Working Professional (Evening College)">
-                          WP
-                        </span>
-                      )}
-                      {r.isDuplicate && (
-                        <span className="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 border border-amber-200 text-amber-700 leading-none">
-                          DUP
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
-                    <td className="px-3 py-2 text-gray-800 font-medium whitespace-nowrap">{r.examPeriod || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.resultClass || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.dateOfIssue || '—'}</td>
-                    <td className="px-3 py-2 text-center whitespace-nowrap">
-                      {r.pcAcademicYear ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 border border-violet-100 text-violet-700">
-                          {r.pcAcademicYear}
-                        </span>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 border-t border-violet-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
-              <span>
-                Showing {pcRows.length} PC record{pcRows.length !== 1 ? 's' : ''}
-                {hasActiveFilters && pcStats && pcStats.totalPCs > 0 && pcRows.length < pcStats.totalPCs && (
-                  <span className="text-gray-400"> (filtered from {pcStats.totalPCs} total)</span>
-                )}
-              </span>
-              <div className="flex items-center gap-3">
-                {pcClearModalMsg && (
-                  <span className="text-green-600 font-medium">{pcClearModalMsg}</span>
-                )}
-                {pcRows.length > 0 && (
-                  <span className="text-gray-300 select-none">Double-click a row to clear PC history</span>
-                )}
-              </div>
-            </div>
-          </div>
+              ))}
+            </tbody>
+          </ReportTable>
         )
       ) : !academicYear ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Please configure an academic year in Settings first.
-        </div>
+        <EmptyState title="Please configure an academic year in Settings first." />
       ) : filteredStudents.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-          No students found{hasActiveFilters ? ' for the selected filters.' : '.'}
-        </div>
+        <EmptyState title={`No students found${hasActiveFilters ? ' for the selected filters.' : '.'}`} />
       ) : reportType === 'snq-allotment' ? (
         /* ── SNQ Allotment table ─────────────────────────────────────────── */
-        <div
-          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col"
-          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
-        >
-          <table className="min-w-full divide-y divide-emerald-50 text-xs">
-            <thead className="sticky top-0 z-10">
-              <tr style={{ background: 'linear-gradient(90deg, #fffbeb, #fefce8)' }}>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-yellow-200">#</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-yellow-200">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-yellow-200">Father Name</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-yellow-200">Gender</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-yellow-200">Category</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-yellow-200">Course</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-yellow-200">Student Mob</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-yellow-200">Father Mob</th>
-                <th className="px-3 py-2 text-right font-bold text-gray-700 whitespace-nowrap w-20 border-b border-yellow-200">SSLC Total</th>
-                <th className="px-3 py-2 text-right font-bold text-gray-700 whitespace-nowrap w-20 border-b border-yellow-200">Income</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-yellow-200">Remarks</th>
+        <ReportTable key="snq-allotment" report="snq-allotment" footer={showingStudents}>
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${RTH} text-center w-9`}>#</th>
+              <th className={`${RTH} text-left`}>Name (SSLC)</th>
+              <th className={`${RTH} text-left`}>Father Name</th>
+              <th className={`${RTH} text-center w-14`}>Gender</th>
+              <th className={`${RTH} text-center w-16`}>Category</th>
+              <th className={`${RTH} text-center w-14`}>Course</th>
+              <th className={`${RTH} text-left w-28`}>Student Mob</th>
+              <th className={`${RTH} text-left w-28`}>Father Mob</th>
+              <th className={`${RTH} text-right w-20`}>SSLC Total</th>
+              <th className={`${RTH} text-right w-20`}>Income</th>
+              <th className={`${RTH} text-left w-24`}>Remarks</th>
+            </tr>
+          </thead>
+          <tbody className={RTBODY}>
+            {visibleStudents.map((s, idx) => (
+              <tr key={s.id} className={RROW}>
+                <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                <td className={TD_TXT}>{s.fatherName}</td>
+                <td className={`${TD} text-center`}>
+                  <LinePill value={s.gender === 'BOY' ? 'B' : 'G'} color={GENDER_COLOR[s.gender]} minWidth={24} />
+                </td>
+                <td className={`${TD} text-center`}><LinePill value={s.category} color={CATEGORY_COLOR[s.category]} minWidth={30} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                <td className={TD_NUM}>{s.studentMobile || '—'}</td>
+                <td className={TD_NUM}>{s.fatherMobile || '—'}</td>
+                <td className={`${TD_NUM} text-right`}>
+                  {s.sslcObtainedTotal ?? '—'}
+                </td>
+                <td className={`${TD_NUM} text-right`}>
+                  {s.annualIncome ? s.annualIncome.toLocaleString('en-IN') : '—'}
+                </td>
+                <td className={TD_TXT}></td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-emerald-50/60">
-              {visibleStudents.map((s, idx) => (
-                <tr
-                  key={s.id}
-                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-yellow-50/50`}
-                >
-                  <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.fatherName}</td>
-                  <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap">
-                    {s.gender === 'BOY' ? 'B' : 'G'}
-                  </td>
-                  <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-100 text-emerald-700">
-                      {s.category}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center text-gray-700 font-medium whitespace-nowrap">{s.course}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.studentMobile || '—'}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.fatherMobile || '—'}</td>
-                  <td className="px-3 py-2 text-right text-gray-700 font-medium whitespace-nowrap tabular-nums">
-                    {s.sslcObtainedTotal ?? '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap tabular-nums">
-                    {s.annualIncome ? s.annualIncome.toLocaleString('en-IN') : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap"></td>
-                </tr>
-              ))}
-              {hasMore && (
-                <tr>
-                  <td colSpan={11} className="px-3 py-2 text-center border-t border-emerald-100/50">
-                    <button
-                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    >
-                      Load more ({filteredStudents.length - visibleCount} remaining)
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
-              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            ))}
+            {hasMore && (
+              <LoadMoreRow colSpan={11} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
             )}
-          </div>
-        </div>
+          </tbody>
+        </ReportTable>
       ) : reportType === 'student-list' ? (
         /* ── Student List table ──────────────────────────────────────────── */
-        <div
-          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-emerald-100 overflow-auto flex flex-col"
-          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
-        >
-          <table className="min-w-full divide-y divide-emerald-50 text-xs">
-            <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Year</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Gender</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-14">Category</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-16">Adm Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-20">Allotted Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-28">Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap w-24">Status</th>
+        <ReportTable key="student-list" report="student-list" footer={showingStudents}>
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${RTH} text-left w-8`}>#</th>
+              <th className={`${RTH} text-left`}>Name (SSLC)</th>
+              <th className={`${RTH} text-left w-24`}>Reg No</th>
+              <th className={`${RTH} text-left w-14`}>Course</th>
+              <th className={`${RTH} text-left w-20`}>Year</th>
+              <th className={`${RTH} text-left w-14`}>Gender</th>
+              <th className={`${RTH} text-left w-14`}>Category</th>
+              <th className={`${RTH} text-left w-20`}>Adm Type</th>
+              <th className={`${RTH} text-left w-16`}>Adm Cat</th>
+              <th className={`${RTH} text-left w-20`}>Allotted Cat</th>
+              <th className={`${RTH} text-left w-28`}>Mobile</th>
+              <th className={`${RTH} text-left w-24`}>Status</th>
+            </tr>
+          </thead>
+          <tbody className={RTBODY}>
+            {visibleStudents.map((s, idx) => (
+              <tr key={s.id} className={RROW}>
+                <td className={TD_IDX}>{idx + 1}</td>
+                <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                <td className={TD_NUM}>{s.regNumber || '—'}</td>
+                <td className={TD}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                <td className={TD}><LinePill value={s.year} color={YEAR_COLOR[s.year]} minWidth={66} /></td>
+                <td className={TD}><LinePill value={s.gender} color={GENDER_COLOR[s.gender]} minWidth={40} /></td>
+                <td className={TD}><LinePill value={s.category} color={CATEGORY_COLOR[s.category]} minWidth={30} /></td>
+                <td className={TD}><LinePill value={s.admType} color={ADM_TYPE_COLOR[s.admType]} minWidth={70} /></td>
+                <td className={TD}><LinePill value={s.admCat} color={ADM_CAT_COLOR[s.admCat]} minWidth={56} /></td>
+                <td className={TD}>
+                  <LinePill
+                    value={s.allottedCategory}
+                    color={s.allottedCategory !== s.category ? AMBER : FALLBACK_COLOR}
+                    minWidth={30}
+                  />
+                </td>
+                <td className={TD_NUM}>{s.studentMobile || '—'}</td>
+                <td className={TD}>
+                  <LinePill value={s.admissionStatus} color={STATUS_COLOR[s.admissionStatus] ?? AMBER} minWidth={80} />
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-emerald-50/60">
-              {visibleStudents.map((s, idx) => (
-                <tr
-                  key={s.id}
-                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-emerald-50/50`}
-                >
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.course}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.year}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.gender}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.category || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    {s.allottedCategory ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        s.allottedCategory !== s.category
-                          ? 'bg-amber-50 border-amber-200 text-amber-700'
-                          : 'bg-gray-50 border-gray-200 text-gray-600'
-                      }`}>
-                        {s.allottedCategory}
-                      </span>
-                    ) : (
-                      <span className="text-gray-300 text-[10px]">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{s.studentMobile || '—'}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                      s.admissionStatus === 'CONFIRMED'
-                        ? 'bg-green-100 text-green-700'
-                        : s.admissionStatus === 'CANCELLED'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {s.admissionStatus || '—'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {hasMore && (
-                <tr>
-                  <td colSpan={12} className="px-3 py-2 text-center border-t border-emerald-100/50">
-                    <button
-                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    >
-                      Load more ({filteredStudents.length - visibleCount} remaining)
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-emerald-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
-              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            ))}
+            {hasMore && (
+              <LoadMoreRow colSpan={12} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
             )}
-          </div>
-        </div>
+          </tbody>
+        </ReportTable>
       ) : reportType === 'whatsapp-numbers' ? (
         /* ── Whatsapp Numbers table ──────────────────────────────────────── */
-        <div
-          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-green-100 overflow-auto flex flex-col"
-          style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
-        >
-          <table className="min-w-full divide-y divide-green-50 text-xs">
-            <thead className="sticky top-0 z-10">
-              <tr style={{ background: 'linear-gradient(90deg, #f0fdf4, #dcfce7)' }}>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-green-200">#</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-green-200">Student Name</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-green-200">Year</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-green-200">Course</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-green-200">Father Mobile</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-green-200">Student Mobile</th>
+        <ReportTable key="whatsapp-numbers" report="whatsapp-numbers" footer={showingStudents}>
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${RTH} text-center w-9`}>#</th>
+              <th className={`${RTH} text-left`}>Student Name</th>
+              <th className={`${RTH} text-left w-28`}>Year</th>
+              <th className={`${RTH} text-center w-14`}>Course</th>
+              <th className={`${RTH} text-left w-32`}>Father Mobile</th>
+              <th className={`${RTH} text-left w-32`}>Student Mobile</th>
+            </tr>
+          </thead>
+          <tbody className={RTBODY}>
+            {visibleStudents.map((s, idx) => (
+              <tr key={s.id} className={RROW}>
+                <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                <td className={TD}><LinePill value={s.year} color={YEAR_COLOR[s.year]} minWidth={66} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                <td className={TD_NUM}>{s.fatherMobile || DASH}</td>
+                <td className={TD_NUM}>{s.studentMobile || DASH}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-green-50/60">
-              {visibleStudents.map((s, idx) => (
-                <tr
-                  key={s.id}
-                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-green-50/50`}
-                >
-                  <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
-                  <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.fatherMobile || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || <span className="text-gray-300">—</span>}</td>
-                </tr>
-              ))}
-              {hasMore && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-2 text-center border-t border-green-100/50">
-                    <button
-                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    >
-                      Load more ({filteredStudents.length - visibleCount} remaining)
-                    </button>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-green-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
-              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+            ))}
+            {hasMore && (
+              <LoadMoreRow colSpan={6} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
             )}
-          </div>
-        </div>
+          </tbody>
+        </ReportTable>
       ) : reportType === 'not-admitted' ? (
         !previousAcademicYear ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            No previous academic year exists to compare against.
-          </div>
+          <EmptyState title="No previous academic year exists to compare against." />
         ) : (
           /* ── Not Admitted List table ───────────────────────────────────── */
-          <div
-            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-red-100 overflow-auto flex flex-col"
-            style={{ boxShadow: '0 1px 4px 0 rgba(185,28,28,0.06)' }}
-          >
-            <table className="min-w-full divide-y divide-red-50 text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr style={{ background: 'linear-gradient(90deg, #fef2f2, #fee2e2)' }}>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-red-200">#</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-red-200">Student Name</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Reg No</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Previous Year</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Current Year</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-red-200">Course</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-12 border-b border-red-200">Cat</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-red-200">Adm Type</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-red-200">Adm Cat</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-red-200">Mobile No</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-24 border-b border-red-200">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-red-50/60">
-                {visibleStudents.map((s, idx) => {
-                  const status = effectiveNotAdmittedStatus(s, notAdmittedStatusMap.get(s.id));
-                  const meta = STATUS_TAG_META[status];
-                  const menuActive = statusCtxMenu?.student.id === s.id;
-                  return (
-                    <tr
-                      key={s.id}
-                      className={`transition-colors cursor-context-menu ${menuActive ? 'row-ctx-active' : meta.row}`}
-                      onContextMenu={(e) => { e.preventDefault(); setStatusCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
-                      title="Right-click to mark status"
-                    >
-                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.regNumber || '—'}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{notAdmittedCurrentYearMap.get(s.id) ?? '—'}</td>
-                      <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
-                      <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap">{s.category || '—'}</td>
-                      <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admType || '—'}</td>
-                      <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admCat || '—'}</td>
-                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || s.fatherMobile || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${meta.badge}`}>
-                          {meta.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {hasMore && (
-                  <tr>
-                    <td colSpan={11} className="px-3 py-2 text-center border-t border-red-100/50">
-                      <button
-                        className="text-xs text-red-600 hover:text-red-800 hover:underline font-medium"
-                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                      >
-                        Load more ({filteredStudents.length - visibleCount} remaining)
-                      </button>
-                    </td>
-                  </tr>
+          <ReportTable key="not-admitted" report="not-admitted"
+            footer={
+              <span>
+                Showing <span className="text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredStudents.length)}</span> of{' '}
+                <span className="text-[#262B35] tabular-nums">{filteredStudents.length}</span> student{filteredStudents.length !== 1 ? 's' : ''}
+                {hasActiveFilters && notAdmittedBase.length > 0 && filteredStudents.length < notAdmittedBase.length && (
+                  <span> (filtered from {notAdmittedBase.length} total)</span>
                 )}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 border-t border-red-50 text-xs text-gray-500 mt-auto">
-              Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-              {hasActiveFilters && notAdmittedBase.length > 0 && filteredStudents.length < notAdmittedBase.length && (
-                <span className="text-gray-400"> (filtered from {notAdmittedBase.length} total)</span>
-              )}
-            </div>
-          </div>
-        )
-      ) : reportType === 'transfer-students' ? (
-        /* ── Transfer Students table ─────────────────────────────────────── */
-        <div
-          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-sky-100 overflow-auto flex flex-col"
-          style={{ boxShadow: '0 1px 4px 0 rgba(3,105,161,0.06)' }}
-        >
-          <table className="min-w-full divide-y divide-sky-50 text-xs">
+              </span>
+            }
+          >
             <thead className="sticky top-0 z-10">
-              <tr style={{ background: 'linear-gradient(90deg, #f0f9ff, #e0f2fe)' }}>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-sky-200">#</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-sky-200">Student Name</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-sky-200">Reg No</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-sky-200">Year</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-sky-200">Course</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-12 border-b border-sky-200">Cat</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-sky-200">Adm Type</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-sky-200">Mobile No</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-28 border-b border-sky-200">Direction</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-36 border-b border-sky-200">Polytechnic</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-24 border-b border-sky-200">Date</th>
-                {isAdmin && <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-sky-200">Action</th>}
+              <tr>
+                <th className={`${RTH} text-center w-9`}>#</th>
+                <th className={`${RTH} text-left`}>Student Name</th>
+                <th className={`${RTH} text-left w-24`}>Reg No</th>
+                <th className={`${RTH} text-left w-24`}>Previous Year</th>
+                <th className={`${RTH} text-left w-24`}>Current Year</th>
+                <th className={`${RTH} text-center w-14`}>Course</th>
+                <th className={`${RTH} text-center w-12`}>Cat</th>
+                <th className={`${RTH} text-center w-20`}>Adm Type</th>
+                <th className={`${RTH} text-center w-16`}>Adm Cat</th>
+                <th className={`${RTH} text-left w-32`}>Mobile No</th>
+                <th className={`${RTH} text-center w-24`}>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-sky-50/60">
+            <tbody className={RTBODY}>
               {visibleStudents.map((s, idx) => {
-                const isOut = !!s.transferOut;
-                const dateVal = isOut ? s.transferOutDate : s.enrollmentDate;
-                const polytechnic = isOut ? s.transferOutPolytechnic : s.transferInPolytechnic;
+                const status = effectiveNotAdmittedStatus(s, notAdmittedStatusMap.get(s.id));
+                const meta = STATUS_TAG_META[status];
+                const menuActive = statusCtxMenu?.student.id === s.id;
                 return (
-                  <tr key={s.id} className="transition-colors hover:bg-sky-50/50">
-                    <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.regNumber || '—'}</td>
-                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
-                    <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
-                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap">{s.category || '—'}</td>
-                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admType || '—'}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums font-mono">{s.studentMobile || s.fatherMobile || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-2 text-center whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        isOut ? 'bg-sky-100 text-sky-700 border-sky-200' : 'bg-violet-100 text-violet-700 border-violet-200'
-                      }`}>
-                        {isOut ? 'Transfer Out' : 'Transfer In'}
+                  <tr
+                    key={s.id}
+                    className={`transition-colors cursor-context-menu ${menuActive ? 'row-ctx-active' : meta.row}`}
+                    onContextMenu={(e) => { e.preventDefault(); setStatusCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
+                    title="Right-click to mark status"
+                  >
+                    <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                    <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                    <td className={TD_NUM}>{s.regNumber || '—'}</td>
+                    <td className={TD}><LinePill value={s.year} color={YEAR_COLOR[s.year]} minWidth={66} /></td>
+                    <td className={TD}>
+                      {(() => {
+                        const cur = notAdmittedCurrentYearMap.get(s.id);
+                        return cur ? <LinePill value={cur} color={YEAR_COLOR[cur]} minWidth={66} /> : '—';
+                      })()}
+                    </td>
+                    <td className={`${TD} text-center`}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                    <td className={`${TD} text-center`}><LinePill value={s.category} color={CATEGORY_COLOR[s.category]} minWidth={30} /></td>
+                    <td className={`${TD} text-center`}><LinePill value={s.admType} color={ADM_TYPE_COLOR[s.admType]} minWidth={70} /></td>
+                    <td className={`${TD} text-center`}><LinePill value={s.admCat} color={ADM_CAT_COLOR[s.admCat]} minWidth={56} /></td>
+                    <td className={TD_NUM}>{s.studentMobile || s.fatherMobile || DASH}</td>
+                    <td className={`${TD} text-center`}>
+                      <span className={`inline-flex items-center justify-center min-w-[84px] px-[7px] py-[4.5px] rounded-full text-[10.5px] font-medium leading-none ${meta.badge}`}>
+                        {meta.label}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{polytechnic || '—'}</td>
-                    <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">
-                      {dateVal ? new Date(dateVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </td>
-                    {isAdmin && (
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        {isOut && (
-                          <button
-                            className="text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:underline disabled:opacity-50 disabled:no-underline"
-                            disabled={clearingTransferOutId === s.id}
-                            onClick={() => handleClearTransferOut(s)}
-                          >
-                            {clearingTransferOutId === s.id ? 'Clearing…' : 'Clear'}
-                          </button>
-                        )}
-                      </td>
-                    )}
                   </tr>
                 );
               })}
               {hasMore && (
-                <tr>
-                  <td colSpan={isAdmin ? 12 : 11} className="px-3 py-2 text-center border-t border-sky-100/50">
-                    <button
-                      className="text-xs text-sky-600 hover:text-sky-800 hover:underline font-medium"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    >
-                      Load more ({filteredStudents.length - visibleCount} remaining)
-                    </button>
-                  </td>
-                </tr>
+                <LoadMoreRow colSpan={11} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
               )}
             </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-sky-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-          </div>
-        </div>
+          </ReportTable>
+        )
+      ) : reportType === 'transfer-students' ? (
+        /* ── Transfer Students table ─────────────────────────────────────── */
+        <ReportTable key="transfer-students" report="transfer-students"
+          footer={
+            <span>
+              Showing <span className="text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredStudents.length)}</span> of{' '}
+              <span className="text-[#262B35] tabular-nums">{filteredStudents.length}</span> student{filteredStudents.length !== 1 ? 's' : ''}
+            </span>
+          }
+        >
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${RTH} text-center w-9`}>#</th>
+              <th className={`${RTH} text-left`}>Student Name</th>
+              <th className={`${RTH} text-left w-24`}>Reg No</th>
+              <th className={`${RTH} text-center w-16`}>Year</th>
+              <th className={`${RTH} text-center w-14`}>Course</th>
+              <th className={`${RTH} text-center w-12`}>Cat</th>
+              <th className={`${RTH} text-center w-20`}>Adm Type</th>
+              <th className={`${RTH} text-left w-32`}>Mobile No</th>
+              <th className={`${RTH} text-center w-28`}>Direction</th>
+              <th className={`${RTH} text-left w-36`}>Polytechnic</th>
+              <th className={`${RTH} text-center w-24`}>Date</th>
+              {isAdmin && <th className={`${RTH} text-center w-20`}>Action</th>}
+            </tr>
+          </thead>
+          <tbody className={RTBODY}>
+            {visibleStudents.map((s, idx) => {
+              const isOut = !!s.transferOut;
+              const dateVal = isOut ? s.transferOutDate : s.enrollmentDate;
+              const polytechnic = isOut ? s.transferOutPolytechnic : s.transferInPolytechnic;
+              return (
+                <tr key={s.id} className={RROW}>
+                  <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                  <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                  <td className={TD_NUM}>{s.regNumber || '—'}</td>
+                  <td className={`${TD} text-center`}><LinePill value={s.year} color={YEAR_COLOR[s.year]} minWidth={66} /></td>
+                  <td className={`${TD} text-center`}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                  <td className={`${TD} text-center`}><LinePill value={s.category} color={CATEGORY_COLOR[s.category]} minWidth={30} /></td>
+                  <td className={`${TD} text-center`}><LinePill value={s.admType} color={ADM_TYPE_COLOR[s.admType]} minWidth={70} /></td>
+                  <td className={TD_NUM}>{s.studentMobile || s.fatherMobile || DASH}</td>
+                  <td className={`${TD} text-center`}>
+                    <LinePill value={isOut ? 'Transfer Out' : 'Transfer In'} color={isOut ? '#0284C7' : '#7C3AED'} minWidth={84} />
+                  </td>
+                  <td className={TD_TXT}>{polytechnic || '—'}</td>
+                  <td className={`${TD_TXT} text-center`}>
+                    {dateVal ? new Date(dateVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                  </td>
+                  {isAdmin && (
+                    <td className={`${TD} text-center`}>
+                      {isOut && (
+                        <button
+                          className="inline-flex items-center justify-center rounded-[7px] border border-[#0284C7]/45 bg-white px-2.5 py-[5px] text-[11px] font-medium leading-none text-[#0369A1] transition-colors enabled:hover:bg-[#0284C7]/[0.08] enabled:cursor-pointer disabled:opacity-50"
+                          disabled={clearingTransferOutId === s.id}
+                          onClick={() => handleClearTransferOut(s)}
+                        >
+                          {clearingTransferOutId === s.id ? 'Clearing…' : 'Clear'}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+            {hasMore && (
+              <LoadMoreRow colSpan={isAdmin ? 12 : 11} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
+            )}
+          </tbody>
+        </ReportTable>
       ) : reportType === 'refund-students' ? (
         refundRows.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            No refund records found{hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}
-          </div>
+          <EmptyState title={`No refund records found${hasActiveFilters ? ' for the selected filters.' : ' across all academic years.'}`} />
         ) : (
           /* ── Refund Students List table ──────────────────────────────────── */
-          <div
-            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-rose-100 overflow-auto flex flex-col"
-            style={{ boxShadow: '0 1px 4px 0 rgba(190,18,60,0.06)' }}
+          <ReportTable key="refund-students" report="refund-students"
+            footer={
+              <>
+                <span>
+                  Showing <span className="text-[#262B35] tabular-nums">{refundRows.length}</span> refund{refundRows.length !== 1 ? 's' : ''}
+                  {hasActiveFilters && refundStats && refundStats.totalRefunds > 0 && refundRows.length < refundStats.totalRefunds && (
+                    <span> (filtered from {refundStats.totalRefunds} total)</span>
+                  )}
+                </span>
+                <span className="font-semibold tabular-nums" style={{ color: inkOf(tint) }}>
+                  Total: ₹{refundRows.reduce((s, r) => s + r.refundAmount, 0).toLocaleString('en-IN')}
+                </span>
+              </>
+            }
           >
-            <table className="min-w-full divide-y divide-rose-50 text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr style={{ background: 'linear-gradient(90deg, #fff1f2, #ffe4e6)' }}>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-rose-200">#</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-rose-200">Student Name</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-14 border-b border-rose-200">Course</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-rose-200">Reg No</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Category</th>
-                  <th className="px-3 py-2 text-right font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Refund Amt</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-32 border-b border-rose-200">Mode</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-rose-200">Payment Date</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-rose-200">Acad. Year</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-rose-50/60">
-                {refundRows.map((r, idx) => {
-                  const category = r.refundCategory ?? 'SNQ';
-                  const categoryBadgeClass = category === 'SNQ'
-                    ? 'bg-blue-50 border-blue-100 text-blue-700'
-                    : category === 'GENERAL'
-                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                    : 'bg-amber-50 border-amber-100 text-amber-700';
-                  const categoryLabel = category === 'SNQ' ? 'SNQ' : category === 'GENERAL' ? 'General Refund' : 'Seat Cancellation';
-                  return (
-                    <tr key={r.id} className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-rose-50/40`}>
-                      <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.studentName}</td>
-                      <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{r.course}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{r.regNumber || '—'}</td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${categoryBadgeClass}`}>
-                          {categoryLabel}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold text-rose-700 whitespace-nowrap tabular-nums">₹{r.refundAmount.toLocaleString('en-IN')}</td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.paymentType.replace(/_/g, ' ')}</td>
-                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                        {r.paymentDate ? new Date(r.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 border border-rose-100 text-rose-700">
-                          {r.academicYear}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 border-t border-rose-50 text-xs text-gray-500 mt-auto flex items-center justify-between gap-3">
-              <span>
-                Showing {refundRows.length} refund{refundRows.length !== 1 ? 's' : ''}
-                {hasActiveFilters && refundStats && refundStats.totalRefunds > 0 && refundRows.length < refundStats.totalRefunds && (
-                  <span className="text-gray-400"> (filtered from {refundStats.totalRefunds} total)</span>
-                )}
-              </span>
-              <span className="font-semibold text-rose-700">
-                Total: ₹{refundRows.reduce((s, r) => s + r.refundAmount, 0).toLocaleString('en-IN')}
-              </span>
-            </div>
-          </div>
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className={`${RTH} text-center w-9`}>#</th>
+                <th className={`${RTH} text-left`}>Student Name</th>
+                <th className={`${RTH} text-center w-14`}>Course</th>
+                <th className={`${RTH} text-left w-24`}>Reg No</th>
+                <th className={`${RTH} text-center w-28`}>Category</th>
+                <th className={`${RTH} text-right w-28`}>Refund Amt</th>
+                <th className={`${RTH} text-left w-32`}>Mode</th>
+                <th className={`${RTH} text-left w-28`}>Payment Date</th>
+                <th className={`${RTH} text-center w-20`}>Acad. Year</th>
+              </tr>
+            </thead>
+            <tbody className={RTBODY}>
+              {refundRows.map((r, idx) => {
+                const category = r.refundCategory ?? 'SNQ';
+                const categoryLabel = category === 'SNQ' ? 'SNQ' : category === 'GENERAL' ? 'General Refund' : 'Seat Cancellation';
+                return (
+                  <tr key={r.id} className={RROW}>
+                    <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                    <td className={TD}><NameCell name={r.studentName} course={r.course} /></td>
+                    <td className={`${TD} text-center`}><LinePill value={r.course} color={DEPT_DOT[r.course]} minWidth={34} /></td>
+                    <td className={TD_NUM}>{r.regNumber || '—'}</td>
+                    <td className={`${TD} text-center`}><LinePill value={categoryLabel} color={REFUND_CAT_COLOR[category]} /></td>
+                    <td className={`${TD} text-right text-[12px] font-semibold tabular-nums`} style={{ color: inkOf(tint) }}>₹{r.refundAmount.toLocaleString('en-IN')}</td>
+                    <td className={TD_TXT}>{r.paymentType.replace(/_/g, ' ')}</td>
+                    <td className={TD_TXT}>
+                      {r.paymentDate ? new Date(r.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
+                    <td className={`${TD} text-center`}><LinePill value={r.academicYear} color={tint} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </ReportTable>
         )
       ) : reportType === 'custom' ? (
         orderedCustomColumns.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-            Select at least one column above to preview the report.
-          </div>
+          <EmptyState title="Select at least one column above to preview the report." />
         ) : (
           /* ── Custom Report table ───────────────────────────────────────── */
-          <div
-            className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-violet-100 overflow-auto flex flex-col"
-            style={{ boxShadow: '0 1px 4px 0 rgba(109,40,217,0.06)' }}
-          >
-            <table className="min-w-full divide-y divide-violet-50 text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr style={{ background: 'linear-gradient(90deg, #f5f3ff, #ede9fe)' }}>
-                  {orderedCustomColumns.map((c) => (
-                    <th
-                      key={c.key}
-                      className={`px-3 py-2 font-bold text-gray-700 whitespace-nowrap border-b border-violet-200 ${ALIGN_CLASS[c.align]}`}
-                    >
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-violet-50/60">
-                {visibleStudents.map((s, idx) => (
-                  <tr
-                    key={s.id}
-                    className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-violet-50/40`}
-                  >
-                    {orderedCustomColumns.map((c) => (
-                      <td key={c.key} className={`px-3 py-2 text-gray-700 whitespace-nowrap ${ALIGN_CLASS[c.align]}`}>
-                        {formatColumnValue(c, s, idx)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {hasMore && (
-                  <tr>
-                    <td colSpan={orderedCustomColumns.length} className="px-3 py-2 text-center border-t border-violet-100/50">
-                      <button
-                        className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
-                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                      >
-                        Load more ({filteredStudents.length - visibleCount} remaining)
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 border-t border-violet-50 text-xs text-gray-500 mt-auto">
-              Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-              {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
-                <span className="text-gray-400"> (filtered from {stats.total} total)</span>
-              )}
-            </div>
-          </div>
-        )
-      ) : (
-        /* ── Allotted Category table ─────────────────────────────────────── */
-        <div
-          className="flex-1 min-h-0 bg-white/80 rounded-2xl border border-indigo-100 overflow-auto flex flex-col"
-          style={{ boxShadow: '0 1px 4px 0 rgba(99,102,241,0.06)' }}
-        >
-          <table className="min-w-full divide-y divide-indigo-50 text-xs">
+          <ReportTable key="custom" report="custom" footer={showingStudents}>
             <thead className="sticky top-0 z-10">
-              <tr style={{ background: 'linear-gradient(90deg, #eef2ff, #e0e7ff)' }}>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-9 border-b border-indigo-200">#</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap border-b border-indigo-200">Student Name</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Year</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-indigo-200">Course</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-24 border-b border-indigo-200">Reg No</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-16 border-b border-indigo-200">Category</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-20 border-b border-indigo-200">Adm Cat</th>
-                <th className="px-3 py-2 text-center font-bold text-indigo-700 whitespace-nowrap w-28 border-b border-indigo-300">Allotted Cat</th>
-                <th className="px-3 py-2 text-center font-bold text-gray-700 whitespace-nowrap w-24 border-b border-indigo-200">Adm Type</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Student Mob</th>
-                <th className="px-3 py-2 text-left font-bold text-gray-700 whitespace-nowrap w-28 border-b border-indigo-200">Father Mob</th>
+              <tr>
+                {orderedCustomColumns.map((c) => (
+                  <th key={c.key} className={`${RTH} ${ALIGN_CLASS[c.align]}`}>
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-indigo-50/60">
+            <tbody className={RTBODY}>
               {visibleStudents.map((s, idx) => (
-                <tr
-                  key={s.id}
-                  className={`transition-colors ${idx % 2 === 1 ? 'bg-gray-50/60' : ''} hover:bg-indigo-50/40`}
-                >
-                  <td className="px-3 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px]">{s.year}</td>
-                  <td className="px-3 py-2 text-center font-semibold text-gray-700 whitespace-nowrap">{s.course}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.regNumber || '—'}</td>
-                  <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 border border-emerald-100 text-emerald-700">
-                      {s.category || '—'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-50 border border-sky-200 text-sky-700">
-                      {s.admCat || '—'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
-                      {s.allottedCategory || '—'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center text-gray-600 whitespace-nowrap text-[11px]">{s.admType || '—'}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.studentMobile || '—'}</td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap tabular-nums">{s.fatherMobile || '—'}</td>
+                <tr key={s.id} className={RROW}>
+                  {orderedCustomColumns.map((c) => (
+                    <td key={c.key} className={`${TD_TXT} !text-[#262B35] ${ALIGN_CLASS[c.align]}`}>
+                      {formatColumnValue(c, s, idx)}
+                    </td>
+                  ))}
                 </tr>
               ))}
               {hasMore && (
-                <tr>
-                  <td colSpan={11} className="px-3 py-2 text-center border-t border-indigo-100/50">
-                    <button
-                      className="text-xs text-emerald-600 hover:text-emerald-800 hover:underline font-medium"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                    >
-                      Load more ({filteredStudents.length - visibleCount} remaining)
-                    </button>
-                  </td>
-                </tr>
+                <LoadMoreRow colSpan={orderedCustomColumns.length} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
               )}
             </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-indigo-50 text-xs text-gray-500 mt-auto">
-            Showing {Math.min(visibleCount, filteredStudents.length)} of {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
-            {hasActiveFilters && stats.total > 0 && filteredStudents.length < stats.total && (
-              <span className="text-gray-400"> (filtered from {stats.total} total)</span>
+          </ReportTable>
+        )
+      ) : (
+        /* ── Allotted Category table ─────────────────────────────────────── */
+        <ReportTable key="allotted-category" report="allotted-category" footer={showingStudents}>
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${RTH} text-center w-9`}>#</th>
+              <th className={`${RTH} text-left`}>Student Name</th>
+              <th className={`${RTH} text-left w-28`}>Year</th>
+              <th className={`${RTH} text-center w-16`}>Course</th>
+              <th className={`${RTH} text-left w-24`}>Reg No</th>
+              <th className={`${RTH} text-center w-16`}>Category</th>
+              <th className={`${RTH} text-center w-20`}>Adm Cat</th>
+              <th className={`${RTH} text-center w-28 !font-semibold`}>Allotted Cat</th>
+              <th className={`${RTH} text-center w-24`}>Adm Type</th>
+              <th className={`${RTH} text-left w-28`}>Student Mob</th>
+              <th className={`${RTH} text-left w-28`}>Father Mob</th>
+            </tr>
+          </thead>
+          <tbody className={RTBODY}>
+            {visibleStudents.map((s, idx) => (
+              <tr key={s.id} className={RROW}>
+                <td className={`${TD_IDX} text-center`}>{idx + 1}</td>
+                <td className={TD}><NameCell name={s.studentNameSSLC} course={s.course} /></td>
+                <td className={TD}><LinePill value={s.year} color={YEAR_COLOR[s.year]} minWidth={66} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.course} color={DEPT_DOT[s.course]} minWidth={34} /></td>
+                <td className={TD_NUM}>{s.regNumber || '—'}</td>
+                <td className={`${TD} text-center`}><LinePill value={s.category} color={CATEGORY_COLOR[s.category]} minWidth={30} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.admCat} color={ADM_CAT_COLOR[s.admCat]} minWidth={56} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.allottedCategory} color={tint} minWidth={40} /></td>
+                <td className={`${TD} text-center`}><LinePill value={s.admType} color={ADM_TYPE_COLOR[s.admType]} minWidth={70} /></td>
+                <td className={TD_NUM}>{s.studentMobile || '—'}</td>
+                <td className={TD_NUM}>{s.fatherMobile || '—'}</td>
+              </tr>
+            ))}
+            {hasMore && (
+              <LoadMoreRow colSpan={11} remaining={filteredStudents.length - visibleCount} onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} />
             )}
-          </div>
-        </div>
+          </tbody>
+        </ReportTable>
       )}
+    </div>
 
       {/* ── PC Clear Modal (double-click on PC row) ─────────────────────── */}
       {pcClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-[#1E1B4B]/40 backdrop-blur-[2px]"
             onClick={() => !pcClearModalClearing && (setPcClearModal(null), setPcClearPasskey(''), setPcClearPasskeyError(''))}
             aria-hidden="true"
+            style={{ animation: 'backdrop-enter 0.2s ease-out' }}
           />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
-            <div className="px-5 py-4 border-b border-red-100 bg-red-50/60">
-              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider">Clear PC History</h3>
-            </div>
+          <div
+            className="relative bg-white rounded-[22px] border border-[#DCDDFB] max-w-sm w-full overflow-hidden"
+            style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: '0 24px 60px rgba(30,27,75,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}
+          >
+            <ClearModalHeader eyebrow="PC History" title="Clear PC History" />
 
             <div className="px-5 py-4 space-y-3">
-              <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                <p className="text-sm font-semibold text-gray-800">{pcClearModal.studentName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {pcClearModal.regNumber || '—'} · {pcClearModal.course} · {pcClearModal.year} · {pcClearModal.enrollmentYear}
-                </p>
-              </div>
+              <ClearModalStudent
+                name={pcClearModal.studentName}
+                course={pcClearModal.course}
+                meta={`${pcClearModal.regNumber || '—'} · ${pcClearModal.course} · ${pcClearModal.year} · ${pcClearModal.enrollmentYear}`}
+              />
 
-              <p className="text-sm text-gray-600">
+              <p className="text-[12.5px] font-medium text-[#5B6371] leading-relaxed">
                 This will permanently erase{' '}
-                <span className="font-semibold text-red-600">all PC records</span> for this student.
+                <span className="font-semibold" style={{ color: inkOf(CORAL) }}>all PC records</span> for this student.
                 The action cannot be undone.
               </p>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Passkey</label>
+                <label className={`block mb-1 ${FIELD_LABEL}`}>Passkey</label>
                 <input
                   type="password"
                   value={pcClearPasskey}
@@ -2816,26 +2797,27 @@ export function StudentReports() {
                   placeholder="Enter passkey"
                   autoFocus
                   autoComplete="new-password"
-                  className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${pcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
+                  className={`${PASSKEY_INPUT} ${pcClearPasskeyError ? 'border-[#E11D48]/60' : 'border-[#DCDDFB]'}`}
                 />
                 {pcClearPasskeyError && (
-                  <p className="text-xs text-red-600 mt-1">{pcClearPasskeyError}</p>
+                  <p className="text-[11.5px] font-medium mt-1" style={{ color: inkOf(CORAL) }}>{pcClearPasskeyError}</p>
                 )}
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+            <div className="px-5 py-3 border-t border-[#DCDDFB] flex justify-end gap-2">
               <button
                 onClick={() => { setPcClearModal(null); setPcClearPasskey(''); setPcClearPasskeyError(''); }}
                 disabled={pcClearModalClearing}
-                className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                className={MODAL_CANCEL_BTN}
               >
                 Cancel
               </button>
               <button
                 onClick={() => { void handlePcClearFromModal(); }}
                 disabled={pcClearModalClearing}
-                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 font-semibold cursor-pointer"
+                className={MODAL_DANGER_BTN}
+                style={{ boxShadow: `0 3px 10px ${CORAL}40` }}
               >
                 {pcClearModalClearing ? 'Clearing…' : 'Yes, Clear History'}
               </button>
@@ -2846,33 +2828,34 @@ export function StudentReports() {
 
       {/* ── TC Clear Modal (double-click on TC row) ─────────────────────── */}
       {tcClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-[#1E1B4B]/40 backdrop-blur-[2px]"
             onClick={() => !tcClearModalClearing && (setTcClearModal(null), setTcClearPasskey(''), setTcClearPasskeyError(''))}
             aria-hidden="true"
+            style={{ animation: 'backdrop-enter 0.2s ease-out' }}
           />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
-            <div className="px-5 py-4 border-b border-red-100 bg-red-50/60">
-              <h3 className="text-sm font-bold text-red-700 uppercase tracking-wider">Clear TC History</h3>
-            </div>
+          <div
+            className="relative bg-white rounded-[22px] border border-[#DCDDFB] max-w-sm w-full overflow-hidden"
+            style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: '0 24px 60px rgba(30,27,75,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}
+          >
+            <ClearModalHeader eyebrow="TC History" title="Clear TC History" />
 
             <div className="px-5 py-4 space-y-3">
-              <div className="bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                <p className="text-sm font-semibold text-gray-800">{tcClearModal.studentName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {tcClearModal.regNumber || '—'} · {tcClearModal.course} · {tcClearModal.year} · {tcClearModal.enrollmentYear}
-                </p>
-              </div>
+              <ClearModalStudent
+                name={tcClearModal.studentName}
+                course={tcClearModal.course}
+                meta={`${tcClearModal.regNumber || '—'} · ${tcClearModal.course} · ${tcClearModal.year} · ${tcClearModal.enrollmentYear}`}
+              />
 
-              <p className="text-sm text-gray-600">
+              <p className="text-[12.5px] font-medium text-[#5B6371] leading-relaxed">
                 This will permanently erase{' '}
-                <span className="font-semibold text-red-600">all TC records</span> for this student.
+                <span className="font-semibold" style={{ color: inkOf(CORAL) }}>all TC records</span> for this student.
                 The action cannot be undone.
               </p>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Passkey</label>
+                <label className={`block mb-1 ${FIELD_LABEL}`}>Passkey</label>
                 <input
                   type="password"
                   value={tcClearPasskey}
@@ -2881,26 +2864,27 @@ export function StudentReports() {
                   placeholder="Enter passkey"
                   autoFocus
                   autoComplete="new-password"
-                  className={`block w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 ${tcClearPasskeyError ? 'border-red-400' : 'border-gray-300'}`}
+                  className={`${PASSKEY_INPUT} ${tcClearPasskeyError ? 'border-[#E11D48]/60' : 'border-[#DCDDFB]'}`}
                 />
                 {tcClearPasskeyError && (
-                  <p className="text-xs text-red-600 mt-1">{tcClearPasskeyError}</p>
+                  <p className="text-[11.5px] font-medium mt-1" style={{ color: inkOf(CORAL) }}>{tcClearPasskeyError}</p>
                 )}
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+            <div className="px-5 py-3 border-t border-[#DCDDFB] flex justify-end gap-2">
               <button
                 onClick={() => { setTcClearModal(null); setTcClearPasskey(''); setTcClearPasskeyError(''); }}
                 disabled={tcClearModalClearing}
-                className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                className={MODAL_CANCEL_BTN}
               >
                 Cancel
               </button>
               <button
                 onClick={() => { void handleTcClearFromModal(); }}
                 disabled={tcClearModalClearing}
-                className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 font-semibold cursor-pointer"
+                className={MODAL_DANGER_BTN}
+                style={{ boxShadow: `0 3px 10px ${CORAL}40` }}
               >
                 {tcClearModalClearing ? 'Clearing…' : 'Yes, Clear History'}
               </button>
@@ -2912,59 +2896,70 @@ export function StudentReports() {
       {/* ── TC Preview Modal (right-click on a TC row) ────────────────────── */}
       {tcPreviewRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6"
           style={{ animation: 'backdrop-enter 0.18s ease-out' }}
         >
-          <div className="absolute inset-0 bg-black/50" onClick={() => setTcPreviewRow(null)} />
+          <div className="absolute inset-0 bg-[#1E1B4B]/45 backdrop-blur-[2px]" onClick={() => setTcPreviewRow(null)} />
           <div
-            className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-            style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out' }}
+            className="relative bg-white rounded-[22px] border border-[#DCDDFB] flex flex-col overflow-hidden"
+            style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out', boxShadow: '0 24px 60px rgba(30,27,75,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-5 py-3.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center justify-between shrink-0">
-              <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <polyline points="6 9 6 2 18 2 18 9"/>
-                      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
-                      <rect x="6" y="14" width="12" height="8"/>
-                    </svg>
-                  </span>
-                  TC Preview — {tcPreviewRow.tcNumber}
-                </h2>
-                <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40 truncate max-w-xs">
+            <div
+              className="relative overflow-hidden px-5 py-3.5 flex items-center justify-between shrink-0 border-b border-[#4F46E5]/20"
+              style={{ background: `linear-gradient(135deg, ${INDIGO}24 0%, ${INDIGO}0D 55%, #FFFFFF 100%)` }}
+            >
+              <span
+                className="pointer-events-none absolute -top-20 -right-10 w-44 h-44 rounded-full border-[22px]"
+                style={{ borderColor: `${INDIGO}12` }}
+                aria-hidden="true"
+              />
+              <div className="relative min-w-0 flex-1 flex items-center gap-2.5 flex-wrap">
+                <span
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-[10px] text-white shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${INDIGO}, #3730A3)`, boxShadow: `0 3px 10px ${INDIGO}40` }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"/>
+                    <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                    <rect x="6" y="14" width="12" height="8"/>
+                  </svg>
+                </span>
+                <div className="flex flex-col shrink-0">
+                  <span className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A8FA8] leading-none">TC Preview</span>
+                  <h2 className="mt-1 text-[16px] font-bold text-[#3730A3] leading-none tracking-[-0.2px] tabular-nums">{tcPreviewRow.tcNumber}</h2>
+                </div>
+                <span className="inline-flex items-center rounded-full border border-[#4F46E5]/40 bg-white/85 text-[#3730A3] px-2.5 py-[4px] text-[10.5px] font-medium leading-none truncate max-w-xs">
                   {tcPreviewRow.studentName}
                 </span>
                 {tcPreviewRow.isDuplicate && (
-                  <span className="inline-flex items-center rounded-full text-[10px] font-semibold px-2 py-0.5 bg-amber-500/30 text-amber-100 border border-amber-400/30 shrink-0">
-                    Duplicate Copy
-                  </span>
+                  <LinePill value="Duplicate Copy" color={AMBER} />
                 )}
               </div>
               <button
                 onClick={() => setTcPreviewRow(null)}
-                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
+                className="relative flex items-center justify-center w-8 h-8 rounded-full border border-[#4F46E5]/35 bg-white text-[#3730A3] hover:bg-[#F3F4FE] hover:border-[#4F46E5]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"
+                aria-label="Close"
               >
-                ×
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
 
             {/* Info banner */}
-            <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center gap-2 shrink-0">
-              <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="px-5 py-2 bg-[#F5F6FE] border-b border-[#DCDDFB] flex items-center gap-2 shrink-0">
+              <svg className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-              <span className="text-xs text-blue-700">
+              <span className="text-[11.5px] font-medium text-[#3730A3]">
                 Read-only preview reconstructed from the issued record. This does not print or save.
               </span>
             </div>
 
             {/* Preview iframe */}
-            <div className="flex-1 overflow-auto min-h-0 bg-slate-300">
+            <div className="scroll-indigo flex-1 overflow-auto min-h-0 bg-[#E4E5F4]">
               {tcPreviewHtml ? (
                 <iframe
                   srcDoc={tcPreviewHtml}
@@ -2973,17 +2968,17 @@ export function StudentReports() {
                   style={{ height: '1100px' }}
                 />
               ) : (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-500">
+                <div className="flex items-center justify-center h-40 text-[13px] font-medium text-[#5B6371]">
                   Unable to load student record for this TC.
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0 flex items-center justify-end">
+            <div className="px-5 py-3 border-t border-[#DCDDFB] bg-white shrink-0 flex items-center justify-end">
               <button
                 onClick={() => setTcPreviewRow(null)}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+                className={MODAL_CANCEL_BTN}
               >
                 Close
               </button>
@@ -3012,44 +3007,49 @@ export function StudentReports() {
             />
             <div
               ref={statusCtxMenuRef}
-              className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[200px]"
-              style={{ left: statusCtxMenu.x, top: statusCtxMenu.y, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+              className="font-wp fixed z-50 bg-white border border-[#DCDDFB] rounded-2xl overflow-hidden min-w-[220px]"
+              style={{ left: statusCtxMenu.x, top: statusCtxMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(30,27,75,0.14), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
               onContextMenu={(e) => e.preventDefault()}
             >
               {/* Header */}
-              <div className="px-3 pt-2 pb-1.5 border-b border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-800 truncate">{student.studentNameSSLC}</p>
-                <p className="text-[9px] text-gray-400 mt-0.5">{student.course} · {student.year} · {student.academicYear}</p>
-                <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${currentMeta.badge}`}>
-                  {currentMeta.label}
-                </span>
+              <div className="px-3 py-2.5 border-b border-[#DCDDFB] bg-[#F3F4FE] flex items-center gap-3">
+                <RingAvatar name={student.studentNameSSLC} course={student.course} />
+                <div className="min-w-0">
+                  <p className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A8FA8] leading-none">
+                    {student.course} · {student.year} · {student.academicYear}
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium text-[#262B35] truncate leading-none">{student.studentNameSSLC}</p>
+                  <span className={`inline-flex items-center mt-1.5 px-2 py-[3px] rounded-full text-[9.5px] font-medium leading-none ${currentMeta.badge}`}>
+                    {currentMeta.label}
+                  </span>
+                </div>
               </div>
               {/* Items */}
-              <div className="py-1">
+              <div className="p-1">
                 {isAdmin ? (
                   <>
                     {TAG_OPTIONS.map((opt) => (
                       <button
                         key={opt.tag}
-                        className="group w-full text-left px-3 py-[5px] text-[12px] text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className={MENU_ITEM}
                         disabled={student.notAdmittedStatusTag === opt.tag}
                         onClick={() => { void handleSetNotAdmittedStatus(student.id, opt.tag); }}
                       >
-                        <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span className={`${MENU_ICON} group-enabled:group-hover:bg-[#4F46E5]/10 group-enabled:group-hover:text-[#4F46E5]`}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </span>
                         {opt.label}
                       </button>
                     ))}
                     {student.notAdmittedStatusTag && (
                       <>
-                        <div className="my-1 border-t border-gray-100" />
+                        <div className="my-1 h-px bg-[#EEEFFC] mx-2" />
                         <button
-                          className="group w-full text-left px-3 py-[5px] text-[12px] text-red-600 hover:bg-red-50 hover:text-red-900 flex items-center gap-2 transition-colors duration-100"
+                          className={`${MENU_ITEM} !text-[#BE123C] enabled:hover:!bg-[#E11D48]/[0.06]`}
                           onClick={() => { void handleSetNotAdmittedStatus(student.id, null); }}
                         >
-                          <span className="w-[16px] h-[16px] rounded-[4px] bg-gray-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          <span className={MENU_ICON} style={{ background: `${CORAL}14`, color: CORAL }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </span>
                           Clear Status
                         </button>
@@ -3057,13 +3057,13 @@ export function StudentReports() {
                     )}
                   </>
                 ) : (
-                  <div className="px-3 py-[5px] text-[11px] text-gray-400">Only admins can edit status.</div>
+                  <div className="px-2 py-1.5 text-[11.5px] font-medium text-[#8A8FA8]">Only admins can edit status.</div>
                 )}
               </div>
             </div>
           </>
         );
       })()}
-    </div>
+    </>
   );
 }

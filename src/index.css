@@ -364,6 +364,77 @@
 .scroll-teal::-webkit-scrollbar-corner {
   background: transparent;
 }
+/* Fee Register: taller horizontal bar — easier to grab on desktop (wide table) */
+.scroll-teal-wide::-webkit-scrollbar {
+  height: 13px;
+}
+.scroll-teal-wide::-webkit-scrollbar-thumb:horizontal {
+  border-width: 3px;
+}
+/* Vertical track inset by the Fee Register's sticky header (28px group row + 36px
+   column row) and totals row (36px), so the scrollbar runs only alongside the rows.
+   Fixed values: Chrome doesn't restyle scrollbars when a CSS variable changes. */
+.scroll-teal-wide::-webkit-scrollbar-track:vertical {
+  margin-top: 64px;
+  margin-bottom: 36px;
+}
+/* Paint the scrollbar column beside the sticky header / totals row in their
+   colours (rightmost header cells #CBE7E7, Grand Total cell #0F8B8D), so those
+   bands run edge to edge and the scrollbar only shows alongside the rows. */
+.scroll-teal-wide::-webkit-scrollbar:vertical {
+  background: linear-gradient(
+    to bottom,
+    #CBE7E7 0 63px,
+    #C7E2E2 63px 64px,
+    transparent 64px calc(100% - 36px),
+    #C7E2E2 calc(100% - 36px) calc(100% - 35px),
+    #0F8B8D calc(100% - 35px)
+  );
+}
+
+/* ── Student Reports tables — thin indigo scrollbar that starts below the
+   36px sticky header. The gutter beside the header is painted in the report's
+   header band colour (static per-report classes below), so the band runs edge
+   to edge and the scrollbar only shows alongside the rows. ────────────────── */
+.scroll-report::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-report::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-report::-webkit-scrollbar-track:vertical {
+  margin-top: 36px;
+}
+/* Gutter beside the header, per report (colours = that report's header band,
+   REPORT_BAND in StudentReports.tsx). Static values: Chrome may not apply CSS
+   variables inside scrollbar styles. */
+.scroll-report--snq-allotment::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #FBF0E4 0 35px, #F4D6B4 35px 36px, transparent 36px); }
+.scroll-report--whatsapp-numbers::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #E5F5EB 0 35px, #B9E3C9 35px 36px, transparent 36px); }
+.scroll-report--tc-issued::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #E7EEFD 0 35px, #BED0F9 35px 36px, transparent 36px); }
+.scroll-report--pc-issued::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F1E9FD 0 35px, #D8C4FA 35px 36px, transparent 36px); }
+.scroll-report--allotted-category::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F8E7FA 0 35px, #ECBEF2 35px 36px, transparent 36px); }
+.scroll-report--student-list::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #ECEBFC 0 35px, #CAC8F7 35px 36px, transparent 36px); }
+.scroll-report--not-admitted::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #FCE6EB 0 35px, #F6BBC8 35px 36px, transparent 36px); }
+.scroll-report--transfer-students::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #E3F1F9 0 35px, #B3DAEE 35px 36px, transparent 36px); }
+.scroll-report--refund-students::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #FBE7F0 0 35px, #F4BED6 35px 36px, transparent 36px); }
+.scroll-report--custom::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #EEEEFD 0 35px, #D0D1FB 35px 36px, transparent 36px); }
+.scroll-report::-webkit-scrollbar-thumb {
+  background: #C9CBF6;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-report::-webkit-scrollbar-thumb:horizontal {
+  border-width: 3px;
+}
+.scroll-report::-webkit-scrollbar-thumb:hover {
+  background: #9EA2EE;
+  background-clip: padding-box;
+}
+.scroll-report::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
 .scroll-indigo {

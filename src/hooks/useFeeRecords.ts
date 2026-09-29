@@ -18,6 +18,7 @@ function financialYearDateRange(academicYear: AcademicYear): { startDate: string
 // Module-level cache keyed by "${academicYear}|${mode}" — survives page navigation
 // so returning to Fee Register, Dashboard, or StudentReports is instant.
 const _cache = new Map<string, FeeRecord[]>();
+const EMPTY: FeeRecord[] = [];
 
 export function useFeeRecords(
   academicYear: AcademicYear | null,
@@ -30,11 +31,16 @@ export function useFeeRecords(
   const [loading, setLoading] = useState(() => !_cache.has(cacheKey) && academicYear !== null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  // Key the current `records` state belongs to. When academicYear/mode changes, state
+  // still holds the previous key's data until the effect runs — without this, callers
+  // would see one render of stale/empty records with loading=false.
+  const [loadedKey, setLoadedKey] = useState(() => (_cache.has(cacheKey) || academicYear === null ? cacheKey : null));
 
   useEffect(() => {
     if (!academicYear) {
       setRecords([]);
       setLoading(false);
+      setLoadedKey(cacheKey);
       return;
     }
     if (!_cache.has(cacheKey)) setLoading(true);
@@ -60,6 +66,7 @@ export function useFeeRecords(
         const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord));
         _cache.set(cacheKey, data);
         setRecords(data);
+        setLoadedKey(cacheKey);
         setLoading(false);
       },
       (err) => {
@@ -76,5 +83,11 @@ export function useFeeRecords(
     setTick((t) => t + 1);
   }
 
-  return { records, loading, error, refetch };
+  const stale = academicYear !== null && loadedKey !== cacheKey;
+  return {
+    records: stale ? (_cache.get(cacheKey) ?? EMPTY) : records,
+    loading: loading || (stale && !_cache.has(cacheKey)),
+    error,
+    refetch,
+  };
 }

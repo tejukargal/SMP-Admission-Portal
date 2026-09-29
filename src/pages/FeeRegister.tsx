@@ -10,6 +10,7 @@ import type { AcademicYear, Course, Year, FeeRecord, SMPFeeHead, AdmType, AdmCat
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } from '../utils/feeReceipts';
 import { PageSpinner } from '../components/common/PageSpinner';
+import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeReceiptDetailModal } from '../components/fee/FeeReceiptDetailModal';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -21,22 +22,96 @@ const ADM_CATS: AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 const PAYMENT_MODES: PaymentMode[] = ['CASH', 'UPI', 'SPLIT'];
 const PAGE_SIZE = 100;
 
-const COURSE_COLORS: Record<Course, string> = {
-  CE: 'border-l-blue-400',
-  ME: 'border-l-orange-400',
-  EC: 'border-l-green-500',
-  CS: 'border-l-purple-400',
-  EE: 'border-l-rose-400',
-};
-
 const YEAR_LABELS: Record<string, string> = {
   '1ST YEAR': 'Y1',
   '2ND YEAR': 'Y2',
   '3RD YEAR': 'Y3',
 };
 
-const fs =
-  'shrink-0 rounded-full border border-[#3B5B8A]/25 px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] hover:border-[#3B5B8A]/50 cursor-pointer transition-colors';
+// ── Design tokens — Collect Fee revamp look (student-portal, teal) ─────────
+const TEAL = '#0F8B8D';
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+const YEAR_COLOR: Record<string, string> = {
+  '1ST YEAR': '#0EA5E9', '2ND YEAR': '#F59E0B', '3RD YEAR': '#8B5CF6',
+};
+const ADM_TYPE_COLOR: Record<string, string> = {
+  REGULAR: '#1D6FD8', REPEATER: '#D97706', LATERAL: '#7C3AED', EXTERNAL: TEAL, SNQ: '#10B981',
+};
+const ADM_CAT_COLOR: Record<string, string> = { GM: '#5B9A2F', SNQ: '#10B981', OTHERS: '#F59E0B' };
+const MODE_COLOR: Record<string, string> = { CASH: '#0FA968', UPI: '#1D6FD8', SPLIT: '#7C3AED' };
+const ACTION_COLOR_DUES = '#D97706';
+const FALLBACK_COLOR = '#8A93A3';
+// Per-column pill widths (px) — sized to each column's longest value.
+const PILL_W = { course: 34, year: 30, admType: 70, admCat: 56, mode: 52 };
+
+// Fixed column widths (px). The header, body and footer are separate tables sharing
+// these widths, so the header/footer sit outside the scroller (the scrollbar starts
+// below the header, as on Collect Fee) and columns never shift.
+const COL_W = {
+  idx: 44, name: 220, father: 220, year: 64, course: 72, reg: 112, cat: 76, admType: 100,
+  date: 96, smpRpt: 80, svkRpt: 84, mode: 80, remarks: 140, due: 92, head: 72, subTotal: 92, total: 108,
+};
+
+const TH =
+  'h-9 px-3 py-0 align-middle text-left text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#0B6567] whitespace-nowrap';
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#CDE6E6] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] hover:text-[#0B6567] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const CHIP_ARROW =
+  'shrink-0 w-6 h-6 rounded-full border border-[#0F8B8D]/45 bg-white text-[#0B6567] flex items-center justify-center shadow-[0_1px_4px_rgba(18,20,26,0.06)] enabled:hover:bg-[#EFF8F8] enabled:cursor-pointer disabled:opacity-35 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-[opacity,background-color]';
+const MENU_ITEM =
+  'group w-full text-left px-2 py-1.5 rounded-[10px] text-[12px] font-medium text-[#5B6371] enabled:hover:bg-[#F4FAFA] enabled:hover:text-[#262B35] enabled:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2.5 transition-colors duration-100';
+const MENU_ICON =
+  'w-6 h-6 rounded-[8px] bg-[#EAF4F4] text-[#5B6371] flex items-center justify-center flex-shrink-0 transition-colors';
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course }: { name: string; course: string }) {
+  const h = DEPT_HUE[course] ?? 210;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="w-[22px] h-[22px] rounded-full flex items-center justify-center shrink-0 text-[9.5px] font-medium tracking-[0.3px]"
+      style={{
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text; fixed min width per column. */
+function LinePill({ value, color, minWidth }: { value?: string; color?: string; minWidth?: number }) {
+  if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none whitespace-nowrap"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+    >
+      {value}
+    </span>
+  );
+}
+
+function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div className="w-14 h-14 rounded-2xl border border-[#CDE6E6] bg-[#EFF8F8] flex items-center justify-center text-[#8A93A3]">
+        {icon}
+      </div>
+      <p className="text-[14px] font-medium text-[#5B6371]">{title}</p>
+    </div>
+  );
+}
 
 function calcSMPTotal(record: FeeRecord): number {
   return (SMP_FEE_HEADS as { key: SMPFeeHead }[]).reduce((s, { key }) => s + record.smp[key], 0);
@@ -162,6 +237,14 @@ export function FeeRegister() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; record: FeeRecord } | null>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
 
+  // One scroller with a sticky header + totals row (native sticky, so columns never
+  // lag or wobble while scrolling). The header rows (28 + 36px) and totals row (36px)
+  // have fixed heights, and the vertical scrollbar track is inset by exactly those
+  // amounts in index.css (.scroll-teal-wide) so it starts below the header. A spacer row keeps the
+  // totals row pinned to the bottom when there are only a few rows.
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLTableRowElement>(null);
+
   const closeCtx = useCallback(() => setCtxMenu(null), []);
 
   useEffect(() => {
@@ -196,19 +279,20 @@ export function FeeRegister() {
     el.style.visibility = 'visible';
   }, [ctxMenu]);
 
-  // Default to current academic year once settings load
-  useEffect(() => {
-    if (settings?.currentAcademicYear && !selectedYear) {
-      setSelectedYear(settings.currentAcademicYear);
-    }
-  }, [settings, selectedYear]);
+  // Default to current academic year once settings load. Done during render (not in an
+  // effect) so there is no intermediate frame showing an empty register.
+  if (settings?.currentAcademicYear && !selectedYear) {
+    setSelectedYear(settings.currentAcademicYear);
+  }
 
-  // Reset date filter when academic year changes; re-arm auto-select of the latest date
-  const autoDateArmedRef = useRef(true);
-  useEffect(() => {
+  // Reset date filter when academic year changes; re-arm auto-select of the latest date.
+  const [autoDateArmed, setAutoDateArmed] = useState(true);
+  const [dateFilterYear, setDateFilterYear] = useState(selectedYear);
+  if (dateFilterYear !== selectedYear) {
+    setDateFilterYear(selectedYear);
     setDateFilter('');
-    autoDateArmedRef.current = true;
-  }, [selectedYear]);
+    setAutoDateArmed(true);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -236,12 +320,10 @@ export function FeeRegister() {
 
   // Default to the most recent date once records for the academic year have loaded.
   // Only fires once per academic-year selection so the user can freely pick "All Dates" afterward.
-  useEffect(() => {
-    if (autoDateArmedRef.current && uniqueDates.length > 0) {
-      setDateFilter(uniqueDates[0]);
-      autoDateArmedRef.current = false;
-    }
-  }, [uniqueDates]);
+  if (autoDateArmed && uniqueDates.length > 0) {
+    setDateFilter(uniqueDates[0]);
+    setAutoDateArmed(false);
+  }
 
   // Collect all unique additional head labels across all records (for dynamic columns)
   const additionalHeadLabels = useMemo(() => {
@@ -358,63 +440,117 @@ export function FeeRegister() {
     return { smp, svk, additional, grandTotal };
   }, [filteredRecords]);
 
+
   const isLoading = settingsLoading || !selectedYear || recordsLoading;
+  const hasTable = !isLoading && filteredRecords.length > 0;
+
+  useLayoutEffect(() => {
+    const sc = tableScrollRef.current;
+    const table = sc?.querySelector('table');
+    if (!hasTable || !sc || !table) return;
+    const sync = () => {
+      const spacer = spacerRef.current;
+      if (spacer) {
+        const current = spacer.offsetHeight;
+        const need = Math.max(0, sc.clientHeight - (table.offsetHeight - current));
+        if (need !== current) spacer.style.height = `${need}px`;
+      }
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(sc);
+    ro.observe(table);
+    return () => ro.disconnect();
+  }, [hasTable]);
 
   if (isLoading) return <LoadingGate />;
 
+  const infoCols = 11 + (showFatherName ? 1 : 0) + (showSVKRpt ? 1 : 0) + (showRemarks ? 1 : 0);
+
+  const colWidths: number[] = [
+    COL_W.idx, COL_W.name,
+    ...(showFatherName ? [COL_W.father] : []),
+    COL_W.year, COL_W.course, COL_W.reg, COL_W.cat, COL_W.admType, COL_W.date, COL_W.smpRpt,
+    ...(showSVKRpt ? [COL_W.svkRpt] : []),
+    COL_W.mode,
+    ...(showRemarks ? [COL_W.remarks] : []),
+    COL_W.due,
+    ...(showSMPDetails ? SMP_FEE_HEADS.map(() => COL_W.head) : []),
+    COL_W.subTotal,
+    ...(showSVKDetails ? [COL_W.head, ...additionalHeadLabels.map((l) => Math.max(COL_W.head, l.length * 7 + 28))] : []),
+    COL_W.subTotal,
+    COL_W.total,
+  ];
+  const tableStyle: React.CSSProperties = { tableLayout: 'fixed', minWidth: colWidths.reduce((a, w) => a + w, 0) };
+  const colgroup = (
+    <colgroup>
+      {colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}
+    </colgroup>
+  );
+
   return (
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold text-gray-900 leading-tight tracking-tight">Fee Register</h2>
-          {selectedYear && (
-            <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{selectedYear}</p>
-          )}
+      <div className="flex-shrink-0 flex items-center gap-4 min-w-0">
+        <div className="shrink-0">
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Fee Register
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold text-[#0B6567] leading-none tracking-[-0.3px]">Fee Register</h2>
+            {selectedYear && (
+              <span className="rounded-full border border-[#0F8B8D]/45 bg-white text-[#0B6567] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
+                {selectedYear}
+              </span>
+            )}
+          </div>
         </div>
 
         {!isLoading && sortedRecords.length > 0 && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
-              <span className="text-gray-500 font-medium">Records</span>
-              <span className="font-bold tabular-nums text-gray-900">
-                {filteredRecords.length}
-                {hasActiveFilters && filteredRecords.length !== sortedRecords.length && (
-                  <span className="text-gray-400 font-normal"> / {sortedRecords.length}</span>
-                )}
-              </span>
+          <>
+            <span className="w-px h-8 bg-[#CDE6E6] shrink-0 self-center" />
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border border-[#0F8B8D]/20 bg-[#EAF5F5] px-3.5 py-1 min-w-[72px]">
+                <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#4F8C8D] leading-tight">Records</span>
+                <span className="text-[16px] font-medium text-[#0B6567] leading-tight tabular-nums whitespace-nowrap">
+                  {filteredRecords.length}
+                  {hasActiveFilters && filteredRecords.length !== sortedRecords.length && (
+                    <span className="text-[11px] text-[#4F8C8D] font-normal"> / {sortedRecords.length}</span>
+                  )}
+                </span>
+              </div>
+              <div className="shrink-0 flex flex-col items-center justify-center rounded-[10px] border border-[#0FA968]/25 bg-[#E9F8F1] px-3.5 py-1 min-w-[96px]">
+                <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#3E8F6C] leading-tight">Collected</span>
+                <span className="text-[16px] font-medium text-[#0B7A4D] leading-tight tabular-nums whitespace-nowrap">₹{totals.grandTotal.toLocaleString()}</span>
+              </div>
+              <div className="flex-1" />
+              <button
+                onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear, dueFeeIds)}
+                disabled={filteredRecords.length === 0}
+                className={OUTLINE_PILL_BTN}
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
+                </svg>
+                Export Excel
+              </button>
             </div>
-            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs shadow-sm whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              <span className="text-emerald-700 font-medium">Collected</span>
-              <span className="font-bold tabular-nums text-emerald-900">₹{totals.grandTotal.toLocaleString()}</span>
-            </div>
-            <button
-              onClick={() => exportRegisterExcel(filteredRecords, additionalHeadLabels, selectedYear, dueFeeIds)}
-              disabled={filteredRecords.length === 0}
-              className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap shadow-sm"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
-              </svg>
-              Export Excel
-            </button>
-          </div>
+          </>
         )}
       </div>
 
       {/* ── Filters ─────────────────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 rounded-2xl border border-[#3B5B8A]/15 overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #eef3fa 0%, #f8fafc 45%, #eaf1fb 100%)', boxShadow: '0 1px 4px 0 rgba(59,91,138,0.08)' }}
-      >
-        <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex-shrink-0 rounded-2xl border border-[#CDE6E6] bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(18,20,26,0.05)]">
+        <div className="flex items-center gap-2 px-2.5 py-2">
 
-          {/* Search — rounded-full pill with icon + clear */}
+          {/* Search */}
           <div className="relative shrink-0 w-60">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3B5B8A]/50 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#0B6567] pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -422,84 +558,92 @@ export function FeeRegister() {
               placeholder="Search name / reg / rpt / dd/mm/yyyy…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full rounded-full border border-[#3B5B8A]/30 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-[#0F8B8D]/45 bg-[#F4FAFA] py-2 text-[14px] font-medium text-[#0B6567] placeholder:text-[#0B6567]/60 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#0F8B8D] focus:ring-2 focus:ring-[#0F8B8D]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
                 aria-label="Clear search"
               >
                 <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                 </svg>
               </button>
             )}
           </div>
 
           {debouncedSearch && dateFilter && (
-            <span className="shrink-0 rounded-full bg-[#D0E2F2] text-[#3B5B8A] text-[10px] font-semibold px-2 py-0.5 border border-[#3B5B8A]/20 whitespace-nowrap">
+            <span className="shrink-0 rounded-full bg-[#EAF5F5] text-[#0B6567] text-[10px] font-medium px-2.5 py-1 border border-[#0F8B8D]/25 whitespace-nowrap">
               Searching all dates
             </span>
           )}
 
           {/* Date navigator — prev/next arrows walk chronologically through dates with records */}
           <div
-            className={`flex items-center gap-2 shrink-0 ${debouncedSearch ? 'opacity-40 pointer-events-none' : ''}`}
+            className={`flex items-center gap-1.5 shrink-0 ${debouncedSearch ? 'opacity-40 pointer-events-none' : ''}`}
             title={debouncedSearch ? 'Clear search to use the day selector' : undefined}
           >
             <button
               type="button"
               disabled={!prevDate}
               onClick={() => prevDate && setDateFilter(prevDate)}
-              className="w-7 h-7 flex items-center justify-center rounded-full border border-[#3B5B8A]/25 bg-white text-[#3B5B8A]/70 hover:bg-[#D0E2F2]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >‹</button>
+              className={CHIP_ARROW}
+              aria-label="Previous date"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
             <input
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className={fs}
+              className="shrink-0 rounded-full border border-[#0F8B8D]/35 bg-white px-3 py-1 text-[12px] font-medium text-[#0B6567] hover:border-[#0F8B8D]/60 focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30 focus:border-[#0F8B8D] cursor-pointer transition-colors"
             />
             <button
               type="button"
               disabled={!nextDate}
               onClick={() => nextDate && setDateFilter(nextDate)}
-              className="w-7 h-7 flex items-center justify-center rounded-full border border-[#3B5B8A]/25 bg-white text-[#3B5B8A]/70 hover:bg-[#D0E2F2]/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >›</button>
+              className={CHIP_ARROW}
+              aria-label="Next date"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
             <button
               type="button"
               onClick={() => setDateFilter(dateFilter ? '' : (uniqueDates[0] ?? ''))}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+              className={`rounded-full border px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                 dateFilter
-                  ? 'border-[#3B5B8A]/25 bg-white text-gray-500 hover:bg-[#D0E2F2]/40'
-                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                  ? 'border-[#CDE6E6] bg-white text-[#5B6371] hover:bg-[#EFF8F8] hover:text-[#262B35]'
+                  : 'border-[#0F8B8D] bg-[#0F8B8D] text-white shadow-[0_2px_8px_#0F8B8D40]'
               }`}
               title={dateFilter ? 'Show all dates' : 'Jump back to the latest date'}
             >All</button>
           </div>
 
           {/* Aided / Unaided filter */}
-          <select
-            className={fs}
+          <FilterDropdown<'AIDED' | 'UNAIDED'>
+            color="teal"
             value={aidedFilter}
-            onChange={(e) => setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')}
-          >
-            <option value="">Aided &amp; Unaided</option>
-            <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-            <option value="UNAIDED">Unaided (EE)</option>
-          </select>
+            onChange={(v) => setAidedFilter(v as 'AIDED' | 'UNAIDED' | '')}
+            placeholder="Aided & Unaided"
+            options={[
+              { value: 'AIDED', label: 'Aided (CE, ME, EC, CS)' },
+              { value: 'UNAIDED', label: 'Unaided (EE)' },
+            ]}
+          />
 
           <div className="flex-1" />
 
           {/* Clear — only when filters active */}
           {hasActiveFilters && (
             <>
-              <span className="w-px h-5 bg-[#3B5B8A]/20 shrink-0" />
+              <span className="w-px h-5 bg-[#CDE6E6] shrink-0" />
               <button
                 onClick={clearFilters}
-                className="shrink-0 rounded-full border border-amber-300 px-2.5 py-1 text-[12px] text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors font-semibold whitespace-nowrap"
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap"
               >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Clear
               </button>
             </>
@@ -509,10 +653,10 @@ export function FeeRegister() {
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+            className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters
-                ? 'bg-[#D0E2F2] border-[#3B5B8A]/40 text-[#3B5B8A]'
-                : 'border-[#3B5B8A]/20 text-[#3B5B8A]/50 hover:bg-[#D0E2F2]/40 hover:text-[#3B5B8A]'
+                ? 'bg-[#0F8B8D]/10 border-[#0F8B8D]/30 text-[#0F8B8D]'
+                : 'border-[#CDE6E6] text-[#5B6371] hover:bg-[#EFF8F8] hover:text-[#262B35]'
             }`}
             title="Toggle filters"
           >
@@ -535,44 +679,56 @@ export function FeeRegister() {
           }}
         >
           <div className="overflow-hidden">
-            <div className="flex flex-wrap content-center items-center gap-1.5 px-3 py-2 border-t border-[#3B5B8A]/10">
-              <select
-                className={fs}
+            <div className="flex flex-wrap content-center items-center gap-1.5 px-2.5 py-2 border-t border-[#EAF3F3]">
+              <FilterDropdown<AcademicYear>
+                color="teal"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value as AcademicYear | '')}
-              >
-                <option value="">Select Year</option>
-                {[...ACADEMIC_YEARS].reverse().map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedYear(v as AcademicYear | '')}
+                placeholder="Select Year"
+                options={[...ACADEMIC_YEARS].reverse().map((y) => ({ value: y, label: y }))}
+              />
 
-              <span className="text-[#3B5B8A]/20 text-sm select-none shrink-0">|</span>
+              <span className="w-px h-5 bg-[#CDE6E6] shrink-0 mx-0.5" />
 
-              <select className={fs} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value as Course | '')}>
-                <option value="">All Courses</option>
-                {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select className={fs} value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')}>
-                <option value="">All Years</option>
-                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <select className={fs} value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')}>
-                <option value="">All Adm Types</option>
-                {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select className={fs} value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')}>
-                <option value="">All Adm Cats</option>
-                {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select className={fs} value={paymentModeFilter} onChange={(e) => setPaymentModeFilter(e.target.value as PaymentMode | '')}>
-                <option value="">All Modes</option>
-                {PAYMENT_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <FilterDropdown<Course>
+                color="teal"
+                value={courseFilter}
+                onChange={(v) => setCourseFilter(v as Course | '')}
+                placeholder="All Courses"
+                options={COURSES.map((c) => ({ value: c, label: c }))}
+              />
+              <FilterDropdown<Year>
+                color="teal"
+                value={yearFilter}
+                onChange={(v) => setYearFilter(v as Year | '')}
+                placeholder="All Years"
+                options={YEARS.map((y) => ({ value: y, label: y }))}
+              />
+              <FilterDropdown<AdmType>
+                color="teal"
+                value={admTypeFilter}
+                onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
+                placeholder="All Adm Types"
+                options={ADM_TYPES.map((t) => ({ value: t, label: t }))}
+              />
+              <FilterDropdown<AdmCat>
+                color="teal"
+                value={admCatFilter}
+                onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
+                placeholder="All Adm Cats"
+                options={ADM_CATS.map((c) => ({ value: c, label: c }))}
+              />
+              <FilterDropdown<PaymentMode>
+                color="teal"
+                value={paymentModeFilter}
+                onChange={(v) => setPaymentModeFilter(v as PaymentMode | '')}
+                placeholder="All Modes"
+                options={PAYMENT_MODES.map((m) => ({ value: m, label: m }))}
+              />
 
-              <span className="text-[#3B5B8A]/20 text-sm select-none shrink-0">|</span>
+              <span className="w-px h-5 bg-[#CDE6E6] shrink-0 mx-0.5" />
 
-              <span className="text-[10px] text-[#3B5B8A]/60 font-medium uppercase tracking-wide select-none shrink-0">Cols:</span>
+              <span className="text-[9.5px] text-[#8A93A3] font-medium uppercase tracking-[0.6px] select-none shrink-0">Cols</span>
               {(
                 [
                   { label: 'Father Name', active: showFatherName, toggle: () => setShowFatherName((v) => !v) },
@@ -585,10 +741,10 @@ export function FeeRegister() {
                 <button
                   key={label}
                   onClick={toggle}
-                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  className={`shrink-0 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
                     active
-                      ? 'border-[#3B5B8A] bg-[#3B5B8A] text-white shadow-sm'
-                      : 'border-[#3B5B8A]/20 bg-white text-gray-500 hover:bg-[#D0E2F2]/40 hover:text-[#3B5B8A] hover:border-[#3B5B8A]/40'
+                      ? 'border-[#0F8B8D] bg-[#0F8B8D] text-white shadow-[0_2px_8px_#0F8B8D40]'
+                      : 'border-[#0F8B8D]/35 bg-white text-[#0B6567] hover:bg-[#F4FAFA] hover:border-[#0F8B8D]/60'
                   }`}
                 >
                   {label}
@@ -601,194 +757,173 @@ export function FeeRegister() {
 
       {/* ── Table / empty states ─────────────────────────────────────────── */}
       {!selectedYear ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400">
-          <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 4h10M3 11h18M3 15h10m-7 4h4" />
-          </svg>
-          <span className="text-sm">Select an academic year to view the fee register.</span>
-        </div>
+        <EmptyState
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+          title="Select an academic year to view the fee register."
+        />
       ) : filteredRecords.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400">
-          <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-sm">
-            {sortedRecords.length === 0
+        <EmptyState
+          icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="6" width="22" height="13" rx="2"/><path d="M1 10h22"/></svg>}
+          title={
+            sortedRecords.length === 0
               ? 'No fee records found for this academic year.'
-              : 'No records match the current filters.'}
-          </span>
-        </div>
+              : 'No records match the current filters.'
+          }
+        />
       ) : (
-        <div className="flex-1 min-h-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full text-xs border-collapse">
-            <thead className="sticky top-0 z-10">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE6E6] overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(18,20,26,0.05)]">
+          <div
+            ref={tableScrollRef}
+            className="scroll-teal scroll-teal-wide flex-1 min-h-0 overflow-auto"
+          >
+          <table className="w-full text-xs border-separate border-spacing-0" style={tableStyle}>
+            {colgroup}
+            <thead className="sticky top-0 z-10 [&>tr:first-child>th]:h-7 [&>tr:first-child>th]:py-0 [&>tr:last-child>th]:border-b [&>tr:last-child>th]:border-b-[#C7E2E2]">
               {/* Group header */}
               <tr>
                 <th
-                  colSpan={11 + (showFatherName ? 1 : 0) + (showSVKRpt ? 1 : 0) + (showRemarks ? 1 : 0)}
-                  className="px-3 py-1.5 text-left text-[9px] font-semibold text-[#D0E2F2]/70 uppercase tracking-wider border-r border-b border-[#2e4a72] bg-[#3B5B8A]"
+                  colSpan={infoCols}
+                  className="px-3 py-1.5 text-left text-[9px] font-medium text-[#4F8C8D] uppercase tracking-[0.8px] border-r border-b border-[#C7E2E2] bg-[#DDEEEE]"
                 >
                   Student Info
                 </th>
                 <th
                   colSpan={showSMPDetails ? SMP_FEE_HEADS.length + 1 : 1}
-                  className="px-3 py-1.5 text-center text-[9px] font-semibold text-[#D0E2F2] uppercase tracking-wider border-r border-[#2e4a72] border-b border-[#D0E2F2]/60 bg-[#3B5B8A]"
+                  className="px-3 py-1.5 text-center text-[9px] font-medium text-[#0A5F8E] uppercase tracking-[0.8px] border-r border-b border-[#C7E2E2] bg-[#D6ECFA]"
                 >
                   SMP Fee — Government
                 </th>
                 <th
                   colSpan={showSVKDetails ? 1 + additionalHeadLabels.length + 1 : 1}
-                  className="px-3 py-1.5 text-center text-[9px] font-semibold text-[#D0E2F2] uppercase tracking-wider border-r border-[#2e4a72] border-b border-[#D0E2F2]/60 bg-[#3B5B8A]"
+                  className="px-3 py-1.5 text-center text-[9px] font-medium text-[#5B3FB5] uppercase tracking-[0.8px] border-r border-b border-[#C7E2E2] bg-[#E7E1FA]"
                 >
                   SVK Fee — Management
                 </th>
-                <th className="px-3 py-1.5 text-center text-[9px] font-semibold text-white uppercase tracking-wider border-b border-white/70 bg-[#3B5B8A]">
+                <th className="px-3 py-1.5 text-center text-[9px] font-medium text-[#0B6567] uppercase tracking-[0.8px] border-b border-[#C7E2E2] bg-[#CBE7E7]">
                   Grand Total
                 </th>
               </tr>
 
               {/* Column header */}
-              <tr className="border-b border-[#2e4a72]">
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/60 whitespace-nowrap w-8 sticky left-0 z-20 bg-[#3B5B8A] border-r border-[#2e4a72] text-[10px] uppercase tracking-wide">#</th>
-                <th className="px-2 py-2 text-left font-semibold text-white whitespace-nowrap sticky left-8 z-20 bg-[#3B5B8A] border-r border-[#2e4a72] text-[10px] uppercase tracking-wide">Name</th>
-                {showFatherName && <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Father Name</th>}
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-16 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Year</th>
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-12 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Course</th>
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-24 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Reg No</th>
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-14 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Cat</th>
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-20 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Adm Type</th>
-                <th className="px-2 py-2 text-left font-bold text-white whitespace-nowrap w-20 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Date</th>
-                <th className="px-2 py-2 text-left font-bold text-white whitespace-nowrap w-12 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">SMP Rpt</th>
-                {showSVKRpt && <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-24 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">SVK Rpt</th>}
-                <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-14 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Mode</th>
-                {showRemarks && <th className="px-2 py-2 text-left font-medium text-[#D0E2F2]/80 whitespace-nowrap w-28 bg-[#3B5B8A] text-[10px] uppercase tracking-wide">Remarks</th>}
-                <th className="px-2 py-2 text-center font-medium text-[#D0E2F2]/80 whitespace-nowrap w-20 bg-[#3B5B8A] border-r border-[#2e4a72] text-[10px] uppercase tracking-wide">Due Fee</th>
+              <tr>
+                <th className={`${TH} sticky left-0 z-20 bg-[#E6F3F3] border-r border-[#C7E2E2]`}>#</th>
+                <th className={`${TH} sticky left-[44px] z-20 bg-[#E6F3F3] border-r border-[#C7E2E2]`}>Name</th>
+                {showFatherName && <th className={`${TH} bg-[#E6F3F3]`}>Father Name</th>}
+                <th className={`${TH} bg-[#E6F3F3]`}>Year</th>
+                <th className={`${TH} bg-[#E6F3F3]`}>Course</th>
+                <th className={`${TH} bg-[#E6F3F3]`}>Reg No</th>
+                <th className={`${TH} bg-[#E6F3F3]`}>Cat</th>
+                <th className={`${TH} bg-[#E6F3F3]`}>Adm Type</th>
+                <th className={`${TH} bg-[#E6F3F3] !font-bold`}>Date</th>
+                <th className={`${TH} bg-[#E6F3F3] !font-bold`}>SMP Rpt</th>
+                {showSVKRpt && <th className={`${TH} bg-[#E6F3F3]`}>SVK Rpt</th>}
+                <th className={`${TH} bg-[#E6F3F3]`}>Mode</th>
+                {showRemarks && <th className={`${TH} bg-[#E6F3F3]`}>Remarks</th>}
+                <th className={`${TH} !text-center bg-[#E6F3F3] border-r border-[#C7E2E2]`}>Due Fee</th>
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key, label }) => (
-                  <th key={key} className="px-2 py-2 text-right font-medium text-[#D0E2F2]/70 whitespace-nowrap w-14 bg-[#2e4a72] text-[10px] uppercase tracking-wide">
+                  <th key={key} className={`${TH} !text-right bg-[#E9F5FC] !text-[#0A5F8E]/80`}>
                     {label}
                   </th>
                 ))}
-                <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap w-16 bg-[#2e4a72] border-r border-[#2e4a72] text-[10px] uppercase tracking-wide">
+                <th className={`${TH} !text-right bg-[#D6ECFA] !text-[#0A5F8E] border-r border-[#C7E2E2]`}>
                   SMP Total
                 </th>
 
                 {showSVKDetails && (
-                  <th className="px-2 py-2 text-right font-medium text-[#D0E2F2]/70 whitespace-nowrap w-14 bg-[#2e4a72] text-[10px] uppercase tracking-wide">SVK</th>
+                  <th className={`${TH} !text-right bg-[#F1EEFC] !text-[#5B3FB5]/80`}>SVK</th>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <th key={label} className="px-2 py-2 text-right font-medium text-[#D0E2F2]/70 whitespace-nowrap w-20 bg-[#2e4a72] text-[10px] uppercase tracking-wide">{label}</th>
+                  <th key={label} className={`${TH} !text-right bg-[#F1EEFC] !text-[#5B3FB5]/80`}>{label}</th>
                 ))}
-                <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap w-16 bg-[#2e4a72] border-r border-[#2e4a72] text-[10px] uppercase tracking-wide">
+                <th className={`${TH} !text-right bg-[#E7E1FA] !text-[#5B3FB5] border-r border-[#C7E2E2]`}>
                   SVK Total
                 </th>
 
-                <th className="px-2 py-2 text-right font-bold text-[#3B5B8A] whitespace-nowrap w-20 bg-[#D0E2F2] text-[10px] uppercase tracking-wide">
+                <th className={`${TH} !text-right bg-[#CBE7E7] !text-[#0B6567] !font-bold`}>
                   Total
                 </th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EAF3F3]">
               {visibleRecords.map((record, idx) => {
                 const smpTotal = calcSMPTotal(record);
                 const svkTotal = calcSVKTotal(record);
                 const total = smpTotal + svkTotal;
+                const isDue = record.isDueFee ?? (dueFeeIds.has(record.id) || record.academicYear !== selectedYear);
                 return (
                   <tr
                     key={record.id}
-                    className={`group hover:bg-[#3B5B8A]/15 transition-colors cursor-context-menu border-l-2 ${COURSE_COLORS[record.course]}`}
+                    className="group hover:bg-[#F4FAFA] transition-colors cursor-context-menu"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       setCtxMenu({ x: e.clientX, y: e.clientY, record });
                     }}
                   >
-                    <td className="px-2 py-1.5 text-gray-300 whitespace-nowrap sticky left-0 z-[1] bg-white group-hover:bg-[#3B5B8A]/15 transition-colors">{idx + 1}</td>
+                    <td className="px-3 py-2 text-[11px] font-medium text-black tabular-nums whitespace-nowrap sticky left-0 z-[1] bg-white group-hover:bg-[#F4FAFA] transition-colors">{idx + 1}</td>
                     <td
-                      className="px-2 py-1.5 font-medium text-gray-900 whitespace-nowrap sticky left-8 z-[1] bg-white group-hover:bg-[#3B5B8A]/15 transition-colors border-r border-gray-100 cursor-pointer select-none"
+                      className="px-3 py-2 whitespace-nowrap overflow-hidden sticky left-[44px] z-[1] bg-white group-hover:bg-[#F4FAFA] transition-colors border-r border-[#EAF3F3] cursor-pointer select-none"
                       onDoubleClick={() => setDetailRecord(record)}
                       title="Double-click to view fee details"
                     >
-                      {record.studentName}
-                      {record.academicYear !== selectedYear && (
-                        <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-[#D0E2F2] text-[#3B5B8A] border border-[#3B5B8A]/20 align-middle">
-                          PY {record.academicYear}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <RingAvatar name={record.studentName} course={record.course} />
+                        <span className="text-[12.5px] font-medium text-[#0B6567] truncate min-w-0">{record.studentName}</span>
+                        {record.academicYear !== selectedYear && (
+                          <LinePill value={`PY ${record.academicYear}`} color={TEAL} />
+                        )}
+                      </div>
                     </td>
-                    {showFatherName && <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{record.fatherName}</td>}
-                    <td className="px-2 py-1.5 whitespace-nowrap">
-                      <span className="text-[10px] font-medium text-gray-400">
-                        {YEAR_LABELS[record.year] ?? record.year}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 whitespace-nowrap">
-                      <span className="inline-flex items-center justify-center w-10 py-0.5 rounded border text-[10px] font-semibold bg-[#D0E2F2]/50 text-[#3B5B8A] border-[#3B5B8A]/20">
-                        {record.course}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap font-mono">{record.regNumber || '—'}</td>
-                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{record.admCat}</td>
-                    <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap">{record.admType}</td>
-                    <td className="px-2 py-1.5 text-[#3B5B8A] font-bold whitespace-nowrap">{formatDate(record.date)}</td>
-                    <td className="px-2 py-1.5 text-[#3B5B8A] font-bold whitespace-nowrap font-mono text-[11px]">{record.receiptNumber || '—'}</td>
-                    {showSVKRpt && <td className="px-2 py-1.5 text-gray-500 whitespace-nowrap font-mono text-[11px]">{record.svkReceiptNumber || '—'}</td>}
-                    <td className="px-2 py-1.5 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center justify-center w-12 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          record.paymentMode === 'UPI'
-                            ? 'bg-[#3B5B8A] text-white border-[#3B5B8A]'
-                            : record.paymentMode === 'SPLIT'
-                            ? 'bg-[#D0E2F2] text-[#3B5B8A] border-[#3B5B8A]/30'
-                            : 'bg-white text-[#3B5B8A] border-[#3B5B8A]/30'
-                        }`}
-                      >
-                        {record.paymentMode}
-                      </span>
-                    </td>
+                    {showFatherName && <td className="px-3 py-2 text-[12px] text-[#5B6371] whitespace-nowrap truncate" title={record.fatherName}>{record.fatherName}</td>}
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.year} value={YEAR_LABELS[record.year] ?? record.year} color={YEAR_COLOR[record.year]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.course} value={record.course} color={DEPT_DOT[record.course]} /></td>
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{record.regNumber || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.admCat} value={record.admCat} color={ADM_CAT_COLOR[record.admCat]} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.admType} value={record.admType} color={ADM_TYPE_COLOR[record.admType]} /></td>
+                    <td className="px-3 py-2 text-[11.5px] text-[#0B6567] font-bold whitespace-nowrap tabular-nums">{formatDate(record.date)}</td>
+                    <td className="px-3 py-2 text-[11.5px] text-[#0B6567] font-bold whitespace-nowrap tabular-nums">{record.receiptNumber || '—'}</td>
+                    {showSVKRpt && <td className="px-3 py-2 text-[11.5px] font-medium text-[#5B6371] whitespace-nowrap tabular-nums">{record.svkReceiptNumber || '—'}</td>}
+                    <td className="px-3 py-2 whitespace-nowrap"><LinePill minWidth={PILL_W.mode} value={record.paymentMode} color={MODE_COLOR[record.paymentMode]} /></td>
                     {showRemarks && (
-                      <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap max-w-[7rem] truncate" title={record.remarks}>
-                        {record.remarks || <span className="text-gray-200">—</span>}
+                      <td className="px-3 py-2 text-[12px] text-[#5B6371] whitespace-nowrap truncate" title={record.remarks}>
+                        {record.remarks || <span className="text-[#C4C8D0]">—</span>}
                       </td>
                     )}
-                    <td className="px-2 py-1.5 text-center whitespace-nowrap border-r border-gray-100">
-                      {(record.isDueFee ?? (dueFeeIds.has(record.id) || record.academicYear !== selectedYear)) && (
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[#D0E2F2] text-[#3B5B8A] border border-[#3B5B8A]/20">
-                          Due Fee
-                        </span>
-                      )}
+                    <td className="px-3 py-2 text-center whitespace-nowrap border-r border-[#EAF3F3]">
+                      {isDue && <LinePill value="Due Fee" color={ACTION_COLOR_DUES} />}
                     </td>
 
                     {/* SMP heads */}
                     {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
-                      <td key={key} className="px-2 py-1.5 text-right text-gray-500 whitespace-nowrap tabular-nums bg-[#D0E2F2]/30 group-hover:bg-[#D0E2F2]/50">
-                        {record.smp[key] > 0 ? record.smp[key].toLocaleString() : <span className="text-gray-200">—</span>}
+                      <td key={key} className="px-3 py-2 text-right text-[11.5px] text-[#5B6371] whitespace-nowrap tabular-nums bg-[#F4FAFE] group-hover:bg-[#E9F5FC]">
+                        {record.smp[key] > 0 ? record.smp[key].toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
                       </td>
                     ))}
-                    <td className="px-2 py-1.5 text-right font-semibold text-[#3B5B8A] whitespace-nowrap tabular-nums border-r border-gray-100 bg-[#D0E2F2]/60 group-hover:bg-[#D0E2F2]/80">
+                    <td className="px-3 py-2 text-right text-[12px] font-medium text-[#0A5F8E] whitespace-nowrap tabular-nums border-r border-[#EAF3F3] bg-[#E9F5FC] group-hover:bg-[#DCEEFA]">
                       {smpTotal.toLocaleString()}
                     </td>
 
                     {/* SVK */}
                     {showSVKDetails && (
-                      <td className="px-2 py-1.5 text-right text-gray-500 whitespace-nowrap tabular-nums bg-[#D0E2F2]/20 group-hover:bg-[#D0E2F2]/40">
-                        {record.svk > 0 ? record.svk.toLocaleString() : <span className="text-gray-200">—</span>}
+                      <td className="px-3 py-2 text-right text-[11.5px] text-[#5B6371] whitespace-nowrap tabular-nums bg-[#F8F6FE] group-hover:bg-[#F1EEFC]">
+                        {record.svk > 0 ? record.svk.toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
                       </td>
                     )}
                     {showSVKDetails && additionalHeadLabels.map((label) => {
                       const val = record.additionalPaid.find((h) => h.label === label)?.amount ?? 0;
                       return (
-                        <td key={label} className="px-2 py-1.5 text-right text-gray-500 whitespace-nowrap tabular-nums bg-[#D0E2F2]/20 group-hover:bg-[#D0E2F2]/40">
-                          {val > 0 ? val.toLocaleString() : <span className="text-gray-200">—</span>}
+                        <td key={label} className="px-3 py-2 text-right text-[11.5px] text-[#5B6371] whitespace-nowrap tabular-nums bg-[#F8F6FE] group-hover:bg-[#F1EEFC]">
+                          {val > 0 ? val.toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1.5 text-right font-semibold text-[#3B5B8A] whitespace-nowrap tabular-nums border-r border-gray-100 bg-[#D0E2F2]/45 group-hover:bg-[#D0E2F2]/65">
+                    <td className="px-3 py-2 text-right text-[12px] font-medium text-[#5B3FB5] whitespace-nowrap tabular-nums border-r border-[#EAF3F3] bg-[#F1EEFC] group-hover:bg-[#E9E4FA]">
                       {svkTotal.toLocaleString()}
                     </td>
 
                     {/* Grand total */}
-                    <td className="px-2 py-1.5 text-right font-bold text-[#2e4a72] whitespace-nowrap tabular-nums bg-[#D0E2F2]/80 group-hover:bg-[#D0E2F2]">
+                    <td className="px-3 py-2 text-right text-[12.5px] font-bold text-[#0B6567] whitespace-nowrap tabular-nums bg-[#E6F3F3] group-hover:bg-[#D9EDED]">
                       ₹{total.toLocaleString()}
                     </td>
                   </tr>
@@ -807,7 +942,7 @@ export function FeeRegister() {
                     className="px-4 py-3 text-center"
                   >
                     <button
-                      className="rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 px-4 py-1 text-xs font-medium transition-colors cursor-pointer"
+                      className={OUTLINE_PILL_BTN}
                       onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
                     >
                       Load {Math.min(PAGE_SIZE, filteredRecords.length - visibleCount)} more ({filteredRecords.length - visibleCount} remaining)
@@ -817,51 +952,56 @@ export function FeeRegister() {
               )}
             </tbody>
 
+            {/* Spacer — sized in useLayoutEffect so the totals row sits at the bottom */}
+            <tbody aria-hidden="true">
+              <tr ref={spacerRef}><td colSpan={colWidths.length} className="p-0" /></tr>
+            </tbody>
+
             {/* Totals footer */}
-            <tfoot className="sticky bottom-0 z-10">
-              <tr className="bg-[#D0E2F2]/50 border-t-2 border-[#3B5B8A]/40 font-semibold">
-                <td className="px-2 py-2 text-[#3B5B8A] text-[10px] uppercase tracking-wide sticky left-0 z-20 bg-[#D0E2F2]/50" colSpan={2}>
+            <tfoot className="sticky bottom-0 z-10 [&_td]:h-9 [&_td]:py-0 [&_td]:border-t [&_td]:border-t-[#C7E2E2]">
+              <tr className="bg-[#E6F3F3] font-medium">
+                <td className="px-3 py-2 text-[#0B6567] text-[10px] uppercase tracking-[0.6px] sticky left-0 z-20 bg-[#E6F3F3]" colSpan={2}>
                   Totals · {filteredRecords.length} records
                 </td>
-                <td colSpan={9 + (showFatherName ? 1 : 0) + (showSVKRpt ? 1 : 0) + (showRemarks ? 1 : 0)} className="bg-[#D0E2F2]/50 border-r border-[#3B5B8A]/30" />
+                <td colSpan={9 + (showFatherName ? 1 : 0) + (showSVKRpt ? 1 : 0) + (showRemarks ? 1 : 0)} className="bg-[#E6F3F3] border-r border-[#C7E2E2]" />
 
                 {showSMPDetails && SMP_FEE_HEADS.map(({ key }) => (
-                  <td key={key} className="px-2 py-2 text-right text-[#3B5B8A] whitespace-nowrap tabular-nums text-xs bg-[#D0E2F2]/70">
-                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-[#3B5B8A]/30">—</span>}
+                  <td key={key} className="px-3 py-2 text-right text-[#0A5F8E] whitespace-nowrap tabular-nums text-xs bg-[#E1F0FA]">
+                    {totals.smp[key] > 0 ? totals.smp[key].toLocaleString() : <span className="text-[#0A5F8E]/30">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-2 text-right text-[#2e4a72] whitespace-nowrap tabular-nums font-bold border-r border-[#3B5B8A]/30 bg-[#D0E2F2]">
+                <td className="px-3 py-2 text-right text-[#0A5F8E] whitespace-nowrap tabular-nums font-bold border-r border-[#C7E2E2] bg-[#D6ECFA]">
                   {(Object.values(totals.smp) as number[]).reduce((s, v) => s + v, 0).toLocaleString()}
                 </td>
 
                 {showSVKDetails && (
-                  <td className="px-2 py-2 text-right text-[#3B5B8A] whitespace-nowrap tabular-nums bg-[#D0E2F2]/70">
-                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-[#3B5B8A]/30">—</span>}
+                  <td className="px-3 py-2 text-right text-[#5B3FB5] whitespace-nowrap tabular-nums bg-[#ECE8FB]">
+                    {totals.svk > 0 ? totals.svk.toLocaleString() : <span className="text-[#5B3FB5]/30">—</span>}
                   </td>
                 )}
                 {showSVKDetails && additionalHeadLabels.map((label) => (
-                  <td key={label} className="px-2 py-2 text-right text-[#3B5B8A] whitespace-nowrap tabular-nums bg-[#D0E2F2]/70">
+                  <td key={label} className="px-3 py-2 text-right text-[#5B3FB5] whitespace-nowrap tabular-nums bg-[#ECE8FB]">
                     {(totals.additional[label] ?? 0) > 0
                       ? (totals.additional[label] ?? 0).toLocaleString()
-                      : <span className="text-[#3B5B8A]/30">—</span>}
+                      : <span className="text-[#5B3FB5]/30">—</span>}
                   </td>
                 ))}
-                <td className="px-2 py-2 text-right text-[#2e4a72] whitespace-nowrap tabular-nums font-bold border-r border-[#3B5B8A]/30 bg-[#D0E2F2]">
+                <td className="px-3 py-2 text-right text-[#5B3FB5] whitespace-nowrap tabular-nums font-bold border-r border-[#C7E2E2] bg-[#E7E1FA]">
                   {(totals.svk + additionalHeadLabels.reduce((s, l) => s + (totals.additional[l] ?? 0), 0)).toLocaleString()}
                 </td>
 
-                <td className="px-2 py-2 text-right text-white whitespace-nowrap tabular-nums font-bold text-sm bg-[#3B5B8A]">
+                <td className="px-3 py-2 text-right text-white whitespace-nowrap tabular-nums font-bold text-sm bg-[#0F8B8D]">
                   ₹{totals.grandTotal.toLocaleString()}
                 </td>
               </tr>
             </tfoot>
           </table>
+          </div>
 
-          <div className="px-3 py-1.5 border-t border-gray-100 text-[10px] text-gray-400 mt-auto shrink-0 flex items-center gap-1.5">
-            <span className="w-1 h-1 rounded-full bg-gray-300 inline-block" />
-            Showing {Math.min(visibleCount, filteredRecords.length)} of {filteredRecords.length}
+          <div className="mt-auto flex-shrink-0 px-4 py-2 border-t border-[#C7E2E2] bg-[#F2F9F9] text-[11px] font-medium text-[#8A93A3]">
+            Showing <span className="font-medium text-[#262B35] tabular-nums">{Math.min(visibleCount, filteredRecords.length)}</span> of <span className="font-medium text-[#262B35] tabular-nums">{filteredRecords.length}</span>
             {filteredRecords.length < sortedRecords.length && (
-              <span className="text-gray-300"> (filtered from {sortedRecords.length} total)</span>
+              <span> (filtered from {sortedRecords.length} total)</span>
             )}
           </div>
         </div>
@@ -904,122 +1044,126 @@ export function FeeRegister() {
           onClose={() => setHistoryRecord(null)}
         />
       )}
+    </div>
 
-      {/* Context menu */}
-      {ctxMenu && (() => {
-        const smp = calcSMPTotal(ctxMenu.record);
-        const svk = ctxMenu.record.svk;
-        const addl = ctxMenu.record.additionalPaid.reduce((s, h) => s + h.amount, 0);
-        return (
-          <div
-            ref={ctxRef}
-            className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
-            style={{ top: ctxMenu.y, left: ctxMenu.x, visibility: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
-          >
-            {/* Header */}
-            <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
-              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                {ctxMenu.record.studentName.charAt(0)}
-              </span>
-              <span className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.record.studentName}</span>
-            </div>
-            {/* Items */}
-            <div className="py-1.5">
-              <button
-                disabled={smp === 0}
-                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-blue-50/70 enabled:hover:text-blue-800 enabled:cursor-pointer"
-                onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
-              >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0 group-enabled:group-hover:bg-blue-200 transition-colors">SMP</span>
-                SMP Receipt
-              </button>
-              <button
-                disabled={svk === 0}
-                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-violet-50/70 enabled:hover:text-violet-800 enabled:cursor-pointer"
-                onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
-              >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold flex-shrink-0 group-enabled:group-hover:bg-violet-200 transition-colors">SVK</span>
-                SVK Receipt
-              </button>
-              <button
-                disabled={addl === 0}
-                className="group w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5 transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed enabled:text-gray-600 enabled:hover:bg-emerald-50/70 enabled:hover:text-emerald-800 enabled:cursor-pointer"
-                onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
-              >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-emerald-100 text-emerald-600 flex items-center justify-center text-[11px] font-bold flex-shrink-0 group-enabled:group-hover:bg-emerald-200 transition-colors">+</span>
-                Additional Receipt
-              </button>
-              <div className="my-1 h-px bg-gray-100 mx-3" />
-              <button
-                className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 cursor-pointer transition-colors duration-100"
-                onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
-              >
-                <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                </span>
-                Fee Details
-              </button>
+    {/* ── Context menu — rendered outside the animated div to avoid the transform containing-block bug ── */}
+    {ctxMenu && (() => {
+      const smp = calcSMPTotal(ctxMenu.record);
+      const svk = ctxMenu.record.svk;
+      const addl = ctxMenu.record.additionalPaid.reduce((s, h) => s + h.amount, 0);
+      return (
+        <div
+          ref={ctxRef}
+          className="font-wp fixed z-50 bg-white border border-[#CDE6E6] rounded-2xl overflow-hidden min-w-[220px]"
+          style={{ top: ctxMenu.y, left: ctxMenu.x, visibility: 'hidden', boxShadow: '0 12px 36px rgba(18,20,26,0.12), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+        >
+          {/* Header */}
+          <div className="px-3 py-2.5 border-b border-[#C7E2E2] bg-[#EEF7F7] flex items-center gap-3">
+            <RingAvatar name={ctxMenu.record.studentName} course={ctxMenu.record.course} />
+            <div className="min-w-0">
+              <p className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] leading-none">
+                {ctxMenu.record.course} · {ctxMenu.record.year}
+              </p>
+              <p className="mt-1 text-[12px] font-medium text-[#262B35] truncate leading-none">{ctxMenu.record.studentName}</p>
             </div>
           </div>
-        );
-      })()}
+          {/* Items */}
+          <div className="p-1">
+            <button
+              disabled={smp === 0}
+              className={MENU_ITEM}
+              onClick={() => { generateSMPReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className={`${MENU_ICON} text-[8.5px] font-bold`} style={{ background: '#0EA5E91A', color: '#0A5F8E' }}>SMP</span>
+              SMP Receipt
+            </button>
+            <button
+              disabled={svk === 0}
+              className={MENU_ITEM}
+              onClick={() => { generateSVKReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className={`${MENU_ICON} text-[8.5px] font-bold`} style={{ background: '#8B5CF61A', color: '#5B3FB5' }}>SVK</span>
+              SVK Receipt
+            </button>
+            <button
+              disabled={addl === 0}
+              className={MENU_ITEM}
+              onClick={() => { generateAdditionalReceipt(ctxMenu.record); closeCtx(); }}
+            >
+              <span className={`${MENU_ICON} text-[13px] font-bold`} style={{ background: '#0FA9681A', color: '#0B7A4D' }}>+</span>
+              Additional Receipt
+            </button>
+            <div className="my-1 h-px bg-[#EAF3F3] mx-2" />
+            <button
+              className={MENU_ITEM}
+              onClick={() => { setHistoryRecord(ctxMenu.record); closeCtx(); }}
+            >
+              <span className={`${MENU_ICON} group-hover:bg-[#0F8B8D]/10 group-hover:text-[#0F8B8D]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </span>
+              Fee Details
+            </button>
+          </div>
+        </div>
+      );
+    })()}
 
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
-            onClick={() => { if (!deleting) setDeleteTarget(null); }}
-            aria-hidden="true"
-            style={{ animation: 'backdrop-enter 0.2s ease-out' }}
-          />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
-            <div className="bg-red-50 border-b border-red-100 px-5 py-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-red-900">Delete Fee Record?</h3>
-                  <p className="text-xs text-red-600 mt-0.5">This action cannot be undone.</p>
-                </div>
+    {/* Delete confirmation */}
+    {deleteTarget && (
+      <div className="font-wp fixed inset-0 z-50 flex items-center justify-center">
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+          onClick={() => { if (!deleting) setDeleteTarget(null); }}
+          aria-hidden="true"
+          style={{ animation: 'backdrop-enter 0.2s ease-out' }}
+        />
+        <div className="relative bg-white rounded-2xl border border-[#CDE6E6] shadow-2xl max-w-sm w-full mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
+          <div className="bg-[#FFF1F2] border-b border-[#FECDD3] px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#E11D48]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-[#E11D48]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-[14px] font-medium text-[#9F1239]">Delete Fee Record?</h3>
+                <p className="text-[11.5px] text-[#E11D48] mt-0.5">This action cannot be undone.</p>
               </div>
             </div>
-            <div className="px-5 py-4">
-              <p className="text-xs text-gray-600 mb-1">
-                <span className="font-semibold text-gray-800">{deleteTarget.studentName}</span>
-                <span className="text-gray-400"> · {formatDate(deleteTarget.date)}</span>
-                {deleteTarget.receiptNumber && (
-                  <span className="ml-1 text-gray-400">· Rpt {deleteTarget.receiptNumber}</span>
-                )}
-              </p>
-              {deleteError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">
-                  {deleteError}
-                </p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-[12px] text-[#5B6371] mb-1">
+              <span className="font-medium text-[#262B35]">{deleteTarget.studentName}</span>
+              <span className="text-[#8A93A3]"> · {formatDate(deleteTarget.date)}</span>
+              {deleteTarget.receiptNumber && (
+                <span className="ml-1 text-[#8A93A3]">· Rpt {deleteTarget.receiptNumber}</span>
               )}
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={deleting}
-                  className="rounded-full border border-gray-200 px-4 py-1.5 text-xs text-gray-600 bg-white hover:bg-gray-50 cursor-pointer transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void handleDelete()}
-                  disabled={deleting}
-                  className="rounded-full border border-transparent px-4 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 cursor-pointer transition-colors disabled:opacity-50"
-                >
-                  {deleting ? 'Deleting…' : 'Delete'}
-                </button>
-              </div>
+            </p>
+            {deleteError && (
+              <p className="text-[12px] text-[#E11D48] bg-[#FFF1F2] border border-[#FECDD3] rounded-lg px-3 py-2 mt-3">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className={OUTLINE_PILL_BTN}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="shrink-0 inline-flex items-center rounded-full border border-transparent px-4 py-1.5 text-[11.5px] font-medium text-white bg-[#E11D48] hover:bg-[#BE123C] focus:outline-none focus:ring-2 focus:ring-[#E11D48]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    </>
   );
 }
