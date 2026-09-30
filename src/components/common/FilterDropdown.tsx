@@ -47,6 +47,15 @@ const COLOR_CLASSES = {
     selRow: 'text-[#3F4BB8] bg-[#F0F2FE]',
     font: 'font-wp',
   },
+  // Amber — ANS Letters revamp (student-portal look, Outfit font).
+  amber: {
+    active: 'border-[#E08A00] bg-[#FEF5E4] text-[#9A5B00]',
+    idle: 'border-[#E08A00]/30 text-[#9A5B00] hover:border-[#E08A00]/55 hover:bg-[#FFF9EF]',
+    ring: 'focus:ring-[#E08A00]/40',
+    allRow: 'text-[#9A5B00] bg-[#FEF5E4]/60',
+    selRow: 'text-[#9A5B00] bg-[#FEF5E4]',
+    font: 'font-wp',
+  },
 } as const;
 
 interface FilterDropdownProps<T extends string> {

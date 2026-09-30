@@ -4,20 +4,110 @@ import { useSettings } from '../hooks/useSettings';
 import { useInquiries } from '../hooks/useInquiries';
 import { addInquiry, updateInquiry, updateInquiryStatus, deleteInquiry } from '../services/inquiryService';
 import { exportInquiriesPdf, exportInquiriesExcel } from '../utils/inquiryExport';
-import { Button } from '../components/common/Button';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import type { Course, AcademicYear, Inquiry, InquiryStatus } from '../types';
+import type React from 'react';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 
 type FilterTab = 'active' | 'converted' | 'cancelled';
 
-const TAB_CONFIG: { id: FilterTab; label: string; badge: string }[] = [
-  { id: 'active',    label: 'Active',    badge: 'bg-green-100 text-green-700' },
-  { id: 'converted', label: 'Converted', badge: 'bg-blue-100 text-blue-700' },
-  { id: 'cancelled', label: 'Cancelled', badge: 'bg-red-100 text-red-700' },
+const TAB_CONFIG: { id: FilterTab; label: string }[] = [
+  { id: 'active',    label: 'Active' },
+  { id: 'converted', label: 'Converted' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
+
+// ── Design tokens — student-portal look, lime / green ───────────────────────
+const LIME = '#65A30D';
+const LIME_INK = '#3F6212';
+const HAIRLINE = '#E3EFC8';
+const FALLBACK_COLOR = '#8A93A3';
+const STATUS_COLOR: Record<FilterTab, string> = {
+  active: '#65A30D',
+  converted: '#0284C7',
+  cancelled: '#E11D48',
+};
+const DEPT_DOT: Record<string, string> = {
+  CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
+};
+const DEPT_HUE: Record<string, number> = { CE: 217, ME: 160, EC: 25, CS: 258, EE: 0 };
+
+/** Accent colour deepened for use as text on a light background. */
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+// Outline chip: white fill + tinted hairline and ink; solid colour when selected.
+function chipStyle(color: string, selected: boolean): React.CSSProperties {
+  return selected
+    ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
+    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) };
+}
+
+const OUTLINE_PILL_BTN =
+  'shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#65A30D]/45 bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#3F6212] hover:bg-[#65A30D]/[0.08] focus:outline-none focus:ring-2 focus:ring-[#65A30D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const TH =
+  'h-9 px-3 py-0 align-middle text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[#F1F8E2] border-b border-[#D5E6AE] text-[#3F6212]';
+
+/** Department ring monogram — pastel gradient in the department's hue with a thin ring. */
+function RingAvatar({ name, course, size = 22 }: { name: string; course: string; size?: number }) {
+  const h = DEPT_HUE[course] ?? 90;
+  const ring = DEPT_DOT[course] ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="rounded-full flex items-center justify-center shrink-0 font-medium tracking-[0.3px]"
+      style={{
+        width: size, height: size, fontSize: size * 0.43,
+        background: `linear-gradient(135deg, hsl(${h - 6} 85% 88%), hsl(${h + 8} 85% 74%))`,
+        color: `hsl(${h} 70% 22%)`,
+        boxShadow: `0 0 0 1px #fff, 0 0 0 2px ${ring}80`,
+      }}
+      title={course}
+    >
+      {name.charAt(0)}
+    </span>
+  );
+}
+
+/** Compact thin-line pill: accent-tinted fill, border and ink text. */
+function LinePill({ value, color, minWidth }: { value?: string | null; color?: string; minWidth?: number }) {
+  if (!value) return <span className="text-[#C4C8D0] text-[10px]">—</span>;
+  const c = color ?? FALLBACK_COLOR;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full border px-[7px] py-[4.5px] text-[10.5px] font-medium leading-none whitespace-nowrap"
+      style={{ background: `${c}14`, borderColor: `${c}73`, color: inkOf(c), minWidth }}
+    >
+      {value}
+    </span>
+  );
+}
+
+function EmptyState({ title, hint, tone = 'muted' }: { title: string; hint?: string; tone?: 'muted' | 'error' }) {
+  const isError = tone === 'error';
+  const c = isError ? '#E11D48' : LIME;
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-14 text-center px-6" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      <div className="w-14 h-14 rounded-2xl border flex items-center justify-center" style={{ borderColor: `${c}33`, background: `${c}0D`, color: c }}>
+        {isError ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        )}
+      </div>
+      <p className="text-[14px] font-medium max-w-md" style={{ color: isError ? inkOf(c) : '#5B6371' }}>{title}</p>
+      {hint && <p className="text-[12px] text-[#8A93A3]">{hint}</p>}
+    </div>
+  );
+}
+
+function AnimNum({ value }: { value: number }) {
+  return (
+    <span key={value} className="font-medium tabular-nums" style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}>
+      {value}
+    </span>
+  );
+}
 
 interface InquiryForm {
   studentName: string;
@@ -80,6 +170,7 @@ export function Inquiries() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
+  const [courseFilter, setCourseFilter] = useState<Course | ''>('');
 
   const ctxRef = useRef<HTMLDivElement>(null);
 
@@ -101,6 +192,13 @@ export function Inquiries() {
       document.removeEventListener('scroll', closeCtx, true);
     };
   }, [ctxMenu, closeCtx]);
+
+  useEffect(() => {
+    if (!showForm || saving) return;
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') handleCancelForm(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showForm, saving]);
 
   function handleContextMenu(e: React.MouseEvent, inq: Inquiry) {
     e.preventDefault();
@@ -145,6 +243,7 @@ export function Inquiries() {
 
   const displayList = useMemo(() => {
     let list = inquiries.filter((i) => i.status === activeTab);
+    if (courseFilter) list = list.filter((i) => i.interestedCourse === courseFilter);
     const q = searchTerm.trim().toUpperCase();
     if (q) {
       list = list.filter(
@@ -157,7 +256,14 @@ export function Inquiries() {
       );
     }
     return list;
-  }, [inquiries, activeTab, searchTerm]);
+  }, [inquiries, activeTab, searchTerm, courseFilter]);
+
+  // Per-course counts for the current status tab (drives the course chips).
+  const courseCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const i of inquiries) if (i.status === activeTab) out[i.interestedCourse] = (out[i.interestedCourse] ?? 0) + 1;
+    return out;
+  }, [inquiries, activeTab]);
 
   // ── Form handlers ──────────────────────────────────────────────────────────
 
@@ -299,380 +405,436 @@ export function Inquiries() {
   const isLoading = settingsLoading || loading;
   if (isLoading) return <PageSpinner />;
 
-  return (
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
+  const hasActiveFilters = !!searchTerm || !!courseFilter;
+  const tabColor = STATUS_COLOR[activeTab];
 
-      {/* Page header */}
+  const INPUT_BASE = 'w-full border bg-[#FBFDF5] px-3 py-2 text-[13px] font-medium text-[#3F6212] placeholder:text-[#3F6212]/45 placeholder:font-normal focus:outline-none focus:bg-white focus:ring-2 transition-all duration-150';
+  const inputCls = (err?: string, rounded = 'rounded-full') =>
+    `${INPUT_BASE} ${rounded} ${err ? 'border-[#E11D48]/60 focus:border-[#E11D48] focus:ring-[#E11D48]/20' : 'border-[#65A30D]/35 focus:border-[#65A30D] focus:ring-[#65A30D]/20'}`;
+  const LABEL = 'text-[11px] font-medium text-[#5B6371] pl-1';
+  const ERR = 'text-[10.5px] font-medium text-[#E11D48] pl-1';
+  const SECTION = 'text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#3F6212]';
+
+  return (
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F9FCF1 0%, #FDFEF9 45%, #F3F9E4 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
+
+      {/* ── Page header ── */}
       <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
         <div className="shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 leading-tight">Inquiries</h2>
-          {academicYear && (
-            <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
-          )}
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions{academicYear ? ` · ${academicYear}` : ''}
+          </p>
+          <h2 className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: LIME_INK }}>Inquiries</h2>
         </div>
 
-        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-            <span className="text-green-600 font-medium">Active</span>
-            <span className="font-bold tabular-nums text-green-800">{counts.active}</span>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="relative w-56">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: LIME_INK }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search name / mobile / course…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-full border border-[#65A30D]/40 bg-[#FBFDF5] py-2 pl-9 pr-3 text-[13px] font-medium text-[#3F6212] placeholder:text-[#3F6212]/55 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#65A30D] focus:ring-2 focus:ring-[#65A30D]/20 transition-all duration-150"
+            />
           </div>
-        </div>
-
-        <Button
-          size="sm"
-          onClick={() => {
-            if (showForm) {
-              handleCancelForm();
-            } else {
-              setForm(emptyForm());
-              setEditingId(null);
-              setFormErrors({});
-              setShowForm(true);
-            }
-          }}
-          className="ml-auto shrink-0"
-        >
-          {showForm ? '✕ Close' : '+ Add Inquiry'}
-        </Button>
-
-        <div className="relative shrink-0">
-          <input
-            type="text"
-            placeholder="Search name / mobile / course…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-52 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-6"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none text-sm"
-            >
-              ×
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
+            disabled={!searchTerm}
+            aria-label="Clear search"
+            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#F97360]/10 px-3 py-2 text-[11.5px] font-medium text-[#E2533F] hover:bg-[#F97360]/[0.16] focus:outline-none focus:ring-2 focus:ring-[#F97360]/30 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default"
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Clear
+          </button>
+          <button
+            onClick={() => {
+              if (showForm) {
+                handleCancelForm();
+              } else {
+                setForm(emptyForm());
+                setEditingId(null);
+                setFormErrors({});
+                setShowForm(true);
+              }
+            }}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium text-white hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65A30D]/40 focus-visible:ring-offset-2 cursor-pointer transition-[filter]"
+            style={{ background: `linear-gradient(135deg, ${LIME}, ${LIME_INK})`, boxShadow: `0 3px 10px ${LIME}40` }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Inquiry
+          </button>
         </div>
 
         {/* Toast */}
         {toastMsg && (
           <div
-            className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-2 border text-xs font-medium px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap pointer-events-auto ${
-              toastError
-                ? 'bg-red-50 border-red-200 text-red-800'
-                : 'bg-green-50 border-green-200 text-green-800'
-            }`}
-            style={{ animation: 'toast-in 0.2s ease-out' }}
+            className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-20 flex items-center gap-2 border text-[12px] font-medium px-3.5 py-1.5 rounded-full whitespace-nowrap pointer-events-auto bg-white"
+            style={{
+              animation: 'toast-in 0.2s ease-out',
+              borderColor: toastError ? '#E11D4866' : '#65A30D66',
+              color: toastError ? '#9F1239' : LIME_INK,
+              boxShadow: `0 4px 14px ${toastError ? '#E11D4820' : '#65A30D25'}`,
+            }}
           >
-            <span className={toastError ? 'text-red-500' : 'text-green-500'}>
+            <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] text-white" style={{ background: toastError ? '#E11D48' : LIME }}>
               {toastError ? '✕' : '✓'}
             </span>
             {toastMsg}
-            <button
-              onClick={() => setToastMsg('')}
-              className={`leading-none ml-1 ${toastError ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
-            >
-              ×
-            </button>
+            <button onClick={() => setToastMsg('')} className="leading-none ml-1 opacity-50 hover:opacity-100 cursor-pointer">×</button>
           </div>
         )}
       </div>
 
-      {/* Inline Add / Edit Inquiry form */}
-      {showForm && (
-        <div className="flex-shrink-0 bg-white border border-blue-200 rounded-lg shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">
-            {editingId ? 'Edit Inquiry' : 'New Walk-in Inquiry'}
-          </h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-3">
-
-            {/* Student Name */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Student Name <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={form.studentName}
-                onChange={(e) => handleFormChange('studentName', e.target.value.toUpperCase())}
-                placeholder="As in SSLC certificate"
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 uppercase ${formErrors.studentName ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.studentName && <span className="text-[10px] text-red-500">{formErrors.studentName}</span>}
-            </div>
-
-            {/* Parent / Guardian Name */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Parent / Guardian Name <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={form.parentName}
-                onChange={(e) => handleFormChange('parentName', e.target.value.toUpperCase())}
-                placeholder="Father / Guardian name"
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 uppercase ${formErrors.parentName ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.parentName && <span className="text-[10px] text-red-500">{formErrors.parentName}</span>}
-            </div>
-
-            {/* Interested Course */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Interested Course <span className="text-red-500">*</span></label>
-              <select
-                value={form.interestedCourse}
-                onChange={(e) => handleFormChange('interestedCourse', e.target.value)}
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white ${formErrors.interestedCourse ? 'border-red-400' : 'border-gray-300'}`}
-              >
-                <option value="">Select course…</option>
-                {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              {formErrors.interestedCourse && <span className="text-[10px] text-red-500">{formErrors.interestedCourse}</span>}
-            </div>
-
-            {/* Father Mobile */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Father Mobile <span className="text-red-500">*</span></label>
-              <input
-                type="tel"
-                value={form.parentMobile}
-                onChange={(e) => handleFormChange('parentMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit mobile number"
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${formErrors.parentMobile ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.parentMobile && <span className="text-[10px] text-red-500">{formErrors.parentMobile}</span>}
-            </div>
-
-            {/* Student Mobile */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Student Mobile <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input
-                type="tel"
-                value={form.studentMobile}
-                onChange={(e) => handleFormChange('studentMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit mobile number"
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${formErrors.studentMobile ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.studentMobile && <span className="text-[10px] text-red-500">{formErrors.studentMobile}</span>}
-            </div>
-
-            {/* Visit Date */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-600">Visit Date <span className="text-red-500">*</span></label>
-              <input
-                type="date"
-                value={form.visitDate}
-                onChange={(e) => handleFormChange('visitDate', e.target.value)}
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${formErrors.visitDate ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.visitDate && <span className="text-[10px] text-red-500">{formErrors.visitDate}</span>}
-            </div>
-
-            {/* Address */}
-            <div className="flex flex-col gap-1 col-span-2">
-              <label className="text-xs font-medium text-gray-600">Address <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={form.address}
-                onChange={(e) => handleFormChange('address', e.target.value.toUpperCase())}
-                placeholder="House / Street / Village / Town"
-                style={{ textTransform: 'uppercase' }}
-                className={`rounded border px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${formErrors.address ? 'border-red-400' : 'border-gray-300'}`}
-              />
-              {formErrors.address && <span className="text-[10px] text-red-500">{formErrors.address}</span>}
-            </div>
-
-            {/* Notes */}
-            <div className="flex flex-col gap-1 col-span-2 md:col-span-3">
-              <label className="text-xs font-medium text-gray-600">Notes <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input
-                type="text"
-                value={form.notes}
-                onChange={(e) => handleFormChange('notes', e.target.value.toUpperCase())}
-                placeholder="Any remarks or follow-up notes…"
-                style={{ textTransform: 'uppercase' }}
-                className="rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
-            <Button size="sm" onClick={() => void handleSave()} loading={saving}>
-              {editingId ? 'Update Inquiry' : 'Save Inquiry'}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={handleCancelForm} disabled={saving}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex-shrink-0 flex items-center border-b border-gray-200 bg-white rounded-t-lg">
-        {TAB_CONFIG.map(({ id, label, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {label}
-            {counts[id] > 0 && (
-              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${badge}`}>
-                {counts[id]}
-              </span>
-            )}
-          </button>
-        ))}
-        {displayList.length > 0 && (
-          <div className="flex items-center gap-2 ml-auto pr-3">
+      {/* ── Status tiles + course chips + exports ── */}
+      <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
+        {TAB_CONFIG.map(({ id, label }) => {
+          const c = STATUS_COLOR[id];
+          const selected = activeTab === id;
+          return (
             <button
-              onClick={handleExportPdf}
-              disabled={exportingPdf}
-              className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex flex-col items-start justify-center rounded-xl border px-3.5 py-1.5 min-w-[104px] cursor-pointer transition-all active:scale-[0.98] hover:brightness-[0.97] ${!selected ? 'opacity-70 hover:opacity-100' : ''}`}
+              style={selected ? { background: c, borderColor: c, boxShadow: `0 3px 10px ${c}40` } : { background: `${c}12`, borderColor: `${c}59` }}
             >
+              <span className="inline-flex items-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.5px] leading-tight" style={{ color: selected ? '#fff' : inkOf(c) }}>
+                {!selected && <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />}
+                {label}
+              </span>
+              <span className="text-[18px] font-medium leading-tight" style={{ color: selected ? '#fff' : inkOf(c) }}><AnimNum value={counts[id]} /></span>
+            </button>
+          );
+        })}
+
+        <span className="w-px h-8 bg-[#D5E6AE] mx-1 self-center" />
+
+        {COURSES.map((c) => {
+          const count = courseCounts[c] ?? 0;
+          const selected = courseFilter === c;
+          const dimmed = (!!courseFilter && !selected) || count === 0;
+          return (
+            <button
+              key={c}
+              onClick={() => setCourseFilter(selected ? '' : c)}
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${dimmed && !selected ? 'opacity-[0.5] hover:opacity-100' : ''}`}
+              style={chipStyle(DEPT_DOT[c], selected)}
+            >
+              {!selected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: DEPT_DOT[c] }} />}
+              <span>{c}</span>
+              <AnimNum value={count} />
+            </button>
+          );
+        })}
+
+        {courseFilter && (
+          <button
+            onClick={() => setCourseFilter('')}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#F97360]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#E2533F] hover:bg-[#F97360]/[0.16] cursor-pointer transition-colors"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Clear course
+          </button>
+        )}
+
+        {displayList.length > 0 && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={handleExportPdf} disabled={exportingPdf} className={OUTLINE_PILL_BTN}>
               {exportingPdf ? 'Generating…' : 'Save PDF'}
             </button>
-            <button
-              onClick={handleExportExcel}
-              disabled={exportingExcel}
-              className="rounded border border-green-300 px-2.5 py-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleExportExcel} disabled={exportingExcel} className={OUTLINE_PILL_BTN}>
               {exportingExcel ? 'Generating…' : 'Save Excel'}
             </button>
           </div>
         )}
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       {error ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-red-500">{error}</div>
+        <EmptyState tone="error" title={error} />
       ) : !academicYear ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-          Please configure an academic year in Settings first.
-        </div>
+        <EmptyState title="Please configure an academic year in Settings first." />
       ) : displayList.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center flex-col gap-2">
-          <p className="text-sm text-gray-400">
-            {searchTerm.trim()
+        <EmptyState
+          title={
+            searchTerm.trim()
               ? `No results for "${searchTerm.trim()}".`
+              : courseFilter
+              ? `No ${activeTab} inquiries for ${courseFilter}.`
               : activeTab === 'active'
               ? `No active inquiries for ${academicYear}.`
               : activeTab === 'converted'
               ? `No converted inquiries for ${academicYear}.`
-              : `No cancelled inquiries for ${academicYear}.`}
-          </p>
-          {activeTab === 'active' && !searchTerm.trim() && (
-            <p className="text-xs text-gray-300">Use "+ Add Inquiry" to record a walk-in visit.</p>
-          )}
-        </div>
+              : `No cancelled inquiries for ${academicYear}.`
+          }
+          hint={activeTab === 'active' && !searchTerm.trim() && !courseFilter ? 'Use "+ Add Inquiry" to record a walk-in visit.' : undefined}
+        />
       ) : (
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 text-xs">
-            <thead className="bg-gray-50 sticky top-0 z-10">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Student Name</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Parent / Guardian</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Father Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Student Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Visit Date</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Address</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {displayList.map((inq, idx) => (
-                <tr
-                  key={inq.id}
-                  onContextMenu={(e) => handleContextMenu(e, inq)}
-                  className={`transition-colors select-none ${
-                    actionLoading === inq.id
-                      ? 'opacity-50 pointer-events-none'
-                      : (!isAdmin && inq.status === 'cancelled')
-                      ? 'hover:bg-gray-50'
-                      : 'hover:bg-gray-50 cursor-context-menu'
-                  } ${editingId === inq.id ? 'bg-blue-50' : ''}`}
-                >
-                  <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
-                    <span className="flex items-center gap-1 group">
-                      {inq.studentName}
-                      <span className="opacity-0 group-hover:opacity-40 transition-opacity text-[9px] text-gray-400 font-normal leading-none select-none">▾</span>
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{inq.parentName || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">{resolveParentMobile(inq)}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">{inq.studentMobile || '—'}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                      {inq.interestedCourse}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtDate(inq.visitDate)}</td>
-                  <td className="px-3 py-2 text-gray-600 max-w-[180px] truncate" title={inq.address}>{inq.address || '—'}</td>
-                  <td className="px-3 py-2 text-gray-500 max-w-[160px] truncate italic" title={inq.notes}>{inq.notes || '—'}</td>
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border overflow-hidden flex flex-col transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(63,98,18,0.06)]" style={{ borderColor: HAIRLINE }}>
+          <div className="scroll-inq flex-1 min-h-0 overflow-auto">
+            <table className="min-w-full text-xs border-separate border-spacing-0">
+              <thead className="sticky top-0 z-10">
+                <tr>
+                  <th className={`${TH} text-left w-8`}>#</th>
+                  <th className={`${TH} text-left`}>Student Name</th>
+                  <th className={`${TH} text-left`}>Parent / Guardian</th>
+                  <th className={`${TH} text-left w-28`}>Father Mobile</th>
+                  <th className={`${TH} text-left w-28`}>Student Mobile</th>
+                  <th className={`${TH} text-left w-14`}>Course</th>
+                  <th className={`${TH} text-left w-24`}>Visit Date</th>
+                  <th className={`${TH} text-left`}>Address</th>
+                  <th className={`${TH} text-left`}>Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
-            {displayList.length} inquiry{displayList.length !== 1 ? 's' : ''}
-            <span className="ml-2 text-gray-300">· Right-click a row for actions</span>
+              </thead>
+              <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EEF6DC]">
+                {displayList.map((inq, idx) => (
+                  <tr
+                    key={inq.id}
+                    onContextMenu={(e) => handleContextMenu(e, inq)}
+                    className={`transition-colors select-none ${
+                      actionLoading === inq.id
+                        ? 'opacity-50 pointer-events-none'
+                        : (!isAdmin && inq.status === 'cancelled')
+                        ? 'hover:bg-[#F9FCF1]'
+                        : 'hover:bg-[#F9FCF1] cursor-context-menu'
+                    } ${editingId === inq.id ? 'bg-[#F1F8E2]' : ''} ${ctxMenu?.inq.id === inq.id ? 'row-ctx-active-lime' : ''}`}
+                  >
+                    <td className="px-3 py-2 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="flex items-center gap-2.5 group">
+                        <RingAvatar name={inq.studentName} course={inq.interestedCourse} />
+                        <span className="text-[12.5px] font-medium" style={{ color: LIME_INK }}>{inq.studentName}</span>
+                        <span className="opacity-0 group-hover:opacity-40 transition-opacity text-[9px] text-gray-400 font-normal leading-none select-none">▾</span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-[#4B5068] whitespace-nowrap">{inq.parentName || '—'}</td>
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{resolveParentMobile(inq)}</td>
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-black tabular-nums whitespace-nowrap">{inq.studentMobile || '—'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <LinePill value={inq.interestedCourse} color={DEPT_DOT[inq.interestedCourse]} minWidth={34} />
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <LinePill value={fmtDate(inq.visitDate)} color={tabColor} />
+                    </td>
+                    <td className="px-3 py-2 text-[11.5px] font-medium text-[#4B5068] max-w-[180px] truncate" title={inq.address}>{inq.address || '—'}</td>
+                    <td className="px-3 py-2 text-[11.5px] text-[#8A93A3] max-w-[160px] truncate italic" title={inq.notes}>{inq.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex-shrink-0 px-4 py-2 border-t bg-[#F9FCF1] text-[11px] font-medium text-[#8A93A3]" style={{ borderColor: '#D5E6AE' }}>
+            <span className="text-[#262B35] tabular-nums">{displayList.length}</span> inquiry{displayList.length !== 1 ? 's' : ''}
+            {hasActiveFilters && <span> (filtered)</span>}
+            <span className="ml-2 text-[#B5BCC8]">· Right-click a row for actions</span>
           </div>
         </div>
       )}
 
-      {/* Context menu */}
+      {/* ── Add / Edit Inquiry modal ── */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-wp" style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => !saving && handleCancelForm()} aria-hidden="true" />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden border"
+            style={{ borderColor: HAIRLINE, maxHeight: 'calc(100vh - 2rem)', animation: 'modal-enter 0.22s ease-out' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between shrink-0" style={{ background: `linear-gradient(135deg, ${LIME}, ${LIME_INK})` }}>
+              <h3 className="text-[14px] font-bold text-white flex items-center gap-2.5">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 ring-1 ring-white/40">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                </span>
+                {editingId ? 'Edit Inquiry' : 'New Walk-in Inquiry'}
+              </h3>
+              <button
+                onClick={handleCancelForm}
+                disabled={saving}
+                aria-label="Close"
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4" style={{ background: 'linear-gradient(160deg, #FDFEF9, #F9FCF1)' }}>
+              {/* Student */}
+              <div className="space-y-2.5">
+                <p className={SECTION}>Student</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-3 gap-y-2.5">
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className={LABEL}>Student Name <span className="text-[#E11D48]">*</span></label>
+                    <input
+                      type="text"
+                      value={form.studentName}
+                      onChange={(e) => handleFormChange('studentName', e.target.value.toUpperCase())}
+                      placeholder="As in SSLC certificate"
+                      style={{ textTransform: 'uppercase' }}
+                      className={inputCls(formErrors.studentName)}
+                    />
+                    {formErrors.studentName && <span className={ERR}>{formErrors.studentName}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={LABEL}>Interested Course <span className="text-[#E11D48]">*</span></label>
+                    <select
+                      value={form.interestedCourse}
+                      onChange={(e) => handleFormChange('interestedCourse', e.target.value)}
+                      className={`${inputCls(formErrors.interestedCourse)} cursor-pointer`}
+                    >
+                      <option value="">Select course…</option>
+                      {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {formErrors.interestedCourse && <span className={ERR}>{formErrors.interestedCourse}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className={LABEL}>Student Mobile <span className="text-[#8A93A3] font-normal">(optional)</span></label>
+                    <input
+                      type="tel"
+                      value={form.studentMobile}
+                      onChange={(e) => handleFormChange('studentMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="10-digit mobile number"
+                      className={inputCls(formErrors.studentMobile)}
+                    />
+                    {formErrors.studentMobile && <span className={ERR}>{formErrors.studentMobile}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Parent */}
+              <div className="space-y-2.5">
+                <p className={SECTION}>Parent / Guardian</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2.5">
+                  <div className="flex flex-col gap-1">
+                    <label className={LABEL}>Parent / Guardian Name <span className="text-[#E11D48]">*</span></label>
+                    <input
+                      type="text"
+                      value={form.parentName}
+                      onChange={(e) => handleFormChange('parentName', e.target.value.toUpperCase())}
+                      placeholder="Father / Guardian name"
+                      style={{ textTransform: 'uppercase' }}
+                      className={inputCls(formErrors.parentName)}
+                    />
+                    {formErrors.parentName && <span className={ERR}>{formErrors.parentName}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className={LABEL}>Father Mobile <span className="text-[#E11D48]">*</span></label>
+                    <input
+                      type="tel"
+                      value={form.parentMobile}
+                      onChange={(e) => handleFormChange('parentMobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="10-digit mobile number"
+                      className={inputCls(formErrors.parentMobile)}
+                    />
+                    {formErrors.parentMobile && <span className={ERR}>{formErrors.parentMobile}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Visit */}
+              <div className="space-y-2.5">
+                <p className={SECTION}>Visit</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-3 gap-y-2.5">
+                  <div className="flex flex-col gap-1">
+                    <label className={LABEL}>Visit Date <span className="text-[#E11D48]">*</span></label>
+                    <input
+                      type="date"
+                      value={form.visitDate}
+                      onChange={(e) => handleFormChange('visitDate', e.target.value)}
+                      className={inputCls(formErrors.visitDate)}
+                    />
+                    {formErrors.visitDate && <span className={ERR}>{formErrors.visitDate}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className={LABEL}>Address <span className="text-[#E11D48]">*</span></label>
+                    <input
+                      type="text"
+                      value={form.address}
+                      onChange={(e) => handleFormChange('address', e.target.value.toUpperCase())}
+                      placeholder="House / Street / Village / Town"
+                      style={{ textTransform: 'uppercase' }}
+                      className={inputCls(formErrors.address)}
+                    />
+                    {formErrors.address && <span className={ERR}>{formErrors.address}</span>}
+                  </div>
+                  <div className="flex flex-col gap-1 sm:col-span-3">
+                    <label className={LABEL}>Notes <span className="text-[#8A93A3] font-normal">(optional)</span></label>
+                    <input
+                      type="text"
+                      value={form.notes}
+                      onChange={(e) => handleFormChange('notes', e.target.value.toUpperCase())}
+                      placeholder="Any remarks or follow-up notes…"
+                      style={{ textTransform: 'uppercase' }}
+                      className={inputCls()}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t flex items-center justify-end gap-2 shrink-0 bg-[#F9FCF1]" style={{ borderColor: HAIRLINE }}>
+              <button onClick={handleCancelForm} disabled={saving} className={OUTLINE_PILL_BTN}>Cancel</button>
+              <button
+                onClick={() => void handleSave()}
+                disabled={saving}
+                className="inline-flex items-center rounded-full px-5 py-1.5 text-[12px] font-medium text-white hover:brightness-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-[filter]"
+                style={{ background: `linear-gradient(135deg, ${LIME}, ${LIME_INK})`, boxShadow: `0 3px 10px ${LIME}40` }}
+              >
+                {saving ? 'Saving…' : editingId ? 'Update Inquiry' : 'Save Inquiry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Context menu ── */}
       {ctxMenu && (
         <div
           ref={ctxRef}
-          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
-          className="bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
+          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999, borderColor: HAIRLINE, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="font-wp bg-white border rounded-2xl overflow-hidden min-w-[210px]"
         >
-          {/* Header */}
-          <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-              {ctxMenu.inq.studentName.charAt(0)}
-            </span>
+          <div className="px-3 pt-2.5 pb-2 border-b flex items-center gap-2.5" style={{ borderColor: '#EEF6DC' }}>
+            <RingAvatar name={ctxMenu.inq.studentName} course={ctxMenu.inq.interestedCourse} size={26} />
             <div className="min-w-0">
-              <p className="text-[12px] font-semibold text-gray-800 truncate">{ctxMenu.inq.studentName}</p>
-              <p className="text-[10px] text-gray-400 truncate">{ctxMenu.inq.interestedCourse} · {fmtDate(ctxMenu.inq.visitDate)}</p>
+              <p className="text-[12px] font-medium truncate" style={{ color: LIME_INK }}>{ctxMenu.inq.studentName}</p>
+              <p className="text-[10px] text-[#8A93A3] truncate">{ctxMenu.inq.interestedCourse} · {fmtDate(ctxMenu.inq.visitDate)}</p>
             </div>
           </div>
 
-          {/* Items */}
           <div className="py-1.5">
-            {/* Edit — always available */}
             <button
               onClick={() => handleEdit(ctxMenu.inq)}
-              className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[7px] text-[13px] font-medium text-[#4B5068] hover:bg-[#F9FCF1] hover:text-[#262B35] flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
             >
-              <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+              <span className="w-[18px] h-[18px] rounded-[5px] bg-[#F1F8E2] text-[#3F6212] flex items-center justify-center flex-shrink-0">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </span>
               Edit Inquiry
             </button>
 
-            {/* Active-only actions — admin only */}
             {ctxMenu.inq.status === 'active' && isAdmin && (
               <>
                 <button
                   onClick={() => handleBeginEnrollment(ctxMenu.inq)}
-                  className="group w-full text-left px-3 py-[7px] text-[13px] text-emerald-700 hover:bg-emerald-50/80 hover:text-emerald-800 flex items-center gap-2.5 transition-colors duration-100 font-medium"
+                  className="group w-full text-left px-3 py-[7px] text-[13px] font-medium text-[#3F6212] hover:bg-[#65A30D]/10 flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
                 >
-                  <span className="w-[18px] h-[18px] rounded-[5px] bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-[#65A30D]/15 text-[#4D7C0F] flex items-center justify-center flex-shrink-0">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                   </span>
                   Begin Enrollment
                 </button>
-                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <div className="my-1 h-px bg-[#EEF6DC] mx-3" />
                 <button
                   onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'cancelled')}
-                  className="group w-full text-left px-3 py-[7px] text-[13px] text-red-600 hover:bg-red-50/80 hover:text-red-700 flex items-center gap-2.5 transition-colors duration-100"
+                  className="group w-full text-left px-3 py-[7px] text-[13px] font-medium text-[#E11D48] hover:bg-[#E11D48]/[0.07] flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
                 >
-                  <span className="w-[18px] h-[18px] rounded-[5px] bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 group-hover:text-red-600 transition-colors">
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-[#E11D48]/10 text-[#E11D48] flex items-center justify-center flex-shrink-0">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </span>
                   Cancel Inquiry
@@ -680,15 +842,14 @@ export function Inquiries() {
               </>
             )}
 
-            {/* Converted-only actions */}
-            {ctxMenu.inq.status === 'converted' && (
+            {(ctxMenu.inq.status === 'converted' || ctxMenu.inq.status === 'cancelled') && (
               <>
-                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <div className="my-1 h-px bg-[#EEF6DC] mx-3" />
                 <button
                   onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
-                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
+                  className="group w-full text-left px-3 py-[7px] text-[13px] font-medium text-[#4B5068] hover:bg-[#F9FCF1] hover:text-[#262B35] flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
                 >
-                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-[#0284C7]/10 text-[#0284C7] flex items-center justify-center flex-shrink-0">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 101.85-4.17L1 10"/></svg>
                   </span>
                   Restore to Active
@@ -696,29 +857,16 @@ export function Inquiries() {
               </>
             )}
 
-            {/* Cancelled-only actions */}
             {ctxMenu.inq.status === 'cancelled' && (
-              <>
-                <div className="my-1 h-px bg-gray-100 mx-3" />
-                <button
-                  onClick={() => void handleStatusChange(ctxMenu.inq.id, ctxMenu.inq.studentName, 'active')}
-                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100"
-                >
-                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 group-hover:text-gray-700 transition-colors">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 101.85-4.17L1 10"/></svg>
-                  </span>
-                  Restore to Active
-                </button>
-                <button
-                  onClick={() => void handleDelete(ctxMenu.inq.id, ctxMenu.inq.studentName)}
-                  className="group w-full text-left px-3 py-[7px] text-[13px] text-red-600 hover:bg-red-50/80 hover:text-red-700 flex items-center gap-2.5 transition-colors duration-100"
-                >
-                  <span className="w-[18px] h-[18px] rounded-[5px] bg-red-100 text-red-500 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 group-hover:text-red-600 transition-colors">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-                  </span>
-                  Delete
-                </button>
-              </>
+              <button
+                onClick={() => void handleDelete(ctxMenu.inq.id, ctxMenu.inq.studentName)}
+                className="group w-full text-left px-3 py-[7px] text-[13px] font-medium text-[#E11D48] hover:bg-[#E11D48]/[0.07] flex items-center gap-2.5 transition-colors duration-100 cursor-pointer"
+              >
+                <span className="w-[18px] h-[18px] rounded-[5px] bg-[#E11D48]/10 text-[#E11D48] flex items-center justify-center flex-shrink-0">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                </span>
+                Delete
+              </button>
             )}
           </div>
         </div>

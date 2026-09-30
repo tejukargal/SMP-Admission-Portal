@@ -30,6 +30,7 @@ import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Cate
 import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
+import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardToggle';
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
 import type { DtekCircular } from '../services/dtekNewsService';
 import {
@@ -270,6 +271,9 @@ export function Dashboard() {
   const [showFilters,    setShowFilters]    = useState(false);
   const [showChips,      setShowChips]      = useState(() => localStorage.getItem('smp_chips_visible') !== 'false');
   const [showStatsPills, setShowStatsPills] = useState(() => localStorage.getItem('smp_statspills_visible') === 'true');
+  // Insights side slot: DTEK News by default; the last choice is remembered.
+  const [sideCard, setSideCard] = useState<SideCard>(() => localStorage.getItem('smp_insights_side') === 'activity' ? 'activity' : 'dtek');
+  const changeSideCard = (next: SideCard) => { setSideCard(next); localStorage.setItem('smp_insights_side', next); };
 
   // ── Certificate context menu (search results) ────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; student: Student } | null>(null);
@@ -2149,7 +2153,7 @@ const [barsReady, setBarsReady] = useState(false);
 
             {/* Course Strength + Adm Type */}
             <div>
-              <SectionLabel>Insights & Recent Activity</SectionLabel>
+              <SectionLabel>Insights · Activity & DTEK News</SectionLabel>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               {/* Course-wise vertical bar chart — cycling modes, mint/ivory palette */}
@@ -2327,24 +2331,29 @@ const [barsReady, setBarsReady] = useState(false);
                 );
               })()}
 
-              {/* Recent activity card — absolute fill so bar chart card sets the row height */}
-              <div className="relative">
-                <div className="absolute inset-0 overflow-hidden rounded-2xl">
-                  <RecentActivityCard
-                    students={allStudents}
-                    feeRecords={feeRecords}
-                    academicYear={feeAcademicYear}
-                    cycleIdx={barChartMode}
-                  />
-                </div>
+              {/* Side slot — Recent Activity / DTEK News, switched by the header toggle.
+                  Absolute fill so the bar chart card sets the row height. Both cards stay mounted
+                  (the inactive one is hidden) so DTEK fetches once and Activity keeps cycling in sync. */}
+              {(() => {
+                const sideToggle = <SideCardToggle value={sideCard} onChange={changeSideCard} />;
+                return (
+                  <div className="relative min-h-[300px]">
+                    <div className={`absolute inset-0 overflow-hidden rounded-2xl ${sideCard === 'activity' ? '' : 'hidden'}`}>
+                      <RecentActivityCard
+                        students={allStudents}
+                        feeRecords={feeRecords}
+                        academicYear={feeAcademicYear}
+                        cycleIdx={barChartMode}
+                        headerExtra={sideToggle}
+                      />
+                    </div>
+                    <div className={`absolute inset-0 overflow-hidden rounded-2xl ${sideCard === 'dtek' ? '' : 'hidden'}`}>
+                      <DtekNewsCard onOpen={setDtekCircular} isAdmin={role === 'admin'} headerExtra={sideToggle} />
+                    </div>
+                  </div>
+                );
+              })()}
               </div>
-              </div>
-            </div>
-
-            {/* DTEK News — the admin-published digest of department circulars */}
-            <div>
-              <SectionLabel>DTEK News</SectionLabel>
-              <DtekNewsCard onOpen={setDtekCircular} isAdmin={role === 'admin'} />
             </div>
 
           </div>

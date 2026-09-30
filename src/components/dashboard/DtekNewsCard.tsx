@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublishedDtekNews, type DtekCircular, type DtekNewsRecord } from '../../services/dtekNewsService';
 import { formatIsoDate, formatIsoDateTime, daysAgo } from '../../utils/formatDates';
@@ -10,12 +11,6 @@ const CARD_BORDER = PERI_BORDER;
 /** Past this, the digest is old enough that the header says so — the
  *  department circulates often, so a stale digest misleads. */
 const STALE_AFTER_DAYS = 14;
-
-/** The Insights & Recent Activity row above measures ~273px (its bar chart is
- *  148px plus header, legend and axis labels). Sitting just above that keeps
- *  this reading as a peer of that row instead of a slab, and the circular list
- *  scrolls inside rather than pushing the page down as the digest grows. */
-const CARD_H = 300;
 
 const CATEGORY_HEX: Record<string, string> = {
   Circular: '#7B7F8C',
@@ -49,12 +44,14 @@ interface Props {
   /** Settings is admin-only routing, so staff get no link into it — it would
    *  just bounce them back to the Dashboard. */
   isAdmin: boolean;
+  /** Optional control rendered at the right end of the header (e.g. the Activity / DTEK toggle). */
+  headerExtra?: ReactNode;
 }
 
 /** Dashboard section showing the admin-published digest of Department of
  *  Technical Education circulars, grouped by date. Read-only: refreshing it is
  *  an AI call that costs money, so that stays behind the Settings review flow. */
-export function DtekNewsCard({ onOpen, isAdmin }: Props) {
+export function DtekNewsCard({ onOpen, isAdmin, headerExtra }: Props) {
   const [news, setNews] = useState<DtekNewsRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -72,8 +69,8 @@ export function DtekNewsCard({ onOpen, isAdmin }: Props) {
 
   return (
     <div
-      className="rounded-2xl border overflow-hidden flex flex-col transition-shadow hover:shadow-[0_4px_16px_rgba(63,75,184,0.07)]"
-      style={{ height: CARD_H, backgroundColor: CARD_BG, borderColor: CARD_BORDER }}
+      className="rounded-2xl border overflow-hidden flex flex-col h-full min-h-[260px] transition-shadow hover:shadow-[0_4px_16px_rgba(63,75,184,0.07)]"
+      style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER }}
     >
       <div
         className="flex items-center justify-between gap-2 px-4 py-2.5 border-b shrink-0"
@@ -93,15 +90,18 @@ export function DtekNewsCard({ onOpen, isAdmin }: Props) {
             </span>
           )}
         </div>
-        {isAdmin && (
-          <Link
-            to="/settings?tab=dtek-news"
-            className="text-[10.5px] font-medium rounded-full border border-[#6B7CF6]/45 bg-white px-3 py-[5px] hover:bg-[#6B7CF6]/[0.08] transition-colors shrink-0"
-            style={{ color: PERI_INK }}
-          >
-            Refresh
-          </Link>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <Link
+              to="/settings?tab=dtek-news"
+              className="text-[10.5px] font-medium rounded-full border border-[#6B7CF6]/45 bg-white px-3 py-[5px] hover:bg-[#6B7CF6]/[0.08] transition-colors shrink-0"
+              style={{ color: PERI_INK }}
+            >
+              Refresh
+            </Link>
+          )}
+          {headerExtra}
+        </div>
       </div>
 
       {loading ? (

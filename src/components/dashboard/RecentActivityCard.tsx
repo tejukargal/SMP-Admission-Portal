@@ -67,9 +67,11 @@ interface Props {
   feeRecords: FeeRecord[];
   academicYear: AcademicYear | null;
   cycleIdx: number;
+  /** Optional control rendered at the right end of the header (e.g. the Activity / DTEK toggle). */
+  headerExtra?: ReactNode;
 }
 
-export function RecentActivityCard({ students, feeRecords, academicYear, cycleIdx }: Props) {
+export function RecentActivityCard({ students, feeRecords, academicYear, cycleIdx, headerExtra }: Props) {
   const events = useMemo<ActivityEvent[]>(() => {
     const confirmedIds = new Set(
       students.filter((s) => s.admissionStatus === 'CONFIRMED').map((s) => s.id),
@@ -177,9 +179,12 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
         className="rounded-2xl h-full flex flex-col border p-4"
         style={{ backgroundColor: CARD_BG, borderColor: CARD_BORDER }}
       >
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1 h-3.5 rounded-full shrink-0 animate-pulse" style={{ background: MATCHA }} />
-          <div className="h-3.5 w-28 rounded animate-pulse" style={{ background: SKELETON }} />
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-3.5 rounded-full shrink-0 animate-pulse" style={{ background: MATCHA }} />
+            <div className="h-3.5 w-28 rounded animate-pulse" style={{ background: SKELETON }} />
+          </div>
+          {headerExtra}
         </div>
         <div className="border-t mb-2" style={{ borderColor: CARD_DIV }} />
         <div className="space-y-2.5 flex-1">
@@ -213,14 +218,17 @@ export function RecentActivityCard({ students, feeRecords, academicYear, cycleId
             {academicYear ? `${academicYear} · ` : ''}latest {PER_KIND} per type
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[9.5px] font-medium" style={{ color: FAINT }}>
-          <span>Enrolled</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>Fee</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>TC</span>
-          <span style={{ opacity: 0.5 }}>·</span>
-          <span>PC</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-[9.5px] font-medium" style={{ color: FAINT }}>
+            <span>Enrolled</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>Fee</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>TC</span>
+            <span style={{ opacity: 0.5 }}>·</span>
+            <span>PC</span>
+          </div>
+          {headerExtra}
         </div>
       </div>
 

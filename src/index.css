@@ -513,6 +513,84 @@
   background: transparent;
 }
 
+/* ── ANS Letters table — thin amber scrollbar starting below the 36px sticky
+   header (band #FDF1DC / #F3D9A8, see AnsLetters.tsx). Static values. ─────── */
+.scroll-anns::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-anns::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-anns::-webkit-scrollbar-track:vertical {
+  margin-top: 36px;
+}
+.scroll-anns::-webkit-scrollbar:vertical {
+  background: linear-gradient(to bottom, #FDF1DC 0 35px, #F3D9A8 35px 36px, transparent 36px);
+}
+.scroll-anns::-webkit-scrollbar-thumb {
+  background: #F3D9A8;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-anns::-webkit-scrollbar-thumb:hover {
+  background: #E6B866;
+  background-clip: padding-box;
+}
+.scroll-anns::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Amber variant of the context-menu row blink — ANS Letters */
+@keyframes row-ctx-pulse-amber {
+  0%, 100% { background-color: rgba(224, 138, 0, 0.06); }
+  50%      { background-color: rgba(224, 138, 0, 0.16); }
+}
+.row-ctx-active-amber {
+  animation: row-ctx-pulse-amber 1.8s ease-in-out infinite;
+  background-color: rgba(224, 138, 0, 0.06);
+}
+
+/* ── Inquiries table — thin lime scrollbar starting below the 36px sticky
+   header (band #F1F8E2 / #D5E6AE, see Inquiries.tsx). Static values. ─────── */
+.scroll-inq::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-inq::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-inq::-webkit-scrollbar-track:vertical {
+  margin-top: 36px;
+}
+.scroll-inq::-webkit-scrollbar:vertical {
+  background: linear-gradient(to bottom, #F1F8E2 0 35px, #D5E6AE 35px 36px, transparent 36px);
+}
+.scroll-inq::-webkit-scrollbar-thumb {
+  background: #D5E6AE;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-inq::-webkit-scrollbar-thumb:hover {
+  background: #B5D27A;
+  background-clip: padding-box;
+}
+.scroll-inq::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Lime variant of the context-menu row blink — Inquiries */
+@keyframes row-ctx-pulse-lime {
+  0%, 100% { background-color: rgba(101, 163, 13, 0.06); }
+  50%      { background-color: rgba(101, 163, 13, 0.16); }
+}
+.row-ctx-active-lime {
+  animation: row-ctx-pulse-lime 1.8s ease-in-out infinite;
+  background-color: rgba(101, 163, 13, 0.06);
+}
+
 /* ── Thin indigo scrollbar — blends with indigo-tinted cards ─────────────── */
 .scroll-indigo {
   scrollbar-width: thin;
