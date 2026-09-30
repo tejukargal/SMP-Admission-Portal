@@ -550,7 +550,7 @@ function ScholarshipsCard() {
         <div className="px-6 py-5 space-y-5">
           <div className="flex items-center gap-2 flex-wrap">
             {published ? (
-              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${(publishedAge ?? 0) > 21 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${(publishedAge ?? 0) > 7 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
                 Published {formatIsoDateTime(published.publishedAt)}
                 {publishedAge !== null && publishedAge > 0 ? ` (${publishedAge} day${publishedAge === 1 ? '' : 's'} ago)` : ' (today)'}
                 {' · '}{published.schemes.length} scheme{published.schemes.length === 1 ? '' : 's'}
@@ -597,6 +597,19 @@ function ScholarshipsCard() {
               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                 Fetched {formatIsoDateTime(pending.fetchedAt)} — check every date against the portal before publishing
               </p>
+              {pending.datesVerifiedFromPage ? (
+                <p className="text-xs rounded-lg bg-emerald-50 text-emerald-700 px-3 py-2">
+                  SSP closing dates were read directly from ssp.karnataka.gov.in
+                  {pending.pageLastUpdated ? ` (page updated ${pending.pageLastUpdated})` : ''}, not guessed by the AI.
+                </p>
+              ) : (
+                <p className="text-xs rounded-lg bg-amber-50 text-amber-700 px-3 py-2">
+                  SSP dates could not be read from the portal — they come from AI web search and may be out of date. Verify each one.
+                </p>
+              )}
+              {(pending.warnings ?? []).map((w) => (
+                <p key={w} className="text-xs rounded-lg bg-amber-50 text-amber-700 px-3 py-2">{w}</p>
+              ))}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Overview (English)</label>
                 <textarea className={TEXTAREA_CLASS} rows={2} value={pending.overviewEn} onChange={(e) => updatePending('overviewEn', e.target.value)} />

@@ -123,6 +123,12 @@ export interface PendingScholarshipUpdates {
   themeHue?: number;
   sourceUrls: string[];
   fetchedAt: string;
+  /** True when the closing dates were read live from the SSP page (not from the AI). */
+  datesVerifiedFromPage?: boolean;
+  /** The SSP page's own "last updated" stamp, e.g. 28/09/2026. */
+  pageLastUpdated?: string;
+  /** Problems the fetch hit (page unreadable, Kannada pass failed…). */
+  warnings?: string[];
 }
 
 /** What's stored at scholarshipUpdates/current and what students see. */
@@ -132,7 +138,7 @@ export interface ScholarshipUpdatesRecord extends PendingScholarshipUpdates {
 }
 
 export const DEFAULT_SCHOLARSHIP_SOURCES = [
-  'https://ssp.postmatric.karnataka.gov.in/',
+  'https://ssp.karnataka.gov.in/',
   'https://scholarships.gov.in/',
 ];
 
@@ -143,7 +149,11 @@ const FETCH_TIMEOUT_MS = 180_000;
 export async function getScholarshipSources(): Promise<string[]> {
   const snap = await getDoc(SOURCES_DOC);
   const urls = (snap.data() as { urls?: unknown } | undefined)?.urls;
-  return Array.isArray(urls) && urls.length > 0 ? urls.filter((u): u is string => typeof u === 'string') : DEFAULT_SCHOLARSHIP_SOURCES;
+  if (!Array.isArray(urls) || urls.length === 0) return DEFAULT_SCHOLARSHIP_SOURCES;
+  // The old SSP address is now only a redirect stub with no content.
+  return urls
+    .filter((u): u is string => typeof u === 'string')
+    .map((u) => u.replace(/^https?:\/\/ssp\.postmatric\.karnataka\.gov\.in\/?$/i, 'https://ssp.karnataka.gov.in/'));
 }
 
 export async function saveScholarshipSources(urls: string[]): Promise<void> {

@@ -935,10 +935,12 @@ exports.saveDailyQuote = (0, https_1.onCall)({ region: 'asia-south1', timeoutSec
 });
 const SCHOLARSHIP_STATUSES = ['open', 'closing-soon', 'closed', 'upcoming', 'unknown'];
 const DEFAULT_SCHOLARSHIP_SOURCES = [
-    'https://ssp.postmatric.karnataka.gov.in/',
+    'https://ssp.karnataka.gov.in/',
     'https://scholarships.gov.in/',
 ];
-const MAX_SCHOLARSHIP_SCHEMES = 8;
+const MAX_SCHOLARSHIP_SCHEMES = 10;
+// Keeps the web tools on official hosts so second-hand dates can't creep in.
+const SCHOLARSHIP_ALLOWED_DOMAINS = ['karnataka.gov.in', 'scholarships.gov.in', 'gov.in'];
 const MAX_SCHOLARSHIP_NEWS = 6;
 // Closing dates this many days out (or fewer) earn an ACTION NEEDED point in
 // the student's own briefing.
@@ -959,13 +961,12 @@ Skip schemes that only cover pre-matric, degree-only, PhD-only, or non-Karnataka
 - portal: short portal name — "SSP", "NSP", or the site's name.
 - url: the best link to apply or read the official details.
 - status: one of "open", "closing-soon" (closing within 14 days of TODAY), "closed", "upcoming", "unknown".
-- applyBy: the closing date as YYYY-MM-DD ONLY if an official notice states a firm date for this academic year; otherwise null.
+- applyBy: the closing date as YYYY-MM-DD ONLY if an official notice states a firm date for this academic year; otherwise null. When several notices give different dates, the LATEST one wins (an extension replaces the earlier date). For SSP schemes the message contains a table read live from the portal's Postmatric "Last Dates" section — use those dates exactly, and never use the Prematric dates.
 - applyByText: the closing date in words with its basis, e.g. "30 September 2026 for fresh and renewal (SSP notice dated 12 August 2026)"; if no date is announced, say "Not announced yet — check the portal" (never guess).
 - eligibility: who can apply in plain words — categories, income ceiling (with the exact amount if stated), course level, minimum attendance/marks conditions.
 - documents: the documents needed, one per array entry (Aadhaar, caste certificate, income certificate, bank passbook, previous marks card, fee receipt, college ID, photo, etc. — only what the source actually asks for).
 - howToApply: 2-3 short steps (portal registration, filling the form, college verification, etc.).
 - notes: renewal vs fresh, Aadhaar-bank seeding, verification at the college office, helpline numbers — brief, only if useful.
-- summaryKn: ONE natural Kannada sentence (proper Kannada script) giving the closing date and who can apply.
 - sources: the URLs you actually used for this scheme.
 
 ## LATEST NEWS
@@ -973,7 +974,6 @@ Also list up to ${MAX_SCHOLARSHIP_NEWS} dated announcements from the portals' no
 - date: YYYY-MM-DD only if the notice states a date; otherwise null.
 - dateText: the date in words (e.g. "28 September 2026"), or "Undated" when none.
 - title: one plain English sentence saying what was announced, with the key date or fact in it.
-- titleKn: a natural Kannada rendering of title (proper Kannada script).
 - portal: "SSP", "NSP" or the site's name.
 - url: the notice or page you read it on.
 Only announcements you actually found; an empty list is fine.
@@ -981,11 +981,12 @@ Only announcements you actually found; an empty list is fine.
 ## RULES
 - Every date, amount, document and condition must come from an official page or notice you read. Never invent, estimate or carry over last year's date as this year's; if unsure, say it is not announced.
 - Be specific and useful to a student who has to act: dates, amounts, document names, where to go.
-- Keep each field short and plain; English fields in English (Kannada only in summaryKn and overviewKn).
-- overviewEn: 1-2 sentences summarising the current situation (what is open, what is closing soon). overviewKn: a natural Kannada rendering of overviewEn.
+- Keep each field short and plain, all in English (Kannada is added in a separate step — do not write any Kannada).
+- overviewEn: 1-2 sentences summarising the current situation (what is open, what is closing soon).
+- For each SSP department in the supplied table, name the scheme so it contains the department name (e.g. "SSP Post-Matric Scholarship 2026-27 (Backward Classes Welfare Department)").
 
 ## OUTPUT FORMAT — STRICT
-Return ONLY a raw JSON object: {"overviewEn": string, "overviewKn": string, "schemes": [ { "name", "portal", "url", "status", "applyBy", "applyByText", "eligibility", "documents": string[], "howToApply", "notes", "summaryKn", "sources": string[] } ], "news": [ { "date", "dateText", "title", "titleKn", "portal", "url" } ]}. No markdown fences, no explanation, no trailing text.`;
+Return ONLY a raw JSON object: {"overviewEn": string, "schemes": [ { "name", "portal", "url", "status", "applyBy", "applyByText", "eligibility", "documents": string[], "howToApply", "notes", "sources": string[] } ], "news": [ { "date", "dateText", "title", "portal", "url" } ]}. No markdown fences, no explanation, no trailing text.`;
 /** Like callGeminiTextForCircular, but with Gemini's built-in Google Search
  *  and URL-context tools switched on so the model can read live web pages.
  *  JSON response mode is not allowed alongside these tools, so the caller
@@ -1161,25 +1162,212 @@ function scholarshipDeadlineLines(updates, today) {
         .map((s) => `- ${s.name} | ${s.portal} | closes ${s.applyBy} (${daysBetweenIsoDates(today, s.applyBy)} day(s) left) | ${s.eligibility || 'see portal'}`);
     return lines.length > 0 ? lines : ['(none)'];
 }
-/** Settings › Daily Briefing › Scholarship Updates › "Fetch latest": asks
- *  Gemini (grounded) for the current summary. Stateless — nothing is written
- *  until the admin publishes. */
-exports.fetchScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 180 }, async (request) => {
-    var _a;
+const SSP_DEPARTMENTS = [
+    { key: 'social', re: /social\s+welfare/i, label: 'Social Welfare Department (SC)' },
+    { key: 'tribal', re: /tribal/i, label: 'Tribal Welfare Department (ST)' },
+    { key: 'backward', re: /backward/i, label: 'Backward Classes Welfare Department (OBC)' },
+    { key: 'minority', re: /minorit/i, label: 'Minorities Welfare Department' },
+    { key: 'dte', re: /technical\s+education/i, label: 'Department of Technical Education' },
+    { key: 'disability', re: /disabilit/i, label: 'Disability Welfare Department' },
+    { key: 'arya', re: /arya|vysya|vyshya/i, label: 'Arya Vysya Community Development Corporation' },
+    { key: 'brahmin', re: /brahmin/i, label: 'Karnataka State Brahmin Development Board' },
+];
+/** Parses the Postmatric panel (#ld-post) of the SSP home page; null when the
+ *  page has no such panel or no card carries a date. */
+function parseSspLastDates(html) {
+    const start = html.search(/id\s*=\s*["']ld-post["']/i);
+    if (start < 0)
+        return null;
+    const rest = html.slice(start);
+    const end = rest.search(/id\s*=\s*["']ld-pre["']/i);
+    const panel = end > 0 ? rest.slice(0, end) : rest;
+    const entries = [];
+    for (const card of panel.split(/<div[^>]*class\s*=\s*["']ld-card\s/i).slice(1)) {
+        const title = /ld-card-main-title["'][^>]*>([\s\S]*?)<\/div>/i.exec(card);
+        const sub = /ld-card-sub["'][^>]*>([\s\S]*?)<\/div>/i.exec(card);
+        if (!title || !sub)
+            continue;
+        const m = /(\d{1,2})[/.](\d{1,2})[/.](\d{4})/.exec(htmlCellText(sub[1]));
+        if (!m)
+            continue;
+        const day = Number(m[1]);
+        const month = Number(m[2]);
+        if (month < 1 || month > 12 || day < 1 || day > 31)
+            continue;
+        const titleText = htmlCellText(title[1]);
+        const dept = SSP_DEPARTMENTS.find((d) => d.re.test(titleText));
+        if (!dept)
+            continue;
+        entries.push({ dept, title: titleText, applyBy: `${m[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` });
+    }
+    if (entries.length === 0)
+        return null;
+    const upd = /id\s*=\s*["']lblLastUpdated["'][^>]*>([^<]*)</i.exec(html);
+    return { entries, lastUpdatedText: upd ? htmlCellText(upd[1]) : '' };
+}
+const ENGLISH_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const KANNADA_MONTHS = ['ಜನವರಿ', 'ಫೆಬ್ರವರಿ', 'ಮಾರ್ಚ್', 'ಏಪ್ರಿಲ್', 'ಮೇ', 'ಜೂನ್', 'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸೆಪ್ಟೆಂಬರ್', 'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್', 'ಡಿಸೆಂಬರ್'];
+/** "2026-10-31" → "31 October 2026" / "31 ಅಕ್ಟೋಬರ್ 2026". Dates are formatted in
+ *  code so a model can never mistranslate or mistype one. */
+function formatIsoDate(iso, months) {
+    const [y, mo, d] = iso.split('-').map(Number);
+    return `${d} ${months[mo - 1]} ${y}`;
+}
+function academicYearLabel(today) {
+    const y = Number(today.slice(0, 4));
+    const start = Number(today.slice(5, 7)) >= 6 ? y : y - 1;
+    return `${start}-${String(start + 1).slice(2)}`;
+}
+/** Rewrites the retired SSP redirect stub to the real portal. */
+function canonicalScholarshipSource(url) {
+    return url.replace(/^https?:\/\/ssp\.postmatric\.karnataka\.gov\.in\/?$/i, 'https://ssp.karnataka.gov.in/');
+}
+/** Makes the SSP page the source of truth for closing dates: every SSP
+ *  department in the portal's table becomes exactly one scheme with the page's
+ *  date; the model's own SSP entries only lend their prose (eligibility,
+ *  documents, steps) when they map to a single department, and are dropped
+ *  otherwise so no model-supplied SSP date survives. Non-SSP schemes (NSP…)
+ *  pass through untouched. */
+function applySspLastDates(schemes, sspDates, today) {
+    const ay = academicYearLabel(today);
+    const isSsp = (s) => /\bssp\b/i.test(s.portal) || /ssp\.karnataka/i.test(s.url);
+    const others = schemes.filter((s) => !isSsp(s));
+    const sspModel = schemes.filter(isSsp);
+    const built = sspDates.entries.map((e) => {
+        var _a, _b, _c;
+        const base = sspModel.find((s) => {
+            const hit = SSP_DEPARTMENTS.filter((d) => d.re.test(`${s.name} ${s.notes}`));
+            return hit.length === 1 && hit[0].key === e.dept.key;
+        });
+        const scheme = {
+            name: (base === null || base === void 0 ? void 0 : base.name) || `SSP Post-Matric Scholarship ${ay} (${e.dept.label})`,
+            portal: 'SSP',
+            url: 'https://ssp.karnataka.gov.in/',
+            status: 'unknown',
+            applyBy: e.applyBy,
+            applyByText: `${formatIsoDate(e.applyBy, ENGLISH_MONTHS)} (SSP portal, Last Dates section — Postmatric)`,
+            eligibility: (_a = base === null || base === void 0 ? void 0 : base.eligibility) !== null && _a !== void 0 ? _a : '',
+            documents: (_b = base === null || base === void 0 ? void 0 : base.documents) !== null && _b !== void 0 ? _b : [],
+            howToApply: (base === null || base === void 0 ? void 0 : base.howToApply) || 'Register / log in on the SSP portal (ssp.karnataka.gov.in), fill the Post-Matric application and get it verified at the college office.',
+            notes: (_c = base === null || base === void 0 ? void 0 : base.notes) !== null && _c !== void 0 ? _c : '',
+            summaryKn: '',
+            sources: ['https://ssp.karnataka.gov.in/'],
+        };
+        return scheme;
+    });
+    return [...built, ...others];
+}
+/** Kannada is a separate, tightly-scoped pass: the model translates only short
+ *  prose (who can apply, headlines, overview) against a fixed glossary, and
+ *  dates are composed in code. Failures become warnings, not errors — the
+ *  admin can still hand-edit the Kannada boxes. */
+const SCHOLARSHIP_KN_SYSTEM = `You are a professional English→Kannada translator for Karnataka government scholarship notices, writing for diploma students. Write correct, natural, grammatical Kannada in the Kannada script (ಕನ್ನಡ, U+0C80–U+0CFF) only — never Hindi/Devanagari. Use the plain register of an official Karnataka notice, not a word-for-word translation.
+
+GLOSSARY (use these exact terms): scholarship = ವಿದ್ಯಾರ್ಥಿವೇತನ; application = ಅರ್ಜಿ; last date = ಕೊನೆಯ ದಿನಾಂಕ; renewal = ನವೀಕರಣ; fresh = ಹೊಸ; eligible = ಅರ್ಹ; income = ಆದಾಯ; caste certificate = ಜಾತಿ ಪ್ರಮಾಣ ಪತ್ರ; income certificate = ಆದಾಯ ಪ್ರಮಾಣ ಪತ್ರ; bank passbook = ಬ್ಯಾಂಕ್ ಪಾಸ್‌ಬುಕ್; diploma = ಡಿಪ್ಲೊಮಾ; college = ಕಾಲೇಜು; Social Welfare Department = ಸಮಾಜ ಕಲ್ಯಾಣ ಇಲಾಖೆ; Tribal Welfare = ಬುಡಕಟ್ಟು ಕಲ್ಯಾಣ ಇಲಾಖೆ; Backward Classes Welfare = ಹಿಂದುಳಿದ ವರ್ಗಗಳ ಕಲ್ಯಾಣ ಇಲಾಖೆ; Minorities Welfare = ಅಲ್ಪಸಂಖ್ಯಾತರ ಕಲ್ಯಾಣ ಇಲಾಖೆ; Department of Technical Education = ತಾಂತ್ರಿಕ ಶಿಕ್ಷಣ ಇಲಾಖೆ; Disability Welfare = ವಿಕಲಚೇತನರ ಕಲ್ಯಾಣ ಇಲಾಖೆ; students = ವಿದ್ಯಾರ್ಥಿಗಳು.
+Keep SSP, NSP, Aadhaar, OBC, SC, ST, PDF and portal names in English letters. Copy every number and rupee amount exactly as digits. Months in Kannada: ಜನವರಿ, ಫೆಬ್ರವರಿ, ಮಾರ್ಚ್, ಏಪ್ರಿಲ್, ಮೇ, ಜೂನ್, ಜುಲೈ, ಆಗಸ್ಟ್, ಸೆಪ್ಟೆಂಬರ್, ಅಕ್ಟೋಬರ್, ನವೆಂಬರ್, ಡಿಸೆಂಬರ್. End sentences with a normal full stop "." — never "।".
+
+INPUT: JSON {"overviewEn": string, "schemes": [{"i": number, "name": string, "eligibility": string}], "news": [{"i": number, "title": string}]}.
+OUTPUT — raw JSON only, no fences: {"overviewKn": string, "schemes": [{"i": number, "whoKn": string}], "news": [{"i": number, "titleKn": string}]}.
+- overviewKn: faithful Kannada of overviewEn.
+- whoKn: ONE short Kannada sentence saying who can apply (from name and eligibility: categories, course, income limit). Do NOT mention any closing date. If eligibility is empty, base it on the scheme name only.
+- titleKn: faithful Kannada of each news title, keeping all dates.
+Return every i given, unchanged.`;
+function kannadaScriptProblem(text) {
+    if (text.match(DEVANAGARI_LETTER_RE))
+        return 'Your previous answer contained Hindi/Devanagari characters, which is WRONG. Rewrite everything in Kannada script only.';
+    if (!KANNADA_RE.test(text))
+        return 'Your previous answer contained no Kannada script, which is WRONG. Write the Kannada fields in Kannada script (ಕನ್ನಡ).';
+    return null;
+}
+async function translateScholarshipKannada(choice, apiKeys, overviewEn, schemes, news) {
+    const input = JSON.stringify({
+        overviewEn,
+        schemes: schemes.map((s, i) => ({ i, name: s.name, eligibility: s.eligibility })),
+        news: news.map((n, i) => ({ i, title: n.title })),
+    });
+    let userMessage = input;
+    let lastProblem = 'no attempt made';
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const { text } = await callText({
+            provider: choice.provider, apiKeys, model: choice.model,
+            systemPrompt: SCHOLARSHIP_KN_SYSTEM, userMessage, maxTokens: 16000, json: true,
+        });
+        let parsed;
+        try {
+            parsed = JSON.parse(extractJsonObject(text));
+        }
+        catch (_a) {
+            lastProblem = 'the Kannada response was not valid JSON';
+            userMessage = `${input}\n\nYour previous answer was not valid JSON. Return only the JSON object.`;
+            continue;
+        }
+        const problem = kannadaScriptProblem(JSON.stringify(parsed));
+        if (problem) {
+            lastProblem = 'the Kannada came back in the wrong script';
+            userMessage = `${input}\n\n${problem}`;
+            continue;
+        }
+        const clean = (v, max) => cleanString(v, max).replace(DANDA_RE, '.');
+        const whoKn = new Map();
+        const titleKn = new Map();
+        if (Array.isArray(parsed.schemes)) {
+            for (const r of parsed.schemes) {
+                if (typeof (r === null || r === void 0 ? void 0 : r.i) === 'number')
+                    whoKn.set(r.i, clean(r.whoKn, 300));
+            }
+        }
+        if (Array.isArray(parsed.news)) {
+            for (const r of parsed.news) {
+                if (typeof (r === null || r === void 0 ? void 0 : r.i) === 'number')
+                    titleKn.set(r.i, clean(r.titleKn, 400));
+            }
+        }
+        return { overviewKn: clean(parsed.overviewKn, 600), whoKn, titleKn };
+    }
+    throw new Error(lastProblem);
+}
+/** Settings › Daily Briefing › Scholarship Updates › "Fetch latest": reads the
+ *  SSP Last Dates table live, then asks the admin's chosen provider (grounded)
+ *  for the rest of the summary and runs a separate Kannada pass. Stateless —
+ *  nothing is written until the admin publishes. */
+exports.fetchScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1', timeoutSeconds: 300 }, async (request) => {
+    var _a, _b, _c, _d, _e;
     requireAdmin(request);
-    const requested = cleanStringList(((_a = request.data) !== null && _a !== void 0 ? _a : {}).sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean);
-    const sourceUrls = requested.length > 0 ? requested : DEFAULT_SCHOLARSHIP_SOURCES;
+    const requested = cleanStringList(((_a = request.data) !== null && _a !== void 0 ? _a : {}).sourceUrls, 10, 1000)
+        .map(cleanUrl).filter(Boolean).map(canonicalScholarshipSource);
+    const sourceUrls = [...new Set(requested.length > 0 ? requested : DEFAULT_SCHOLARSHIP_SOURCES)];
     const { apiKeys, choice } = await loadBriefingAiSettings();
     const scholarshipChoice = choice('scholarship');
     const today = todayIST();
     const { dayLabel, dateLabel } = todayLabelsIST();
+    const warnings = [];
+    // Read the portal ourselves, fresh on every fetch.
+    let sspDates = null;
+    for (const url of sourceUrls) {
+        if (!/(^|\.)ssp\.karnataka\.gov\.in$/i.test(new URL(url).hostname))
+            continue;
+        try {
+            sspDates = parseSspLastDates(await httpsGetText(url));
+            if (sspDates)
+                break;
+            warnings.push(`Could not find the Postmatric Last Dates section on ${url} — the page layout may have changed.`);
+        }
+        catch (err) {
+            warnings.push(`Could not read ${url} (${err instanceof Error ? err.message : String(err)}).`);
+        }
+    }
     const userMessage = [
         `TODAY: ${dayLabel}, ${dateLabel} (${today}). Academic year in Karnataka runs June to May.`,
         '',
+        ...(sspDates ? [
+            `SSP POSTMATRIC LAST DATES — read live from the portal${sspDates.lastUpdatedText ? ` (page last updated ${sspDates.lastUpdatedText})` : ''}. These are authoritative and already include any extensions; copy them exactly and do not use any other date for these departments:`,
+            ...sspDates.entries.map((e) => `- ${e.title}: ${e.applyBy} (${formatIsoDate(e.applyBy, ENGLISH_MONTHS)})`),
+            '',
+        ] : []),
         'SOURCES (open each one, and also its latest notifications / news / circulars / important-dates pages):',
         ...sourceUrls.map((u) => `- ${u}`),
         '',
-        'Also search the web for this academic year\'s official closing-date announcements for these portals (Karnataka SSP post-matric scholarship last date, NSP last date) and prefer official government pages and notices over news sites.',
+        'Also search for this academic year\'s official announcements (last-date extensions, NSP last date) and prefer official government pages and notices over news sites. If notices disagree, the latest one wins.',
     ].join('\n');
     let rawText = '';
     let groundedSources = [];
@@ -1189,6 +1377,7 @@ exports.fetchScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1', t
             // See the note in fetchDtekNews: grounded calls need headroom for the
             // model's thinking phase on top of the answer.
             systemPrompt: SCHOLARSHIP_SYSTEM, userMessage, maxTokens: 24000, grounded: true,
+            allowedDomains: SCHOLARSHIP_ALLOWED_DOMAINS,
         }));
     }
     catch (err) {
@@ -1199,16 +1388,49 @@ exports.fetchScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1', t
     try {
         parsedJson = JSON.parse(extractJsonObject(rawText));
     }
-    catch (_b) {
+    catch (_f) {
         throw new https_1.HttpsError('internal', `The AI response was not valid JSON. It began: ${rawText.slice(0, 200)}`);
     }
     const normalized = normalizeScholarshipUpdates(parsedJson, today);
-    if (!normalized) {
+    if (!normalized && !sspDates) {
         throw new https_1.HttpsError('internal', 'The AI response contained no usable schemes. Try again, or pick a different provider/model above.');
     }
-    // Schemes the model left unattributed fall back to the grounding URLs.
-    const schemes = normalized.schemes.map((s) => (s.sources.length > 0 ? s : Object.assign(Object.assign({}, s), { sources: groundedSources.slice(0, 5) })));
-    return Object.assign(Object.assign({}, normalized), { schemes, themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString() });
+    let schemes = (_b = normalized === null || normalized === void 0 ? void 0 : normalized.schemes) !== null && _b !== void 0 ? _b : [];
+    if (sspDates)
+        schemes = applySspLastDates(schemes, sspDates, today);
+    // Status must follow the (possibly overridden) dates; re-run the normaliser.
+    schemes = schemes
+        .map((s) => normalizeScheme(s, today))
+        .filter((s) => s !== null)
+        .slice(0, MAX_SCHOLARSHIP_SCHEMES)
+        // Schemes the model left unattributed fall back to the grounding URLs.
+        .map((s) => (s.sources.length > 0 ? s : Object.assign(Object.assign({}, s), { sources: groundedSources.slice(0, 5) })));
+    const news = (_c = normalized === null || normalized === void 0 ? void 0 : normalized.news) !== null && _c !== void 0 ? _c : [];
+    const overviewEn = (_d = normalized === null || normalized === void 0 ? void 0 : normalized.overviewEn) !== null && _d !== void 0 ? _d : '';
+    let overviewKn = '';
+    try {
+        const kn = await translateScholarshipKannada(scholarshipChoice, apiKeys, overviewEn, schemes, news);
+        overviewKn = kn.overviewKn;
+        schemes = schemes.map((s, i) => {
+            var _a;
+            const who = (_a = kn.whoKn.get(i)) !== null && _a !== void 0 ? _a : '';
+            const datePart = s.applyBy
+                ? `ಕೊನೆಯ ದಿನಾಂಕ: ${formatIsoDate(s.applyBy, KANNADA_MONTHS)}.`
+                : 'ಕೊನೆಯ ದಿನಾಂಕ ಇನ್ನೂ ಪ್ರಕಟವಾಗಿಲ್ಲ — ಪೋರ್ಟಲ್ ಪರಿಶೀಲಿಸಿ.';
+            return Object.assign(Object.assign({}, s), { summaryKn: `${datePart} ${who}`.trim() });
+        });
+        news.forEach((n, i) => { var _a; n.titleKn = (_a = kn.titleKn.get(i)) !== null && _a !== void 0 ? _a : ''; });
+    }
+    catch (err) {
+        warnings.push(`Kannada translation failed (${err instanceof Error ? err.message : String(err)}) — please type the Kannada boxes or fetch again.`);
+    }
+    return {
+        overviewEn, overviewKn, schemes, news,
+        themeHue: randomHue(), sourceUrls, fetchedAt: new Date().toISOString(),
+        datesVerifiedFromPage: sspDates !== null,
+        pageLastUpdated: (_e = sspDates === null || sspDates === void 0 ? void 0 : sspDates.lastUpdatedText) !== null && _e !== void 0 ? _e : '',
+        warnings,
+    };
 });
 /** Settings › Daily Briefing › Scholarship Updates › "Publish": stores the
  *  reviewed summary at scholarshipUpdates/current (Admin SDK — clients can't
@@ -1222,7 +1444,7 @@ exports.publishScholarshipUpdates = (0, https_1.onCall)({ region: 'asia-south1',
     if (!normalized) {
         throw new https_1.HttpsError('invalid-argument', 'At least one scheme with a name is required.');
     }
-    const doc = Object.assign(Object.assign({}, normalized), { sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean), themeHue: Number.isInteger(data.themeHue) && data.themeHue >= 0 && data.themeHue < 360 ? data.themeHue : randomHue(), fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(), publishedAt: new Date().toISOString(), publishedBy: (_c = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid) !== null && _c !== void 0 ? _c : '' });
+    const doc = Object.assign(Object.assign({}, normalized), { sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean), themeHue: Number.isInteger(data.themeHue) && data.themeHue >= 0 && data.themeHue < 360 ? data.themeHue : randomHue(), fetchedAt: cleanString(data.fetchedAt, 40) || new Date().toISOString(), pageLastUpdated: cleanString(data.pageLastUpdated, 40), publishedAt: new Date().toISOString(), publishedBy: (_c = (_b = request.auth) === null || _b === void 0 ? void 0 : _b.uid) !== null && _c !== void 0 ? _c : '' });
     await db.doc('scholarshipUpdates/current').set(doc);
     return doc;
 });
