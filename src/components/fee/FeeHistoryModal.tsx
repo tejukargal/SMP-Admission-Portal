@@ -331,7 +331,7 @@ export function FeeHistoryModal({ student, onClose, initialNoDues }: Props) {
   return (
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
-        className="absolute inset-0 bg-[#0B2A2B]/45 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-[#0B2A2B]/45"
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
+import { preloadRoute } from '../../routePreload';
 import { useAuth } from '../../contexts/AuthContext';
 import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
 
@@ -243,7 +244,6 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         transition: 'width 220ms cubic-bezier(0.4, 0, 0.2, 1)',
         willChange: 'width',
         background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(20px)',
         borderRight: '1px solid #d1fae5',
         boxShadow: '1px 0 12px 0 rgba(16,185,129,0.06)',
       }}
@@ -339,7 +339,8 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
             to={to}
             className={({ isActive }) => navClass(isActive)}
             style={navItemStyle}
-            onMouseEnter={(e) => showTooltip(label, e)}
+            onMouseEnter={(e) => { preloadRoute(to); showTooltip(label, e); }}
+            onFocus={() => preloadRoute(to)}
             onMouseLeave={hideTooltip}
             onClick={onNavigate}
           >
@@ -379,7 +380,8 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
             to={to}
             className={({ isActive }) => navClass(isActive)}
             style={navItemStyle}
-            onMouseEnter={(e) => showTooltip(label, e)}
+            onMouseEnter={(e) => { preloadRoute(to); showTooltip(label, e); }}
+            onFocus={() => preloadRoute(to)}
             onMouseLeave={hideTooltip}
             onClick={onNavigate}
           >

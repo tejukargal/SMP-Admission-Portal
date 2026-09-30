@@ -2609,7 +2609,7 @@ const [barsReady, setBarsReady] = useState(false);
       ];
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setCourseModalCourse(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setCourseModalCourse(null)} aria-hidden="true" />
           <div className={`relative rounded-2xl border ${c.border} ${c.bg} shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className={`px-5 py-3.5 flex items-center justify-between border-b ${c.border} relative overflow-hidden`}>
               <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-medium leading-none select-none pointer-events-none ${c.textColor} opacity-[0.07]`}>
@@ -2682,7 +2682,7 @@ const [barsReady, setBarsReady] = useState(false);
       const grandTotal = rows.reduce((a, r) => a + r.total, 0);
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setTotalModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setTotalModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#93D6F5] bg-[#EEF9FD] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-lg mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             {/* Header */}
             <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#93D6F5] relative overflow-hidden">
@@ -2771,7 +2771,7 @@ const [barsReady, setBarsReady] = useState(false);
       const tl = 'px-2.5 py-0.5 text-left text-xs';
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setSummaryModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setSummaryModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#93E0C6] bg-[#EEFAF6] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#9FE3CD]">
               <div className="flex items-center gap-2.5">
@@ -2833,7 +2833,7 @@ const [barsReady, setBarsReady] = useState(false);
       const tc = 'px-3 py-2.5 text-right tabular-nums';
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setIntakeModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setIntakeModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#93D6F5] bg-[#EEF9FD] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             {/* Header */}
             <div className="px-5 py-3.5 flex items-center justify-between border-b border-[#93D6F5] relative overflow-hidden">
@@ -2931,7 +2931,7 @@ const [barsReady, setBarsReady] = useState(false);
       const grand = rows.reduce((a, r) => ({ yr1: a.yr1 + r.yr1, yr2: a.yr2 + r.yr2, yr3: a.yr3 + r.yr3, total: a.total + r.total }), { yr1: 0, yr2: 0, yr3: 0, total: 0 });
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setGenderModal(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setGenderModal(null)} aria-hidden="true" />
           <div className={`relative rounded-2xl border ${brd} ${bg} shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
             {/* Header */}
             <div className={`px-5 py-3.5 flex items-center justify-between border-b ${brd} relative overflow-hidden`}>
@@ -3015,7 +3015,7 @@ const [barsReady, setBarsReady] = useState(false);
       ];
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setYearModalYear(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setYearModalYear(null)} aria-hidden="true" />
           <div className={`relative rounded-2xl border ${y.border} ${y.bg} shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-md mx-4 overflow-hidden`} style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className={`px-5 py-3.5 flex items-center justify-between border-b ${y.border} relative overflow-hidden`}>
               <span aria-hidden="true" className={`absolute -bottom-4 -right-2 text-8xl font-medium leading-none select-none pointer-events-none ${y.textColor} opacity-[0.07]`}>
@@ -3103,7 +3103,7 @@ const [barsReady, setBarsReady] = useState(false);
       const tl = 'px-2.5 py-1 text-left text-xs';
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setCatModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setCatModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#93E0C6] bg-[#EEFAF6] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#9FE3CD]">
               <div className="flex items-center gap-2.5">
@@ -3169,7 +3169,7 @@ const [barsReady, setBarsReady] = useState(false);
       const tl = 'px-2.5 py-1 text-left text-xs';
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setAdmTypeModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setAdmTypeModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#93D6F5] bg-[#EEF9FD] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#9FDBF6]">
               <div className="flex items-center gap-2.5">
@@ -3237,7 +3237,7 @@ const [barsReady, setBarsReady] = useState(false);
 
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setAdmTypeDetailModal(null)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setAdmTypeDetailModal(null)} aria-hidden="true" />
           <div className="relative rounded-2xl border shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden flex flex-col h-[480px]" style={{ borderColor: theme.trackColor, background: theme.bodyBg, animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b shrink-0" style={{ borderColor: theme.trackColor }}>
               <div className="flex items-center gap-2.5">
@@ -3361,7 +3361,7 @@ const [barsReady, setBarsReady] = useState(false);
       }
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setCatGenderModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setCatGenderModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#F6ADD1] bg-[#FEF2F8] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-5xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#F7B6D6]">
               <div className="flex items-center gap-2.5">
@@ -3452,7 +3452,7 @@ const [barsReady, setBarsReady] = useState(false);
       );
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setYearGenderModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setYearGenderModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#95DFD7] bg-[#EFFAF9] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#A1E3DB]">
               <div className="flex items-center gap-2.5">
@@ -3518,7 +3518,7 @@ const [barsReady, setBarsReady] = useState(false);
       }
       return (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={() => setDateWiseModal(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setDateWiseModal(false)} aria-hidden="true" />
           <div className="relative rounded-2xl border border-[#CBB6FB] bg-[#F7F4FE] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
             <div className="px-5 py-3 flex items-center justify-between border-b border-[#D1BEFB]">
               <div className="flex items-center gap-2.5">

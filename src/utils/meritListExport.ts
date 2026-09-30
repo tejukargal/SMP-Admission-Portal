@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 
 /** Structural type satisfied by both Student and MeritListStudent. */
 interface MeritRow {
@@ -477,7 +477,8 @@ export async function exportMeritListExcel(
 
   // ── Workbook ────────────────────────────────────────────────────────────────
 
-  const wb = new ExcelJS.Workbook();
+  const { default: ExcelJSLib } = await import('exceljs');
+  const wb = new ExcelJSLib.Workbook();
   wb.creator = 'SMP Admissions';
 
   const ws = wb.addWorksheet(
@@ -693,7 +694,8 @@ export async function exportLateralMeritListExcel(
   const todayFmt = `${dd}/${mm}/${yyyy}`;
   const ayDisplay = academicYear ?? '';
 
-  const wb = new ExcelJS.Workbook();
+  const { default: ExcelJSLib } = await import('exceljs');
+  const wb = new ExcelJSLib.Workbook();
   wb.creator = 'SMP Admissions';
 
   const ws = wb.addWorksheet(

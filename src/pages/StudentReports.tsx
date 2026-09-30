@@ -2763,7 +2763,7 @@ export function StudentReports() {
       {pcClearModal && (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
-            className="absolute inset-0 bg-[#1E1B4B]/40 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#1E1B4B]/40"
             onClick={() => !pcClearModalClearing && (setPcClearModal(null), setPcClearPasskey(''), setPcClearPasskeyError(''))}
             aria-hidden="true"
             style={{ animation: 'backdrop-enter 0.2s ease-out' }}
@@ -2830,7 +2830,7 @@ export function StudentReports() {
       {tcClearModal && (
         <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
-            className="absolute inset-0 bg-[#1E1B4B]/40 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#1E1B4B]/40"
             onClick={() => !tcClearModalClearing && (setTcClearModal(null), setTcClearPasskey(''), setTcClearPasskeyError(''))}
             aria-hidden="true"
             style={{ animation: 'backdrop-enter 0.2s ease-out' }}
@@ -2899,7 +2899,7 @@ export function StudentReports() {
           className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6"
           style={{ animation: 'backdrop-enter 0.18s ease-out' }}
         >
-          <div className="absolute inset-0 bg-[#1E1B4B]/45 backdrop-blur-[2px]" onClick={() => setTcPreviewRow(null)} />
+          <div className="absolute inset-0 bg-[#1E1B4B]/45" onClick={() => setTcPreviewRow(null)} />
           <div
             className="relative bg-white rounded-[22px] border border-[#DCDDFB] flex flex-col overflow-hidden"
             style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out', boxShadow: '0 24px 60px rgba(30,27,75,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}

@@ -63,7 +63,6 @@ export function EnrollmentBreakdownModal({ students, academicYear, onClose }: Pr
     >
       <div
         className="absolute inset-0 bg-black/40"
-        style={{ backdropFilter: 'blur(4px)' }}
         onClick={onClose}
         aria-hidden="true"
       />

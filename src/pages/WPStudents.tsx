@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { updateStudentAllottedCategory } from '../services/studentService';
@@ -373,7 +372,7 @@ export function WPStudents() {
 
   function handleSaveExcel() {
     setSavingExcel(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const headers = [
           '#', 'Name (SSLC)', 'Name (Aadhar)', 'Father Name', 'Mother Name',
@@ -410,6 +409,7 @@ export function WPStudents() {
           s.admissionStatus,
           s.academicYear,
         ]);
+        const XLSX = await import('xlsx');
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'WP Students');

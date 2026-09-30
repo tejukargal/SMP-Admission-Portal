@@ -1,17 +1,18 @@
-import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, lazy, Suspense, type FormEvent, type ChangeEvent } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear, syncMyAdminClaim } from '../services/userService';
 import { auth } from '../config/firebase';
 import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
 import { Button } from '../components/common/Button';
-import { FeeStructurePanel } from './FeeStructurePanel';
 import { isFeeStructureSection, type FeeStructureSection } from './feeStructureShared';
-import { ExamFee } from './ExamFee';
 import { StudentAppPanel, isStudentAppSection, type StudentAppSection } from './StudentAppPanel';
 import { ImportPanel, isImportSection, type ImportSection } from './ImportPanel';
 import { GeneralPanel, isGeneralSection, type GeneralSection } from './GeneralPanel';
 import { BackupPanel, isBackupSection, type BackupSection } from './BackupPanel';
-import { DtekNewsPanel } from './DtekNewsPanel';
+
+const FeeStructurePanel = lazy(() => import('./FeeStructurePanel').then((m) => ({ default: m.FeeStructurePanel })));
+const ExamFee = lazy(() => import('./ExamFee').then((m) => ({ default: m.ExamFee })));
+const DtekNewsPanel = lazy(() => import('./DtekNewsPanel').then((m) => ({ default: m.DtekNewsPanel })));
 import type { AcademicYear, StaffUser } from '../types';
 
 type Tab = 'general' | 'fee-structure' | 'exam-fee' | 'import' | 'staff' | 'messaging' | 'student-app' | 'dtek-news' | 'backup';
@@ -267,13 +268,13 @@ export function Settings() {
 
         {/* ── Fee Structure ── */}
         {activeTab === 'fee-structure' && (
-          <FeeStructurePanel section={feeSection} onSectionChange={setFeeSection} />
+          <Suspense fallback={null}><FeeStructurePanel section={feeSection} onSectionChange={setFeeSection} /></Suspense>
         )}
 
         {/* ── Exam Fee ── */}
         {activeTab === 'exam-fee' && (
           <div className="h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <ExamFee />
+            <Suspense fallback={null}><ExamFee /></Suspense>
           </div>
         )}
 
@@ -478,7 +479,7 @@ export function Settings() {
         )}
 
         {/* ── DTEK News (department circular digest shown on the Dashboard) ── */}
-        {activeTab === 'dtek-news' && <DtekNewsPanel />}
+        {activeTab === 'dtek-news' && <Suspense fallback={null}><DtekNewsPanel /></Suspense>}
 
         {/* ── Backup & Restore (export, restore, data repair) ── */}
         {activeTab === 'backup' && (

@@ -96,7 +96,7 @@ export function ResultDetailModal({ result, onClose }: Props) {
       className="font-wp fixed inset-0 z-50 flex items-center justify-center"
       style={{ animation: 'backdrop-enter 0.15s ease-out' }}
     >
-      <div className="absolute inset-0 bg-[#2A0E45]/40 backdrop-blur-[3px]" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-[#2A0E45]/40" onClick={onClose} aria-hidden="true" />
       <div
         className="relative bg-white rounded-[22px] border border-[#E9D8F7] w-[720px] max-w-[calc(100vw-2rem)] h-[85vh] mx-4 flex flex-col overflow-hidden"
         style={{ animation: 'modal-enter 0.2s ease-out', boxShadow: '0 24px 60px rgba(42,14,69,0.24), 0 4px 14px rgba(18,20,26,0.06)' }}

@@ -464,7 +464,7 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
 
           {/* ── Unsaved-changes warning overlay ── */}
           {showUnsavedWarning && (
-            <div className="absolute inset-0 z-[80] flex items-center justify-center rounded-2xl bg-black/40 backdrop-blur-[2px]">
+            <div className="absolute inset-0 z-[80] flex items-center justify-center rounded-2xl bg-black/40">
               <div
                 className="bg-white rounded-2xl shadow-2xl w-72 overflow-hidden"
                 style={{ animation: 'modal-enter 0.16s ease-out' }}

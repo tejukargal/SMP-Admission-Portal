@@ -31,7 +31,7 @@ export function AllottedCategoryModal({ student, saving, onSave, onSkip, suggest
       style={{ animation: 'backdrop-enter 0.15s ease-out' }}
     >
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/40"
         onClick={onSkip}
         aria-hidden="true"
       />

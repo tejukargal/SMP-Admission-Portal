@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { deleteFeeRecord } from '../services/feeRecordService';
@@ -154,7 +153,7 @@ function sortRecords(records: FeeRecord[]): FeeRecord[] {
   });
 }
 
-function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[], academicYear: string, dueFeeIds: Set<string>): void {
+async function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[], academicYear: string, dueFeeIds: Set<string>): Promise<void> {
   const smpHeaders = SMP_FEE_HEADS.map(({ label }) => label);
   const headers = [
     '#', 'Name', 'Father Name', 'Year', 'Course', 'Reg No',
@@ -191,6 +190,7 @@ function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: string[
     ];
   });
 
+  const XLSX = await import('xlsx');
   const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Fee Register');
@@ -1112,7 +1112,7 @@ export function FeeRegister() {
     {deleteTarget && (
       <div className="font-wp fixed inset-0 z-50 flex items-center justify-center">
         <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+          className="absolute inset-0 bg-black/40"
           onClick={() => { if (!deleting) setDeleteTarget(null); }}
           aria-hidden="true"
           style={{ animation: 'backdrop-enter 0.2s ease-out' }}

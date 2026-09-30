@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, type FormEvent, type ChangeEvent, type KeyboardEvent, type ClipboardEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type SelectHTMLAttributes, type FormEvent, type ChangeEvent, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
@@ -7,8 +7,7 @@ import { applyAdmCatFeeAdjustment, applyCourseYearUpdate } from '../services/fee
 import { createStudentNotification } from '../services/studentNotificationService';
 import { validateStudentForm, validateStudentFormEdit, type ValidationErrors } from '../utils/validation';
 import { Input } from '../components/common/Input';
-import { Select } from '../components/common/Select';
-import { Button } from '../components/common/Button';
+import { createPortal } from 'react-dom';
 import { KARNATAKA_TALUKS, KARNATAKA_TALUK_DISTRICT } from '../data/karnatakaLocations';
 import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, Religion, Category, AdmType, AdmCat, TenthBoard, PriorQualification } from '../types';
 
@@ -92,6 +91,211 @@ const ADMISSION_STATUS_OPTIONS = [
   { value: 'CANCELLED', label: 'CANCELLED' },
 ];
 
+// ── Design tokens — mirrors the Inquiries "Add Inquiry" modal (lime) ─────────
+const ROSE = '#65A30D';        // accent (name kept for shared helper code)
+const ROSE_INK = '#3F6212';
+const ROSE_HAIR = '#E3EFC8';
+
+const ENROLL_SECTIONS = [
+  { key: 'personal',   n: 1, title: 'Personal Information', color: '#65A30D' },
+  { key: 'contact',    n: 2, title: 'Contact Details',      color: '#65A30D' },
+  { key: 'marks',      n: 3, title: 'SSLC Marks',           color: '#65A30D' },
+  { key: 'enrollment', n: 4, title: 'Enrollment Details',   color: '#65A30D' },
+] as const;
+
+const inkOf = (c: string) => `color-mix(in srgb, ${c} 72%, #000)`;
+
+/** Section label like the modal's: small uppercase lime-ink text + numbered dot + hairline. */
+function SectionLabel({ idx }: { idx: number }) {
+  const sec = ENROLL_SECTIONS[idx];
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-medium text-white shrink-0" style={{ background: `linear-gradient(135deg, ${ROSE}, ${ROSE_INK})` }}>{sec.n}</span>
+      <p className="text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap" style={{ color: ROSE_INK }}>{sec.title}</p>
+      <span className="h-px flex-1" style={{ background: ROSE_HAIR }} />
+    </div>
+  );
+}
+
+/** Small divider label inside a section grid (visual grouping only). */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2 pt-1">
+      <span className="text-[10px] font-medium text-[#8A93A3] whitespace-nowrap">{children}</span>
+      <span className="h-px flex-1 bg-[#EEF6DC]" />
+    </div>
+  );
+}
+
+const PILL_BTN =
+  'inline-flex items-center justify-center gap-1.5 rounded-full border border-[#65A30D]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#3F6212] hover:bg-[#65A30D]/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65A30D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+const GRAD_BTN =
+  'inline-flex items-center justify-center gap-1.5 rounded-full px-5 py-1.5 text-[12px] font-medium text-white hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65A30D]/40 focus-visible:ring-offset-2 cursor-pointer transition-[filter] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap';
+const GRAD_STYLE: React.CSSProperties = { background: `linear-gradient(135deg, ${ROSE}, ${ROSE_INK})`, boxShadow: `0 3px 10px ${ROSE}40` };
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+function ModalShell({ tone, title, icon, children, footer }: { tone: 'lime' | 'rose' | 'amber'; title: string; icon: React.ReactNode; children: React.ReactNode; footer: React.ReactNode }) {
+  const c = tone === 'lime' ? ROSE : tone === 'rose' ? '#E11D48' : '#D97706';
+  return (
+    <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl border w-full max-w-md overflow-hidden" style={{ borderColor: `${c}33`, animation: 'modal-enter 0.22s ease-out' }}>
+        <div className="px-5 py-3.5 flex items-center gap-2.5" style={{ background: `linear-gradient(135deg, ${c}, ${inkOf(c)})` }}>
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 ring-1 ring-white/40 text-white">{icon}</span>
+          <h3 className="text-[14px] font-bold text-white">{title}</h3>
+        </div>
+        <div className="px-5 py-4 space-y-3">{children}</div>
+        <div className="px-5 py-3 border-t flex gap-2 justify-end" style={{ borderColor: `${c}22`, background: `${c}08` }}>{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+const WARN_ICON = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
+/**
+ * Page-local dropdown that replaces the native <select> with the app's pill + floating-menu style
+ * (same look as FilterDropdown). Same props as the shared Select; onChange receives a select-like
+ * event so the existing handlers (`e.target.value`) work unchanged.
+ */
+interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
+  label?: string;
+  error?: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  onChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
+}
+
+function Select({ label, error, options, placeholder, className = '', value, onChange, disabled }: SelectProps) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const current = String(value ?? '');
+  const selected = options.find((o) => o.value === current);
+
+  function pick(v: string) {
+    onChange?.({ target: { value: v }, currentTarget: { value: v } } as unknown as ChangeEvent<HTMLSelectElement>);
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current?.contains(e.target as Node) || triggerRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    function close() { setOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('resize', close);
+    document.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', close);
+      document.removeEventListener('scroll', close, true);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current || !menuRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const menu = menuRef.current;
+    const w = Math.max(rect.width, 160);
+    let left = rect.left;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    const below = window.innerHeight - rect.bottom;
+    const h = Math.min(menu.scrollHeight, 260);
+    menu.style.left = `${left}px`;
+    menu.style.minWidth = `${w}px`;
+    menu.style.top = below < h + 12 && rect.top > below ? `${rect.top - h - 4}px` : `${rect.bottom + 4}px`;
+  }, [open]);
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (disabled) return;
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      setHi(Math.max(0, options.findIndex((o) => o.value === current)));
+      setOpen(true);
+      return;
+    }
+    if (!open) return;
+    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(options.length - 1, h + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(0, h - 1)); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (hi >= 0) pick(options[hi].value); }
+    else if (e.key === 'Tab') setOpen(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      {label && <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{label}</label>}
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => { setHi(Math.max(0, options.findIndex((o) => o.value === current))); setOpen((o) => !o); }}
+        onKeyDown={onKeyDown}
+        className={`enroll-dd ${error ? 'enroll-dd-error' : ''} ${open ? 'enroll-dd-open' : ''} ${className}`}
+      >
+        <span className={`truncate ${selected ? '' : 'enroll-dd-placeholder'}`}>{selected?.label ?? placeholder ?? 'Select…'}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          role="listbox"
+          className="font-wp fixed z-[9999] bg-white border rounded-2xl overflow-hidden py-1"
+          style={{ borderColor: '#E3EFC8', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+        >
+          <div className="max-h-64 overflow-y-auto">
+            {options.map((opt, i) => {
+              const isSel = opt.value === current;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="option"
+                  aria-selected={isSel}
+                  onMouseEnter={() => setHi(i)}
+                  onClick={() => pick(opt.value)}
+                  className={`w-full text-left px-3 py-[6px] text-[12.5px] font-medium flex items-center gap-2 transition-colors duration-100 cursor-pointer ${
+                    isSel ? 'text-[#3F6212] bg-[#F1F8E2]' : i === hi ? 'text-[#3F6212] bg-[#F9FCF1]' : 'text-[#4B5068]'
+                  }`}
+                >
+                  <span className="w-3 h-3 flex items-center justify-center shrink-0">
+                    {isSel && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    )}
+                  </span>
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 interface YearWarningModalProps {
   studentName: string;
   selectedYear: string;
@@ -111,87 +315,81 @@ interface DuplicateWarningModalProps {
 function DuplicateWarningModal({ type, match, allMatches, onContinue, onReset }: DuplicateWarningModalProps) {
   const distinctYears = [...new Set(allMatches.map((s) => s.academicYear))].sort();
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-red-100 w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-red-50" style={{ background: 'linear-gradient(90deg, #fff1f2, #fff7ed)' }}>
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <span className="text-red-500">⚠</span> Possible Duplicate Entry
-          </h3>
-        </div>
-        <div className="px-6 py-5 space-y-3">
-          {type === 'same-year' ? (
-            <>
-              <p className="text-sm text-gray-700">
-                A student with the same name, father name, and mother name is already enrolled in{' '}
-                <span className="font-semibold">{match.academicYear}</span>:
-              </p>
-              <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-1">
-                <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
-                <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
-                <p className="text-xs text-gray-600">{match.course} · {match.year} · {match.academicYear}</p>
-                {match.meritNumber && (
-                  <p className="text-xs text-gray-500 font-mono">Merit: {match.meritNumber} · Reg: {match.regNumber}</p>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-gray-700">
-                This student already has enrollment records across{' '}
-                <span className="font-semibold">{distinctYears.length} academic year{distinctYears.length !== 1 ? 's' : ''}</span>.
-                Students can only be enrolled for a maximum of 3 academic years.
-              </p>
-              <div className="bg-red-50 rounded-lg px-4 py-3 border border-red-100 space-y-2">
-                <p className="text-sm font-semibold text-gray-900">{match.studentNameSSLC}</p>
-                <p className="text-xs text-gray-600">Father: {match.fatherName} · Mother: {match.motherName}</p>
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {distinctYears.map((yr) => (
-                    <span key={yr} className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200">{yr}</span>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-          <p className="text-sm text-gray-600">
-            Do you want to continue with this entry, or reset the name fields to start over?
+    <ModalShell
+      tone="rose"
+      title="Possible Duplicate Entry"
+      icon={WARN_ICON}
+      footer={
+        <>
+          <button type="button" onClick={onReset} className={PILL_BTN}>Reset Fields</button>
+          <button type="button" onClick={onContinue} className={GRAD_BTN} style={GRAD_STYLE}>Continue Anyway</button>
+        </>
+      }
+    >
+      {type === 'same-year' ? (
+        <>
+          <p className="text-[13px] text-[#4B5068]">
+            A student with the same name, father name, and mother name is already enrolled in{' '}
+            <span className="font-medium text-[#262B35]">{match.academicYear}</span>:
           </p>
-        </div>
-        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex gap-3 justify-end">
-          <Button variant="secondary" onClick={onReset}>Reset Fields</Button>
-          <Button onClick={onContinue}>Continue Anyway</Button>
-        </div>
-      </div>
-    </div>
+          <div className="rounded-xl px-4 py-3 border space-y-1" style={{ background: '#FFF5F7', borderColor: '#FECDD3' }}>
+            <p className="text-[13px] font-medium" style={{ color: '#9F1239' }}>{match.studentNameSSLC}</p>
+            <p className="text-[11.5px] text-[#5B6371]">Father: {match.fatherName} · Mother: {match.motherName}</p>
+            <p className="text-[11.5px] text-[#5B6371]">{match.course} · {match.year} · {match.academicYear}</p>
+            {match.meritNumber && (
+              <p className="text-[11px] text-[#8A93A3] font-mono">Merit: {match.meritNumber} · Reg: {match.regNumber}</p>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-[13px] text-[#4B5068]">
+            This student already has enrollment records across{' '}
+            <span className="font-medium text-[#262B35]">{distinctYears.length} academic year{distinctYears.length !== 1 ? 's' : ''}</span>.
+            Students can only be enrolled for a maximum of 3 academic years.
+          </p>
+          <div className="rounded-xl px-4 py-3 border space-y-2" style={{ background: '#FFF5F7', borderColor: '#FECDD3' }}>
+            <p className="text-[13px] font-medium" style={{ color: '#9F1239' }}>{match.studentNameSSLC}</p>
+            <p className="text-[11.5px] text-[#5B6371]">Father: {match.fatherName} · Mother: {match.motherName}</p>
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {distinctYears.map((yr) => (
+                <span key={yr} className="text-[10.5px] font-medium px-2.5 py-1 rounded-full border border-[#E11D48]/45 bg-[#E11D48]/[0.07] text-[#9F1239] leading-none">{yr}</span>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      <p className="text-[13px] text-[#4B5068]">
+        Do you want to continue with this entry, or reset the name fields to start over?
+      </p>
+    </ModalShell>
   );
 }
 
 function YearWarningModal({ studentName, selectedYear, conflictRecord, onProceed, onEdit }: YearWarningModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-amber-100 w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-amber-50" style={{ background: 'linear-gradient(90deg, #fffbeb, #fef9c3)' }}>
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <span className="text-amber-500">⚠</span> Year Conflict Detected
-          </h3>
-        </div>
-        <div className="px-6 py-5 space-y-3">
-          <p className="text-sm text-gray-700">
-            <span className="font-semibold">{studentName}</span> was already enrolled as{' '}
-            <span className="font-semibold text-amber-700">{conflictRecord.year}</span> in{' '}
-            <span className="font-semibold text-amber-700">{conflictRecord.academicYear}</span>.
-          </p>
-          <p className="text-sm text-gray-700">
-            Saving as <span className="font-semibold">{selectedYear}</span> again may indicate the student
-            was <span className="font-semibold text-red-600">not promoted</span>. Do you want to proceed,
-            or go back and edit the year?
-          </p>
-        </div>
-        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex gap-3 justify-end">
-          <Button variant="secondary" onClick={onEdit}>Edit Year</Button>
-          <Button onClick={onProceed}>Proceed Anyway</Button>
-        </div>
-      </div>
-    </div>
+    <ModalShell
+      tone="amber"
+      title="Year Conflict Detected"
+      icon={WARN_ICON}
+      footer={
+        <>
+          <button type="button" onClick={onEdit} className={PILL_BTN}>Edit Year</button>
+          <button type="button" onClick={onProceed} className={GRAD_BTN} style={GRAD_STYLE}>Proceed Anyway</button>
+        </>
+      }
+    >
+      <p className="text-[13px] text-[#4B5068]">
+        <span className="font-medium text-[#262B35]">{studentName}</span> was already enrolled as{' '}
+        <span className="font-medium text-amber-700">{conflictRecord.year}</span> in{' '}
+        <span className="font-medium text-amber-700">{conflictRecord.academicYear}</span>.
+      </p>
+      <p className="text-[13px] text-[#4B5068]">
+        Saving as <span className="font-medium text-[#262B35]">{selectedYear}</span> again may indicate the student
+        was <span className="font-medium text-red-600">not promoted</span>. Do you want to proceed,
+        or go back and edit the year?
+      </p>
+    </ModalShell>
   );
 }
 
@@ -215,130 +413,146 @@ function PreviewRow({ label, value, required }: { label: string; value: string |
   const display = value === '' || value === 0 || value === null || value === undefined
     ? null
     : String(value);
+  const isPct = /Percentage$/.test(label);
   return (
-    <div className="grid grid-cols-2 gap-2 py-1.5 border-b border-emerald-50/60 last:border-0">
-      <dt className="text-xs text-gray-500 font-medium flex items-center gap-1">
+    <div className="grid grid-cols-2 gap-2 py-1.5 border-b border-[#EEF6DC] last:border-0">
+      <dt className="text-[11.5px] text-[#8A93A3] font-medium flex items-center gap-1">
         {label}
-        {required && <span className="text-red-500">*</span>}
+        {required && <span className="text-[#E11D48]">*</span>}
       </dt>
-      <dd className={`text-xs font-semibold ${display ? 'text-gray-900' : 'text-gray-300'}`}>
-        {display ?? '—'}
+      <dd className={`text-[12px] font-medium ${display ? 'text-[#262B35]' : 'text-[#C4C8D0]'}`}>
+        {display && isPct ? (
+          <span className="inline-flex items-center rounded-full border border-[#65A30D]/45 bg-[#65A30D]/[0.07] px-2 py-[2px] text-[11px] text-[#3F6212]">{display}</span>
+        ) : (display ?? '—')}
       </dd>
     </div>
   );
 }
 
+function PreviewCard({ idx, children }: { idx: number; children: React.ReactNode }) {
+  const sec = ENROLL_SECTIONS[idx];
+  return (
+    <section className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: ROSE_HAIR }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: '#EEF6DC', background: `${sec.color}0D` }}>
+        <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-medium text-white" style={{ background: sec.color }}>{sec.n}</span>
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.6px]" style={{ color: inkOf(sec.color) }}>{sec.title === 'SSLC Marks' ? 'SSLC Marks' : sec.title}</h3>
+      </div>
+      <dl className="px-4 py-1">{children}</dl>
+    </section>
+  );
+}
+
 function EnrollmentPreview({ form, saving, errorMsg, onConfirm, onEdit }: EnrollmentPreviewProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-2xl my-8 overflow-hidden">
+    <div className="font-wp fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl border w-full max-w-2xl my-8 overflow-hidden" style={{ borderColor: ROSE_HAIR, animation: 'modal-enter 0.22s ease-out' }}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-emerald-50" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
-          <h2 className="text-base font-bold text-gray-900">Review Enrollment Details</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Please verify all details before confirming. Fields marked <span className="text-red-500 font-bold">*</span> are mandatory.
-          </p>
+        <div className="px-5 py-3.5" style={{ background: `linear-gradient(135deg, ${ROSE}, ${ROSE_INK})` }}>
+          <h2 className="text-[14px] font-bold text-white flex items-center gap-2.5">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 ring-1 ring-white/40 text-[12px] font-medium">
+              {(form.studentNameSSLC || '?').charAt(0)}
+            </span>
+            Review Enrollment Details
+          </h2>
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            {form.studentNameSSLC && <span className="text-[11.5px] font-medium text-white/95">{form.studentNameSSLC}</span>}
+            {form.course && <span className="rounded-full border border-white/50 bg-white/15 px-2 py-[3px] text-[10.5px] font-medium text-white leading-none">{form.course}</span>}
+            {form.year && <span className="rounded-full border border-white/50 bg-white/15 px-2 py-[3px] text-[10.5px] font-medium text-white leading-none">{form.year}</span>}
+            {form.academicYear && <span className="rounded-full border border-white/50 bg-white/15 px-2 py-[3px] text-[10.5px] font-medium text-white leading-none">{form.academicYear}</span>}
+          </div>
+        </div>
+        <div className="px-5 py-2 border-b text-[11.5px] text-[#3F6212] font-medium" style={{ background: '#F9FCF1', borderColor: ROSE_HAIR }}>
+          Please verify all details before confirming. Fields marked <span className="text-[#E11D48] font-bold">*</span> are mandatory.
         </div>
 
-        <div className="px-6 py-4 space-y-5 max-h-[65vh] overflow-y-auto">
+        <div className="px-5 py-4 space-y-3 max-h-[62vh] overflow-y-auto" style={{ background: 'linear-gradient(160deg, #FDFEF9, #F9FCF1)' }}>
           {/* Personal Information */}
-          <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Personal Information</h3>
-            <dl>
-              <PreviewRow label="Name (SSLC)" value={form.studentNameSSLC} required />
-              <PreviewRow label="Name (Aadhar)" value={form.studentNameAadhar} required />
-              <PreviewRow label="Father Name" value={form.fatherName} />
-              <PreviewRow label="Mother Name" value={form.motherName} />
-              <PreviewRow label="Date of Birth" value={form.dateOfBirth} />
-              <PreviewRow label="Gender" value={form.gender} required />
-              <PreviewRow label="Religion" value={form.religion} required />
-              <PreviewRow label="Caste" value={form.caste} />
-              <PreviewRow label="Category" value={form.category} />
-              <PreviewRow label="Annual Income" value={form.annualIncome > 0 ? `₹ ${form.annualIncome.toLocaleString()}` : ''} />
-              <PreviewRow label="Aadhar Number" value={form.aadharNumber} />
-              <PreviewRow label="APAAR ID" value={form.apaarId} />
-            </dl>
-          </section>
+          <PreviewCard idx={0}>
+            <PreviewRow label="Name (SSLC)" value={form.studentNameSSLC} required />
+            <PreviewRow label="Name (Aadhar)" value={form.studentNameAadhar} required />
+            <PreviewRow label="Father Name" value={form.fatherName} />
+            <PreviewRow label="Mother Name" value={form.motherName} />
+            <PreviewRow label="Date of Birth" value={form.dateOfBirth} />
+            <PreviewRow label="Gender" value={form.gender} required />
+            <PreviewRow label="Religion" value={form.religion} required />
+            <PreviewRow label="Caste" value={form.caste} />
+            <PreviewRow label="Category" value={form.category} />
+            <PreviewRow label="Annual Income" value={form.annualIncome > 0 ? `₹ ${form.annualIncome.toLocaleString()}` : ''} />
+            <PreviewRow label="Aadhar Number" value={form.aadharNumber} />
+            <PreviewRow label="APAAR ID" value={form.apaarId} />
+          </PreviewCard>
 
           {/* Contact */}
-          <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Contact Details</h3>
-            <dl>
-              <PreviewRow label="Father Mobile" value={form.fatherMobile} />
-              <PreviewRow label="Student Mobile" value={form.studentMobile} />
-              <PreviewRow label="Address" value={form.address} />
-              <PreviewRow label="Town / City" value={form.town} />
-              <PreviewRow label="Taluk" value={form.taluk} />
-              <PreviewRow label="District" value={form.district} />
-            </dl>
-          </section>
+          <PreviewCard idx={1}>
+            <PreviewRow label="Father Mobile" value={form.fatherMobile} />
+            <PreviewRow label="Student Mobile" value={form.studentMobile} />
+            <PreviewRow label="Address" value={form.address} />
+            <PreviewRow label="Town / City" value={form.town} />
+            <PreviewRow label="Taluk" value={form.taluk} />
+            <PreviewRow label="District" value={form.district} />
+          </PreviewCard>
 
           {/* SSLC Marks */}
-          <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">SSLC Marks</h3>
-            <dl>
-              <PreviewRow label="10th Board" value={form.tenthBoard} />
-              <PreviewRow label="Prior Qualification" value={form.priorQualification} />
-              {form.priorQualification === 'PUC' && (
-                <>
-                  <PreviewRow label="PUC Max Total" value={form.pucMaxTotal} />
-                  <PreviewRow label="PUC Obtained Total" value={form.pucObtainedTotal} />
-                  <PreviewRow label="PUC Percentage" value={(form.pucMaxTotal ?? 0) > 0 ? `${(((form.pucObtainedTotal ?? 0) / form.pucMaxTotal) * 100).toFixed(2)}%` : ''} />
-                </>
-              )}
-              {form.priorQualification === 'ITI' && (
-                <>
-                  <PreviewRow label="ITI Max Total" value={form.itiMaxTotal} />
-                  <PreviewRow label="ITI Obtained Total" value={form.itiObtainedTotal} />
-                  <PreviewRow label="ITI Percentage" value={(form.itiMaxTotal ?? 0) > 0 ? `${(((form.itiObtainedTotal ?? 0) / form.itiMaxTotal) * 100).toFixed(2)}%` : ''} />
-                </>
-              )}
-              <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
-              <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
-              <PreviewRow
-                label="SSLC Percentage"
-                value={form.sslcMaxTotal > 0 ? `${((form.sslcObtainedTotal / form.sslcMaxTotal) * 100).toFixed(2)}%` : ''}
-              />
-              <PreviewRow label="Science Max" value={form.scienceMax} />
-              <PreviewRow label="Science Obtained" value={form.scienceObtained} />
-              <PreviewRow label="Maths Max" value={form.mathsMax} />
-              <PreviewRow label="Maths Obtained" value={form.mathsObtained} />
-              <PreviewRow label="Maths + Science Max Total" value={form.mathsScienceMaxTotal} />
-              <PreviewRow label="Maths + Science Obtained Total" value={form.mathsScienceObtainedTotal} />
-            </dl>
-          </section>
+          <PreviewCard idx={2}>
+            <PreviewRow label="10th Board" value={form.tenthBoard} />
+            <PreviewRow label="Prior Qualification" value={form.priorQualification} />
+            {form.priorQualification === 'PUC' && (
+              <>
+                <PreviewRow label="PUC Max Total" value={form.pucMaxTotal} />
+                <PreviewRow label="PUC Obtained Total" value={form.pucObtainedTotal} />
+                <PreviewRow label="PUC Percentage" value={(form.pucMaxTotal ?? 0) > 0 ? `${(((form.pucObtainedTotal ?? 0) / form.pucMaxTotal) * 100).toFixed(2)}%` : ''} />
+              </>
+            )}
+            {form.priorQualification === 'ITI' && (
+              <>
+                <PreviewRow label="ITI Max Total" value={form.itiMaxTotal} />
+                <PreviewRow label="ITI Obtained Total" value={form.itiObtainedTotal} />
+                <PreviewRow label="ITI Percentage" value={(form.itiMaxTotal ?? 0) > 0 ? `${(((form.itiObtainedTotal ?? 0) / form.itiMaxTotal) * 100).toFixed(2)}%` : ''} />
+              </>
+            )}
+            <PreviewRow label="SSLC Max Total" value={form.sslcMaxTotal} />
+            <PreviewRow label="SSLC Obtained Total" value={form.sslcObtainedTotal} />
+            <PreviewRow
+              label="SSLC Percentage"
+              value={form.sslcMaxTotal > 0 ? `${((form.sslcObtainedTotal / form.sslcMaxTotal) * 100).toFixed(2)}%` : ''}
+            />
+            <PreviewRow label="Science Max" value={form.scienceMax} />
+            <PreviewRow label="Science Obtained" value={form.scienceObtained} />
+            <PreviewRow label="Maths Max" value={form.mathsMax} />
+            <PreviewRow label="Maths Obtained" value={form.mathsObtained} />
+            <PreviewRow label="Maths + Science Max Total" value={form.mathsScienceMaxTotal} />
+            <PreviewRow label="Maths + Science Obtained Total" value={form.mathsScienceObtainedTotal} />
+          </PreviewCard>
 
           {/* Enrollment Details */}
-          <section>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Enrollment Details</h3>
-            <dl>
-              <PreviewRow label="Course" value={COURSE_LABEL[form.course] ?? form.course} required />
-              <PreviewRow label="Year" value={form.year} required />
-              <PreviewRow label="Adm Type" value={form.admType} required />
-              <PreviewRow label="Adm Cat" value={form.admCat} required />
-              <PreviewRow label="Academic Year" value={form.academicYear} required />
-              <PreviewRow label="Admission Status" value={form.admissionStatus} required />
-              <PreviewRow label="Enrollment Date" value={form.enrollmentDate} />
-              <PreviewRow label="Application No" value={form.applicationNumber} />
-              <PreviewRow label="Reg Number" value={form.regNumber} />
-            </dl>
-          </section>
+          <PreviewCard idx={3}>
+            <PreviewRow label="Course" value={COURSE_LABEL[form.course] ?? form.course} required />
+            <PreviewRow label="Year" value={form.year} required />
+            <PreviewRow label="Adm Type" value={form.admType} required />
+            <PreviewRow label="Adm Cat" value={form.admCat} required />
+            <PreviewRow label="Academic Year" value={form.academicYear} required />
+            <PreviewRow label="Admission Status" value={form.admissionStatus} required />
+            <PreviewRow label="Enrollment Date" value={form.enrollmentDate} />
+            <PreviewRow label="Application No" value={form.applicationNumber} />
+            <PreviewRow label="Reg Number" value={form.regNumber} />
+          </PreviewCard>
         </div>
 
         {errorMsg && (
-          <div className="mx-6 mb-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 border border-red-100">
+          <div className="mx-5 mb-3 text-[13px] font-medium text-[#BE123C] bg-[#FFF1F2] rounded-xl px-4 py-3 border border-[#FECDD3]">
             {errorMsg}
           </div>
         )}
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50/60 border-t border-emerald-50 flex gap-3 justify-end">
-          <Button variant="secondary" size="lg" onClick={onEdit} disabled={saving}>
+        <div className="px-5 py-3 border-t flex gap-2 justify-end" style={{ borderColor: ROSE_HAIR, background: '#F9FCF1' }}>
+          <button type="button" onClick={onEdit} disabled={saving} className={PILL_BTN}>
             Edit Details
-          </Button>
-          <Button size="lg" loading={saving} onClick={onConfirm}>
+          </button>
+          <button type="button" onClick={onConfirm} disabled={saving} className={GRAD_BTN} style={GRAD_STYLE}>
+            {saving && <Spinner />}
             Confirm &amp; Enroll
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -1224,31 +1438,52 @@ export function EnrollStudent() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      {/* ── Scrollable area ─────────────────────────────────────────────── */}
-      <div ref={topRef} className="flex-1 min-h-0 overflow-y-auto px-0 pb-2">
+    <div
+      className="font-wp enroll-skin -m-4 p-4 h-[calc(100%+2rem)] flex flex-col"
+      style={{ background: 'linear-gradient(160deg, #F9FCF1 0%, #FDFEF9 45%, #F3F9E4 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
+      {/* ── Modal-style card ─────────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 w-full max-w-6xl mx-auto flex flex-col bg-white rounded-2xl border shadow-xl overflow-hidden" style={{ borderColor: ROSE_HAIR }}>
 
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-black text-gray-800 leading-tight tracking-tight">
+      {/* Card header */}
+      <div className="px-5 py-3.5 flex items-center gap-3 shrink-0 min-w-0" style={{ background: `linear-gradient(135deg, ${ROSE}, ${ROSE_INK})` }}>
+        <h2 className="text-[14px] font-bold text-white flex items-center gap-2.5 shrink-0">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/20 ring-1 ring-white/40">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+          </span>
           {editId ? 'Edit Student' : 'Enroll Student'}
         </h2>
-        <Button variant="secondary" size="sm" onClick={() => void navigate(backTo)}>
+        {form.academicYear && (
+          <span className="rounded-full border border-white/50 bg-white/15 px-2.5 py-[4px] text-[10.5px] font-medium text-white leading-none whitespace-nowrap">
+            {form.academicYear}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => void navigate(backTo)}
+          className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/35 px-3.5 py-1.5 text-[11.5px] font-medium text-white transition-colors cursor-pointer"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           {backLabel}
-        </Button>
+        </button>
       </div>
 
+      {/* ── Scrollable area ─────────────────────────────────────────────── */}
+      <div ref={topRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 scroll-enroll" style={{ background: 'linear-gradient(160deg, #FDFEF9, #F9FCF1)' }}>
+
       {successMsg && (
-        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-5">{successMsg}</p>
+        <p className="text-[13px] font-medium text-[#3F6212] bg-[#F1F8E2] border border-[#D5E6AE] rounded-xl px-4 py-3 mb-4">{successMsg}</p>
       )}
       {errorMsg && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">{errorMsg}</p>
+        <p className="text-[13px] font-medium text-[#BE123C] bg-[#FFF1F2] border border-[#FECDD3] rounded-xl px-4 py-3 mb-4">{errorMsg}</p>
       )}
 
       {/* Dashboard re-enroll info banner */}
       {reEnrollStudent && reEnrollTargetYear && reEnrollAcademicYear && (
-        <div className="mb-5 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 flex items-center gap-2">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 flex-shrink-0"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+        <div className="mb-4 px-4 py-2.5 rounded-xl border text-[13px] text-[#3F6212] flex items-center gap-2.5" style={{ background: '#F1F8E2', borderColor: '#D5E6AE' }}>
+          <span className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: `linear-gradient(135deg, ${ROSE}, ${ROSE_INK})` }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+          </span>
           <span>
             Re-enrolling <span className="font-bold">{reEnrollStudent.studentNameSSLC}</span> for{' '}
             <span className="font-bold">{reEnrollTargetYear}</span> in{' '}
@@ -1259,48 +1494,52 @@ export function EnrollStudent() {
 
       {/* Re-enroll banner — admin only */}
       {!editId && isAdmin && (
-        <div className="bg-sky-50 rounded-lg border border-sky-200 mb-5">
+        <div className="bg-white rounded-2xl border mb-5" style={{ borderColor: ROSE_HAIR }}>
           <button
             type="button"
             onClick={() => setReEnrollOpen((o) => !o)}
-            className="w-full flex items-center justify-between px-5 py-3 text-left"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left cursor-pointer"
           >
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-sky-800">Re-enroll from Previous Year</span>
+            <span className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg border flex items-center justify-center shrink-0" style={{ background: `${ROSE}12`, borderColor: `${ROSE}40`, color: inkOf(ROSE) }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+              </span>
+              <span className="text-[13px] font-medium" style={{ color: ROSE_INK }}>Re-enroll from Previous Year</span>
               {prevSourceStudent && (
-                <span className="text-xs text-sky-600 font-normal">
+                <span className="text-[12px] text-[#8A93A3] font-normal">
                   — {prevSourceStudent.studentNameSSLC}
                 </span>
               )}
             </span>
             <svg
-              className={`w-4 h-4 text-sky-600 transition-transform duration-200 ${reEnrollOpen || !!prevSourceStudent ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 transition-transform duration-200 ${reEnrollOpen || !!prevSourceStudent ? 'rotate-180' : ''}`}
+              style={{ color: ROSE }}
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {(reEnrollOpen || !!prevSourceStudent) && (
-            <div className="px-5 pb-4 border-t border-sky-200">
+            <div className="px-4 pb-4 border-t" style={{ borderColor: '#EEF6DC' }}>
               {prevSourceStudent ? (
                 <div className="flex items-center gap-3 flex-wrap pt-3">
-                  <p className="text-sm text-sky-700">
+                  <p className="text-[13px] text-[#4B5068]">
                     Pre-filled from:{' '}
-                    <span className="font-medium">{prevSourceStudent.studentNameSSLC}</span>
+                    <span className="font-medium" style={{ color: ROSE_INK }}>{prevSourceStudent.studentNameSSLC}</span>
                     {' '}— {prevSourceStudent.course}, {prevSourceStudent.year},{' '}
                     {prevSourceStudent.academicYear}
                   </p>
                   <button
                     type="button"
                     onClick={handleClearPrevStudent}
-                    className="text-xs text-red-600 hover:text-red-800 underline"
+                    className="inline-flex items-center gap-1 rounded-full bg-[#F97360]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#E2533F] hover:bg-[#F97360]/[0.16] cursor-pointer transition-colors"
                   >
                     Clear &amp; start fresh
                   </button>
                 </div>
               ) : (
                 <div className="relative pt-3">
-                  <p className="text-xs text-sky-600 mb-2">
+                  <p className="text-[12px] text-[#8A93A3] mb-2">
                     Search by name or register number to pre-fill the form with an existing student's details.
                   </p>
                   <div className="flex items-center gap-2">
@@ -1309,36 +1548,41 @@ export function EnrollStudent() {
                       value={prevQuery}
                       onChange={(e) => setPrevQuery(e.target.value)}
                       placeholder="Type name or register number..."
-                      className="block w-full max-w-sm rounded-md border border-sky-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      className="block w-full max-w-md py-2"
                     />
                     <button
                       type="button"
                       onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevQuery(''); if (casteLingerTimer.current) clearTimeout(casteLingerTimer.current); setCasteSuggestions([]); setCasteOpen(false); }}
-                      className="flex-shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-400 transition-colors"
+                      className={`${PILL_BTN} flex-shrink-0`}
                     >
                       Reset Fields
                     </button>
                   </div>
                   {prevSearching && (
-                    <p className="text-xs text-sky-500 mt-1">Searching...</p>
+                    <p className="text-[12px] mt-1" style={{ color: ROSE }}>Searching...</p>
                   )}
                   {prevQuery.trim().length >= 2 && !prevSearching && prevResults.length === 0 && (
-                    <p className="text-xs text-gray-500 mt-1">No students found in previous years.</p>
+                    <p className="text-[12px] text-[#8A93A3] mt-1">No students found in previous years.</p>
                   )}
                   {prevResults.length > 0 && (
-                    <ul className="absolute z-10 w-full max-w-sm bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-64 overflow-y-auto">
+                    <ul className="absolute z-10 w-full max-w-md bg-white border rounded-xl shadow-lg mt-1 max-h-64 overflow-y-auto" style={{ borderColor: ROSE_HAIR }}>
                       {prevResults.map((s) => (
                         <li key={s.id}>
                           <button
                             type="button"
                             onClick={() => handlePrevStudentSelect(s)}
-                            className="w-full text-left px-4 py-3 hover:bg-sky-50 border-b border-gray-100 last:border-0"
+                            className="w-full text-left px-4 py-2.5 hover:bg-[#F9FCF1] border-b border-[#EEF6DC] last:border-0 flex items-center gap-2.5 cursor-pointer"
                           >
-                            <p className="text-sm font-medium text-gray-900">{s.studentNameSSLC}</p>
-                            <p className="text-xs text-gray-500">
-                              {s.course} · {s.year} · {s.academicYear}
-                              {s.regNumber ? ` · ${s.regNumber}` : ''}
-                            </p>
+                            <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-medium" style={{ background: 'linear-gradient(135deg, #D9F99D, #BEF264)', color: '#365314', boxShadow: '0 0 0 1px #fff, 0 0 0 2px #65A30D80' }}>
+                              {s.studentNameSSLC.charAt(0)}
+                            </span>
+                            <span className="min-w-0">
+                              <p className="text-[13px] font-medium" style={{ color: ROSE_INK }}>{s.studentNameSSLC}</p>
+                              <p className="text-[11.5px] text-[#8A93A3]">
+                                {s.course} · {s.year} · {s.academicYear}
+                                {s.regNumber ? ` · ${s.regNumber}` : ''}
+                              </p>
+                            </span>
                           </button>
                         </li>
                       ))}
@@ -1351,14 +1595,12 @@ export function EnrollStudent() {
         </div>
       )}
 
-      <form id="enroll-form" onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+      <form id="enroll-form" onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
 
         {/* ── Personal Information ─────────────────────────────────────── */}
-        <section className="rounded-xl border border-sky-200 shadow-sm">
-          <div className="bg-sky-100 px-6 py-2.5 border-b border-sky-200 rounded-t-xl">
-            <h3 className="text-sm font-bold text-sky-800 uppercase tracking-wider">Personal Information</h3>
-          </div>
-          <div className="bg-sky-50 px-6 py-5 rounded-b-xl">
+        <section className="" style={{ borderColor: '#E3EFC8' }}>
+          <SectionLabel idx={0} />
+          <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <Input
@@ -1452,13 +1694,13 @@ export function EnrollStudent() {
                 />
                 {displayErrors['caste'] && <p className="text-xs text-red-500 font-medium">{displayErrors['caste']}</p>}
                 {casteOpen && (
-                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-emerald-100 rounded-lg shadow-lg mt-0.5 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-[#D5E6AE] rounded-xl shadow-lg mt-0.5 overflow-hidden">
                     {casteSuggestions.map((item, idx) => (
                       <button
                         key={item.caste}
                         type="button"
                         onMouseDown={() => handleCastePick(item)}
-                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === casteHighlight ? 'bg-emerald-50 text-emerald-700' : 'hover:bg-emerald-50 text-gray-800'}`}
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === casteHighlight ? 'bg-[#F1F8E2] text-[#3F6212]' : 'hover:bg-[#F1F8E2] text-gray-800'}`}
                       >
                         <span className="font-medium">{item.caste}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
@@ -1509,11 +1751,9 @@ export function EnrollStudent() {
         </section>
 
         {/* ── Contact Details ──────────────────────────────────────────── */}
-        <section className="rounded-xl border border-emerald-200 shadow-sm">
-          <div className="bg-emerald-100 px-6 py-2.5 border-b border-emerald-200 rounded-t-xl">
-            <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider">Contact Details</h3>
-          </div>
-          <div className="bg-emerald-50 px-6 py-5 rounded-b-xl">
+        <section className="pt-6 border-t" style={{ borderColor: '#E3EFC8' }}>
+          <SectionLabel idx={1} />
+          <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <Input
@@ -1569,13 +1809,13 @@ export function EnrollStudent() {
                 />
                 {displayErrors['taluk'] && <p className="text-xs text-red-500 font-medium">{displayErrors['taluk']}</p>}
                 {talukOpen && (
-                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-emerald-100 rounded-lg shadow-lg mt-0.5 overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white border border-[#D5E6AE] rounded-xl shadow-lg mt-0.5 overflow-hidden">
                     {talukSuggestions.map((taluk, idx) => (
                       <button
                         key={taluk}
                         type="button"
                         onMouseDown={() => handleTalukPick(taluk)}
-                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === talukHighlight ? 'bg-emerald-50 text-emerald-700' : 'hover:bg-emerald-50 text-gray-800'}`}
+                        className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center gap-2 ${idx === talukHighlight ? 'bg-[#F1F8E2] text-[#3F6212]' : 'hover:bg-[#F1F8E2] text-gray-800'}`}
                       >
                         <span className="font-medium">{taluk}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{KARNATAKA_TALUK_DISTRICT[taluk]}</span>
@@ -1597,12 +1837,11 @@ export function EnrollStudent() {
         </section>
 
         {/* ── SSLC Marks ───────────────────────────────────────────────── */}
-        <section className="rounded-xl border border-amber-200 overflow-hidden shadow-sm">
-          <div className="bg-amber-100 px-6 py-2.5 border-b border-amber-200">
-            <h3 className="text-sm font-bold text-amber-800 uppercase tracking-wider">SSLC Marks</h3>
-          </div>
-          <div className="bg-amber-50 px-6 py-5">
+        <section className="pt-6 border-t" style={{ borderColor: '#E3EFC8' }}>
+          <SectionLabel idx={2} />
+          <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <GroupLabel>Board &amp; prior qualification</GroupLabel>
               <div className="lg:col-span-2">
                 <Select
                   label="10th Board"
@@ -1708,6 +1947,7 @@ export function EnrollStudent() {
                   />
                 </div>
               )}
+              <GroupLabel>SSLC totals</GroupLabel>
               <div className="lg:col-span-2">
                 <Input
                   label="SSLC Max Total"
@@ -1741,6 +1981,7 @@ export function EnrollStudent() {
                   className="block w-full rounded-md border border-amber-200 px-3 py-2 text-sm bg-amber-100/60 text-gray-600 cursor-not-allowed"
                 />
               </div>
+              <GroupLabel>Subject marks (Maths &amp; Science)</GroupLabel>
               <Input
                 label="Science Max"
                 type="number"
@@ -1806,12 +2047,11 @@ export function EnrollStudent() {
         </section>
 
         {/* ── Enrollment Details ───────────────────────────────────────── */}
-        <section className="rounded-xl border border-violet-200 overflow-hidden shadow-sm">
-          <div className="bg-violet-100 px-6 py-2.5 border-b border-violet-200">
-            <h3 className="text-sm font-bold text-violet-800 uppercase tracking-wider">Enrollment Details</h3>
-          </div>
-          <div className="bg-violet-50 px-6 py-5">
+        <section className="pt-6 border-t" style={{ borderColor: '#E3EFC8' }}>
+          <SectionLabel idx={3} />
+          <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <GroupLabel>Course &amp; admission</GroupLabel>
               <div className="lg:col-span-2">
                 <Select
                   label="Course"
@@ -1902,7 +2142,7 @@ export function EnrollStudent() {
                         transferredIn: e.target.checked,
                         transferInPolytechnic: e.target.checked ? prev.transferInPolytechnic : '',
                       }))}
-                      className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-400 cursor-pointer"
+                      className="w-4 h-4 rounded border-lime-400 text-lime-600 focus:ring-lime-400 cursor-pointer"
                     />
                     <span className="font-semibold text-gray-600 uppercase tracking-wider text-xs">
                       Transferred In (from another Polytechnic)
@@ -1919,6 +2159,7 @@ export function EnrollStudent() {
                   )}
                 </div>
               )}
+              <GroupLabel>Registration</GroupLabel>
               <Input
                 label="Reg Number"
                 value={form.regNumber}
@@ -1968,13 +2209,13 @@ export function EnrollStudent() {
             </div>
 
             {editId && enrollmentHistory.length > 0 && (
-              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-100/50 px-4 py-3">
+              <div className="mt-4 rounded-xl border border-[#D5E6AE] bg-[#F1F8E2] px-4 py-3">
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={applyToAllYears}
                     onChange={(e) => setApplyToAllYears(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-400 cursor-pointer"
+                    className="mt-0.5 w-4 h-4 rounded border-lime-400 text-lime-600 focus:ring-lime-400 cursor-pointer"
                   />
                   <span className="text-sm text-gray-700">
                     <span className="font-semibold">Apply name / profile corrections to all years for this student</span>
@@ -1994,15 +2235,15 @@ export function EnrollStudent() {
 
       </div>{/* end scrollable area */}
 
-      {/* ── Footer bar — mirrors the top Header style ───────────────────── */}
+      {/* ── Footer bar — like the Add Inquiry modal footer ─────────────── */}
       <div
-        className="flex-shrink-0 flex items-center gap-3 bg-white h-13 -mx-4 -mb-4 px-5"
-        style={{ borderTop: '1px solid #d1fae5', boxShadow: '0 -1px 6px 0 rgba(16,185,129,0.06)' }}
+        className="flex-shrink-0 flex items-center gap-3 px-5 py-3 border-t bg-[#F9FCF1]"
+        style={{ borderColor: ROSE_HAIR }}
       >
         {/* Error field pills — shown on the left when validation fails */}
         {Object.keys(errors).length > 0 && (
           <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
-            <svg className="shrink-0 text-red-500 w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="shrink-0 text-[#E11D48] w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <div className="flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0" style={{ scrollbarWidth: 'none' }}>
@@ -2017,7 +2258,7 @@ export function EnrollStudent() {
                 return displayKeys.map((key) => (
                   <span
                     key={key}
-                    className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                    className="shrink-0 inline-flex items-center px-2.5 py-[3px] rounded-full text-[10.5px] font-medium bg-[#E11D48]/[0.06] text-[#BE123C] border border-[#E11D48]/40 whitespace-nowrap leading-none"
                   >
                     {key === 'fatherMobile' && mobileMerged ? 'Mobile (Father / Student)' : (FIELD_LABELS[key] ?? key)}
                   </span>
@@ -2030,28 +2271,29 @@ export function EnrollStudent() {
         {/* Buttons — pushed to the right */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {!editId && (
-            <Button
+            <button
               type="button"
-              variant="secondary"
-              size="sm"
+              className={PILL_BTN}
               onClick={() => { setForm(emptyForm(settings?.currentAcademicYear)); setErrors({}); setPrevSourceStudent(null); }}
             >
               Reset
-            </Button>
+            </button>
           )}
-          <Button
+          <button
             type="button"
-            variant="secondary"
-            size="sm"
+            className={PILL_BTN}
             onClick={() => void navigate(backTo)}
           >
             Cancel
-          </Button>
-          <Button type="submit" form="enroll-form" loading={saving} size="sm">
+          </button>
+          <button type="submit" form="enroll-form" disabled={saving} className={GRAD_BTN} style={GRAD_STYLE}>
+            {saving && <Spinner />}
             {editId ? 'Update Student' : 'Preview & Enroll'}
-          </Button>
+          </button>
         </div>
       </div>
+
+      </div>{/* end card */}
 
       {showPreview && (
         <EnrollmentPreview

@@ -53,7 +53,7 @@ export const EYEBROW =
 
 /** Clickable bento tile: hairline border, lift on hover (no resting shadow). */
 export const TILE =
-  'rounded-2xl border relative overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(63,75,184,0.08)]';
+  'rounded-2xl border relative overflow-hidden cursor-pointer transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(63,75,184,0.08)]';
 
 /** Very light tint of an accent over white, with a matching hairline. */
 export const tileStyle = (c: string) => ({

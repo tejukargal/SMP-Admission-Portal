@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import type { AcademicYear, FeeStructure, Course, Year } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { getSettings } from '../services/settingsService';
@@ -63,7 +62,7 @@ function fmtCell(n: number) {
 }
 // ── Export: Excel ──────────────────────────────────────────────────────────
 
-function exportExcel(
+async function exportExcel(
   rows: FeeStructure[],
   additionalLabels: string[],
   academicYear: string,
@@ -95,6 +94,7 @@ function exportExcel(
     ];
   });
 
+  const XLSX = await import('xlsx');
   const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Fee Structure');

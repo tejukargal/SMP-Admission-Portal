@@ -3,17 +3,14 @@
 /* ── Typography ─────────────────────────────────────────────────────────────
    Segoe UI Variable (Win 11) → Segoe UI (Win 10) → system-ui fallback.
    Inter is loaded as a web-font fallback for non-Windows platforms.        */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 /* Student Portal — matches the "SMP Connect" notice-board reference design.
    Scoped to .font-portal (StudentLogin + StudentPortal roots) so the admin
    app keeps its Segoe UI / Inter stack untouched. */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 /* Revamped pages — Outfit, the SMP Student Portal app's typeface (see its
    theme/tokens.ts). Scoped to .font-wp so the rest of the admin app is
    untouched until the revamp rolls out further. */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
   font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -609,3 +606,116 @@
 .scroll-indigo::-webkit-scrollbar-thumb:hover {
   background: #a5b4fc;
 }
+
+/* ── Enroll Student — lime modal-style skin (mirrors the Add Inquiry modal),
+   scoped to the page wrapper so shared Input/Select keep their look elsewhere.
+   Unlayered on purpose: it must beat Tailwind utility classes on those components. ── */
+.enroll-skin label.text-xs,
+.enroll-skin span.text-xs.font-semibold {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #5B6371;
+  padding-left: 4px;
+}
+.enroll-skin :is(input, select):where(:not([type='checkbox'])) {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3F6212;
+  background-color: #FBFDF5;
+  border: 1px solid rgba(101, 163, 13, 0.6);
+  border-radius: 9999px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.enroll-skin select:where(:not([multiple])) {
+  padding-right: 28px;
+}
+.enroll-skin :is(input, select)::placeholder {
+  color: rgba(63, 98, 18, 0.4);
+  font-weight: 400;
+}
+.enroll-skin :is(input, select):where(:not([type='checkbox'])):hover {
+  border-color: rgba(101, 163, 13, 0.8);
+}
+.enroll-skin :is(input, select):where(:not([type='checkbox'])):focus {
+  outline: none;
+  background-color: #fff;
+  border-color: #65A30D;
+  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.2);
+}
+/* Auto-calculated / read-only / disabled fields */
+.enroll-skin input[readonly],
+.enroll-skin select:disabled {
+  background: #F1F8E2;
+  border-color: rgba(101, 163, 13, 0.35);
+  color: rgba(63, 98, 18, 0.6);
+  box-shadow: none;
+}
+/* Validation error state (class comes from the shared components) */
+.enroll-skin :is(input, select).border-red-400 {
+  border-color: #E11D48;
+  background-color: #FFF5F7;
+}
+.enroll-skin :is(input, select).border-red-400:focus {
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.16);
+}
+
+/* Enroll page scroller — thin lime scrollbar */
+.scroll-enroll::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-enroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-enroll::-webkit-scrollbar-thumb {
+  background: #D5E6AE;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-enroll::-webkit-scrollbar-thumb:hover {
+  background: #B5D27A;
+  background-clip: padding-box;
+}
+
+/* Enroll Student — custom dropdown trigger (pill, matches the input skin + FilterDropdown menu) */
+.enroll-skin .enroll-dd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: #3F6212;
+  background-color: #FBFDF5;
+  border: 1px solid rgba(101, 163, 13, 0.6);
+  border-radius: 9999px;
+  padding: 0.5rem 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+.enroll-skin .enroll-dd:hover:not(:disabled) { border-color: rgba(101, 163, 13, 0.8); }
+.enroll-skin .enroll-dd:focus-visible,
+.enroll-skin .enroll-dd-open {
+  outline: none;
+  background-color: #fff;
+  border-color: #65A30D;
+  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.2);
+}
+.enroll-skin .enroll-dd-placeholder { color: rgba(63, 98, 18, 0.4); font-weight: 400; }
+.enroll-skin .enroll-dd:disabled {
+  background: #F1F8E2;
+  border-color: rgba(101, 163, 13, 0.35);
+  color: rgba(63, 98, 18, 0.6);
+  cursor: not-allowed;
+}
+.enroll-skin .enroll-dd-error { border-color: #E11D48; background-color: #FFF5F7; }
+.enroll-skin .enroll-dd-error:focus-visible,
+.enroll-skin .enroll-dd-error.enroll-dd-open { box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.16); }

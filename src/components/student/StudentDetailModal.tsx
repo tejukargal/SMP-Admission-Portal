@@ -2095,7 +2095,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
     <ModalThemeContext.Provider value={theme}>
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
-        className={`absolute inset-0 backdrop-blur-[3px] ${pw ? 'bg-[#1E2340]/35' : 'bg-[#0B2A3E]/45'}`}
+        className={`absolute inset-0 ${pw ? 'bg-[#1E2340]/35' : 'bg-[#0B2A3E]/45'}`}
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}

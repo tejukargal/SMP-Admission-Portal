@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { updateStudentAllottedCategory, updateStudentTransferOut } from '../services/studentService';
@@ -456,7 +455,7 @@ export function Students() {
 
   function handleSaveExcel() {
     setSavingExcel(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const headers = [
           '#', 'Name (SSLC)', 'Name (Aadhar)', 'Father Name', 'Mother Name',
@@ -508,6 +507,7 @@ export function Students() {
           s.admissionStatus,
           s.academicYear,
         ]);
+        const XLSX = await import('xlsx');
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Students');

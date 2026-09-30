@@ -30,7 +30,6 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
       <div
         className="absolute inset-0 bg-black/40"
-        style={{ backdropFilter: 'blur(4px)' }}
         onClick={onCancel}
         aria-hidden="true"
       />

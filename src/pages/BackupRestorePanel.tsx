@@ -205,7 +205,7 @@ export function BackupRestorePanel() {
 
       {/* ── Confirm Restore Modal ──────────────────────────────────────── */}
       {confirmOpen && parsedBackup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-base font-semibold text-gray-900 mb-1">Confirm Restore</h2>
             <p className="text-sm text-gray-500 mb-4">

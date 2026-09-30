@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StudentAuthProvider, useStudentAuth } from './contexts/StudentAuthContext';
 import { FiltersProvider } from './contexts/FiltersContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { Layout } from './components/layout/Layout';
+import { pageLoaders, preloadCommonRoutes } from './routePreload';
 import { PageSpinner } from './components/common/PageSpinner';
 
 const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
@@ -20,47 +21,29 @@ const ReceiptBreakup = lazy(() =>
 const CircularDetail = lazy(() =>
   import('./pages/student-portal/CircularDetail').then((m) => ({ default: m.CircularDetail }))
 );
-const StudentMessages = lazy(() =>
-  import('./pages/StudentMessages').then((m) => ({ default: m.StudentMessages }))
-);
-const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
-const Students = lazy(() => import('./pages/Students').then((m) => ({ default: m.Students })));
-const WPStudents = lazy(() =>
-  import('./pages/WPStudents').then((m) => ({ default: m.WPStudents }))
-);
-const Admissions = lazy(() =>
-  import('./pages/Admissions').then((m) => ({ default: m.Admissions }))
-);
-const EnrollStudent = lazy(() =>
-  import('./pages/EnrollStudent').then((m) => ({ default: m.EnrollStudent }))
-);
-const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
-const CollectFee = lazy(() =>
-  import('./pages/CollectFee').then((m) => ({ default: m.CollectFee }))
-);
-const FeeRegister = lazy(() =>
-  import('./pages/FeeRegister').then((m) => ({ default: m.FeeRegister }))
-);
-const FeeReportsPage = lazy(() =>
-  import('./pages/FeeReportsPage').then((m) => ({ default: m.FeeReportsPage }))
-);
-const Messaging = lazy(() =>
-  import('./pages/Messaging').then((m) => ({ default: m.Messaging }))
-);
-const Inquiries = lazy(() =>
-  import('./pages/Inquiries').then((m) => ({ default: m.Inquiries }))
-);
-const StudentReports = lazy(() =>
-  import('./pages/StudentReports').then((m) => ({ default: m.StudentReports }))
-);
-const Results = lazy(() => import('./pages/Results').then((m) => ({ default: m.Results })));
-const AnsLetters = lazy(() =>
-  import('./pages/AnsLetters').then((m) => ({ default: m.AnsLetters }))
-);
+const StudentMessages = lazy(pageLoaders.studentMessages);
+const Dashboard = lazy(pageLoaders.dashboard);
+const Students = lazy(pageLoaders.students);
+const WPStudents = lazy(pageLoaders.wpStudents);
+const Admissions = lazy(pageLoaders.admissions);
+const EnrollStudent = lazy(pageLoaders.enroll);
+const Settings = lazy(pageLoaders.settings);
+const CollectFee = lazy(pageLoaders.collectFee);
+const FeeRegister = lazy(pageLoaders.feeRegister);
+const FeeReportsPage = lazy(pageLoaders.feeReports);
+const Messaging = lazy(pageLoaders.messaging);
+const Inquiries = lazy(pageLoaders.inquiries);
+const StudentReports = lazy(pageLoaders.studentReports);
+const Results = lazy(pageLoaders.results);
+const AnsLetters = lazy(pageLoaders.ansLetters);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
   const { isStudentSession, loading: studentLoading } = useStudentAuth();
+
+  useEffect(() => {
+    if (user) preloadCommonRoutes(role === 'admin');
+  }, [user, role]);
 
   if (loading || studentLoading) {
     return <PageSpinner fullScreen />;

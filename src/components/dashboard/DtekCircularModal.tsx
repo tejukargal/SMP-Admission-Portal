@@ -12,7 +12,7 @@ interface Props {
 export function DtekCircularModal({ circular, onClose }: Props) {
   return (
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-      <div className="absolute inset-0 bg-[#1E2340]/30 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-[#1E2340]/30" onClick={onClose} aria-hidden="true" />
       <div
         className="relative rounded-2xl border border-[#DADFFA] bg-white shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-lg mx-4 overflow-hidden max-h-[85vh] flex flex-col"
         style={{ animation: 'modal-enter 0.25s ease-out' }}
