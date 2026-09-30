@@ -1,4 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useMemo } from 'react';
+import {
+  ModalThemeContext, useModalTheme, FEE_DEFAULT_THEME, PERIWINKLE_THEME,
+  type ModalThemeName,
+} from '../common/modalTheme';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   saveFeeRecord,
@@ -52,11 +56,13 @@ interface Props {
   receiptCounterYear?: AcademicYear;
   onClose: () => void;
   onSaved: () => void;
+  /** Visual theme. 'default' = teal with green/red payment status (Collect Fee page);
+   *  'periwinkle' = Dashboard look (periwinkle accent, indigo paid/due). */
+  theme?: ModalThemeName;
 }
 
 // ── Design tokens — teal student-portal look (matches Collect Fee / Fee Details) ──
 const TEAL = '#0F8B8D';
-const TEAL_INK = '#0B6567';
 const SKY = '#0284C7';     // SMP
 const VIOLET = '#7C3AED';  // SVK
 const MINT = '#0FA968';    // Additional / cleared
@@ -185,11 +191,12 @@ function SumTile({ label, value, color, emphasis }: { label: string; value: numb
 
 /** CASH / UPI / SPLIT segmented pill group; the selected mode fills with the section accent (SPLIT in teal). */
 function ModeToggle({ value, color, onSelect }: { value: PaymentMode; color: string; onSelect: (mode: PaymentMode) => void }) {
+  const theme = useModalTheme(FEE_DEFAULT_THEME);
   return (
     <div className="flex items-center gap-0.5 shrink-0 w-[144px] rounded-full border border-[#D5E6E6] bg-white p-0.5">
       {(['CASH', 'UPI', 'SPLIT'] as PaymentMode[]).map((mode) => {
         const selected = value === mode;
-        const c = mode === 'SPLIT' ? TEAL : color;
+        const c = mode === 'SPLIT' ? theme.accent : color;
         return (
           <button
             key={mode}
@@ -232,7 +239,12 @@ function ErrorStrip({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function FeeCollectionModal({ student, academicYear, receiptCounterYear, onClose, onSaved }: Props) {
+export function FeeCollectionModal({ student, academicYear, receiptCounterYear, onClose, onSaved, theme: themeName = 'default' }: Props) {
+  const pw = themeName === 'periwinkle';
+  const theme = pw ? PERIWINKLE_THEME : FEE_DEFAULT_THEME;
+  // Shadow the module-level teal tokens so every inline accent follows the theme.
+  const TEAL = theme.accent;
+  const TEAL_INK = theme.accentInk;
   const { user } = useAuth();
   const counterYear = receiptCounterYear ?? academicYear;
   const [structure, setStructure] = useState<FeeStructure | null>(null);
@@ -619,21 +631,22 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
   const isUpdate = priorPayments.length > 0;
 
   return (
+    <ModalThemeContext.Provider value={theme}>
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
-        className="absolute inset-0 bg-[#0B2A2B]/45 backdrop-blur-[2px]"
+        className={pw ? "absolute inset-0 bg-[#1E2340]/45 backdrop-blur-[2px]" : "absolute inset-0 bg-[#0B2A2B]/45 backdrop-blur-[2px]"}
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
       <div
-        className="relative bg-white rounded-[22px] border border-[#CDE6E6] w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"
-        style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: '0 24px 60px rgba(11,42,43,0.22), 0 4px 14px rgba(18,20,26,0.06)' }}
+        className={pw ? "relative bg-white rounded-[22px] border border-[#DADFFA] w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]" : "relative bg-white rounded-[22px] border border-[#CDE6E6] w-full max-w-3xl flex flex-col overflow-hidden h-[calc(100vh-3rem)]"}
+        style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: (pw ? '0 24px 60px rgba(63,75,184,0.22), 0 4px 14px rgba(18,20,26,0.06)' : '0 24px 60px rgba(11,42,43,0.22), 0 4px 14px rgba(18,20,26,0.06)') }}
       >
 
         {/* Header */}
         <div
-          className="relative overflow-hidden px-5 py-3.5 flex items-center justify-between shrink-0 border-b border-[#0F8B8D]/20"
+          className={pw ? "relative overflow-hidden px-5 py-3.5 flex items-center justify-between shrink-0 border-b border-[#6B7CF6]/20" : "relative overflow-hidden px-5 py-3.5 flex items-center justify-between shrink-0 border-b border-[#0F8B8D]/20"}
           style={{ background: `linear-gradient(135deg, ${TEAL}24 0%, ${TEAL}0D 55%, #FFFFFF 100%)` }}
         >
           <span
@@ -650,11 +663,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
             </span>
             <div className="flex flex-col">
               <span className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">Fee Collection</span>
-              <h3 className="mt-1 text-[17px] font-bold text-[#0B6567] leading-none tracking-[-0.2px]">
+              <h3 className={pw ? "mt-1 text-[17px] font-bold text-[#3F4BB8] leading-none tracking-[-0.2px]" : "mt-1 text-[17px] font-bold text-[#0B6567] leading-none tracking-[-0.2px]"}>
                 {isUpdate ? 'Add Payment Installment' : 'Collect Fee'}
               </h3>
             </div>
-            <span className="rounded-full border border-[#0F8B8D]/45 bg-white/80 text-[#0B6567] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums">
+            <span className={pw ? "rounded-full border border-[#6B7CF6]/45 bg-white/80 text-[#3F4BB8] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums" : "rounded-full border border-[#0F8B8D]/45 bg-white/80 text-[#0B6567] px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums"}>
               {academicYear}
             </span>
             {isUpdate && (
@@ -663,14 +676,14 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               </OutlinePill>
             )}
             {isUpdate && !loadingData && grandAllotted > 0 && (
-              <OutlinePill color={CORAL}>
+              <OutlinePill color={theme.due}>
                 Due: ₹{(grandAllotted - totalPrevious).toLocaleString()}
               </OutlinePill>
             )}
           </div>
           <button
             onClick={onClose}
-            className="relative flex items-center justify-center w-8 h-8 rounded-full border border-[#0F8B8D]/35 bg-white text-[#0B6567] hover:bg-[#EFF8F8] hover:border-[#0F8B8D]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"
+            className={pw ? "relative flex items-center justify-center w-8 h-8 rounded-full border border-[#6B7CF6]/35 bg-white text-[#3F4BB8] hover:bg-[#F0F2FE] hover:border-[#6B7CF6]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]" : "relative flex items-center justify-center w-8 h-8 rounded-full border border-[#0F8B8D]/35 bg-white text-[#0B6567] hover:bg-[#EFF8F8] hover:border-[#0F8B8D]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"}
             aria-label="Close"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -678,7 +691,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         </div>
 
         {/* Student info bar */}
-        <div className="px-5 py-3 bg-white border-b border-[#E3F0F0] shrink-0">
+        <div className={pw ? "px-5 py-3 bg-white border-b border-[#E4E8FD] shrink-0" : "px-5 py-3 bg-white border-b border-[#E3F0F0] shrink-0"}>
           <div className="flex items-center gap-x-4 gap-y-2.5 flex-wrap">
             <div className="min-w-[200px] flex-1 flex items-center gap-3">
               <RingAvatar name={student.studentNameSSLC} course={student.course} />
@@ -710,7 +723,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               {!editingAllotted && (structure || loadedOverride) && (
                 <button
                   onClick={startEditAllotted}
-                  className="inline-flex items-center gap-1 rounded-full border border-[#0F8B8D]/40 bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer"
+                  className={pw ? "inline-flex items-center gap-1 rounded-full border border-[#6B7CF6]/40 bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#3F4BB8] hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/30 transition-colors cursor-pointer" : "inline-flex items-center gap-1 rounded-full border border-[#0F8B8D]/40 bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer"}
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                   {loadedOverride ? 'Edit Custom Allotted' : 'Override Allotted Fee'}
@@ -723,7 +736,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                   </span>
                   <button
                     onClick={cancelEditAllotted}
-                    className="rounded-full border border-[#D5E6E6] bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"
+                    className={pw ? "rounded-full border border-[#DADFFA] bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] cursor-pointer transition-colors" : "rounded-full border border-[#D5E6E6] bg-white px-2.5 py-[4px] text-[10.5px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"}
                   >
                     Cancel
                   </button>
@@ -736,21 +749,21 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         {/* Body */}
         <div
           className="scroll-teal px-5 py-4 flex-1 min-h-0 overflow-y-auto"
-          style={{ background: 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)' }}
+          style={{ background: (pw ? 'linear-gradient(160deg, #F7F8FF 0%, #FCFCFF 45%, #F2F4FE 100%)' : 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)') }}
         >
           {loadingData ? (
             <div className="space-y-5">
               {/* SMP table skeleton */}
               <div>
                 <div className="skeleton h-3 w-36 mb-3 rounded" />
-                <div className="border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden">
-                  <div className="bg-[#EDF7F7] px-3 py-2 flex gap-4 border-b border-[#E3F0F0]">
+                <div className={pw ? "border border-[#DADFFA] bg-white rounded-2xl overflow-hidden" : "border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden"}>
+                  <div className={pw ? "bg-[#ECEFFD] px-3 py-2 flex gap-4 border-b border-[#E4E8FD]" : "bg-[#EDF7F7] px-3 py-2 flex gap-4 border-b border-[#E3F0F0]"}>
                     <div className="skeleton h-3 flex-1" />
                     <div className="skeleton h-3 w-20" />
                     <div className="skeleton h-3 w-24" />
                   </div>
                   {Array.from({ length: 14 }).map((_, i) => (
-                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0">
+                    <div key={i} className={pw ? "px-3 py-2 flex gap-4 border-b border-[#EBEEFB] last:border-0" : "px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0"}>
                       <div className="skeleton h-3 flex-1" style={{ width: `${45 + (i % 4) * 10}%` }} />
                       <div className="skeleton h-3 w-20" />
                       <div className="skeleton h-6 w-24 !rounded-lg" />
@@ -761,9 +774,9 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
               {/* SVK skeleton */}
               <div>
                 <div className="skeleton h-3 w-28 mb-3 rounded" />
-                <div className="border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden">
+                <div className={pw ? "border border-[#DADFFA] bg-white rounded-2xl overflow-hidden" : "border border-[#CDE6E6] bg-white rounded-2xl overflow-hidden"}>
                   {Array.from({ length: 2 }).map((_, i) => (
-                    <div key={i} className="px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0">
+                    <div key={i} className={pw ? "px-3 py-2 flex gap-4 border-b border-[#EBEEFB] last:border-0" : "px-3 py-2 flex gap-4 border-b border-[#EAF3F3] last:border-0"}>
                       <div className="skeleton h-3 flex-1" />
                       <div className="skeleton h-3 w-20" />
                       <div className="skeleton h-6 w-24 !rounded-lg" />
@@ -819,7 +832,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EEF4F6]">
+                    <tbody className={pw ? "divide-y divide-[#EBEEFB]" : "divide-y divide-[#EEF4F6]"}>
                       {SMP_FEE_HEADS.map(({ key, label }) => (
                         <tr
                           key={key}
@@ -908,7 +921,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EEF4F6]">
+                    <tbody className={pw ? "divide-y divide-[#EBEEFB]" : "divide-y divide-[#EEF4F6]"}>
                       <tr
                         className={
                           editingAllotted ? 'bg-amber-50/70' : 'hover:bg-[var(--acc-row)] transition-colors'
@@ -996,7 +1009,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#EEF4F6]">
+                      <tbody className={pw ? "divide-y divide-[#EBEEFB]" : "divide-y divide-[#EEF4F6]"}>
                         {effAdditionalHeads.map((ah, idx) => {
                           const nowEntry = additionalNow.find((h) => h.label === ah.label);
                           const nowIdx = additionalNow.findIndex((h) => h.label === ah.label);
@@ -1102,7 +1115,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={cancelEditAllotted}
-                      className="rounded-full border border-[#D5E6E6] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"
+                      className={pw ? "rounded-full border border-[#DADFFA] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] cursor-pointer transition-colors" : "rounded-full border border-[#D5E6E6] bg-white px-3.5 py-1.5 text-[12px] font-medium text-[#5B6371] hover:bg-[#F4FAFA] cursor-pointer transition-colors"}
                     >
                       Cancel
                     </button>
@@ -1129,25 +1142,25 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                 )}
                 <SumTile label={isUpdate ? 'Now Paying' : 'Paying'} value={grandNow} color={TEAL} emphasis />
                 {isUpdate && (
-                  <SumTile label="Total After" value={grandTotal} color={MINT} />
+                  <SumTile label="Total After" value={grandTotal} color={theme.paid} />
                 )}
-                <SumTile label="Balance" value={balance} color={balance > 0 ? CORAL : MINT} />
+                <SumTile label="Balance" value={balance} color={balance > 0 ? theme.due : theme.paid} />
               </div>
 
               {/* ── Payment Details ────────────────────────────────────── */}
-              <div className="rounded-2xl border border-[#CDE6E6] bg-white overflow-hidden shadow-[0_4px_14px_rgba(15,139,141,0.06)]">
+              <div className={pw ? "rounded-2xl border border-[#DADFFA] bg-white overflow-hidden shadow-[0_4px_14px_rgba(107,124,246,0.06)]" : "rounded-2xl border border-[#CDE6E6] bg-white overflow-hidden shadow-[0_4px_14px_rgba(15,139,141,0.06)]"}>
                 {/* Section header */}
                 <div
-                  className="px-4 py-2.5 border-b border-[#E3F0F0] flex items-center gap-2"
-                  style={{ background: 'linear-gradient(90deg, #E3F2F2 0%, #EDF7F7 55%, #F6FBFB 100%)' }}
+                  className={pw ? "px-4 py-2.5 border-b border-[#E4E8FD] flex items-center gap-2" : "px-4 py-2.5 border-b border-[#E3F0F0] flex items-center gap-2"}
+                  style={{ background: (pw ? 'linear-gradient(90deg, #E4E8FD 0%, #ECEFFD 55%, #F7F8FF 100%)' : 'linear-gradient(90deg, #E3F2F2 0%, #EDF7F7 55%, #F6FBFB 100%)') }}
                 >
                   <span className="w-1.5 h-1.5 rounded-full" style={{ background: TEAL }} />
-                  <span className="text-[10px] font-medium text-[#0B6567] uppercase tracking-[0.8px]">
+                  <span className={pw ? "text-[10px] font-medium text-[#3F4BB8] uppercase tracking-[0.8px]" : "text-[10px] font-medium text-[#0B6567] uppercase tracking-[0.8px]"}>
                     Payment Details
                   </span>
                 </div>
 
-                <div className="divide-y divide-[#EEF4F6]">
+                <div className={pw ? "divide-y divide-[#EBEEFB]" : "divide-y divide-[#EEF4F6]"}>
 
                   {/* Date */}
                   <div className="flex items-center gap-3 px-4 py-2.5" style={accVars(TEAL)}>
@@ -1320,7 +1333,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                   {splitNote && (
                     <div className="flex items-start gap-3 px-4 py-2" style={{ background: `${TEAL}0A` }}>
                       <div className="w-36 shrink-0" />
-                      <div className="flex-1 text-[10.5px] text-[#0B6567] font-medium leading-relaxed">
+                      <div className={pw ? "flex-1 text-[10.5px] text-[#3F4BB8] font-medium leading-relaxed" : "flex-1 text-[10.5px] text-[#0B6567] font-medium leading-relaxed"}>
                         <span className="font-semibold mr-1" style={{ color: TEAL }}>Split:</span>{splitNote}
                         <span className="text-[#8A93A3] ml-1 font-normal">(auto-added to remarks)</span>
                       </div>
@@ -1354,12 +1367,12 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-[#CDE6E6] bg-white flex justify-end gap-2.5 shrink-0">
+        <div className={pw ? "px-5 py-3 border-t border-[#DADFFA] bg-white flex justify-end gap-2.5 shrink-0" : "px-5 py-3 border-t border-[#CDE6E6] bg-white flex justify-end gap-2.5 shrink-0"}>
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="inline-flex items-center justify-center rounded-full border border-[#0F8B8D]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={pw ? "inline-flex items-center justify-center rounded-full border border-[#6B7CF6]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#3F4BB8] hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed" : "inline-flex items-center justify-center rounded-full border border-[#0F8B8D]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.06] hover:border-[#0F8B8D]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"}
           >
             Cancel
           </button>
@@ -1367,7 +1380,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
             type="button"
             onClick={() => void handleSave()}
             disabled={(loadingData || !!loadError || !date || grandNow === 0 || !isSplitValid) || saving}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-medium text-white enabled:hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/40 focus-visible:ring-offset-2 enabled:cursor-pointer transition-[filter,opacity] disabled:opacity-50 disabled:cursor-not-allowed"
+            className={pw ? "inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-medium text-white enabled:hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/40 focus-visible:ring-offset-2 enabled:cursor-pointer transition-[filter,opacity] disabled:opacity-50 disabled:cursor-not-allowed" : "inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-medium text-white enabled:hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/40 focus-visible:ring-offset-2 enabled:cursor-pointer transition-[filter,opacity] disabled:opacity-50 disabled:cursor-not-allowed"}
             style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_INK})`, boxShadow: `0 3px 10px ${TEAL}40` }}
           >
             {saving && (
@@ -1381,5 +1394,6 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         </div>
       </div>
     </div>
+    </ModalThemeContext.Provider>
   );
 }

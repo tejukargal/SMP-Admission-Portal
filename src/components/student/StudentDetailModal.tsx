@@ -25,6 +25,10 @@ import { mergeResultsBySession } from '../../utils/resultMerge';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
 import { ResultDetailModal } from '../results/ResultDetailModal';
 import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
+import {
+  ModalThemeContext, useModalTheme, STUDENT_DEFAULT_THEME, PERIWINKLE_THEME,
+  type ModalThemeName,
+} from '../common/modalTheme';
 import type {
   Student, FeeRecord, AcademicYear,
   AdmType, AdmCat, DocRecord, ExamResult, AnsLetterRecord, AnsLetterStatus,
@@ -203,7 +207,7 @@ function RecordCard({ color, icon, title, pills, meta, actions, children, style 
 }
 
 /** Pill-shaped button: outline (tinted), solid (tinted) or neutral. */
-function PillBtn({ color = OCEAN, variant = 'outline', onClick, disabled, title, children }: {
+function PillBtn({ color: colorProp, variant = 'outline', onClick, disabled, title, children }: {
   color?: string;
   variant?: 'outline' | 'solid' | 'neutral';
   onClick?: () => void;
@@ -211,6 +215,8 @@ function PillBtn({ color = OCEAN, variant = 'outline', onClick, disabled, title,
   title?: string;
   children: React.ReactNode;
 }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
+  const color = colorProp ?? theme.accent;
   const style: React.CSSProperties =
     variant === 'solid'
       ? { background: color, borderColor: color, color: '#fff', boxShadow: `0 2px 8px ${color}40` }
@@ -327,6 +333,7 @@ const Ico = {
 // ─── Profile tab ─────────────────────────────────────────────────────────────
 
 function ProfileTab({ student: s }: { student: Student }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   const sslcPct = s.sslcMaxTotal > 0
     ? ((s.sslcObtainedTotal / s.sslcMaxTotal) * 100)
     : null;
@@ -389,7 +396,7 @@ function ProfileTab({ student: s }: { student: Student }) {
       </IconCard>
 
       {/* Academic */}
-      <IconCard title="Academic" color={OCEAN} icon={Ico.cap}>
+      <IconCard title="Academic" color={theme.accent} icon={Ico.cap}>
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
           <Field label="Course">
             <LinePill value={s.course} color={DEPT_DOT[s.course]} />
@@ -626,6 +633,7 @@ function FeeTab({
 }) {
   const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
   const [receiptDetailRecord, setReceiptDetailRecord] = useState<FeeRecord | null>(null);
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
 
   function toggleDues(ay: string) {
     setExpandedDues((prev) => {
@@ -676,7 +684,7 @@ function FeeTab({
   if (yearData.length === 0) {
     return (
       <EmptyState
-        color={MINT}
+        color={theme.paid}
         icon={Ico.big(<><rect x="1" y="5" width="22" height="14" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></>)}
         title="No fee records found for this student."
       />
@@ -696,8 +704,8 @@ function FeeTab({
             color="#5B6371"
             sub={overallFine > 0 ? `+Fine ₹${overallFine.toLocaleString()}` : undefined}
           />
-          <SumTile label="Total Paid" value={overallPaid} color={MINT} />
-          <SumTile label="Total Due" value={overallDue} color={overallDue > 0 ? CORAL : MINT} emphasis />
+          <SumTile label="Total Paid" value={overallPaid} color={theme.paid} />
+          <SumTile label="Total Due" value={overallDue} color={overallDue > 0 ? theme.due : theme.paid} emphasis />
         </div>
         {overallAllotted > 0 && (
           <div className="mt-2.5 flex items-center gap-2.5">
@@ -706,7 +714,7 @@ function FeeTab({
                 className="h-full rounded-full"
                 style={{
                   width: `${overallPct}%`,
-                  background: overallDue > 0 ? `linear-gradient(90deg, ${MINT}, #F59E0B)` : MINT,
+                  background: overallDue > 0 ? `linear-gradient(90deg, ${theme.paid}, #F59E0B)` : theme.paid,
                   transformOrigin: 'left',
                   animation: 'fee-bar-fill 0.6s ease-out both',
                 }}
@@ -748,7 +756,7 @@ function FeeTab({
           ? Math.max(0, smpPaidRaw - smpAllotted - refunded)
           : 0;
 
-        const stateColor = allotted === null ? AMBER : noDues ? MINT : CORAL;
+        const stateColor = allotted === null ? AMBER : noDues ? theme.paid : theme.due;
         const yearPct = allotted ? Math.min(100, Math.max(0, (totalPaid / allotted) * 100)) : 0;
         // Sub-line under each stat: same inclusion rules as before (> 0 for allotted/paid, ≠ 0 for due).
         const split = (a: number, b: number, c: number, show: (n: number) => boolean) =>
@@ -788,13 +796,13 @@ function FeeTab({
                   <>
                     <FeeStat label="Allotted" value={`₹${allotted.toLocaleString()}`} sub={split(smpAllotted, svkBaseAllotted, additionalAllotted, positive)} color="#5B6371" />
                     <span className="w-px bg-[#E3EAF1]" />
-                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} sub={split(smpPaid, svkBasePaid, additionalPaidTotal, positive)} color={MINT} />
+                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} sub={split(smpPaid, svkBasePaid, additionalPaidTotal, positive)} color={theme.paid} />
                     <span className="w-px bg-[#E3EAF1]" />
-                    <FeeStat label="Due" value={`₹${due!.toLocaleString()}`} sub={split(smpDue, svkDue, additionalDue, nonZero)} color={noDues ? MINT : CORAL} />
+                    <FeeStat label="Due" value={`₹${due!.toLocaleString()}`} sub={split(smpDue, svkDue, additionalDue, nonZero)} color={noDues ? theme.paid : theme.due} />
                   </>
                 ) : (
                   <>
-                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} color={MINT} />
+                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} color={theme.paid} />
                     <span className="self-center"><LinePill value="No structure configured" color={AMBER} /></span>
                   </>
                 )}
@@ -811,7 +819,12 @@ function FeeTab({
             )}
 
             {pendingRefund > 0 && (
-              <div className="px-3.5 py-2 text-white text-[12px] font-semibold flex items-center gap-2" style={{ background: `linear-gradient(90deg, ${CORAL}, #BE123C)` }}>
+              <div
+                className={`px-3.5 py-2 text-[12px] flex items-center gap-2 ${theme.solidDue ? 'font-medium border-b' : 'text-white font-semibold'}`}
+                style={theme.solidDue
+                  ? { background: `${theme.refund}14`, borderColor: `${theme.refund}40`, color: inkOf(theme.refund) }
+                  : { background: `linear-gradient(90deg, ${CORAL}, #BE123C)` }}
+              >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 <span>SNQ Refund Pending: student has to be refunded ₹{pendingRefund.toLocaleString()} (voucher not yet generated)</span>
               </div>
@@ -1013,16 +1026,20 @@ function FeeTab({
   );
 }
 
-/** One fee head in the dues breakdown: coral amount when due, mint ✓ when cleared. */
+/** One fee head in the dues breakdown: due amount when due, ✓ when cleared.
+ *  Default theme: coral / mint outline. Themed: solid fill when due, soft outline when cleared. */
 function DueChip({ label, dueAmt }: { label: string; dueAmt: number }) {
-  const c = dueAmt > 0 ? CORAL : MINT;
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
+  const isDue = dueAmt > 0;
+  const c = isDue ? theme.due : theme.paid;
+  const solid = theme.solidDue && isDue;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1 text-[10.5px] font-medium leading-none"
-      style={{ borderColor: `${c}40` }}
+      className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10.5px] font-medium leading-none"
+      style={solid ? { background: c, borderColor: c } : { background: '#fff', borderColor: `${c}40` }}
     >
-      <span className="text-[#5B6371] whitespace-nowrap">{label}</span>
-      <span className="font-semibold tabular-nums" style={{ color: inkOf(c) }}>
+      <span className="whitespace-nowrap" style={{ color: solid ? '#ffffffCC' : '#5B6371' }}>{label}</span>
+      <span className="font-semibold tabular-nums" style={{ color: solid ? '#fff' : inkOf(c) }}>
         {dueAmt === 0 ? '✓' : `₹${dueAmt.toLocaleString()}`}
       </span>
     </span>
@@ -1038,6 +1055,7 @@ function TcHistoryTab({
   editRecords: TCEditRecord[];
   loading: boolean;
 }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   if (loading) return <CardSkeleton />;
 
   if (records.length === 0 && editRecords.length === 0) {
@@ -1076,7 +1094,7 @@ function TcHistoryTab({
             pills={
               <>
                 <LinePill value={isDup ? 'Duplicate Copy' : 'Original'} color={c} dot />
-                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={OCEAN} />}
+                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={theme.accent} />}
               </>
             }
             meta={`Issued ${fmtDate(r.issuedAt)}`}
@@ -1136,6 +1154,7 @@ function TcHistoryTab({
 // ─── PC History tab ───────────────────────────────────────────────────────────
 
 function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: boolean }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   if (loading) return <CardSkeleton />;
 
   if (records.length === 0) {
@@ -1172,7 +1191,7 @@ function PcHistoryTab({ records, loading }: { records: PCRecord[]; loading: bool
             pills={
               <>
                 <LinePill value={isDup ? 'Duplicate Copy' : 'Original'} color={c} dot />
-                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={OCEAN} />}
+                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={theme.accent} />}
               </>
             }
             meta={`Issued ${fmtDate(r.issuedAt)}`}
@@ -1212,6 +1231,7 @@ const ANS_STATUS_COLOR: Record<AnsLetterStatus, string> = {
 const ANS_TINT = '#EA580C';
 
 function AnsHistoryTab({ student, records, loading }: { student: Student; records: AnsLetterRecord[]; loading: boolean }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   const [previewing, setPreviewing] = useState(false);
 
   if (loading) return <CardSkeleton cells={3} />;
@@ -1250,7 +1270,7 @@ function AnsHistoryTab({ student, records, loading }: { student: Student; record
           pills={
             <>
               <LinePill value={ANS_STATUS_LABEL[r.status]} color={ANS_STATUS_COLOR[r.status]} dot />
-              {idx === 0 && records.length > 1 && <LinePill value="Latest" color={OCEAN} />}
+              {idx === 0 && records.length > 1 && <LinePill value="Latest" color={theme.accent} />}
             </>
           }
           meta={new Date(r.issuedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
@@ -1410,6 +1430,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
   onDeleted: (id: string) => void;
   onCreated: (r: RefundRecord) => void;
 }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   const { role } = useAuth();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1495,7 +1516,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
           subtitle="SNQ, seat cancellation, or general fee refund vouchers will appear here once generated for this student."
         >
           {role === 'admin' && (
-            <PillBtn color={OCEAN} variant="solid" onClick={() => setShowGeneralRefundModal(true)}>
+            <PillBtn color={theme.accent} variant="solid" onClick={() => setShowGeneralRefundModal(true)}>
               {Ico.plus}
               Record Refund
             </PillBtn>
@@ -1524,7 +1545,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
           {records.length} refund{records.length > 1 ? 's' : ''} · Total Refunded <span className="font-semibold tabular-nums">₹{totalRefunded.toLocaleString()}</span>
         </SummaryPill>
         {role === 'admin' && (
-          <PillBtn color={OCEAN} variant="solid" onClick={() => setShowGeneralRefundModal(true)}>
+          <PillBtn color={theme.accent} variant="solid" onClick={() => setShowGeneralRefundModal(true)}>
             {Ico.plus}
             Record Refund
           </PillBtn>
@@ -1548,7 +1569,7 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
       {/* Record cards */}
       {records.map((r, idx) => {
         const isGeneral = r.refundCategory === 'GENERAL';
-        const c = isGeneral ? OCEAN : CORAL;
+        const c = isGeneral ? theme.accent : theme.refund;
         return (
           <RecordCard
             key={r.id}
@@ -1558,13 +1579,13 @@ function RefundHistoryTab({ student, records, loading, error, onDeleted, onCreat
             pills={
               <>
                 <LinePill value={REFUND_CATEGORY_LABELS[r.refundCategory ?? 'SNQ']} color={c} dot />
-                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={OCEAN} />}
+                {idx === 0 && records.length > 1 && <LinePill value="Latest" color={theme.accent} />}
               </>
             }
             meta={`Issued ${fmtDate(r.issuedAt)}`}
             actions={
               <>
-                <PillBtn color={OCEAN} onClick={() => handlePrint(r)} title="Print refund voucher">
+                <PillBtn color={theme.accent} onClick={() => handlePrint(r)} title="Print refund voucher">
                   {Ico.print}
                   Print Voucher
                 </PillBtn>
@@ -1825,9 +1846,15 @@ interface Props {
   student: Student;
   onClose: () => void;
   defaultTab?: Tab;
+  /** Visual theme. 'default' = ocean blue with green/red payment status (Students, Admissions, WP Students);
+   *  'periwinkle' = Dashboard look (periwinkle accent, indigo paid/due, amber refund). */
+  theme?: ModalThemeName;
 }
 
-export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }: Props) {
+export function StudentDetailModal({ student, onClose, defaultTab = 'profile', theme: themeName = 'default' }: Props) {
+  const pw = themeName === 'periwinkle';
+  const theme = pw ? PERIWINKLE_THEME : STUDENT_DEFAULT_THEME;
+  const tabTint: Record<Tab, string> = { ...TAB_TINT, profile: theme.accent, fee: theme.paid, refund: theme.refund };
   const { role } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
 
@@ -2065,25 +2092,26 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
   const feeReady = feeLoaded && !feeError && yearData.length > 0;
 
   return (
+    <ModalThemeContext.Provider value={theme}>
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
-        className="absolute inset-0 bg-[#0B2A3E]/45 backdrop-blur-[3px]"
+        className={`absolute inset-0 backdrop-blur-[3px] ${pw ? 'bg-[#1E2340]/35' : 'bg-[#0B2A3E]/45'}`}
         onClick={onClose}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
       <div
-        className="relative bg-white rounded-[22px] border border-[#CFE3F2] w-full max-w-5xl flex flex-col overflow-hidden max-h-[calc(100vh-3rem)] min-h-[580px]"
-        style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: '0 24px 60px rgba(11,42,62,0.24), 0 4px 14px rgba(18,20,26,0.06)' }}
+        className={`relative bg-white rounded-[22px] border w-full max-w-5xl flex flex-col overflow-hidden max-h-[calc(100vh-3rem)] min-h-[580px] ${pw ? 'border-[#DADFFA]' : 'border-[#CFE3F2]'}`}
+        style={{ animation: 'modal-enter 0.25s ease-out', boxShadow: pw ? '0 24px 60px rgba(63,75,184,0.22), 0 4px 14px rgba(18,20,26,0.06)' : '0 24px 60px rgba(11,42,62,0.24), 0 4px 14px rgba(18,20,26,0.06)' }}
       >
         {/* Hero header — two compact rows: identity + pills, then an inline info line */}
         <div
           className="relative overflow-hidden px-5 pt-3 pb-2.5 shrink-0"
-          style={{ background: `linear-gradient(135deg, ${OCEAN}26 0%, ${OCEAN}0D 50%, #FFFFFF 100%)` }}
+          style={{ background: `linear-gradient(135deg, ${theme.accent}26 0%, ${theme.accent}0D 50%, #FFFFFF 100%)` }}
         >
           <span
             className="pointer-events-none absolute -top-24 -right-12 w-56 h-56 rounded-full border-[26px]"
-            style={{ borderColor: `${OCEAN}12` }}
+            style={{ borderColor: `${theme.accent}12` }}
             aria-hidden="true"
           />
 
@@ -2091,12 +2119,12 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           <div className="relative flex items-center gap-3">
             <RingAvatar name={student.studentNameSSLC} course={student.course} size={36} />
             <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <h3 className="text-[17px] font-bold text-[#075E93] leading-none tracking-[-0.2px] truncate max-w-[360px]" title={student.studentNameSSLC}>
+              <h3 className={`text-[17px] font-bold ${pw ? 'text-[#3F4BB8]' : 'text-[#075E93]'} leading-none tracking-[-0.2px] truncate max-w-[360px]`} title={student.studentNameSSLC}>
                 {student.studentNameSSLC}
               </h3>
               <div className="flex flex-wrap items-center gap-1.5">
                 {student.regNumber && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[#0B7BC0]/40 bg-white/85 px-2.5 py-[6px] text-[11px] font-semibold leading-none text-black tabular-nums">
+                  <span className={`inline-flex items-center gap-1 rounded-full border ${pw ? 'border-[#6B7CF6]/40' : 'border-[#0B7BC0]/40'} bg-white/85 px-2.5 py-[6px] text-[11px] font-semibold leading-none text-black tabular-nums`}>
                     <span className="text-[8.5px] font-medium uppercase tracking-[0.6px] text-[#8A93A3]">Reg</span>
                     {student.regNumber}
                   </span>
@@ -2113,12 +2141,14 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
                 )}
                 {feeReady && (
                   <span
-                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-[6px] text-[11px] font-semibold leading-none text-white"
-                    style={{
-                      background: overallDue > 0 ? CORAL : MINT,
-                      boxShadow: `0 2px 8px ${overallDue > 0 ? CORAL : MINT}45`,
-                      animation: 'stat-pop 0.3s ease-out',
-                    }}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-[6px] text-[11px] font-semibold leading-none ${theme.solidDue && overallDue <= 0 ? 'border' : 'text-white'}`}
+                    style={theme.solidDue && overallDue <= 0
+                      ? { background: `${theme.paid}14`, borderColor: `${theme.paid}73`, color: inkOf(theme.paid), animation: 'stat-pop 0.3s ease-out' }
+                      : {
+                          background: overallDue > 0 ? theme.due : theme.paid,
+                          boxShadow: `0 2px 8px ${overallDue > 0 ? theme.due : theme.paid}45`,
+                          animation: 'stat-pop 0.3s ease-out',
+                        }}
                   >
                     {overallDue > 0 ? `Due ₹${overallDue.toLocaleString()}` : '✓ No Dues'}
                   </span>
@@ -2126,14 +2156,14 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
               </div>
             </div>
             <span
-              className="shrink-0 rounded-full border border-[#0B7BC0]/40 bg-white/85 px-2.5 py-[6px] text-[11px] font-medium leading-none text-[#075E93] tabular-nums"
+              className={`shrink-0 rounded-full border bg-white/85 px-2.5 py-[6px] text-[11px] font-medium leading-none tabular-nums ${pw ? 'border-[#6B7CF6]/40 text-[#3F4BB8]' : 'border-[#0B7BC0]/40 text-[#075E93]'}`}
               title="Academic year"
             >
               {student.academicYear}
             </span>
             <button
               onClick={onClose}
-              className="relative flex items-center justify-center w-7 h-7 rounded-full border border-[#0B7BC0]/35 bg-white text-[#075E93] hover:bg-[#EEF6FC] hover:border-[#0B7BC0]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7BC0]/30 transition-colors cursor-pointer shrink-0 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"
+              className={`relative flex items-center justify-center w-7 h-7 rounded-full border bg-white focus:outline-none focus-visible:ring-2 transition-colors cursor-pointer shrink-0 shadow-[0_1px_4px_rgba(18,20,26,0.06)] ${pw ? 'border-[#6B7CF6]/35 text-[#3F4BB8] hover:bg-[#F5F6FF] hover:border-[#6B7CF6]/60 focus-visible:ring-[#6B7CF6]/30' : 'border-[#0B7BC0]/35 text-[#075E93] hover:bg-[#EEF6FC] hover:border-[#0B7BC0]/60 focus-visible:ring-[#0B7BC0]/30'}`}
               aria-label="Close"
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -2143,7 +2173,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           {/* Row 2: inline info chips */}
           <div className="relative mt-2 pl-[48px] flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             <InfoChip label="Father" value={student.fatherName} color={VIOLET} />
-            <InfoChip label="Mobile" value={student.fatherMobile || student.studentMobile || '—'} color={OCEAN} mono />
+            <InfoChip label="Mobile" value={student.fatherMobile || student.studentMobile || '—'} color={theme.accent} mono />
             <InfoChip label="Adm Type" value={student.admType} color={ADM_TYPE_COLOR[student.admType]} />
             <InfoChip label="Cat" value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} />
             <InfoChip label="Religion" value={student.religion} color="#64748B" />
@@ -2156,7 +2186,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {tabs.map((t) => {
               const active = activeTab === t.id;
-              const c = TAB_TINT[t.id];
+              const c = tabTint[t.id];
               return (
                 <button
                   key={t.id}
@@ -2178,7 +2208,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
         </div>
 
         {/* Tab content */}
-        <div className="flex-1 min-h-0 overflow-y-auto bg-[#F7FBFE] [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+        <div className={`flex-1 min-h-0 overflow-y-auto ${pw ? 'bg-[#F8F9FF]' : 'bg-[#F7FBFE]'} [&::-webkit-scrollbar]:hidden`} style={{ scrollbarWidth: 'none' }}>
           <div key={activeTab}>
           {activeTab === 'profile' && <ProfileTab student={student} />}
           {activeTab === 'documents' && (
@@ -2226,12 +2256,13 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile' }:
           <span className="text-[10.5px] font-medium text-[#A9B0BB]">Press Esc to close</span>
           <button
             onClick={onClose}
-            className="inline-flex items-center justify-center rounded-full border border-[#0B7BC0]/45 bg-white px-4 py-1.5 text-[12px] font-medium text-[#075E93] hover:bg-[#0B7BC0]/[0.06] hover:border-[#0B7BC0]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B7BC0]/30 cursor-pointer transition-colors"
+            className={`inline-flex items-center justify-center rounded-full border bg-white px-4 py-1.5 text-[12px] font-medium focus:outline-none focus-visible:ring-2 cursor-pointer transition-colors ${pw ? 'border-[#6B7CF6]/45 text-[#3F4BB8] hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/70 focus-visible:ring-[#6B7CF6]/30' : 'border-[#0B7BC0]/45 text-[#075E93] hover:bg-[#0B7BC0]/[0.06] hover:border-[#0B7BC0]/70 focus-visible:ring-[#0B7BC0]/30'}`}
           >
             Close
           </button>
         </div>
       </div>
     </div>
+    </ModalThemeContext.Provider>
   );
 }

@@ -38,6 +38,15 @@ const COLOR_CLASSES = {
     selRow: 'text-[#3730A3] bg-[#EEF0FE]',
     font: 'font-wp',
   },
+  // Periwinkle — Dashboard revamp (student-portal look, Outfit font).
+  periwinkle: {
+    active: 'border-[#6B7CF6] bg-[#F0F2FE] text-[#3F4BB8]',
+    idle: 'border-[#6B7CF6]/30 text-[#3F4BB8] hover:border-[#6B7CF6]/55 hover:bg-[#F5F6FF]',
+    ring: 'focus:ring-[#6B7CF6]/40',
+    allRow: 'text-[#3F4BB8] bg-[#F0F2FE]/60',
+    selRow: 'text-[#3F4BB8] bg-[#F0F2FE]',
+    font: 'font-wp',
+  },
 } as const;
 
 interface FilterDropdownProps<T extends string> {
