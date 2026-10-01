@@ -3,7 +3,10 @@ import { createPortal } from 'react-dom';
 import type { Circular, Department, StoredAttachment } from '../../types';
 import { DEPARTMENTS, DEPARTMENT_ORDER } from '../../utils/departments';
 import { stripHtml } from '../../utils/htmlContent';
-import { Button } from '../common/Button';
+import {
+  CYAN, CYAN_INK, HAIRLINE, BAND, MsgIcon, BTN_GRAY, BTN_CYAN, TEXT_INPUT, FIELD_OVERRIDE, SELECT_PILL,
+  PillButton, FieldLabel,
+} from '../messages/messagesUi';
 import { Input } from '../common/Input';
 import { Select } from '../common/Select';
 import { RichTextEditor } from './RichTextEditor';
@@ -160,17 +163,20 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-      <div className="absolute inset-0 bg-black/40" style={{ animation: 'backdrop-enter 0.18s ease-out' }} onClick={onClose} aria-hidden="true" />
+    <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="absolute inset-0 bg-[#0B2530]/40" style={{ animation: 'backdrop-enter 0.18s ease-out' }} onClick={onClose} aria-hidden="true" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
-        style={{ animation: 'modal-enter 0.22s ease-out' }}
+        className="relative bg-white rounded-2xl border w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+        style={{ borderColor: HAIRLINE, boxShadow: '0 24px 60px -12px rgba(14,106,133,0.35)', animation: 'modal-enter 0.22s ease-out' }}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-100 shrink-0">
-          <h3 className="text-sm font-bold text-gray-900">{initial ? 'Edit Circular' : 'New Circular'}</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors cursor-pointer" aria-label="Close">
+        <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b shrink-0" style={{ borderColor: BAND, background: 'linear-gradient(180deg, #F5FBFD 0%, #FFFFFF 100%)' }}>
+          <span className="w-8 h-8 shrink-0 rounded-xl flex items-center justify-center" style={{ background: `${CYAN}14`, color: CYAN, boxShadow: `inset 0 0 0 1px ${CYAN}26` }}>
+            <MsgIcon name="megaphone" size={15} />
+          </span>
+          <h3 className="flex-1 min-w-0 text-[14.5px] font-medium truncate" style={{ color: CYAN_INK }}>{initial ? 'Edit Circular' : 'New Circular'}</h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#8A93A3] hover:bg-[#0891B2]/10 hover:text-[#0E6A85] transition-colors cursor-pointer" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -178,30 +184,30 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3.5">
-          <div className="flex flex-col gap-1.5 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Compose with AI</label>
+          <div className="flex flex-col gap-2 rounded-2xl border p-3" style={{ borderColor: HAIRLINE, background: 'linear-gradient(160deg, #F2FAFC 0%, #FAFDFE 100%)' }}>
+            <label className="inline-flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: CYAN_INK }}><MsgIcon name="sparkle" size={13} />Compose with AI</label>
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               rows={3}
               placeholder="e.g. Announce that 3rd semester admission last date is extended, with a late fine after a cutoff date"
-              className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+              className={`${TEXT_INPUT} !bg-white resize-y`}
             />
             <details className="text-xs">
-              <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">Add key dates/deadlines (optional)</summary>
+              <summary className="cursor-pointer text-[#5B6371] hover:text-[#0E6A85] select-none">Add key dates/deadlines (optional)</summary>
               <textarea
                 value={keyDates}
                 onChange={(e) => setKeyDates(e.target.value)}
                 rows={2}
                 placeholder="e.g. Last date: 20 August 2026. Rs.500 fine after 15 August 2026."
-                className="mt-1.5 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+                className={`${TEXT_INPUT} !bg-white mt-1.5 resize-y`}
               />
             </details>
             <div className="flex items-center gap-2 flex-wrap">
               <select
                 value={aiProvider}
                 onChange={(e) => handleProviderChange(e.target.value as CircularAiProvider)}
-                className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                className={SELECT_PILL}
               >
                 <option value="claude">Claude</option>
                 <option value="gemini">Gemini</option>
@@ -209,7 +215,7 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
               <select
                 value={aiLanguage}
                 onChange={(e) => handleLanguageChange(e.target.value as CircularAiLanguage)}
-                className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                className={SELECT_PILL}
               >
                 <option value="english">English</option>
                 <option value="kannada">Kannada</option>
@@ -219,13 +225,14 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                 type="button"
                 onClick={handleGenerateDraftClick}
                 disabled={composing || brief.trim() === ''}
-                className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                className={BTN_CYAN}
               >
+                <MsgIcon name="sparkle" size={12} />
                 {composing ? 'Generating…' : 'Generate Draft'}
               </button>
             </div>
             {confirmOverwrite && (
-              <div className="flex items-center gap-2 flex-wrap text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 flex-wrap text-[12px] text-[#9A5B00] bg-[#D97706]/[0.07] border border-[#D97706]/30 rounded-xl px-3 py-2">
                 <span>This will replace your current Title, Subject and Body.</span>
                 <button
                   type="button"
@@ -234,49 +241,49 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                 >
                   Continue
                 </button>
-                <button type="button" onClick={() => setConfirmOverwrite(false)} className="text-gray-500 underline cursor-pointer">
+                <button type="button" onClick={() => setConfirmOverwrite(false)} className="text-[#5B6371] underline cursor-pointer">
                   Cancel
                 </button>
               </div>
             )}
-            {composeError && <p className="text-xs text-red-500 font-medium">{composeError}</p>}
+            {composeError && <p className="text-[12px] text-[#A5173A] font-medium">{composeError}</p>}
           </div>
 
-          <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Diploma Exam Time Table — June 2026" />
+          <div><FieldLabel>Title</FieldLabel><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Diploma Exam Time Table — June 2026" className={FIELD_OVERRIDE} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</label>
+            <div className="flex flex-col">
+              <FieldLabel>Date</FieldLabel>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors"
+                className={TEXT_INPUT}
               />
             </div>
-            <Select
-              label="Department"
+            <div><FieldLabel>Department</FieldLabel><Select
+              className={`${FIELD_OVERRIDE} cursor-pointer`}
               value={department}
               onChange={(e) => setDepartment(e.target.value as Department)}
               options={DEPARTMENT_ORDER.map((d) => ({ value: d, label: d === DEPARTMENTS[d].name ? d : `${d} — ${DEPARTMENTS[d].name}` }))}
-            />
+            /></div>
           </div>
-          <Input label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="One-line subject of the circular" />
+          <div><FieldLabel>Subject</FieldLabel><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="One-line subject of the circular" className={FIELD_OVERRIDE} /></div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">AI Background</label>
+          <div className="flex flex-col">
+            <FieldLabel>AI Background</FieldLabel>
             {pendingBackground ? (
               <div className="flex items-center gap-3">
                 <img
                   src={`data:${pendingBackground.mimeType};base64,${pendingBackground.base64}`}
                   alt="Generated background preview"
-                  className="w-32 h-20 object-cover rounded-lg border border-gray-200"
+                  className="w-32 h-20 object-cover rounded-xl border border-[#CBE8F0]"
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => void handleGenerateBackground()}
                     disabled={generatingBackground}
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                    className={BTN_GRAY}
                   >
                     {generatingBackground ? 'Regenerating…' : 'Regenerate'}
                   </button>
@@ -284,7 +291,7 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                     type="button"
                     onClick={() => setPendingBackground(null)}
                     disabled={generatingBackground}
-                    className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                    className={BTN_GRAY}
                   >
                     Remove
                   </button>
@@ -295,13 +302,13 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                 <img
                   src={initial.backgroundImageUrl}
                   alt="Current background"
-                  className="w-32 h-20 object-cover rounded-lg border border-gray-200"
+                  className="w-32 h-20 object-cover rounded-xl border border-[#CBE8F0]"
                 />
                 <button
                   type="button"
                   onClick={() => void handleGenerateBackground()}
                   disabled={generatingBackground || !canGenerateBackground}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                  className={BTN_GRAY}
                 >
                   {generatingBackground ? 'Generating…' : 'Regenerate'}
                 </button>
@@ -311,19 +318,19 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                 type="button"
                 onClick={() => void handleGenerateBackground()}
                 disabled={generatingBackground || !canGenerateBackground}
-                className="self-start px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                className={`${BTN_CYAN} self-start`}
               >
                 {generatingBackground ? 'Generating…' : 'Generate Background'}
               </button>
             )}
             {!canGenerateBackground && !generatingBackground && (
-              <p className="text-[11px] text-gray-400">Add a title and department first.</p>
+              <p className="mt-1 text-[11px] text-[#8A93A3]">Add a title and department first.</p>
             )}
-            {backgroundError && <p className="text-xs text-red-500 font-medium">{backgroundError}</p>}
+            {backgroundError && <p className="mt-1 text-[12px] text-[#A5173A] font-medium">{backgroundError}</p>}
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
+          <div className="flex flex-col">
+            <FieldLabel>Body</FieldLabel>
             <RichTextEditor
               key={bodySeedVersion}
               value={aiSeedBody ?? initial?.body ?? ''}
@@ -331,8 +338,8 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
               placeholder="Write the circular content…"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Attachments</label>
+          <div className="flex flex-col">
+            <FieldLabel>Attachments</FieldLabel>
             <AttachmentDropzone
               files={newFiles}
               onAdd={(files) => setNewFiles((prev) => [...prev, ...files])}
@@ -344,14 +351,14 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
               }}
             />
           </div>
-          {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+          {error && <p className="text-[12px] text-[#A5173A] font-medium">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t border-gray-100 shrink-0">
-          <button onClick={onClose} disabled={saving} className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>
-          <Button size="sm" loading={saving} disabled={!valid} onClick={() => void handleSubmit()}>
+        <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t shrink-0 bg-[#FAFDFE]" style={{ borderColor: BAND }}>
+          <button onClick={onClose} disabled={saving} className={BTN_GRAY}>Cancel</button>
+          <PillButton loading={saving} disabled={!valid} onClick={() => void handleSubmit()}>
             {initial ? 'Save Changes' : 'Publish Circular'}
-          </Button>
+          </PillButton>
         </div>
       </div>
     </div>,

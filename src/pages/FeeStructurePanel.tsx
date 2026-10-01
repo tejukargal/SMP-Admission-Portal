@@ -3,6 +3,7 @@ import { FeeStructuresSection } from './FeeStructuresSection';
 import { LateFeeScheduleSection } from './LateFeeScheduleSection';
 import { FeeToolsSection } from './FeeToolsSection';
 import { DISCARD_PROMPT, type FeeStructureSection } from './feeStructureShared';
+import { SettingsSectionNav } from '../components/settings/settingsUi';
 
 const SECTION_GROUPS: { title: string; items: { id: FeeStructureSection; label: string; hint: string }[] }[] = [
   {
@@ -39,37 +40,13 @@ export function FeeStructurePanel({ section, onSectionChange }: FeeStructurePane
   }
 
   return (
-    <div className="h-full flex gap-6">
-      <nav className="w-56 flex-shrink-0 overflow-auto border-r border-gray-200 pr-4 space-y-5">
-        {SECTION_GROUPS.map((group) => (
-          <div key={group.title}>
-            <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{group.title}</p>
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = item.id === section;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => go(item.id)}
-                    className={`w-full text-left px-3 py-2 rounded-md border-l-2 transition-colors cursor-pointer ${
-                      active
-                        ? 'bg-blue-50 border-blue-600 text-blue-700'
-                        : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-800'
-                    }`}
-                  >
-                    <span className="block text-sm font-medium">
-                      {item.label}
-                      {active && dirty && <span className="ml-1.5 text-orange-500" title="Unsaved changes">●</span>}
-                    </span>
-                    <span className={`block text-[11px] ${active ? 'text-blue-500' : 'text-gray-400'}`}>{item.hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
+    <div className="h-full flex gap-4">
+      <SettingsSectionNav
+        groups={SECTION_GROUPS}
+        active={section}
+        onSelect={go}
+        renderBadge={(id) => id === section && dirty && <span className="ml-1.5 text-orange-500" title="Unsaved changes">●</span>}
+      />
 
       <div
         key={section}

@@ -13,7 +13,7 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   options: Option<T>[];
   className?: string;
   /** Accent colour; defaults to the app's emerald. */
-  tone?: 'emerald' | 'indigo' | 'pea' | 'ocean';
+  tone?: 'emerald' | 'indigo' | 'pea' | 'ocean' | 'cyan';
 }
 
 const TONES = {
@@ -53,6 +53,16 @@ const TONES = {
     allRow: 'text-[#075E93] bg-[#EEF6FC]/60',
     checkedRow: 'text-[#075E93] bg-[#EEF6FC]',
     checkbox: 'border-[#0B7BC0] bg-[#0B7BC0]',
+    font: 'font-wp',
+  },
+  // Sky / cyan — Student Messages revamp (student-portal look).
+  cyan: {
+    ring: 'focus:ring-[#0891B2]/40',
+    active: 'border-[#0891B2] bg-[#ECF7FA] text-[#0E6A85]',
+    idle: 'border-[#0891B2]/30 text-[#0E6A85] hover:border-[#0891B2]/55 hover:bg-[#F3FAFC]',
+    allRow: 'text-[#0E6A85] bg-[#ECF7FA]/60',
+    checkedRow: 'text-[#0E6A85] bg-[#ECF7FA]',
+    checkbox: 'border-[#0891B2] bg-[#0891B2]',
     font: 'font-wp',
   },
 } as const;

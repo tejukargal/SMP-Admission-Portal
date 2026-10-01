@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
@@ -18,7 +18,11 @@ import {
   bulkDeleteStudentMessages,
 } from '../services/studentMessageService';
 import { subscribeToStudentLoginActivity } from '../services/studentLoginActivityService';
-import { Button } from '../components/common/Button';
+import {
+  CYAN, CYAN_INK, HAIRLINE, BAND, MINT, CORAL, AMBER, MUTED, PAGE_BG,
+  BTN_CYAN, TEXT_INPUT, FIELD_OVERRIDE, SELECT_PILL, MsgIcon,
+  PillButton, FieldLabel, StatusPill, CountChip, SearchPill, Segmented, KebabButton, EmptyState, MsgModal,
+} from '../components/messages/messagesUi';
 import { Input } from '../components/common/Input';
 import { Select } from '../components/common/Select';
 import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilterDropdown';
@@ -513,141 +517,153 @@ export function StudentMessages() {
 
   const openCount = messages.filter((m) => m.status === 'open').length;
 
+
+  const TAB_DEFS: { id: 'circulars' | 'compose' | 'sent' | 'inbox'; label: string; icon: ReactNode; count?: ReactNode }[] = [
+    { id: 'circulars', label: 'Circulars', icon: <MsgIcon name="megaphone" /> },
+    { id: 'compose', label: 'Compose', icon: <MsgIcon name="pen" /> },
+    { id: 'sent', label: 'Sent', icon: <MsgIcon name="send" />, count: notices.length > 0 ? notices.length : null },
+    { id: 'inbox', label: 'Inbox', icon: <MsgIcon name="inbox" />, count: openCount > 0 ? openCount : null },
+  ];
+
   return (
-    <div className="h-full flex flex-col gap-3" style={{ animation: 'page-enter 0.22s ease-out' }}>
-      <div className="flex-shrink-0 flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
-        <h2 className="text-lg sm:text-xl font-black text-gray-800 leading-tight tracking-tight shrink-0">Student Messages</h2>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: PAGE_BG, animation: 'page-enter 0.22s ease-out' }}
+    >
+      {/* Page header */}
+      <div className="flex-shrink-0 flex items-end gap-3 flex-wrap min-w-0">
+        <div className="shrink-0">
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Student Messages
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: CYAN_INK }}>Student Messages</h2>
+            {academicYear && (
+              <span className="rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums" style={{ borderColor: `${CYAN}66`, color: CYAN_INK }}>
+                {academicYear}
+              </span>
+            )}
+          </div>
+        </div>
         <button
           onClick={() => setShowActiveUsers(true)}
-          className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer shrink-0"
+          className="ml-auto shrink-0 inline-flex items-center gap-2 rounded-full border bg-white px-3.5 py-1.5 text-[12px] font-medium transition-all hover:shadow-[0_4px_14px_rgba(15,169,104,0.15)] cursor-pointer"
+          style={{ borderColor: `${MINT}55`, color: '#0A7A4B' }}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="relative flex w-2 h-2">
+            <span className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping" style={{ background: MINT }} />
+            <span className="relative inline-flex w-2 h-2 rounded-full" style={{ background: MINT }} />
+          </span>
           Active Users
           {!loginActivityLoading && (
-            <span className="rounded-full bg-emerald-100 text-emerald-700 text-[10px] px-1.5">{onlineCount}</span>
+            <span className="rounded-full px-1.5 min-w-[18px] text-center text-[10.5px] font-semibold tabular-nums leading-[17px]" style={{ background: `${MINT}1A` }}>{onlineCount}</span>
           )}
         </button>
-        <div className="flex items-center gap-1.5 sm:ml-auto overflow-x-auto no-scrollbar w-full sm:w-auto">
-          <button
-            onClick={() => setTab('circulars')}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'circulars' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            Circulars
-          </button>
-          <button
-            onClick={() => setTab('compose')}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${tab === 'compose' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            Compose
-          </button>
-          <button
-            onClick={() => setTab('sent')}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'sent' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            Sent {notices.length > 0 && <span className="rounded-full bg-gray-200 text-gray-600 text-[10px] px-1.5">{notices.length}</span>}
-          </button>
-          <button
-            onClick={() => setTab('inbox')}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${tab === 'inbox' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          >
-            Inbox {openCount > 0 && <span className="rounded-full bg-red-500 text-white text-[10px] px-1.5">{openCount}</span>}
-          </button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex-shrink-0 rounded-2xl border bg-white p-1.5" style={{ borderColor: HAIRLINE }}>
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {TAB_DEFS.map((t) => {
+            const isActive = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-[7px] text-[12.5px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0891B2]/40 ${
+                  isActive ? 'text-white' : 'text-[#5B6371] hover:bg-[#0891B2]/[0.07] hover:text-[#0E6A85]'
+                }`}
+                style={isActive ? { background: `linear-gradient(135deg, ${CYAN}, ${CYAN_INK})`, boxShadow: `0 3px 10px ${CYAN}40` } : undefined}
+              >
+                <span className={isActive ? 'opacity-95' : 'opacity-70'}>{t.icon}</span>
+                {t.label}
+                {t.count != null && <CountChip active={isActive} alert={t.id === 'inbox'}>{t.count}</CountChip>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {tab === 'compose' ? (
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col" style={{ animation: 'page-enter 0.2s ease-out' }}>
           {/* Audience filters */}
-          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col">
-            <div className="flex items-center justify-between mb-2 shrink-0">
-              <h3 className="text-sm font-bold text-gray-900">Choose Audience</h3>
-              <button onClick={clearAudienceFilters} className="text-[11px] text-amber-600 hover:text-amber-800 font-semibold cursor-pointer">Clear filters</button>
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border p-3 flex flex-col" style={{ borderColor: HAIRLINE }}>
+            <div className="flex items-center justify-between gap-2 mb-2.5 shrink-0 px-0.5">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: `${CYAN}14`, color: CYAN, boxShadow: `inset 0 0 0 1px ${CYAN}26` }}>
+                  <MsgIcon name="users" />
+                </span>
+                <h3 className="text-[14px] font-medium" style={{ color: CYAN_INK }}>Choose Audience</h3>
+              </div>
+              <button
+                onClick={clearAudienceFilters}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] transition-colors cursor-pointer"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                Clear filters
+              </button>
             </div>
 
-              {/* Toolbar — mirrors Students page filter bar */}
-              <div
-                className="shrink-0 rounded-2xl border border-emerald-100 overflow-hidden mb-2.5"
-                style={{ background: 'linear-gradient(160deg, #f4fdf9 0%, #f8fafc 45%, #f0fdf6 100%)', boxShadow: '0 1px 4px 0 rgba(16,185,129,0.08)' }}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2">
-                  {/* Search — rounded-full with icon + amber clear */}
-                  <div className="relative shrink-0 w-full sm:w-52">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                    </svg>
-                    <input
-                      type="text"
-                      placeholder="Search name / reg / mobile…"
-                      value={pickerSearch}
-                      onChange={(e) => setPickerSearch(e.target.value)}
-                      className={`w-full rounded-full border border-emerald-300 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-500 bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${pickerSearch ? 'pr-8' : 'pr-3'}`}
-                    />
-                    {pickerSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setPickerSearch('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
-                        aria-label="Clear search"
-                      >
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                          <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                    )}
-                  </div>
+              {/* Toolbar */}
+              <div className="shrink-0 rounded-2xl border mb-2.5" style={{ borderColor: HAIRLINE, background: '#F7FCFD' }}>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-2.5 py-2">
+                  <SearchPill value={pickerSearch} onChange={setPickerSearch} placeholder="Search name / reg / mobile…" />
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                    <MultiSelectFilterDropdown<Course> value={courseFilter} onChange={setCourseFilter} placeholder="Course"
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <MultiSelectFilterDropdown<Course> tone="cyan" value={courseFilter} onChange={setCourseFilter} placeholder="Course"
                       options={COURSES.map((c) => ({ value: c, label: c }))} />
-                    <MultiSelectFilterDropdown<Year> value={yearFilter} onChange={setYearFilter} placeholder="Year"
+                    <MultiSelectFilterDropdown<Year> tone="cyan" value={yearFilter} onChange={setYearFilter} placeholder="Year"
                       options={YEARS.map((y) => ({ value: y, label: y }))} />
-                    <MultiSelectFilterDropdown<Gender> value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
+                    <MultiSelectFilterDropdown<Gender> tone="cyan" value={genderFilter} onChange={setGenderFilter} placeholder="Gender"
                       options={[{ value: 'BOY', label: 'BOY' }, { value: 'GIRL', label: 'GIRL' }]} />
-                    <MultiSelectFilterDropdown<Category> value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
+                    <MultiSelectFilterDropdown<Category> tone="cyan" value={categoryFilter} onChange={setCategoryFilter} placeholder="Cat"
                       options={['GM', 'SC', 'ST', 'C1', '2A', '2B', '3A', '3B'].map((c) => ({ value: c as Category, label: c }))} />
-                    <MultiSelectFilterDropdown<AdmType> value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
+                    <MultiSelectFilterDropdown<AdmType> tone="cyan" value={admTypeFilter} onChange={setAdmTypeFilter} placeholder="Adm Type"
                       options={['REGULAR', 'REPEATER', 'LATERAL', 'EXTERNAL'].map((v) => ({ value: v as AdmType, label: v }))} />
-                    <MultiSelectFilterDropdown<AdmCat> value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
+                    <MultiSelectFilterDropdown<AdmCat> tone="cyan" value={admCatFilter} onChange={setAdmCatFilter} placeholder="Adm Cat"
                       options={['GM', 'SNQ', 'OTHERS'].map((v) => ({ value: v as AdmCat, label: v }))} />
-                    <MultiSelectFilterDropdown<FeeStatusValue> value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
+                    <MultiSelectFilterDropdown<FeeStatusValue> tone="cyan" value={feeStatusFilter} onChange={setFeeStatusFilter} placeholder="Fee Status"
                       options={FEE_STATUS_OPTIONS} />
                   </div>
                 </div>
               </div>
 
               {studentsLoading ? (
-                <div className="text-xs text-gray-400 py-6 text-center">Loading students…</div>
+                <EmptyState loading>Loading students…</EmptyState>
               ) : (
                 <StudentPickerTable rows={filteredRows} selected={selected} onToggle={toggleRow} onToggleAll={toggleAll} />
               )}
 
               {/* Footer — selection summary + Compose & Send trigger, bottom-right */}
-              <div className="shrink-0 flex items-center justify-between gap-3 mt-2 pt-2">
-                <p className="text-xs text-gray-600">
-                  <span className="font-semibold text-emerald-700">{selectedRows.length}</span> of {filteredRows.length} matched student{filteredRows.length !== 1 ? 's' : ''} selected
+              <div className="shrink-0 flex items-center justify-between gap-3 mt-2.5 pt-2.5 border-t flex-wrap" style={{ borderColor: BAND }}>
+                <p className="text-[12px] text-[#5B6371] flex items-center gap-1.5 flex-wrap">
+                  <span className="rounded-full border bg-white px-2 py-[2px] text-[11.5px] font-semibold tabular-nums" style={{ borderColor: `${CYAN}55`, color: CYAN_INK }}>{selectedRows.length}</span>
+                  of {filteredRows.length} matched student{filteredRows.length !== 1 ? 's' : ''} selected
                   {allStudents.length > 0 && filteredRows.length !== allStudents.length && (
-                    <span className="text-gray-400"> ({allStudents.length} total in {academicYear})</span>
+                    <span className="text-[#8A93A3]"> ({allStudents.length} total in {academicYear})</span>
                   )}
                 </p>
-                <Button
+                <PillButton
                   onClick={() => setShowComposeModal(true)}
                   disabled={selectedRows.length === 0}
+                  className="!px-4 !py-2"
                 >
+                  <MsgIcon name="send" size={13} />
                   Compose & Send{selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}
-                </Button>
+                </PillButton>
               </div>
           </div>
         </div>
       ) : tab === 'circulars' ? (
         user ? <AdminCircularsTab user={user} /> : null
       ) : tab === 'sent' ? (
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ animation: 'page-enter 0.2s ease-out' }}>
           {noticesLoading ? (
-            <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
+            <EmptyState loading>Loading…</EmptyState>
           ) : sortedNotices.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-10">No notices posted yet.</div>
+            <EmptyState>No notices posted yet.</EmptyState>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 pb-1">
               {sortedNotices.map((n) => (
                 <AdminNoticeCard
                   key={n.id}
@@ -694,122 +710,150 @@ export function StudentMessages() {
           )}
         </div>
       ) : (
-        <div className="flex-1 min-h-0 flex flex-col gap-2.5">
+        <div className="flex-1 min-h-0 flex flex-col gap-2.5" style={{ animation: 'page-enter 0.2s ease-out' }}>
           {/* Inbox toolbar */}
-          <div className="flex-shrink-0 flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1">
-              {(['all', 'open', 'resolved'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setInboxFilter(f)}
-                  className={`rounded-full px-3 py-1 text-[11px] font-semibold capitalize cursor-pointer transition-colors ${inboxFilter === f ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-            <input
-              type="text"
-              placeholder="Search name / reg no / message…"
-              value={inboxSearch}
-              onChange={(e) => setInboxSearch(e.target.value)}
-              className="flex-1 min-w-[180px] rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+          <div className="flex-shrink-0 rounded-2xl border bg-white px-2.5 py-2 flex flex-wrap items-center gap-2" style={{ borderColor: HAIRLINE }}>
+            <Segmented<'all' | 'open' | 'resolved'>
+              value={inboxFilter}
+              onChange={setInboxFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'open', label: 'Open' },
+                { value: 'resolved', label: 'Resolved' },
+              ]}
             />
+            <SearchPill value={inboxSearch} onChange={setInboxSearch} placeholder="Search name / reg no / message…" className="flex-1 min-w-[180px] max-w-md" />
             {filteredMessages.length > 0 && (
-              <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+              <label className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#5B6371] cursor-pointer hover:border-[#0891B2]/40 transition-colors" style={{ borderColor: HAIRLINE }}>
                 <input
                   type="checkbox"
                   checked={filteredMessages.length > 0 && filteredMessages.every((m) => inboxSelected.has(m.id))}
                   onChange={toggleInboxAll}
-                  className="cursor-pointer"
+                  className="cursor-pointer accent-[#0891B2]"
                 />
                 Select all
               </label>
             )}
             {inboxSelected.size > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-gray-500">{inboxSelected.size} selected</span>
-                <Button size="sm" variant="secondary" disabled={bulkBusy} onClick={() => void handleBulkResolve()}>Mark Resolved</Button>
-                <Button size="sm" variant="danger" disabled={bulkBusy} onClick={() => setConfirmBulkDelete(true)}>Delete</Button>
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: BAND, color: CYAN_INK }}>{inboxSelected.size} selected</span>
+                <PillButton tone="green" disabled={bulkBusy} onClick={() => void handleBulkResolve()}>Mark Resolved</PillButton>
+                <PillButton tone="red" disabled={bulkBusy} onClick={() => setConfirmBulkDelete(true)}>Delete</PillButton>
               </div>
             )}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 pb-1">
             {inboxLoading ? (
-              <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
+              <EmptyState loading>Loading…</EmptyState>
             ) : filteredMessages.length === 0 ? (
-              <div className="text-sm text-gray-400 text-center py-10">No student messages found.</div>
-            ) : filteredMessages.map((m) => (
-              <div key={m.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${inboxSelected.has(m.id) ? 'border-emerald-300' : 'border-gray-100'}`}>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={inboxSelected.has(m.id)} onChange={() => toggleInboxRow(m.id)} className="cursor-pointer" />
-                  <span className="text-sm font-bold text-gray-900">{m.studentName} <span className="text-gray-400 font-normal">({m.regNumber})</span></span>
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${m.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {m.status === 'resolved' ? 'Resolved' : 'Open'}
+              <EmptyState>No student messages found.</EmptyState>
+            ) : filteredMessages.map((m) => {
+              const isSel = inboxSelected.has(m.id);
+              const resolved = m.status === 'resolved';
+              return (
+              <div
+                key={m.id}
+                className="bg-white rounded-2xl border p-3.5 transition-shadow hover:shadow-[0_6px_20px_rgba(14,106,133,0.07)]"
+                style={{ borderColor: isSel ? `${CYAN}80` : HAIRLINE, boxShadow: isSel ? `0 0 0 3px ${CYAN}14` : undefined }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <input type="checkbox" checked={isSel} onChange={() => toggleInboxRow(m.id)} className="cursor-pointer accent-[#0891B2] shrink-0" />
+                  <span
+                    className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[13px] font-semibold"
+                    style={{ background: `${resolved ? MINT : CYAN}14`, color: resolved ? '#0A7A4B' : CYAN_INK, boxShadow: `0 0 0 2px #fff, 0 0 0 3.5px ${resolved ? MINT : CYAN}40` }}
+                  >
+                    {m.studentName.charAt(0).toUpperCase()}
                   </span>
-                  <button onClick={() => void handleDeleteOne(m.id)} className="text-[11px] text-red-500 hover:text-red-700 font-semibold cursor-pointer">Delete</button>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-[#262B35] truncate">
+                      {m.studentName} <span className="text-[#8A93A3] font-normal tabular-nums">({m.regNumber})</span>
+                    </p>
+                    <span className="inline-block mt-0.5 rounded-full px-2 py-[1px] text-[10px] font-medium" style={{ background: BAND, color: CYAN_INK }}>{m.category}</span>
+                  </div>
+                  <StatusPill color={resolved ? MINT : AMBER}>{resolved ? 'Resolved' : 'Open'}</StatusPill>
+                  <button
+                    onClick={() => void handleDeleteOne(m.id)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.08] transition-colors cursor-pointer"
+                  >
+                    <MsgIcon name="trash" size={12} />
+                    Delete
+                  </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 ml-2 sm:ml-6">{m.category}</p>
-                <p className="text-sm text-gray-700 mt-1.5 ml-2 sm:ml-6 whitespace-pre-wrap">{m.message}</p>
+                <p className="text-[13px] text-[#3F4654] mt-2.5 ml-0 sm:ml-[3.4rem] whitespace-pre-wrap rounded-2xl rounded-tl-md px-3.5 py-2.5 bg-[#F5F8FA] border border-[#EDF1F4]">{m.message}</p>
                 {m.status === 'open' ? (
-                  <div className="mt-2.5 ml-2 sm:ml-6 flex items-center gap-2">
+                  <div className="mt-2.5 ml-0 sm:ml-[3.4rem] flex items-center gap-2">
                     <input
                       value={replyDrafts[m.id] ?? ''}
                       onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
                       placeholder="Optional reply…"
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      className={`${TEXT_INPUT} flex-1 !rounded-full`}
                     />
-                    <Button size="sm" onClick={() => void handleResolve(m.id)}>Mark Resolved</Button>
+                    <PillButton tone="green" onClick={() => void handleResolve(m.id)}>
+                      <MsgIcon name="check" size={12} />
+                      Mark Resolved
+                    </PillButton>
                   </div>
                 ) : m.adminReply ? (
-                  <div className="mt-2 ml-2 sm:ml-6 pt-2 border-t border-gray-100">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Your Reply</p>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{m.adminReply}</p>
+                  <div className="mt-2 ml-0 sm:ml-[3.4rem] rounded-2xl rounded-tr-md px-3.5 py-2.5 border" style={{ background: '#F2FAFC', borderColor: HAIRLINE }}>
+                    <p className="text-[9.5px] font-medium uppercase tracking-[1px] mb-0.5" style={{ color: CYAN }}>Your Reply</p>
+                    <p className="text-[13px] text-[#262B35] whitespace-pre-wrap">{m.adminReply}</p>
                   </div>
                 ) : null}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Compose & Send — opened from the audience table's bottom-right button */}
       {showComposeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowComposeModal(false)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-900">Compose & Send</h3>
-            <p className="text-[11px] text-gray-400">
-              Recipients: <span className="font-semibold text-emerald-700">{selectedRows.length}</span> student{selectedRows.length !== 1 ? 's' : ''} selected
-            </p>
-
+        <MsgModal
+          title="Compose & Send"
+          icon={<MsgIcon name="pen" size={15} />}
+          onClose={() => setShowComposeModal(false)}
+          subtitle={<>Recipients: <span className="font-semibold" style={{ color: CYAN_INK }}>{selectedRows.length}</span> student{selectedRows.length !== 1 ? 's' : ''} selected</>}
+          footer={<>
+            <PillButton tone="gray" onClick={() => setShowComposeModal(false)}>Cancel</PillButton>
+            <PillButton
+              onClick={() => setConfirmSend(true)}
+              disabled={!title.trim() || !bodyHasText || selectedRows.length === 0}
+            >
+              <MsgIcon name="send" size={12} />
+              Send to {selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}
+            </PillButton>
+          </>}
+        >
             {/* Compose with AI — mirrors CircularForm's panel; the audience
                 (count + filter summary) is sent along as prompt context. */}
-            <div className="flex flex-col gap-1.5 rounded-lg border border-gray-200 bg-gray-50/60 p-3">
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Compose with AI</label>
+            <div className="flex flex-col gap-2 rounded-2xl border p-3" style={{ borderColor: HAIRLINE, background: 'linear-gradient(160deg, #F2FAFC 0%, #FAFDFE 100%)' }}>
+              <label className="inline-flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: CYAN_INK }}>
+                <MsgIcon name="sparkle" size={13} />
+                Compose with AI
+              </label>
               <textarea
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
                 rows={3}
                 placeholder="e.g. Remind these students to clear their pending fee before the exams, with a fine after the last date"
-                className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+                className={`${TEXT_INPUT} !bg-white resize-y`}
               />
-              <details className="text-xs">
-                <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">Add key dates/amounts (optional)</summary>
+              <details className="text-[12px]">
+                <summary className="cursor-pointer text-[#5B6371] hover:text-[#0E6A85] select-none">Add key dates/amounts (optional)</summary>
                 <textarea
                   value={keyDates}
                   onChange={(e) => setKeyDates(e.target.value)}
                   rows={2}
                   placeholder="e.g. Last date: 30 September 2026. Rs.200 fine after that."
-                  className="mt-1.5 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors resize-y"
+                  className={`${TEXT_INPUT} !bg-white mt-1.5 resize-y`}
                 />
               </details>
               <div className="flex items-center gap-2 flex-wrap">
                 <select
                   value={aiProvider}
                   onChange={(e) => handleProviderChange(e.target.value as CircularAiProvider)}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                  className={SELECT_PILL}
                 >
                   <option value="claude">Claude</option>
                   <option value="gemini">Gemini</option>
@@ -817,7 +861,7 @@ export function StudentMessages() {
                 <select
                   value={aiLanguage}
                   onChange={(e) => handleLanguageChange(e.target.value as CircularAiLanguage)}
-                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+                  className={SELECT_PILL}
                 >
                   <option value="english">English</option>
                   <option value="kannada">Kannada</option>
@@ -827,13 +871,14 @@ export function StudentMessages() {
                   type="button"
                   onClick={handleGenerateDraftClick}
                   disabled={composing || brief.trim() === ''}
-                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+                  className={BTN_CYAN}
                 >
+                  <MsgIcon name="sparkle" size={12} />
                   {composing ? 'Generating…' : 'Generate Draft'}
                 </button>
               </div>
               {confirmOverwrite && (
-                <div className="flex items-center gap-2 flex-wrap text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 flex-wrap text-[12px] text-[#9A5B00] bg-[#D97706]/[0.07] border border-[#D97706]/30 rounded-xl px-3 py-2">
                   <span>This will replace your current Title and Body.</span>
                   <button
                     type="button"
@@ -842,81 +887,74 @@ export function StudentMessages() {
                   >
                     Continue
                   </button>
-                  <button type="button" onClick={() => setConfirmOverwrite(false)} className="text-gray-500 underline cursor-pointer">
+                  <button type="button" onClick={() => setConfirmOverwrite(false)} className="text-[#5B6371] underline cursor-pointer">
                     Cancel
                   </button>
                 </div>
               )}
-              {composeError && <p className="text-xs text-red-500 font-medium">{composeError}</p>}
+              {composeError && <p className="text-[12px] text-[#A5173A] font-medium">{composeError}</p>}
             </div>
 
-            <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" />
             <div>
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
-              <div className="mt-1">
-                <RichTextEditor
-                  key={bodySeedVersion}
-                  value={bodySeed}
-                  onChange={setBody}
-                  placeholder="Write the notice…"
-                />
-              </div>
+              <FieldLabel>Title</FieldLabel>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pending Fee Reminder" className={FIELD_OVERRIDE} />
             </div>
-            <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
             <div>
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Attachments <span className="normal-case font-normal text-gray-400">(optional)</span></label>
-              <div className="mt-1">
-                <AttachmentDropzone
-                  files={attachFiles}
-                  onAdd={(files) => setAttachFiles((prev) => [...prev, ...files])}
-                  onRemove={(i) => setAttachFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                />
-              </div>
+              <FieldLabel>Body</FieldLabel>
+              <RichTextEditor
+                key={bodySeedVersion}
+                value={bodySeed}
+                onChange={setBody}
+                placeholder="Write the notice…"
+              />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setShowComposeModal(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
-              <Button
-                size="sm"
-                onClick={() => setConfirmSend(true)}
-                disabled={!title.trim() || !bodyHasText || selectedRows.length === 0}
-              >
-                Send to {selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}
-              </Button>
+            <div>
+              <FieldLabel>Category</FieldLabel>
+              <Select value={category} onChange={(e) => setCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} className={`${FIELD_OVERRIDE} cursor-pointer`} />
             </div>
-          </div>
-        </div>
+            <div>
+              <FieldLabel hint="(optional)">Attachments</FieldLabel>
+              <AttachmentDropzone
+                files={attachFiles}
+                onAdd={(files) => setAttachFiles((prev) => [...prev, ...files])}
+                onRemove={(i) => setAttachFiles((prev) => prev.filter((_, idx) => idx !== i))}
+              />
+            </div>
+        </MsgModal>
       )}
 
       {/* Edit a sent notice */}
       {editingNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setEditingNotice(null)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-5 space-y-3 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-900">Edit Notice</h3>
-            <p className="text-[11px] text-gray-400">
-              Recipients: {editingNotice.scope === 'selected'
-                ? (editingNotice.audienceLabel ?? `${editingNotice.targetRegNumbers?.length ?? 0} students`)
-                : `${LEGACY_SCOPE_LABEL[editingNotice.scope] ?? editingNotice.scope}${editingNotice.scopeValue ? `: ${editingNotice.scopeValue}` : ''}`} (unchanged)
-            </p>
-            <Input label="Title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+        <MsgModal
+          title="Edit Notice"
+          icon={<MsgIcon name="pen" size={15} />}
+          onClose={() => setEditingNotice(null)}
+          subtitle={<>Recipients: {editingNotice.scope === 'selected'
+            ? (editingNotice.audienceLabel ?? `${editingNotice.targetRegNumbers?.length ?? 0} students`)
+            : `${LEGACY_SCOPE_LABEL[editingNotice.scope] ?? editingNotice.scope}${editingNotice.scopeValue ? `: ${editingNotice.scopeValue}` : ''}`} (unchanged)</>}
+          footer={<>
+            <PillButton tone="gray" onClick={() => setEditingNotice(null)}>Cancel</PillButton>
+            <PillButton loading={editSaving} disabled={!editTitle.trim() || !stripHtml(editBody).trim()} onClick={() => void handleSaveEditNotice()}>Save Changes</PillButton>
+          </>}
+        >
             <div>
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Body</label>
-              <div className="mt-1">
-                <RichTextEditor
-                  key={editSeedVersion}
-                  value={editBody}
-                  onChange={setEditBody}
-                  placeholder="Write the notice…"
-                />
-              </div>
+              <FieldLabel>Title</FieldLabel>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={FIELD_OVERRIDE} />
             </div>
-            <Select label="Category" value={editCategory} onChange={(e) => setEditCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} />
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setEditingNotice(null)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
-              <Button size="sm" loading={editSaving} disabled={!editTitle.trim() || !stripHtml(editBody).trim()} onClick={() => void handleSaveEditNotice()}>Save Changes</Button>
+            <div>
+              <FieldLabel>Body</FieldLabel>
+              <RichTextEditor
+                key={editSeedVersion}
+                value={editBody}
+                onChange={setEditBody}
+                placeholder="Write the notice…"
+              />
             </div>
-          </div>
-        </div>
+            <div>
+              <FieldLabel>Category</FieldLabel>
+              <Select value={editCategory} onChange={(e) => setEditCategory(e.target.value as NoticeCategory)} options={CATEGORY_OPTIONS} className={`${FIELD_OVERRIDE} cursor-pointer`} />
+            </div>
+        </MsgModal>
       )}
 
       {showActiveUsers && (
@@ -925,45 +963,48 @@ export function StudentMessages() {
 
       {/* Confirm: send notice */}
       {confirmSend && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmSend(false)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Confirm Send</h3>
-            <p className="text-sm text-gray-600">
-              Send this notice to <span className="font-semibold text-emerald-700">{selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}</span>?
+        <MsgModal
+          title="Confirm Send"
+          icon={<MsgIcon name="send" size={15} />}
+          size="sm"
+          onClose={() => setConfirmSend(false)}
+          footer={<>
+            <PillButton tone="gray" onClick={() => setConfirmSend(false)} disabled={posting}>Cancel</PillButton>
+            <PillButton onClick={() => void handlePostNotice()} disabled={posting}>
+              {posting ? 'Sending…' : 'Yes, Send'}
+            </PillButton>
+          </>}
+        >
+            <p className="text-[13px] text-[#3F4654]">
+              Send this notice to <span className="font-semibold" style={{ color: CYAN_INK }}>{selectedRows.length} student{selectedRows.length !== 1 ? 's' : ''}</span>?
             </p>
-            <div className="bg-gray-50 rounded border border-gray-200 px-3 py-2 text-xs text-gray-700">
-              <p className="font-semibold">{title}</p>
+            <div className="rounded-xl border px-3.5 py-2.5 text-[12px] text-[#3F4654]" style={{ borderColor: HAIRLINE, background: '#F7FCFD' }}>
+              <p className="font-medium text-[#262B35]">{title}</p>
               <p className="mt-1 whitespace-pre-wrap">{stripHtml(body).slice(0, 200)}{stripHtml(body).length > 200 ? '…' : ''}</p>
               {attachFiles.length > 0 && (
-                <p className="mt-1 text-gray-500">📎 {attachFiles.length} attachment{attachFiles.length !== 1 ? 's' : ''}</p>
+                <p className="mt-1.5 inline-flex items-center gap-1 text-[#5B6371]"><MsgIcon name="clip" size={11} /> {attachFiles.length} attachment{attachFiles.length !== 1 ? 's' : ''}</p>
               )}
             </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setConfirmSend(false)} disabled={posting} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>
-              <button onClick={() => void handlePostNotice()} disabled={posting} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 cursor-pointer disabled:opacity-50">
-                {posting ? 'Sending…' : 'Yes, Send'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </MsgModal>
       )}
 
       {/* Confirm: bulk delete inbox messages */}
       {confirmBulkDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmBulkDelete(false)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Delete Messages</h3>
-            <p className="text-sm text-gray-600">
-              Delete <span className="font-semibold text-red-600">{inboxSelected.size} message{inboxSelected.size !== 1 ? 's' : ''}</span>? This cannot be undone.
+        <MsgModal
+          title="Delete Messages"
+          icon={<MsgIcon name="trash" size={15} />}
+          tone={CORAL}
+          size="sm"
+          onClose={() => setConfirmBulkDelete(false)}
+          footer={<>
+            <PillButton tone="gray" onClick={() => setConfirmBulkDelete(false)}>Cancel</PillButton>
+            <PillButton tone="danger" onClick={() => void handleBulkDelete()}>Yes, Delete</PillButton>
+          </>}
+        >
+            <p className="text-[13px] text-[#3F4654]">
+              Delete <span className="font-semibold text-[#A5173A]">{inboxSelected.size} message{inboxSelected.size !== 1 ? 's' : ''}</span>? This cannot be undone.
             </p>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setConfirmBulkDelete(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
-              <button onClick={() => void handleBulkDelete()} className="px-3 py-1.5 text-xs rounded bg-red-500 text-white font-semibold hover:bg-red-600 cursor-pointer">Yes, Delete</button>
-            </div>
-          </div>
-        </div>
+        </MsgModal>
       )}
     </div>
   );
@@ -978,59 +1019,47 @@ interface AdminNoticeCardProps {
 
 function AdminNoticeCard({ notice: n, categoryLabel, scopeLabel, onContextMenu }: AdminNoticeCardProps) {
   const watermarkLabel = n.archivedAt ? 'Unpublished' : n.inactiveAt ? 'Inactive' : null;
+  const muted = !!(n.archivedAt || n.inactiveAt);
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border shadow-sm p-2.5 border-l-[3px] select-none ${n.pinned ? 'border-amber-300' : 'border-gray-100'} ${n.archivedAt || n.inactiveAt ? 'bg-gray-100/80' : 'bg-white'}`}
+      className={`relative overflow-hidden rounded-2xl border p-3 select-none transition-shadow hover:shadow-[0_6px_20px_rgba(14,106,133,0.08)] ${muted ? 'bg-[#F4F6F8]' : 'bg-white'}`}
+      style={{
+        borderColor: n.pinned ? `${AMBER}66` : HAIRLINE,
+        boxShadow: n.pinned ? `0 0 0 2px ${AMBER}1A` : undefined,
+      }}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
     >
+      {/* Accent strip */}
+      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full" style={{ background: muted ? '#C7CDD5' : n.pinned ? AMBER : CYAN }} />
       {watermarkLabel && <CardWatermark label={watermarkLabel} />}
-      <button
-        type="button"
-        aria-label="Options"
-        className="absolute top-2 right-2 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-        onClick={(e) => {
-          e.stopPropagation();
-          const rect = e.currentTarget.getBoundingClientRect();
-          onContextMenu(rect.right, rect.bottom + 4);
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
-      </button>
-      <div className="relative z-10">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1 flex-wrap">
-          <span className="truncate">{categoryLabel} · {scopeLabel}</span>
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-            {n.archivedAt ? 'Unpublished' : 'Published'}
-          </span>
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${n.inactiveAt ? 'bg-gray-200 text-gray-500' : 'bg-sky-100 text-sky-700'}`}>
-            {n.inactiveAt ? 'Inactive' : 'Active'}
-          </span>
+      <KebabButton onOpen={onContextMenu} className="absolute top-2 right-2" />
+      <div className="relative z-10 pl-1">
+        <p className="text-[9.5px] font-medium uppercase tracking-[0.8px] text-[#8A93A3] truncate pr-7">{categoryLabel} · {scopeLabel}</p>
+        <div className="flex items-center gap-1 flex-wrap mt-1.5">
+          <StatusPill color={n.archivedAt ? MUTED : MINT}>{n.archivedAt ? 'Unpublished' : 'Published'}</StatusPill>
+          <StatusPill color={n.inactiveAt ? MUTED : CYAN}>{n.inactiveAt ? 'Inactive' : 'Active'}</StatusPill>
           {n.pinned && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+            <StatusPill color={AMBER} dot={false}>
+              <MsgIcon name="pin" />
               Pinned
+            </StatusPill>
+          )}
+        </div>
+        <h4 className="text-[13.5px] font-medium text-[#262B35] mt-2 line-clamp-1">{n.title}</h4>
+        <p className="text-[12px] text-[#5B6371] mt-0.5 line-clamp-2 leading-snug">{stripHtml(n.body)}</p>
+        <div className="flex items-center gap-2 mt-2 text-[10.5px] text-[#8A93A3]">
+          <span className="tabular-nums">
+            {new Date(n.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            {n.updatedAt && ' · edited'}
+          </span>
+          {(n.attachments?.length ?? 0) > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-[1px]" style={{ background: BAND, color: CYAN_INK }}>
+              <MsgIcon name="clip" size={11} />
+              {n.attachments!.length} attachment{n.attachments!.length !== 1 ? 's' : ''}
             </span>
           )}
-        </span>
-        <p className="text-[10px] text-gray-400 mt-1">
-          {new Date(n.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          {n.updatedAt && ' · edited'}
-        </p>
-        <h4 className="text-sm font-bold text-gray-900 mt-1 line-clamp-1">{n.title}</h4>
-        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{stripHtml(n.body)}</p>
-        {(n.attachments?.length ?? 0) > 0 && (
-          <p className="flex items-center gap-1 text-[10px] text-gray-400 mt-1">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-            </svg>
-            {n.attachments!.length} attachment{n.attachments!.length !== 1 ? 's' : ''}
-          </p>
-        )}
+        </div>
       </div>
     </div>
   );

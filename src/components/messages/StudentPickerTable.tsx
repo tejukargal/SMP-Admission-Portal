@@ -15,12 +15,16 @@ export function feeStatusOf(row: PickerRow): FeeStatusValue | null {
   return 'has-dues';
 }
 
+// Thin-outline pastel pills (Student Messages cyan revamp).
+const PILL = 'inline-flex items-center gap-1 px-2 py-[2px] rounded-full border bg-white text-[10px] font-medium';
 const FEE_STATUS_BADGE: Record<FeeStatusValue, string> = {
-  paid: 'bg-emerald-100 text-emerald-700',
-  'not-paid': 'bg-red-100 text-red-700',
-  'has-dues': 'bg-amber-100 text-amber-700',
-  'no-dues': 'bg-emerald-100 text-emerald-700',
+  paid: 'border-[#0FA968]/40 text-[#0A7A4B]',
+  'not-paid': 'border-[#E11D48]/35 text-[#A5173A]',
+  'has-dues': 'border-[#D97706]/40 text-[#9A5B00]',
+  'no-dues': 'border-[#0FA968]/40 text-[#0A7A4B]',
 };
+const CARD = 'rounded-2xl border border-[#CBE8F0] bg-white';
+const TH = 'px-2.5 py-2 text-left text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#0E6A85] whitespace-nowrap';
 
 const FEE_STATUS_LABEL: Record<FeeStatusValue, string> = {
   paid: 'Paid',
@@ -43,8 +47,7 @@ export function StudentPickerTable({ rows, selected, onToggle, onToggleAll }: St
   if (rows.length === 0) {
     return (
       <div
-        className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400 rounded-2xl border border-emerald-100 bg-white/80"
-        style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+        className={`flex-1 min-h-0 flex items-center justify-center text-[12.5px] text-[#8A93A3] ${CARD}`}
       >
         No students match the current filters.
       </div>
@@ -53,20 +56,19 @@ export function StudentPickerTable({ rows, selected, onToggle, onToggleAll }: St
 
   return (
     <div
-      className="flex-1 min-h-0 overflow-auto rounded-2xl border border-emerald-100 bg-white/80"
-      style={{ boxShadow: '0 1px 4px 0 rgba(16,185,129,0.06)' }}
+      className={`flex-1 min-h-0 overflow-auto scroll-fee ${CARD}`}
     >
       {/* Mobile card list — tap a card to toggle selection, avoids the 14-column table below */}
-      <div className="sm:hidden divide-y divide-emerald-50/60">
-        <label className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-50 to-sky-50 sticky top-0 z-10 cursor-pointer">
+      <div className="sm:hidden divide-y divide-[#ECF7FA]">
+        <label className="flex items-center gap-2 px-3 py-2 bg-[#ECF7FA] sticky top-0 z-10 cursor-pointer">
           <input
             type="checkbox"
             checked={allChecked}
             ref={(el) => { if (el) el.indeterminate = someChecked; }}
             onChange={onToggleAll}
-            className="cursor-pointer shrink-0"
+            className="cursor-pointer shrink-0 accent-[#0891B2]"
           />
-          <span className="text-[11px] font-semibold text-gray-600">Select all ({rows.length})</span>
+          <span className="text-[11px] font-medium text-[#0E6A85]">Select all ({rows.length})</span>
         </label>
         {rows.map((row) => {
           const s = row.student;
@@ -77,25 +79,25 @@ export function StudentPickerTable({ rows, selected, onToggle, onToggleAll }: St
               key={s.id}
               type="button"
               onClick={() => onToggle(s.id)}
-              className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50/60' : 'active:bg-emerald-50/40'}`}
+              className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-[#0891B2]/[0.07]' : 'active:bg-[#0891B2]/[0.04]'}`}
             >
               <input
                 type="checkbox"
                 checked={isSelected}
                 onChange={() => onToggle(s.id)}
                 onClick={(e) => e.stopPropagation()}
-                className="mt-0.5 cursor-pointer shrink-0"
+                className="mt-0.5 cursor-pointer shrink-0 accent-[#0891B2]"
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-gray-900 truncate">{s.studentNameSSLC}</span>
+                  <span className="text-[13px] font-medium text-[#262B35] truncate">{s.studentNameSSLC}</span>
                   {feeStatus && (
-                    <span className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${FEE_STATUS_BADGE[feeStatus]}`}>
+                    <span className={`shrink-0 ${PILL} ${FEE_STATUS_BADGE[feeStatus]}`}>
                       {FEE_STATUS_LABEL[feeStatus]}
                     </span>
                   )}
                 </span>
-                <span className="block text-[11px] text-gray-500 mt-0.5">
+                <span className="block text-[11px] text-[#8A93A3] mt-0.5">
                   {s.regNumber || '—'} · {s.course} · {s.year} · {s.gender}
                 </span>
               </span>
@@ -105,74 +107,74 @@ export function StudentPickerTable({ rows, selected, onToggle, onToggleAll }: St
       </div>
 
       {/* Desktop/tablet table */}
-      <table className="hidden sm:table min-w-full divide-y divide-emerald-50 text-xs">
-        <thead className="sticky top-0 z-10" style={{ background: 'linear-gradient(90deg, #ecfdf5, #f0f9ff)' }}>
+      <table className="hidden sm:table min-w-full text-[12px]">
+        <thead className="sticky top-0 z-10 bg-[#ECF7FA] shadow-[inset_0_-1px_0_#CBE8F0]">
           <tr>
-            <th className="px-2 py-1.5 w-8">
+            <th className="px-2.5 py-2 w-8">
               <input
                 type="checkbox"
                 checked={allChecked}
                 ref={(el) => { if (el) el.indeterminate = someChecked; }}
                 onChange={onToggleAll}
-                className="cursor-pointer"
+                className="cursor-pointer accent-[#0891B2]"
               />
             </th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap w-8">#</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Name (SSLC)</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Reg No</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Course</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Year</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Gender</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Category</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Adm Type</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Adm Cat</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Allotted Cat</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Mobile</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Status</th>
-            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 whitespace-nowrap">Fee Status</th>
+            <th className={`${TH} w-8`}>#</th>
+            <th className={TH}>Name (SSLC)</th>
+            <th className={TH}>Reg No</th>
+            <th className={TH}>Course</th>
+            <th className={TH}>Year</th>
+            <th className={TH}>Gender</th>
+            <th className={TH}>Category</th>
+            <th className={TH}>Adm Type</th>
+            <th className={TH}>Adm Cat</th>
+            <th className={TH}>Allotted Cat</th>
+            <th className={TH}>Mobile</th>
+            <th className={TH}>Status</th>
+            <th className={TH}>Fee Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-emerald-50/60">
+        <tbody className="divide-y divide-[#ECF7FA]">
           {rows.map((row, idx) => {
             const s = row.student;
             const isSelected = selected.has(s.id);
             const feeStatus = feeStatusOf(row);
             return (
-              <tr key={s.id} className={isSelected ? 'bg-emerald-50/60' : 'hover:bg-emerald-50/40'}>
-                <td className="px-2 py-1">
-                  <input type="checkbox" checked={isSelected} onChange={() => onToggle(s.id)} className="cursor-pointer" />
+              <tr key={s.id} className={`transition-colors ${isSelected ? 'bg-[#0891B2]/[0.07]' : 'hover:bg-[#F3FAFC]'}`}>
+                <td className="px-2.5 py-1.5">
+                  <input type="checkbox" checked={isSelected} onChange={() => onToggle(s.id)} className="cursor-pointer accent-[#0891B2]" />
                 </td>
-                <td className="px-2 py-1 text-gray-400 whitespace-nowrap">{idx + 1}</td>
-                <td className="px-2 py-1 font-medium text-gray-900 whitespace-nowrap">{s.studentNameSSLC}</td>
-                <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{s.regNumber || '—'}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.course}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.year}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.gender}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.category || '—'}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.admType || '—'}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.admCat || '—'}</td>
-                <td className="px-2 py-1 text-gray-700 whitespace-nowrap">{s.allottedCategory || '—'}</td>
-                <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{s.studentMobile}</td>
-                <td className="px-2 py-1 whitespace-nowrap">
+                <td className="px-2.5 py-1.5 text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
+                <td className="px-2.5 py-1.5 font-medium text-[#262B35] whitespace-nowrap">{s.studentNameSSLC}</td>
+                <td className="px-2.5 py-1.5 text-[#5B6371] tabular-nums whitespace-nowrap">{s.regNumber || '—'}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.course}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.year}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.gender}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.category || '—'}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.admType || '—'}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.admCat || '—'}</td>
+                <td className="px-2.5 py-1.5 text-[#3F4654] whitespace-nowrap">{s.allottedCategory || '—'}</td>
+                <td className="px-2.5 py-1.5 text-[#5B6371] tabular-nums whitespace-nowrap">{s.studentMobile}</td>
+                <td className="px-2.5 py-1.5 whitespace-nowrap">
                   <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    className={`${PILL} ${
                       s.admissionStatus === 'CONFIRMED'
-                        ? 'bg-green-100 text-green-700'
+                        ? 'border-[#0FA968]/40 text-[#0A7A4B]'
                         : s.admissionStatus === 'CANCELLED'
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-yellow-100 text-yellow-700'
+                        ? 'border-[#E11D48]/35 text-[#A5173A]'
+                        : 'border-[#D97706]/40 text-[#9A5B00]'
                     }`}
                   >
                     {s.admissionStatus || '—'}
                   </span>
                 </td>
-                <td className="px-2 py-1 whitespace-nowrap">
+                <td className="px-2.5 py-1.5 whitespace-nowrap">
                   {feeStatus ? (
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${FEE_STATUS_BADGE[feeStatus]}`}>
+                    <span className={`${PILL} ${FEE_STATUS_BADGE[feeStatus]}`}>
                       {FEE_STATUS_LABEL[feeStatus]}
                     </span>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-[#C7CDD5]">—</span>
                   )}
                 </td>
               </tr>

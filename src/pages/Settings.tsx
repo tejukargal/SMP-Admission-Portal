@@ -1,9 +1,12 @@
-import { useState, useEffect, lazy, Suspense, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, lazy, Suspense, type FormEvent, type ChangeEvent, type ReactNode } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getStaffUsers, createStaffUser, deactivateStaffUser, reactivateStaffUser, setStaffDefaultYear, syncMyAdminClaim } from '../services/userService';
 import { auth } from '../config/firebase';
 import { getMessagingConfig, saveMessagingConfig } from '../services/adminConfigService';
-import { Button } from '../components/common/Button';
+import {
+  SLATE, SLATE_INK, HAIRLINE, BAND, MINT, CORAL, PAGE_BG, TEXT_INPUT,
+  PillButton, FieldLabel, Notice, SettingsCard,
+} from '../components/settings/settingsUi';
 import { isFeeStructureSection, type FeeStructureSection } from './feeStructureShared';
 import { StudentAppPanel, isStudentAppSection, type StudentAppSection } from './StudentAppPanel';
 import { ImportPanel, isImportSection, type ImportSection } from './ImportPanel';
@@ -49,6 +52,35 @@ const ACADEMIC_YEAR_OPTIONS = [
   { value: '2013-14', label: '2013-14' },
   { value: '2012-13', label: '2012-13' },
 ];
+
+// ── Icons (display only) ──────────────────────────────────────────────────────
+function Ico({ children, size = 14 }: { children: ReactNode; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+const TAB_ICONS: Record<Tab, ReactNode> = {
+  'general': <Ico><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></Ico>,
+  'fee-structure': <Ico><path d="M4 3h16v18l-3-2-3 2-2-2-2 2-3-2-3 2z" /><line x1="8" y1="8" x2="16" y2="8" /><line x1="8" y1="12" x2="16" y2="12" /></Ico>,
+  'exam-fee': <Ico><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M9 15l2 2 4-4" /></Ico>,
+  'import': <Ico><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></Ico>,
+  'staff': <Ico><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Ico>,
+  'messaging': <Ico><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></Ico>,
+  'student-app': <Ico><rect x="5" y="2" width="14" height="20" rx="2.5" /><line x1="11" y1="18" x2="13" y2="18" /></Ico>,
+  'dtek-news': <Ico><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" /><line x1="10" y1="7" x2="18" y2="7" /><line x1="10" y1="11" x2="18" y2="11" /><line x1="10" y1="15" x2="14" y2="15" /></Ico>,
+  'backup': <Ico><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></Ico>,
+};
+
+const CARD_ICONS = {
+  send: <Ico size={17}><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></Ico>,
+  key: <Ico size={17}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></Ico>,
+  shield: <Ico size={17}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" /></Ico>,
+  userPlus: <Ico size={17}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></Ico>,
+  users: <Ico size={17}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Ico>,
+};
 
 // The five student-app tabs were folded into one 'student-app' tab with
 // sections; old ?tab= links keep working by mapping to the section.
@@ -239,23 +271,53 @@ export function Settings() {
   }
 
   return (
-    <div className="h-full flex flex-col" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: PAGE_BG, animation: 'page-enter 0.22s ease-out' }}
+    >
+
+      {/* Page header */}
+      <div className="flex-shrink-0 flex items-end gap-4 min-w-0">
+        <div className="shrink-0">
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Settings
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: SLATE_INK }}>Settings</h2>
+            <span
+              key={activeTab}
+              className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none"
+              style={{ borderColor: `${SLATE}66`, color: SLATE_INK, animation: 'page-enter 0.18s ease-out' }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: SLATE }} />
+              {TABS.find((t) => t.id === activeTab)?.label}
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Tab bar */}
-      <div className="flex-shrink-0 flex gap-1 border-b border-gray-200 mb-4">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex-shrink-0 rounded-2xl border bg-white p-1.5" style={{ borderColor: HAIRLINE }}>
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-[7px] text-[12.5px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3B5BA9]/40 ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-[#5B6371] hover:bg-[#3B5BA9]/[0.07] hover:text-[#2B437F]'
+                }`}
+                style={isActive ? { background: `linear-gradient(135deg, ${SLATE}, ${SLATE_INK})`, boxShadow: `0 3px 10px ${SLATE}40` } : undefined}
+              >
+                <span className={isActive ? 'opacity-95' : 'opacity-70'}>{TAB_ICONS[tab.id]}</span>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tab content */}
@@ -286,63 +348,63 @@ export function Settings() {
         {/* ── Messaging ── */}
         {activeTab === 'messaging' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <div className="max-w-md space-y-5">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Bulk SMS Composer</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Temporarily moved off the sidebar while it's being finished. Open it here in the meantime.
-                </p>
-                <Button variant="secondary" onClick={() => navigate('/messaging')}>
+            <div className="max-w-2xl space-y-4 pb-2">
+              <SettingsCard
+                title="Bulk SMS Composer"
+                subtitle="Temporarily moved off the sidebar while it's being finished. Open it here in the meantime."
+                icon={CARD_ICONS.send}
+              >
+                <PillButton tone="slate" onClick={() => navigate('/messaging')}>
                   Open Bulk SMS Composer →
-                </Button>
-              </div>
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Fast2SMS Configuration</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  These credentials are used by the Bulk SMS feature to send messages via Fast2SMS.
-                  Your API key is stored securely in Firestore and never exposed to students.
-                </p>
+                </PillButton>
+              </SettingsCard>
+              <SettingsCard
+                title="Fast2SMS Configuration"
+                subtitle={<>These credentials are used by the Bulk SMS feature to send messages via Fast2SMS. Your API key is stored securely in Firestore and never exposed to students.</>}
+                icon={CARD_ICONS.key}
+                tone="#7C5CC4"
+                delay={0.05}
+              >
                 {msgLoading ? (
-                  <p className="text-sm text-gray-400">Loading…</p>
+                  <div className="flex items-center gap-2 text-[12.5px] text-[#8A93A3]">
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-[#D9E1F2] border-t-[#3B5BA9] animate-spin" />
+                    Loading…
+                  </div>
                 ) : (
                   <form onSubmit={(e) => { void handleSaveMessaging(e); }} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Fast2SMS API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={msgApiKey}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgApiKey(e.target.value); setMsgSaveMsg(''); setMsgSaveError(''); }}
-                        placeholder="Paste your Fast2SMS API key"
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                    <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
+                      <div>
+                        <FieldLabel>Fast2SMS API Key</FieldLabel>
+                        <input
+                          type="password"
+                          value={msgApiKey}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgApiKey(e.target.value); setMsgSaveMsg(''); setMsgSaveError(''); }}
+                          placeholder="Paste your Fast2SMS API key"
+                          className={TEXT_INPUT}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel hint="(optional, default: SMPCLG)">Sender ID</FieldLabel>
+                        <input
+                          type="text"
+                          value={msgSenderId}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgSenderId(e.target.value.toUpperCase()); setMsgSaveMsg(''); setMsgSaveError(''); }}
+                          placeholder="SMPCLG"
+                          maxLength={11}
+                          className={`${TEXT_INPUT} tracking-wide`}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Sender ID <span className="text-gray-400 font-normal">(optional, default: SMPCLG)</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={msgSenderId}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setMsgSenderId(e.target.value.toUpperCase()); setMsgSaveMsg(''); setMsgSaveError(''); }}
-                        placeholder="SMPCLG"
-                        maxLength={11}
-                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                    {msgSaveError && <Notice tone="error">{msgSaveError}</Notice>}
+                    {msgSaveMsg && <Notice tone="success">{msgSaveMsg}</Notice>}
+                    <div className="pt-1 border-t" style={{ borderColor: BAND }}>
+                      <PillButton type="submit" loading={msgSaving} className="mt-3">
+                        Save Messaging Settings
+                      </PillButton>
                     </div>
-                    {msgSaveError && (
-                      <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">{msgSaveError}</p>
-                    )}
-                    {msgSaveMsg && (
-                      <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-md px-3 py-2">{msgSaveMsg}</p>
-                    )}
-                    <Button type="submit" loading={msgSaving}>
-                      Save Messaging Settings
-                    </Button>
                   </form>
                 )}
-              </div>
+              </SettingsCard>
             </div>
           </div>
         )}
@@ -350,88 +412,118 @@ export function Settings() {
         {/* ── Staff Accounts ── */}
         {activeTab === 'staff' && (
           <div className="h-full overflow-auto" style={{ animation: 'page-enter 0.22s ease-out' }}>
-            <div className="max-w-lg space-y-5">
+            <div className="max-w-5xl space-y-4 pb-2">
 
-              {/* Refresh my access (custom claim sync) */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">My Access</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Refreshes the admin permission used for Storage uploads (e.g. remittance challan copies) from your current role.
-                  Use this once, or any time uploads unexpectedly fail with a permission error.
-                </p>
-                <Button onClick={() => { void handleSyncMyAccess(); }} loading={syncingClaim} variant="secondary">
-                  Refresh My Permissions
-                </Button>
-                {syncClaimMsg && (
-                  <p className="text-sm text-gray-600 bg-gray-50 rounded-md px-3 py-2 mt-3">{syncClaimMsg}</p>
-                )}
-              </div>
+              <div className="grid gap-4 lg:grid-cols-2 items-start">
+                {/* Refresh my access (custom claim sync) */}
+                <SettingsCard
+                  title="My Access"
+                  subtitle={<>Refreshes the admin permission used for Storage uploads (e.g. remittance challan copies) from your current role. Use this once, or any time uploads unexpectedly fail with a permission error.</>}
+                  icon={CARD_ICONS.shield}
+                  tone={MINT}
+                >
+                  <PillButton tone="slate" onClick={() => { void handleSyncMyAccess(); }} loading={syncingClaim}>
+                    Refresh My Permissions
+                  </PillButton>
+                  {syncClaimMsg && <Notice tone="info" className="mt-3">{syncClaimMsg}</Notice>}
+                </SettingsCard>
 
-              {/* Create staff account */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-1">Create Staff Account</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Staff can enroll students, view student list, fee register, and dashboard.
-                  They cannot edit/delete students, collect fees, or access settings.
-                </p>
-                <form onSubmit={(e) => { void handleCreateStaff(e); }} className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={newStaffEmail}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffEmail(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
-                      placeholder="staff@example.com"
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <input
-                      type="password"
-                      value={newStaffPassword}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffPassword(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
-                      placeholder="Min 6 characters"
-                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  {staffCreateError && (
-                    <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{staffCreateError}</p>
-                  )}
-                  {staffCreateMsg && (
-                    <p className="text-sm text-green-700 bg-green-50 rounded-md px-3 py-2">{staffCreateMsg}</p>
-                  )}
-                  <Button type="submit" loading={creatingStaff}>
-                    Create Staff Account
-                  </Button>
-                </form>
+                {/* Create staff account */}
+                <SettingsCard
+                  title="Create Staff Account"
+                  subtitle={<>Staff can enroll students, view student list, fee register, and dashboard. They cannot edit/delete students, collect fees, or access settings.</>}
+                  icon={CARD_ICONS.userPlus}
+                  delay={0.04}
+                >
+                  <form onSubmit={(e) => { void handleCreateStaff(e); }} className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel>Email</FieldLabel>
+                        <input
+                          type="email"
+                          value={newStaffEmail}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffEmail(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
+                          placeholder="staff@example.com"
+                          className={TEXT_INPUT}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Password</FieldLabel>
+                        <input
+                          type="password"
+                          value={newStaffPassword}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewStaffPassword(e.target.value); setStaffCreateError(''); setStaffCreateMsg(''); }}
+                          placeholder="Min 6 characters"
+                          className={TEXT_INPUT}
+                        />
+                      </div>
+                    </div>
+                    {staffCreateError && <Notice tone="error">{staffCreateError}</Notice>}
+                    {staffCreateMsg && <Notice tone="success">{staffCreateMsg}</Notice>}
+                    <PillButton type="submit" loading={creatingStaff}>
+                      Create Staff Account
+                    </PillButton>
+                  </form>
+                </SettingsCard>
               </div>
 
               {/* Staff list */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" style={{ animation: 'page-enter 0.2s ease-out 0.07s both' }}>
-                <h3 className="text-base font-medium text-gray-800 mb-4">Staff Accounts</h3>
+              <SettingsCard
+                title="Staff Accounts"
+                icon={CARD_ICONS.users}
+                tone="#0B7BC0"
+                delay={0.08}
+                right={!staffLoading && !staffError && (
+                  <span
+                    className="rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums"
+                    style={{ borderColor: `${SLATE}66`, color: SLATE_INK }}
+                  >
+                    {staffUsers.length} {staffUsers.length === 1 ? 'account' : 'accounts'}
+                  </span>
+                )}
+              >
                 {staffLoading ? (
-                  <p className="text-sm text-gray-500">Loading...</p>
+                  <div className="flex items-center gap-2 text-[12.5px] text-[#8A93A3]">
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-[#D9E1F2] border-t-[#3B5BA9] animate-spin" />
+                    Loading...
+                  </div>
                 ) : staffError ? (
-                  <p className="text-sm text-red-600">{staffError}</p>
+                  <Notice tone="error">{staffError}</Notice>
                 ) : staffUsers.length === 0 ? (
-                  <p className="text-sm text-gray-400">No staff accounts yet.</p>
+                  <div className="rounded-xl border border-dashed px-4 py-6 text-center text-[12.5px] text-[#8A93A3]" style={{ borderColor: HAIRLINE }}>
+                    No staff accounts yet.
+                  </div>
                 ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {staffUsers.map((u) => (
-                      <li key={u.uid} className="flex items-center justify-between py-3 gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{u.email}</p>
-                          <p className="text-[10px] text-gray-400">
-                            Created {new Date(u.createdAt).toLocaleDateString('en-IN')}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span className="text-[10px] text-gray-400 shrink-0">Default year:</span>
+                  <ul className="rounded-xl border overflow-hidden divide-y" style={{ borderColor: HAIRLINE }}>
+                    {staffUsers.map((u) => {
+                      const tone = u.active ? MINT : CORAL;
+                      return (
+                        <li key={u.uid} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-3 hover:bg-[#F8FAFE] transition-colors" style={{ borderColor: BAND }}>
+                          <div className="flex items-center gap-3 min-w-0 flex-1 basis-56">
+                            <span
+                              className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-[14px] font-semibold"
+                              style={
+                                u.active
+                                  ? { background: `${SLATE}14`, color: SLATE_INK, boxShadow: `0 0 0 2px #fff, 0 0 0 3.5px ${SLATE}40` }
+                                  : { background: '#F1F2F5', color: '#8A93A3', boxShadow: '0 0 0 2px #fff, 0 0 0 3.5px #E3E6EC' }
+                              }
+                            >
+                              {u.email.charAt(0).toUpperCase()}
+                            </span>
+                            <div className="min-w-0">
+                              <p className={`text-[13px] font-medium truncate ${u.active ? 'text-[#262B35]' : 'text-[#8A93A3]'}`}>{u.email}</p>
+                              <p className="text-[10.5px] text-[#8A93A3]">
+                                Created {new Date(u.createdAt).toLocaleDateString('en-IN')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10.5px] text-[#8A93A3] shrink-0">Default year:</span>
                             <select
                               value={u.defaultAcademicYear ?? ''}
                               onChange={(e) => { void handleSetDefaultYear(u.uid, e.target.value); }}
                               disabled={savingYearFor === u.uid}
-                              className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer disabled:opacity-50"
+                              className="rounded-full border border-[#3B5BA9]/35 bg-white px-2.5 py-1 text-[11px] font-medium text-[#2B437F] hover:border-[#3B5BA9]/60 focus:outline-none focus:ring-2 focus:ring-[#3B5BA9]/25 cursor-pointer disabled:opacity-50 transition-colors"
                             >
                               <option value="">Not set (follows global)</option>
                               {ACADEMIC_YEAR_OPTIONS.map((opt) => (
@@ -439,36 +531,31 @@ export function Settings() {
                               ))}
                             </select>
                             {savingYearFor === u.uid && (
-                              <span className="text-[10px] text-gray-400">Saving…</span>
+                              <span className="text-[10.5px] text-[#3B5BA9]">Saving…</span>
                             )}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
-                              u.active
-                                ? 'bg-green-100 text-green-700 border border-green-200'
-                                : 'bg-red-50 text-red-500 border border-red-200'
-                            }`}
-                          >
-                            {u.active ? 'Active' : 'Deactivated'}
-                          </span>
-                          <button
-                            onClick={() => { void handleToggleStaff(u.uid, u.active); }}
-                            className={`rounded px-2.5 py-1 text-xs font-medium border transition-colors cursor-pointer ${
-                              u.active
-                                ? 'text-red-600 border-red-200 hover:bg-red-50'
-                                : 'text-green-700 border-green-200 hover:bg-green-50'
-                            }`}
-                          >
-                            {u.active ? 'Deactivate' : 'Reactivate'}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                          <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium"
+                              style={{ borderColor: `${tone}55`, color: u.active ? '#0A7A4B' : '#A5173A' }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ background: tone }} />
+                              {u.active ? 'Active' : 'Deactivated'}
+                            </span>
+                            <PillButton
+                              tone={u.active ? 'red' : 'green'}
+                              className="!px-3 !py-1 !text-[11px]"
+                              onClick={() => { void handleToggleStaff(u.uid, u.active); }}
+                            >
+                              {u.active ? 'Deactivate' : 'Reactivate'}
+                            </PillButton>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
-              </div>
+              </SettingsCard>
             </div>
           </div>
         )}

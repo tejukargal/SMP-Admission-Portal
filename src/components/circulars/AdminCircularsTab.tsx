@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import type { User } from 'firebase/auth';
 import type { Circular, StoredAttachment } from '../../types';
 import {
@@ -9,7 +8,10 @@ import {
 } from '../../services/circularService';
 import { departmentMeta } from '../../utils/departments';
 import { stripHtml, formatCircularDate } from '../../utils/htmlContent';
-import { Button } from '../common/Button';
+import {
+  HAIRLINE, BAND, CYAN_INK, MINT, CORAL, AMBER, MUTED, MsgIcon,
+  PillButton, StatusPill, Segmented, KebabButton, EmptyState, MsgModal,
+} from '../messages/messagesUi';
 import { CardContextMenu } from '../common/CardContextMenu';
 import { CardWatermark } from '../common/CardWatermark';
 import { CircularForm, type CircularFormValues } from './CircularForm';
@@ -106,44 +108,38 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-2.5">
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="flex flex-col gap-1.5">
-          <p className="text-xs text-gray-500">
-            Circulars are visible to <span className="font-semibold text-gray-700">all students</span> in the portal — department is a label/filter only.
-          </p>
-          <div className="flex items-center gap-1">
-            {([['active', 'Active', activeCount], ['expired', 'Expired', expiredCount]] as const).map(([key, label, count]) => (
-              <button
-                key={key}
-                onClick={() => setView(key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold cursor-pointer transition-colors ${view === key ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              >
-                {label}
-                <span className={`rounded-full text-[10px] px-1.5 ${view === key ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-600'}`}>{count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="self-start sm:self-auto">
-          <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+    <div className="flex-1 min-h-0 flex flex-col gap-2.5" style={{ animation: 'page-enter 0.2s ease-out' }}>
+      <div className="shrink-0 rounded-2xl border bg-white px-2.5 py-2 flex flex-col sm:flex-row sm:items-center gap-2" style={{ borderColor: HAIRLINE }}>
+        <Segmented<'active' | 'expired'>
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'active', label: 'Active', count: activeCount },
+            { value: 'expired', label: 'Expired', count: expiredCount },
+          ]}
+        />
+        <p className="flex-1 min-w-0 text-[12px] text-[#5B6371] sm:px-1">
+          Circulars are visible to{' '}
+          <span className="rounded-full px-2 py-[1px] font-medium" style={{ background: BAND, color: CYAN_INK }}>all students</span>
+          {' '}in the portal — department is a label/filter only.
+        </p>
+        <PillButton onClick={() => setShowForm(true)} className="self-start sm:self-auto !px-4 !py-2">
+          <MsgIcon name="plus" size={13} />
           New Circular
-        </Button>
+        </PillButton>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
-          <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
+          <EmptyState loading>Loading…</EmptyState>
         ) : circulars.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-10">No circulars posted yet. Click "New Circular" to publish the first one.</div>
+          <EmptyState>No circulars posted yet. Click "New Circular" to publish the first one.</EmptyState>
         ) : shown.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-10">
+          <EmptyState>
             {view === 'expired' ? 'No expired circulars. Use "Mark as Expired" on a circular to move it here.' : 'No active circulars — everything is under Expired.'}
-          </div>
+          </EmptyState>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 pb-1">
             {shown.map((c) => (
               <AdminCircularCard
                 key={c.id}
@@ -217,22 +213,24 @@ export function AdminCircularsTab({ user }: AdminCircularsTabProps) {
       )}
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmDelete(null)} aria-hidden="true" />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Delete Circular</h3>
-            <p className="text-sm text-gray-600">
-              Delete <span className="font-semibold text-red-600">"{confirmDelete.title}"</span>
+        <MsgModal
+          title="Delete Circular"
+          icon={<MsgIcon name="trash" size={15} />}
+          tone={CORAL}
+          size="sm"
+          onClose={() => setConfirmDelete(null)}
+          footer={<>
+            <PillButton tone="gray" onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</PillButton>
+            <PillButton tone="danger" onClick={() => void handleDelete()} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Yes, Delete'}
+            </PillButton>
+          </>}
+        >
+            <p className="text-[13px] text-[#3F4654]">
+              Delete <span className="font-semibold text-[#A5173A]">"{confirmDelete.title}"</span>
               {(confirmDelete.attachments?.length ?? 0) > 0 && ` and its ${confirmDelete.attachments.length} attachment${confirmDelete.attachments.length !== 1 ? 's' : ''}`}? This cannot be undone.
             </p>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>
-              <button onClick={() => void handleDelete()} disabled={deleting} className="px-3 py-1.5 text-xs rounded bg-red-500 text-white font-semibold hover:bg-red-600 cursor-pointer disabled:opacity-50">
-                {deleting ? 'Deleting…' : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </MsgModal>
       )}
     </div>
   );
@@ -248,70 +246,54 @@ function AdminCircularCard({ circular: c, onContextMenu }: AdminCircularCardProp
   const preview3 = stripHtml(c.body);
   const initials = c.department.slice(0, 2).toUpperCase();
 
+  const muted = !!(c.archivedAt || c.expiredAt);
   return (
     <div
-      className={`relative flex overflow-hidden rounded-xl border shadow-sm border-l-[3px] select-none ${meta.borderL} ${c.pinned ? 'border-amber-300' : 'border-gray-100'} ${c.archivedAt ? 'bg-gray-100/80' : c.expiredAt ? 'bg-gray-50' : 'bg-white'}`}
+      className={`relative flex gap-2.5 overflow-hidden rounded-2xl border p-2 select-none transition-shadow hover:shadow-[0_6px_20px_rgba(14,106,133,0.08)] ${c.archivedAt ? 'bg-[#F4F6F8]' : c.expiredAt ? 'bg-[#F8FAFB]' : 'bg-white'}`}
+      style={{
+        borderColor: c.pinned ? `${AMBER}66` : HAIRLINE,
+        boxShadow: c.pinned ? `0 0 0 2px ${AMBER}1A` : undefined,
+      }}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); }}
     >
       {/* Background — 30% column, shown full (not masked) */}
-      <div className="w-[30%] shrink-0 relative bg-gray-100">
+      <div className={`w-[30%] shrink-0 relative rounded-xl overflow-hidden bg-gray-100 ${muted ? 'opacity-70 grayscale-[35%]' : ''}`}>
         {c.backgroundImageUrl ? (
           <img src={c.backgroundImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className={`absolute inset-0 flex items-center justify-center ${meta.cardBg}`}>
-            <span className={`text-base font-black ${meta.text} opacity-40`}>{initials}</span>
+            <span className={`text-base font-semibold ${meta.text} opacity-50`}>{initials}</span>
           </div>
         )}
       </div>
 
       {/* Message preview — 70% column */}
-      <div className="flex-1 min-w-0 relative p-2">
+      <div className="flex-1 min-w-0 relative py-0.5">
         {c.archivedAt ? <CardWatermark label="Unpublished" /> : c.expiredAt ? <CardWatermark label="Expired" /> : null}
-        <button
-          type="button"
-          aria-label="Options"
-          className="absolute top-1 right-1 z-10 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            const rect = e.currentTarget.getBoundingClientRect();
-            onContextMenu(rect.right, rect.bottom + 4);
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="12" cy="19" r="2" />
-          </svg>
-        </button>
-        <div className="relative z-10 pr-5">
+        <KebabButton onOpen={onContextMenu} className="absolute -top-0.5 -right-0.5" />
+        <div className="relative z-10 pr-6">
           <span className="flex items-center gap-1 flex-wrap min-w-0">
-            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${meta.pill}`}>{c.department}</span>
-            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${c.archivedAt ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}`}>
-              {c.archivedAt ? 'Unpublished' : 'Published'}
-            </span>
-            {c.expiredAt && (
-              <span className="rounded-full bg-gray-200 text-gray-600 px-1.5 py-0.5 text-[9px] font-bold">Expired</span>
-            )}
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-[1px] text-[9.5px] font-medium ${meta.pill}`}>{c.department}</span>
+            <StatusPill color={c.archivedAt ? MUTED : MINT}>{c.archivedAt ? 'Unpublished' : 'Published'}</StatusPill>
+            {c.expiredAt && <StatusPill color={MUTED}>Expired</StatusPill>}
             {c.pinned && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 3c-.6 0-1 .4-1 1v6.2l-2.5 2.5V6a1 1 0 0 0-2 0v6.7L8 15.2V17h8v-1.8l-2.5-2.5V6.9L16 4.7V13a1 1 0 0 0 2 0V4c0-.6-.4-1-1-1z"/><path d="M11 17v4a1 1 0 0 0 2 0v-4z"/></svg>
+              <StatusPill color={AMBER} dot={false}>
+                <MsgIcon name="pin" />
                 Pinned
-              </span>
+              </StatusPill>
             )}
             {(c.attachments?.length ?? 0) > 0 && (
-              <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
+              <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-[1px] text-[10px]" style={{ background: BAND, color: CYAN_INK }}>
+                <MsgIcon name="clip" size={11} />
                 {c.attachments.length}
               </span>
             )}
           </span>
-          <h4 className="text-xs font-bold text-gray-900 mt-1 leading-snug line-clamp-1">{c.title}</h4>
-          <p className={`text-[10px] font-semibold ${meta.text} mt-0.5 line-clamp-1`}>
-            {c.subject} <span className="text-gray-400 font-normal">· {formatCircularDate(c.date)}</span>
+          <h4 className="text-[13px] font-medium text-[#262B35] mt-1.5 leading-snug line-clamp-1">{c.title}</h4>
+          <p className={`text-[10.5px] font-medium ${meta.text} mt-0.5 line-clamp-1`}>
+            {c.subject} <span className="text-[#8A93A3] font-normal">· {formatCircularDate(c.date)}</span>
           </p>
-          {preview3 && <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-snug">{preview3}</p>}
+          {preview3 && <p className="text-[11.5px] text-[#5B6371] mt-0.5 line-clamp-2 leading-snug">{preview3}</p>}
         </div>
       </div>
     </div>
@@ -366,15 +348,36 @@ function BackgroundGenerateModal({ circular, onClose }: BackgroundGenerateModalP
     }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
-        <h3 className="text-sm font-bold text-gray-900">AI Background — {circular.title}</h3>
-
-        <div className="w-full aspect-video rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+  return (
+    <MsgModal
+      portal
+      title={`AI Background — ${circular.title}`}
+      icon={<MsgIcon name="image" size={15} />}
+      size="md"
+      onClose={onClose}
+      footer={<>
+        <PillButton tone="gray" onClick={onClose} disabled={saving}>
+          Cancel
+        </PillButton>
+        <PillButton
+          tone="cyan"
+          onClick={() => void generate()}
+          disabled={generating || saving}
+        >
+          <MsgIcon name="sparkle" size={12} />
+          {generating ? 'Generating…' : 'Regenerate'}
+        </PillButton>
+        <PillButton loading={saving} disabled={!pending || generating} onClick={() => void handleAccept()}>
+          Use this Background
+        </PillButton>
+      </>}
+    >
+        <div className="w-full aspect-video rounded-xl border flex items-center justify-center overflow-hidden" style={{ borderColor: HAIRLINE, background: '#F2FAFC' }}>
           {generating ? (
-            <span className="text-xs text-gray-400">Generating…</span>
+            <span className="flex flex-col items-center gap-2 text-[12px] text-[#8A93A3]">
+              <span className="w-5 h-5 rounded-full border-2 border-[#CBE8F0] border-t-[#0891B2] animate-spin" />
+              Generating…
+            </span>
           ) : pending ? (
             <img
               src={`data:${pending.mimeType};base64,${pending.base64}`}
@@ -382,29 +385,11 @@ function BackgroundGenerateModal({ circular, onClose }: BackgroundGenerateModalP
               className="w-full h-full object-cover"
             />
           ) : (
-            <span className="text-xs text-gray-400">No preview yet.</span>
+            <span className="text-[12px] text-[#8A93A3]">No preview yet.</span>
           )}
         </div>
 
-        {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button onClick={onClose} disabled={saving} className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50">
-            Cancel
-          </button>
-          <button
-            onClick={() => void generate()}
-            disabled={generating || saving}
-            className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-50"
-          >
-            {generating ? 'Generating…' : 'Regenerate'}
-          </button>
-          <Button size="sm" loading={saving} disabled={!pending || generating} onClick={() => void handleAccept()}>
-            Use this Background
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        {error && <p className="text-[12px] text-[#A5173A] font-medium">{error}</p>}
+    </MsgModal>
   );
 }

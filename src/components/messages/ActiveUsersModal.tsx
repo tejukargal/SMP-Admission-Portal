@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { StudentLoginActivity } from '../../types';
+import { MsgModal, SearchPill, StatusPill, EmptyState, MsgIcon, MINT, CYAN, VIOLET, MUTED } from './messagesUi';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -43,79 +44,76 @@ export function ActiveUsersModal({ activity, loading, onClose }: ActiveUsersModa
     });
   }, [activity, search]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-sm font-bold text-gray-900">Student Portal — Active Users</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <span className="flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
-              <span className="w-1.5 h-1.5 rounded-full bg-white" />
-              Online Now: {counts.online}
-            </span>
-            <span className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-              Logged In Today: {counts.today}
-            </span>
-            <span className="rounded-full bg-violet-50 border border-violet-200 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
-              This Week: {counts.week}
-            </span>
-            <span className="rounded-full bg-gray-100 border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
-              Total Ever Logged In: {counts.total}
-            </span>
-          </div>
-          <input
-            type="text"
-            placeholder="Search name / reg no…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
-          />
-        </div>
+  const COUNT_PILLS = [
+    { label: 'Online Now', value: counts.online, c: MINT, solid: true },
+    { label: 'Logged In Today', value: counts.today, c: CYAN },
+    { label: 'This Week', value: counts.week, c: VIOLET },
+    { label: 'Total Ever Logged In', value: counts.total, c: MUTED },
+  ];
+  const TH = 'px-3 py-2 text-left text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#0E6A85] whitespace-nowrap';
 
-        <div className="flex-1 min-h-0 overflow-auto">
-          {loading ? (
-            <div className="text-sm text-gray-400 text-center py-10">Loading…</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-10">No student logins recorded yet.</div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-100 text-xs">
-              <thead className="sticky top-0 bg-gray-50 z-10">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Status</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Name</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Reg No</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Course</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Year</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Last Login</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">Logins</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${a.online ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${a.online ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-                        {a.online ? 'Online' : 'Offline'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{a.studentName || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{a.regNumber || '—'}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{a.course || '—'}</td>
-                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{a.year || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatWhen(a.lastLoginAt)}</td>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{a.loginCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+  return (
+    <MsgModal
+      title="Student Portal — Active Users"
+      icon={<MsgIcon name="users" size={15} />}
+      tone={MINT}
+      size="xl"
+      onClose={onClose}
+      bodyClassName=""
+      subtitle={
+        <div className="mt-2 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {COUNT_PILLS.map((p) => (
+              <span
+                key={p.label}
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                style={p.solid
+                  ? { background: p.c, borderColor: p.c, color: '#fff' }
+                  : { background: `${p.c}0F`, borderColor: `${p.c}40`, color: p.c === MUTED ? '#5B6371' : p.c }}
+              >
+                {p.solid && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                {p.label}: <span className="font-semibold tabular-nums">{p.value}</span>
+              </span>
+            ))}
+          </div>
+          <SearchPill value={search} onChange={setSearch} placeholder="Search name / reg no…" className="w-full" />
         </div>
-      </div>
-    </div>
+      }
+    >
+      {loading ? (
+        <EmptyState loading>Loading…</EmptyState>
+      ) : filtered.length === 0 ? (
+        <EmptyState>No student logins recorded yet.</EmptyState>
+      ) : (
+        <table className="min-w-full text-[12px]">
+          <thead className="sticky top-0 z-10 bg-[#ECF7FA] shadow-[inset_0_-1px_0_#CBE8F0]">
+            <tr>
+              <th className={TH}>Status</th>
+              <th className={TH}>Name</th>
+              <th className={TH}>Reg No</th>
+              <th className={TH}>Course</th>
+              <th className={TH}>Year</th>
+              <th className={TH}>Last Login</th>
+              <th className={TH}>Logins</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#ECF7FA]">
+            {filtered.map((a) => (
+              <tr key={a.id} className="hover:bg-[#F3FAFC] transition-colors">
+                <td className="px-3 py-2 whitespace-nowrap">
+                  <StatusPill color={a.online ? MINT : MUTED}>{a.online ? 'Online' : 'Offline'}</StatusPill>
+                </td>
+                <td className="px-3 py-2 font-medium text-[#262B35] whitespace-nowrap">{a.studentName || '—'}</td>
+                <td className="px-3 py-2 text-[#5B6371] tabular-nums whitespace-nowrap">{a.regNumber || '—'}</td>
+                <td className="px-3 py-2 text-[#3F4654] whitespace-nowrap">{a.course || '—'}</td>
+                <td className="px-3 py-2 text-[#3F4654] whitespace-nowrap">{a.year || '—'}</td>
+                <td className="px-3 py-2 text-[#5B6371] tabular-nums whitespace-nowrap">{formatWhen(a.lastLoginAt)}</td>
+                <td className="px-3 py-2 text-[#5B6371] tabular-nums whitespace-nowrap">{a.loginCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </MsgModal>
   );
 }
