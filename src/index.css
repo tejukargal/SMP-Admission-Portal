@@ -749,3 +749,23 @@
 .scroll-adm::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ── Fee Reports tables — thin teal scrollbar. Sticky-header tables add
+   .scroll-fee-h1/h2/h3 (number of header rows): header cells are forced to a
+   fixed 32px height so the vertical scrollbar can start exactly below the
+   header (static values; Chrome ignores CSS variables in scrollbar styles).
+   The gutter beside the header is painted in the header band colour. ──────── */
+.scroll-fee::-webkit-scrollbar { width: 8px; height: 10px; }
+.scroll-fee::-webkit-scrollbar-track { background: transparent; }
+.scroll-fee::-webkit-scrollbar-thumb { background: #CDE7E7; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+.scroll-fee::-webkit-scrollbar-thumb:hover { background: #8CC9CA; background-clip: padding-box; }
+.scroll-fee::-webkit-scrollbar-corner { background: transparent; }
+.scroll-fee-h1 thead th, .scroll-fee-h2 thead th, .scroll-fee-h3 thead th {
+  height: 32px; padding-top: 0; padding-bottom: 0; vertical-align: middle;
+}
+.scroll-fee-h1::-webkit-scrollbar-track:vertical { margin-top: 33px; }
+.scroll-fee-h1::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F2FAFA 0 32px, #CDE7E7 32px 33px, transparent 33px); }
+.scroll-fee-h2::-webkit-scrollbar-track:vertical { margin-top: 65px; }
+.scroll-fee-h2::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F2FAFA 0 64px, #CDE7E7 64px 65px, transparent 65px); }
+.scroll-fee-h3::-webkit-scrollbar-track:vertical { margin-top: 97px; }
+.scroll-fee-h3::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F2FAFA 0 96px, #CDE7E7 96px 97px, transparent 97px); }

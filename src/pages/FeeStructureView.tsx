@@ -196,7 +196,7 @@ export function FeeStructureView() {
               setCourseFilter(''); setYearFilter('');
               setAdmTypeFilter(''); setAdmCatFilter('');
             }}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
+            className="text-sm border border-[#CDE7E7] rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/40"
           >
             {ACADEMIC_YEARS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -213,7 +213,7 @@ export function FeeStructureView() {
           <select
             value={courseFilter}
             onChange={(e) => setCourseFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
+            className="text-xs border border-[#CDE7E7] rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/40"
           >
             <option value="">All Courses</option>
             {COURSES.filter((c) => availableCourses.includes(c)).map((c) => (
@@ -225,7 +225,7 @@ export function FeeStructureView() {
           <select
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
+            className="text-xs border border-[#CDE7E7] rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/40"
           >
             <option value="">All Years</option>
             {YEARS.map((y) => (
@@ -237,7 +237,7 @@ export function FeeStructureView() {
           <select
             value={admTypeFilter}
             onChange={(e) => setAdmTypeFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
+            className="text-xs border border-[#CDE7E7] rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/40"
           >
             <option value="">All Adm Types</option>
             {ADM_TYPES.map((t) => (
@@ -249,7 +249,7 @@ export function FeeStructureView() {
           <select
             value={admCatFilter}
             onChange={(e) => setAdmCatFilter(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/40"
+            className="text-xs border border-[#CDE7E7] rounded-lg px-2.5 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/40"
           >
             <option value="">All Adm Cats</option>
             {ADM_CATS.map((c) => (
@@ -274,10 +274,10 @@ export function FeeStructureView() {
           <button
             onClick={() => setShowSmpBreakup((v) => !v)}
             title={showSmpBreakup ? 'Hide Govt Fee Breakup' : 'Show Govt Fee Breakup'}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-colors ${
               showSmpBreakup
-                ? 'bg-[#D0E2F2]/40 border-[#3B5B8A]/25 text-[#3B5B8A] hover:bg-[#D0E2F2]/70'
-                : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
+                ? 'bg-[#DDF0F0]/40 border-[#0F8B8D]/25 text-[#0B6567] hover:bg-[#DDF0F0]/70'
+                : 'bg-gray-100 border-[#CDE7E7] text-gray-500 hover:bg-gray-200'
             }`}
           >
             {showSmpBreakup ? (
@@ -301,7 +301,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportExcel(filteredStructures, additionalLabels, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-[#CDE7E7] bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
@@ -314,7 +314,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportFeeStructureFormattedPDF(structures, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-[#CDE7E7] bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/>
@@ -327,7 +327,7 @@ export function FeeStructureView() {
           {hasData && (
             <button
               onClick={() => exportFeeStructureFormatted(structures, selectedYear ?? '')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-[#3B5B8A]/25 bg-[#D0E2F2]/40 text-[#3B5B8A] hover:bg-[#D0E2F2]/70 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-[#0F8B8D]/25 bg-[#DDF0F0]/40 text-[#0B6567] hover:bg-[#DDF0F0]/70 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
@@ -341,7 +341,7 @@ export function FeeStructureView() {
       {/* ── Loading / error / empty ───────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center h-48">
-          <div className="w-7 h-7 border-2 border-[#3B5B8A] border-t-transparent rounded-full animate-spin" />
+          <div className="w-7 h-7 border-2 border-[#0F8B8D] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>
@@ -358,7 +358,7 @@ export function FeeStructureView() {
           <span>No combinations match the selected filters.</span>
           <button
             onClick={() => { setCourseFilter(''); setYearFilter(''); setAdmTypeFilter(''); setAdmCatFilter(''); }}
-            className="text-xs text-[#3B5B8A] underline"
+            className="text-xs text-[#0B6567] underline"
           >
             Clear filters
           </button>
@@ -392,7 +392,7 @@ export function FeeStructureView() {
           </div>
 
           {/* ── Table ──────────────────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#CDE7E7] shadow-sm overflow-hidden">
             <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 255px)' }}>
               <table className="text-xs border-collapse" style={{ minWidth: 'max-content' }}>
 
@@ -413,31 +413,31 @@ export function FeeStructureView() {
 
                 <thead>
                   {/* ── Row 1: group headers ── */}
-                  <tr className="border-b border-gray-200">
-                    <th rowSpan={2} className={`${stickyHBase} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-gray-200 whitespace-nowrap`}>Course</th>
-                    <th rowSpan={2} className={`${stickyHSecond} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-gray-200 whitespace-nowrap`}>Year</th>
-                    <th rowSpan={2} className={`${stickyHThird} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-gray-200 whitespace-nowrap`}>Adm Type</th>
-                    <th rowSpan={2} className={`${stickyHFourth} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-gray-200 whitespace-nowrap`}>Cat</th>
+                  <tr className="border-b border-[#CDE7E7]">
+                    <th rowSpan={2} className={`${stickyHBase} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-[#CDE7E7] whitespace-nowrap`}>Course</th>
+                    <th rowSpan={2} className={`${stickyHSecond} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-[#CDE7E7] whitespace-nowrap`}>Year</th>
+                    <th rowSpan={2} className={`${stickyHThird} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-[#CDE7E7] whitespace-nowrap`}>Adm Type</th>
+                    <th rowSpan={2} className={`${stickyHFourth} bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-r border-[#CDE7E7] whitespace-nowrap`}>Cat</th>
 
                     {/* SMP group header */}
                     {showSmpBreakup ? (
                       <th
                         colSpan={SMP_FEE_HEADS.length + 1}
-                        className={`${hRow1} px-3 py-1.5 text-center font-semibold text-blue-700 bg-blue-50 border-r border-gray-200`}
+                        className={`${hRow1} px-3 py-1.5 text-center font-semibold text-blue-700 bg-blue-50 border-r border-[#CDE7E7]`}
                       >
                         Govt Fee (SMP)
                       </th>
                     ) : (
                       <th
                         rowSpan={2}
-                        className={`${hRow1} px-3 py-2 text-center font-semibold text-blue-700 bg-blue-50 border-r border-gray-200 whitespace-nowrap`}
+                        className={`${hRow1} px-3 py-2 text-center font-semibold text-blue-700 bg-blue-50 border-r border-[#CDE7E7] whitespace-nowrap`}
                       >
                         Govt Fee (SMP)
                       </th>
                     )}
 
                     {/* SVK */}
-                    <th rowSpan={2} className={`${hRow1} px-3 py-2 text-center font-semibold text-purple-700 bg-purple-50 border-r border-gray-200 whitespace-nowrap`}>
+                    <th rowSpan={2} className={`${hRow1} px-3 py-2 text-center font-semibold text-purple-700 bg-purple-50 border-r border-[#CDE7E7] whitespace-nowrap`}>
                       SVK Mgmt Fee
                     </th>
 
@@ -445,7 +445,7 @@ export function FeeStructureView() {
                     {additionalLabels.length > 0 && (
                       <th
                         colSpan={additionalLabels.length + 1}
-                        className={`${hRow1} px-3 py-1.5 text-center font-semibold text-amber-700 bg-amber-50 border-r border-gray-200`}
+                        className={`${hRow1} px-3 py-1.5 text-center font-semibold text-amber-700 bg-amber-50 border-r border-[#CDE7E7]`}
                       >
                         Additional Fee
                       </th>
@@ -458,7 +458,7 @@ export function FeeStructureView() {
                   </tr>
 
                   {/* ── Row 2: sub-headers ── */}
-                  <tr className="border-b-2 border-gray-200">
+                  <tr className="border-b-2 border-[#CDE7E7]">
                     {/* SMP individual heads — only when breakup visible */}
                     {showSmpBreakup && SMP_FEE_HEADS.map(({ key }) => (
                       <th
@@ -470,7 +470,7 @@ export function FeeStructureView() {
                       </th>
                     ))}
                     {showSmpBreakup && (
-                      <th className={`${hRow2} px-2 py-1.5 text-center font-bold text-blue-700 bg-blue-100 border-r border-gray-200 whitespace-nowrap`}>
+                      <th className={`${hRow2} px-2 py-1.5 text-center font-bold text-blue-700 bg-blue-100 border-r border-[#CDE7E7] whitespace-nowrap`}>
                         SMP Total
                       </th>
                     )}
@@ -485,7 +485,7 @@ export function FeeStructureView() {
                       </th>
                     ))}
                     {additionalLabels.length > 0 && (
-                      <th className={`${hRow2} px-2 py-1.5 text-center font-bold text-amber-700 bg-amber-100 border-r border-gray-200 whitespace-nowrap`}>
+                      <th className={`${hRow2} px-2 py-1.5 text-center font-bold text-amber-700 bg-amber-100 border-r border-[#CDE7E7] whitespace-nowrap`}>
                         Addl. Total
                       </th>
                     )}
@@ -500,26 +500,26 @@ export function FeeStructureView() {
                     const rowBg  = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
 
                     return (
-                      <tr key={s.id} className={`${rowBg} hover:bg-[#D0E2F2]/40 transition-colors`}>
-                        <td className={`${stickyBase} ${rowBg} px-3 py-2.5 font-semibold text-gray-900 border-r border-gray-100 whitespace-nowrap`}>{s.course}</td>
-                        <td className={`${stickySecond} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-gray-100 whitespace-nowrap`}>{s.year}</td>
-                        <td className={`${stickyThird} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-gray-100 whitespace-nowrap`}>{s.admType}</td>
-                        <td className={`${stickyFourth} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-gray-100 whitespace-nowrap`}>{s.admCat}</td>
+                      <tr key={s.id} className={`${rowBg} hover:bg-[#DDF0F0]/40 transition-colors`}>
+                        <td className={`${stickyBase} ${rowBg} px-3 py-2.5 font-semibold text-gray-900 border-r border-[#E3F1F1] whitespace-nowrap`}>{s.course}</td>
+                        <td className={`${stickySecond} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-[#E3F1F1] whitespace-nowrap`}>{s.year}</td>
+                        <td className={`${stickyThird} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-[#E3F1F1] whitespace-nowrap`}>{s.admType}</td>
+                        <td className={`${stickyFourth} ${rowBg} px-3 py-2.5 text-gray-600 border-r border-[#E3F1F1] whitespace-nowrap`}>{s.admCat}</td>
 
                         {/* SMP individual head cells */}
                         {showSmpBreakup && SMP_FEE_HEADS.map(({ key }) => (
-                          <td key={key} className="px-2 py-2.5 text-right text-gray-700 border-r border-gray-100 whitespace-nowrap bg-blue-50/30">
+                          <td key={key} className="px-2 py-2.5 text-right text-gray-700 border-r border-[#E3F1F1] whitespace-nowrap bg-blue-50/30">
                             {fmtCell(s.smp[key] ?? 0)}
                           </td>
                         ))}
 
                         {/* SMP total */}
-                        <td className="px-3 py-2.5 text-right font-bold text-blue-700 bg-blue-50 border-r border-gray-200 whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-right font-bold text-blue-700 bg-blue-50 border-r border-[#CDE7E7] whitespace-nowrap">
                           ₹{smpSum.toLocaleString('en-IN')}
                         </td>
 
                         {/* SVK */}
-                        <td className="px-3 py-2.5 text-right font-semibold text-purple-700 bg-purple-50 border-r border-gray-200 whitespace-nowrap">
+                        <td className="px-3 py-2.5 text-right font-semibold text-purple-700 bg-purple-50 border-r border-[#CDE7E7] whitespace-nowrap">
                           {s.svk === 0 ? <span className="text-gray-300">—</span> : `₹${s.svk.toLocaleString('en-IN')}`}
                         </td>
 
@@ -527,7 +527,7 @@ export function FeeStructureView() {
                         {additionalLabels.map((label) => {
                           const head = s.additionalHeads.find((h) => h.label === label);
                           return (
-                            <td key={label} className="px-2 py-2.5 text-right text-gray-700 border-r border-gray-100 whitespace-nowrap bg-amber-50/30">
+                            <td key={label} className="px-2 py-2.5 text-right text-gray-700 border-r border-[#E3F1F1] whitespace-nowrap bg-amber-50/30">
                               {fmtCell(head?.amount ?? 0)}
                             </td>
                           );
@@ -535,7 +535,7 @@ export function FeeStructureView() {
 
                         {/* Additional total */}
                         {additionalLabels.length > 0 && (
-                          <td className="px-3 py-2.5 text-right font-bold text-amber-700 bg-amber-50 border-r border-gray-200 whitespace-nowrap">
+                          <td className="px-3 py-2.5 text-right font-bold text-amber-700 bg-amber-50 border-r border-[#CDE7E7] whitespace-nowrap">
                             {addSum === 0 ? <span className="text-gray-300">—</span> : `₹${addSum.toLocaleString('en-IN')}`}
                           </td>
                         )}
@@ -552,7 +552,7 @@ export function FeeStructureView() {
             </div>
 
             {/* Footer */}
-            <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-400 flex items-center justify-between">
+            <div className="px-4 py-2 bg-gray-50 border-t border-[#E3F1F1] text-[11px] text-gray-400 flex items-center justify-between">
               <span>{totalRows} combination{totalRows !== 1 ? 's' : ''} for {selectedYear}</span>
               <span>Amounts in Indian Rupees (₹). Excel export always includes full Govt Fee breakup.</span>
             </div>

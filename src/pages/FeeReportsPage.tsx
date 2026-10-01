@@ -6,7 +6,9 @@ import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getRefundRecordsByAcademicYear, isFeeNettingRefund, type RefundRecord } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
-import { Button } from '../components/common/Button';
+import { fs, THEAD, THEAD_DARK, TFOOT, BTN_GRAY, BTN_PRIMARY, TEAL_INK, HAIRLINE, Chip, ExportBar, ClearButton, StatChipRow, SegmentedToggle, SearchBox, FilterPanel } from '../components/feeReports/feeReportUi';
+import { FilterDropdown } from '../components/common/FilterDropdown';
+import { PageSpinner } from '../components/common/PageSpinner';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
@@ -57,14 +59,9 @@ const COURSE_COLORS: Record<Course, string> = {
 };
 
 // ── Design tokens ───────────────────────────────────────────────────────────
-// Matches the Fee Register page's navy design system (see src/pages/FeeRegister.tsx):
-// #3B5B8A primary, #D0E2F2 light tint, #2e4a72 dark accent for nested/total cells.
-const fs =
-  'shrink-0 rounded-full border border-[#3B5B8A]/25 px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] hover:border-[#3B5B8A]/50 cursor-pointer transition-colors';
-
-const ACCENT      = 'bg-[#3B5B8A]';
-const ACCENT_DARK = 'bg-[#2e4a72]';
-const TFOOT       = 'sticky bottom-0 z-10 bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]';
+// Teal student-portal look; shared helpers live in components/feeReports/feeReportUi.tsx.
+const ACCENT      = THEAD;
+const ACCENT_DARK = THEAD_DARK;
 
 const GOV_HEADS: { key: keyof GovHeadAmounts; label: string }[] = [
   { key: 'tuition',  label: 'Tuition'  },
@@ -180,55 +177,56 @@ interface HubCardContent { headline: string; rows?: HubStat[]; matrix?: HubMatri
 
 function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; content: Partial<Record<TabId, HubCardContent>> }) {
   return (
-    <div className="flex flex-col gap-4" style={{ animation: 'content-enter 0.22s ease-out' }}>
+    <div className="flex flex-col gap-5" style={{ animation: 'content-enter 0.22s ease-out' }}>
       {REPORT_GROUPS.map((group) => (
         <div key={group}>
           <div className="flex items-center gap-2.5 mb-1.5">
-            <span className="w-1 h-4 rounded-full shrink-0 bg-[#3B5B8A]" />
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#3B5B8A]">{group}</h2>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#0F8B8D]" />
+            <h2 className="text-[10px] font-medium uppercase tracking-[1px] text-[#8A93A3]">{group}</h2>
+            <span className="flex-1 h-px" style={{ background: HAIRLINE }} />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {TAB_META.filter((t) => t.group === group).map((tab) => { const c = content[tab.id]; return (
               <button
                 key={tab.id}
                 onClick={() => onSelect(tab.id)}
-                className="group flex flex-col rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left hover:border-[#3B5B8A]/50 hover:shadow-sm transition-all"
+                className="group flex flex-col rounded-2xl border border-[#CDE7E7] bg-white px-3.5 py-3 text-left cursor-pointer hover:border-[#0F8B8D]/50 hover:shadow-[0_4px_16px_rgba(11,101,103,0.08)] hover:-translate-y-px transition-all"
                 style={{ animation: `content-enter 0.25s ease-out ${Math.min((TAB_ORDER_INDEX[tab.id] ?? 0) * 0.03, 0.3)}s both` }}
               >
                 <span className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-[#D0E2F2]/50 text-[#3B5B8A]">
+                  <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-[#0F8B8D]/10 text-[#0B6567]">
                     {tab.icon}
                   </span>
-                  <span className="flex-1 min-w-0 text-xs font-semibold text-gray-800 truncate">{tab.label}</span>
-                  <svg className="shrink-0 text-gray-300 group-hover:text-[#3B5B8A] transition-colors" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                  <span className="flex-1 min-w-0 text-[12.5px] font-medium text-[#262B35] truncate">{tab.label}</span>
+                  <svg className="shrink-0 text-gray-300 group-hover:text-[#0B6567] transition-colors" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
                 </span>
 
                 {c && (
                   <>
-                    <span className="text-sm font-bold text-[#3B5B8A] mt-1.5 truncate">{c.headline}</span>
+                    <span className="text-[15px] font-semibold text-[#0B6567] mt-2 truncate tabular-nums">{c.headline}</span>
                     {c.matrix ? (
                       <table className="mt-1.5 w-full border-collapse table-fixed">
                         <thead>
-                          <tr className="border-b border-gray-100">
+                          <tr className="border-b border-[#E3F1F1]">
                             <th className="pb-1 w-[20%]" />
                             {c.matrix.columns.map((col) => (
-                              <th key={col} className="pb-1 pl-1 w-[20%] text-[8px] font-semibold uppercase tracking-wide text-gray-400 text-right truncate">{col}</th>
+                              <th key={col} className="pb-1 pl-1 w-[20%] text-[9px] font-medium uppercase tracking-wide text-[#8A93A3] text-right truncate">{col}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {c.matrix.rowLabels.map((label, r) => (
                             <tr key={label}>
-                              <td className="py-0.5 pr-1 text-[9px] font-semibold text-gray-600 truncate">{label}</td>
+                              <td className="py-0.5 pr-1 text-[10px] font-medium text-[#5B6371] truncate">{label}</td>
                               {c.matrix!.data[r].map((v, ci) => (
-                                <td key={ci} className="py-0.5 pl-1 text-[9px] font-bold text-gray-700 tabular-nums text-right truncate">{v}</td>
+                                <td key={ci} className="py-0.5 pl-1 text-[10px] font-semibold text-[#262B35] tabular-nums text-right truncate">{v}</td>
                               ))}
                             </tr>
                           ))}
-                          <tr className="border-t-2 border-[#3B5B8A]/30">
-                            <td className="pt-1 pr-1 text-[8px] font-bold uppercase text-[#3B5B8A] truncate">Total</td>
+                          <tr className="border-t border-[#0F8B8D]/30">
+                            <td className="pt-1 pr-1 text-[9px] font-medium uppercase text-[#0B6567] truncate">Total</td>
                             {c.matrix.totalRow.map((v, ci) => (
-                              <td key={ci} className="pt-1 pl-1 text-[9px] font-black text-[#3B5B8A] tabular-nums text-right truncate">{v}</td>
+                              <td key={ci} className="pt-1 pl-1 text-[10px] font-semibold text-[#0B6567] tabular-nums text-right truncate">{v}</td>
                             ))}
                           </tr>
                         </tbody>
@@ -236,11 +234,11 @@ function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; conte
                     ) : c.rows && (
                       <table className="mt-1.5 w-full border-collapse table-fixed">
                         <thead>
-                          <tr className="border-b border-gray-100">
+                          <tr className="border-b border-[#E3F1F1]">
                             {c.rows.map((stat, i) => {
                               const isTotal = i === c.rows!.length - 1 && (stat.label === 'Total' || stat.label === 'Balance');
                               return (
-                                <th key={i} className={`pb-1 text-[9px] font-semibold uppercase tracking-wide text-left truncate ${isTotal ? 'pl-1.5 border-l border-gray-200 text-[#3B5B8A]/70' : 'text-gray-400'}`}>
+                                <th key={i} className={`pb-1 text-[9.5px] font-medium uppercase tracking-wide text-left truncate ${isTotal ? 'pl-1.5 border-l border-[#CDE7E7] text-[#0B6567]/70' : 'text-[#8A93A3]'}`}>
                                   {stat.label}
                                 </th>
                               );
@@ -252,7 +250,7 @@ function ReportHub({ onSelect, content }: { onSelect: (id: TabId) => void; conte
                             {c.rows.map((stat, i) => {
                               const isTotal = i === c.rows!.length - 1 && (stat.label === 'Total' || stat.label === 'Balance');
                               return (
-                                <td key={i} className={`pt-1 text-[11px] font-bold tabular-nums truncate ${isTotal ? 'pl-1.5 border-l border-gray-200 text-[#3B5B8A]' : 'text-gray-700'}`}>
+                                <td key={i} className={`pt-1 text-[11.5px] font-semibold tabular-nums truncate ${isTotal ? 'pl-1.5 border-l border-[#CDE7E7] text-[#0B6567]' : 'text-[#262B35]'}`}>
                                   {stat.value}
                                 </td>
                               );
@@ -315,205 +313,23 @@ function numPdf(n: number): string {
   return sign + grouped + ',' + last3;
 }
 
-// ── Chip ──────────────────────────────────────────────────────────────────────
-interface ChipProps { label: string; count: number; active: boolean; colorClass: string; onClick: () => void; }
-function Chip({ label, count, active, colorClass, onClick }: ChipProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors
-        ${active ? colorClass : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
-    >
-      <span>{label}</span>
-      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold
-        ${active ? 'bg-white/40' : 'bg-gray-100 text-gray-500'}`}>
-        {count}
-      </span>
-    </button>
-  );
-}
-
-// ── Export buttons ─────────────────────────────────────────────────────────────
-// Pill-shaped, matching Fee Register's "Export Excel" button.
-function ExportBar({ onPdf, onExcel }: { onPdf?: () => void; onExcel?: () => void }) {
-  const cls = 'flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap shadow-sm';
-  return (
-    <div className="flex gap-2">
-      {onPdf   && <button onClick={onPdf} className={cls}>PDF</button>}
-      {onExcel && <button onClick={onExcel} className={cls}>Excel</button>}
-    </div>
-  );
-}
-
-// ── Clear filters button ─────────────────────────────────────────────────────
-function ClearButton({ active, onClick }: { active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-        active
-          ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400'
-          : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
-      }`}
-    >
-      Clear
-    </button>
-  );
-}
-
-// ── Stat chip strip ──────────────────────────────────────────────────────────
-// Pill-shaped stat badges, matching Fee Register's header "Records"/"Collected" pills.
-interface StatChipEntry { label: string; value: string | number; color: string; bg: string; border: string; }
-function StatChipRow({ entries }: { entries: StatChipEntry[] }) {
-  return (
-    <div className="shrink-0 flex flex-wrap gap-2">
-      {entries.map((c) => (
-        <div key={c.label} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-1 shadow-sm whitespace-nowrap`}>
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{c.label}</span>
-          <span className={`text-sm font-bold tabular-nums ${c.color}`}>{c.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Segmented toggle (replaces bespoke pill-toggle / underline-tab variants) ──
-interface SegmentedOption { value: string; label: string; }
-function SegmentedToggle({ options, value, onChange }: { options: SegmentedOption[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-            value === o.value ? `${ACCENT} text-white shadow-sm` : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Search box ──────────────────────────────────────────────────────────────
-// Pill search input matching Fee Register's search bar: icon + amber circular clear button.
-function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
-  return (
-    <div className="relative shrink-0 w-60">
-      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#3B5B8A]/50 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-        <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-      </svg>
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-full border border-[#3B5B8A]/30 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30 focus:border-[#3B5B8A] bg-white shadow-sm text-gray-800 placeholder:text-gray-400 placeholder:font-normal transition-all duration-150 pl-8 ${value ? 'pr-8' : 'pr-3'}`}
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange('')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-white transition-colors duration-150 shrink-0"
-          aria-label="Clear search"
-        >
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-            <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Collapsible filter panel ──────────────────────────────────────────────────
-// Matches Fee Register's gradient toolbar: an always-visible top row (search / stat
-// pills / export / clear / toggle) with a collapsible row of filter selects below it,
-// hidden until the user expands it. `showFilters` is local — each tab only has one
-// panel mounted at a time, so per-mount state (not lifted to the parent) is correct.
-function FilterPanel({
-  search, right, hasActiveFilters, onClear, children,
-}: {
-  search?: ReactNode;
-  right?: ReactNode;
-  hasActiveFilters: boolean;
-  onClear: () => void;
-  children: ReactNode;
-}) {
-  const [showFilters, setShowFilters] = useState(false);
-  return (
-    <div
-      className="shrink-0 rounded-2xl border border-[#3B5B8A]/15 overflow-hidden"
-      style={{ background: 'linear-gradient(160deg, #eef3fa 0%, #f8fafc 45%, #eaf1fb 100%)', boxShadow: '0 1px 4px 0 rgba(59,91,138,0.08)' }}
-    >
-      {/* Top row — search / right slot / clear / toggle. Fixed in place: expanding the
-          filters below never shifts this row, matching Fee Register's filter bar. */}
-      <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
-        {search}
-        <div className="flex-1" />
-        {right}
-        {hasActiveFilters && (
-          <>
-            <span className="w-px h-5 bg-[#3B5B8A]/20 shrink-0" />
-            <ClearButton active={hasActiveFilters} onClick={onClear} />
-          </>
-        )}
-        <button
-          type="button"
-          onClick={() => setShowFilters((v) => !v)}
-          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
-            showFilters
-              ? 'bg-[#D0E2F2] border-[#3B5B8A]/40 text-[#3B5B8A]'
-              : 'border-[#3B5B8A]/20 text-[#3B5B8A]/50 hover:bg-[#D0E2F2]/40 hover:text-[#3B5B8A]'
-          }`}
-          title="Toggle filters"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-            <line x1="11" y1="18" x2="13" y2="18" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Collapsible filter row — expands below the top row, never displacing it */}
-      <div
-        className="grid"
-        style={{
-          gridTemplateRows: showFilters ? '1fr' : '0fr',
-          opacity: showFilters ? 1 : 0,
-          transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
-        }}
-      >
-        <div className="overflow-hidden">
-          <div className="flex flex-wrap content-center items-center gap-1.5 px-3 py-2 border-t border-[#3B5B8A]/10">
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Shared: grouped 2-row header for fee detail tables ─────────────────────────
 function FeeTableHead({ headerColor }: { headerColor: string }) {
   return (
-    <thead className={`sticky top-0 z-10 ${headerColor} text-white text-[11px]`}>
+    <thead className={`sticky top-0 z-10 ${headerColor} text-[11px]`}>
       <tr>
         <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Name</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Reg No</th>
         <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Course</th>
         <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Year</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Allotted</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Paid</th>
-        <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Balance</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Allotted</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Paid</th>
+        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Balance</th>
       </tr>
       <tr>
         {(['SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total'] as const).map((h, i) => (
-          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-white/30' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
+          <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-[#CDE7E7]' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
         ))}
       </tr>
     </thead>
@@ -523,24 +339,24 @@ function FeeTableHead({ headerColor }: { headerColor: string }) {
 // ── Shared: fee detail row cells ───────────────────────────────────────────────
 function FeeDetailRow({ r, i, stripe }: { r: StudentFeeRow; i: number; stripe: boolean }) {
   return (
-    <tr className={`border-l-2 ${COURSE_COLORS[r.student.course]} hover:bg-[#3B5B8A]/10 transition-colors ${stripe ? 'bg-gray-50' : 'bg-white'}`}>
+    <tr className={`border-l-2 ${COURSE_COLORS[r.student.course]} hover:bg-[#0F8B8D]/10 transition-colors ${stripe ? 'bg-gray-50' : 'bg-white'}`}>
       <td className="px-2 py-1.5 text-center text-gray-400 text-[11px]">{i + 1}</td>
       <td className="px-2 py-1.5 font-medium text-[11px] max-w-[140px] truncate">{r.student.studentNameSSLC}</td>
       <td className="px-2 py-1.5 text-gray-500 text-[11px]">{r.student.regNumber || '—'}</td>
       <td className="px-2 py-1.5 text-center font-semibold text-[11px]">{r.student.course}</td>
       <td className="px-2 py-1.5 text-[11px]">{r.student.year}</td>
       {/* Allotted */}
-      <td className="px-2 py-1.5 text-right text-[11px] border-l border-gray-100">{r.smpAllotted !== null ? fmt(r.smpAllotted) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] border-l border-[#E3F1F1]">{r.smpAllotted !== null ? fmt(r.smpAllotted) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px]">{r.svkBaseAllotted !== null ? fmt(r.svkBaseAllotted) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px]">{r.additionalAllotted !== null ? fmt(r.additionalAllotted) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] font-semibold">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
       {/* Paid */}
-      <td className="px-2 py-1.5 text-right text-[11px] text-green-700 border-l border-gray-100">{r.smpPaid > 0 ? fmt(r.smpPaid) : '—'}</td>
+      <td className="px-2 py-1.5 text-right text-[11px] text-green-700 border-l border-[#E3F1F1]">{r.smpPaid > 0 ? fmt(r.smpPaid) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.svkBasePaid > 0 ? fmt(r.svkBasePaid) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] text-green-700">{r.additionalPaid > 0 ? fmt(r.additionalPaid) : '—'}</td>
       <td className="px-2 py-1.5 text-right text-[11px] text-green-700 font-semibold">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
       {/* Balance */}
-      <td className={`px-2 py-1.5 text-right text-[11px] border-l border-gray-100 ${r.smpBalance !== null && r.smpBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.smpBalance !== null ? fmt(r.smpBalance) : '—'}</td>
+      <td className={`px-2 py-1.5 text-right text-[11px] border-l border-[#E3F1F1] ${r.smpBalance !== null && r.smpBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.smpBalance !== null ? fmt(r.smpBalance) : '—'}</td>
       <td className={`px-2 py-1.5 text-right text-[11px] ${r.svkBaseBalance !== null && r.svkBaseBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.svkBaseBalance !== null ? fmt(r.svkBaseBalance) : '—'}</td>
       <td className={`px-2 py-1.5 text-right text-[11px] ${r.additionalBalance !== null && r.additionalBalance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.additionalBalance !== null ? fmt(r.additionalBalance) : '—'}</td>
       <td className={`px-2 py-1.5 text-right text-[11px] font-semibold ${r.balance !== null && r.balance > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance !== null ? fmt(r.balance) : '—'}</td>
@@ -603,23 +419,23 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
   colSpanLabel?: number;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+    <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
       <table className="w-full text-[11px]">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-2 py-1.5 text-center font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}>Course / Year</th>
             <th className="px-2 py-1.5 text-center font-semibold">Students</th>
             <th className="px-2 py-1.5 text-center font-semibold">Paid</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Allotted</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Collected</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Balance</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Allotted</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Collected</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Balance</th>
           </tr>
           <tr>
             <th className="px-2 py-1 font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}></th>
             <th className="px-2 py-1 font-semibold"></th>
             <th className="px-2 py-1 font-semibold"></th>
             {(['SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total'] as const).map((h, i) => (
-              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-white/30' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
+              <th key={i} className={`px-2 py-1 text-right font-semibold ${i % 4 === 0 ? 'border-l border-[#CDE7E7]' : ''} ${i % 4 === 3 ? ACCENT_DARK : ''}`}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -633,15 +449,15 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
                 <td className="px-2 py-1.5">{b.year}</td>
                 <td className="px-2 py-1.5 text-center">{b.total}</td>
                 <td className="px-2 py-1.5 text-center text-green-700">{b.paid}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100">{fmt(b.smpAllt)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{fmt(b.smpAllt)}</td>
                 <td className="px-2 py-1.5 text-right">{fmt(b.svkBaseAllt)}</td>
                 <td className="px-2 py-1.5 text-right">{fmt(b.addAllt)}</td>
                 <td className="px-2 py-1.5 text-right font-semibold">{fmt(bAllt)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700 border-l border-gray-100">{fmt(b.smpColl)}</td>
+                <td className="px-2 py-1.5 text-right text-green-700 border-l border-[#E3F1F1]">{fmt(b.smpColl)}</td>
                 <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.svkBaseColl)}</td>
                 <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.addColl)}</td>
                 <td className="px-2 py-1.5 text-right text-green-700 font-semibold">{fmt(bColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600 border-l border-gray-100">{fmt(b.smpAllt - b.smpColl)}</td>
+                <td className="px-2 py-1.5 text-right text-red-600 border-l border-[#E3F1F1]">{fmt(b.smpAllt - b.smpColl)}</td>
                 <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.svkBaseAllt - b.svkBaseColl)}</td>
                 <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.addAllt - b.addColl)}</td>
                 <td className="px-2 py-1.5 text-right text-red-600 font-semibold">{fmt(bAllt - bColl)}</td>
@@ -649,20 +465,20 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t border-gray-300 text-[11px]">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567] text-[11px]">
           <tr>
             <td className="px-2 py-2" colSpan={colSpanLabel === 1 ? 1 : 2}>Total</td>
             <td className="px-2 py-2 text-center">{totals.students}</td>
             <td className="px-2 py-2 text-center text-green-700">{totals.paid}</td>
-            <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpAllt)}</td>
+            <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.smpAllt)}</td>
             <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
             <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
             <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
-            <td className="px-2 py-2 text-right text-green-700 border-l border-gray-200">{fmt(totals.smpColl)}</td>
+            <td className="px-2 py-2 text-right text-green-700 border-l border-[#CDE7E7]">{fmt(totals.smpColl)}</td>
             <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBaseColl)}</td>
             <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addColl)}</td>
             <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpColl + totals.svkColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600 border-l border-gray-200">{fmt(totals.smpAllt - totals.smpColl)}</td>
+            <td className="px-2 py-2 text-right text-red-600 border-l border-[#CDE7E7]">{fmt(totals.smpAllt - totals.smpColl)}</td>
             <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBaseColl)}</td>
             <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addColl)}</td>
             <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpColl + totals.svkColl))}</td>
@@ -692,13 +508,13 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
 
   return (
     <div className="space-y-2">
-      <CommonFilters fp={fp} extra={
+      <CommonFilters collapsible={false} fp={fp} extra={
         <ExportBar onPdf={() => exportStatsPdf(rows, academicYear)} onExcel={() => exportStatsExcel(rows, academicYear)} />
       } />
 
       {/* Count summary strip */}
       <StatChipRow entries={[
-        { label: 'Total',    value: total,       color: 'text-[#3B5B8A]',    bg: 'bg-[#D0E2F2]/40',    border: 'border-[#3B5B8A]/25'   },
+        { label: 'Total',    value: total,       color: 'text-[#0B6567]',    bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
         { label: 'Paid',     value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
         { label: 'Not Paid', value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
         { label: 'Fee Dues', value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
@@ -706,9 +522,9 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
       ]} />
 
       {/* SMP / SVK Base / Additional / Total amount table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
         <table className="w-full text-sm">
-          <thead className={`${ACCENT} text-white`}>
+          <thead className={`${ACCENT}`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Metric</th>
               <th className="px-3 py-2 text-right font-semibold">SMP</th>
@@ -789,7 +605,7 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
           }
         />
       </div>
-      <div className="flex-1 min-h-0 rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee scroll-fee-h2">
         <table className="w-full bg-white">
           <FeeTableHead headerColor={ACCENT} />
           <tbody>
@@ -803,15 +619,15 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {rows.length} student{rows.length !== 1 ? 's' : ''}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpAllt)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.smpAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
-                <td className="px-2 py-2 text-right text-green-700 border-l border-gray-200">{fmt(totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700 border-l border-[#CDE7E7]">{fmt(totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBasePaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
-                <td className="px-2 py-2 text-right text-red-600 border-l border-gray-200">{fmt(totals.smpAllt - totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600 border-l border-[#CDE7E7]">{fmt(totals.smpAllt - totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBasePaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
@@ -866,7 +682,7 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
           }
         />
       </div>
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee scroll-fee-h2">
         <table className="w-full">
           <FeeTableHead headerColor={ACCENT} />
           <tbody>
@@ -876,19 +692,19 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
             )}
           </tbody>
           {dueRows.length > 0 && (
-            <tfoot className="sticky bottom-0 z-10 bg-[#B9D4EC] font-bold border-t-2 border-[#3B5B8A]/40 text-[11px] text-[#3B5B8A]">
+            <tfoot className="sticky bottom-0 z-10 bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[11px] text-[#0B6567]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2" colSpan={4}>Total — {dueRows.length} student{dueRows.length !== 1 ? 's' : ''}</td>
-                <td className="px-2 py-2 text-right border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#0F8B8D]/20">{fmt(totals.smpAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
                 <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
-                <td className="px-2 py-2 text-right text-green-700 border-l border-[#3B5B8A]/20">{fmt(totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-green-700 border-l border-[#0F8B8D]/20">{fmt(totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBasePaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpPaid + totals.svkPaid)}</td>
-                <td className="px-2 py-2 text-right text-red-600 border-l border-[#3B5B8A]/20">{fmt(totals.smpAllt - totals.smpPaid)}</td>
+                <td className="px-2 py-2 text-right text-red-600 border-l border-[#0F8B8D]/20">{fmt(totals.smpAllt - totals.smpPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBasePaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addPaid)}</td>
                 <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpPaid + totals.svkPaid))}</td>
@@ -919,7 +735,7 @@ function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
 
   return (
     <div className="space-y-3">
-      <CommonFilters fp={fp} extra={
+      <CommonFilters collapsible={false} fp={fp} extra={
         <ExportBar onPdf={() => exportCourseYearPdf(rows, academicYear)} onExcel={() => exportCourseYearExcel(rows, academicYear)} />
       } />
       <GroupTable breakdown={breakdown} totals={totals} />
@@ -947,7 +763,7 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
 
   return (
     <div className="space-y-3">
-      <CommonFilters fp={fp} extra={
+      <CommonFilters collapsible={false} fp={fp} extra={
         <>
           <span className="text-xs text-gray-500">{feeRecords.length} payment record{feeRecords.length !== 1 ? 's' : ''}</span>
           <ExportBar onPdf={() => exportConsolidatedPdf(feeRecords, academicYear)} onExcel={() => exportConsolidatedExcel(feeRecords, academicYear)} />
@@ -955,16 +771,16 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
       } />
 
       {/* SMP vs SVK summary */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto max-w-xs">
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto max-w-xs scroll-fee">
         <table className="w-full text-sm">
-          <thead className={`${ACCENT} text-white`}>
+          <thead className={`${ACCENT}`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Category</th>
               <th className="px-3 py-2 text-right font-semibold">Amount</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="bg-[#D0E2F2]/40">
+            <tr className="bg-[#DDF0F0]/40">
               <td className="px-3 py-1.5 font-semibold">SMP Total</td>
               <td className="px-3 py-1.5 text-right font-semibold">{fmt(smpGrandTotal)}</td>
             </tr>
@@ -976,13 +792,13 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
               <td className="px-3 py-1.5 pl-5 text-gray-500">SVK (Add-ons)</td>
               <td className="px-3 py-1.5 text-right">{fmt(additionalTotal)}</td>
             </tr>
-            <tr className="bg-[#D0E2F2]/40">
+            <tr className="bg-[#DDF0F0]/40">
               <td className="px-3 py-1.5 font-semibold">SVK Total</td>
               <td className="px-3 py-1.5 text-right font-semibold">{fmt(svkFullTotal)}</td>
             </tr>
           </tbody>
-          <tfoot className="border-t border-gray-200">
-            <tr className={`${ACCENT} text-white font-bold`}>
+          <tfoot className="border-t border-[#CDE7E7]">
+            <tr className={`${ACCENT} font-bold`}>
               <td className="px-3 py-2">Grand Total</td>
               <td className="px-3 py-2 text-right">{fmt(grandTotal)}</td>
             </tr>
@@ -991,9 +807,9 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
       </div>
 
       {/* SMP head-wise breakdown */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto max-w-xs">
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto max-w-xs scroll-fee">
         <table className="w-full text-sm">
-          <thead className="bg-gray-500 text-white">
+          <thead className={THEAD}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">SMP Fee Head</th>
               <th className="px-3 py-2 text-right font-semibold">Amount</th>
@@ -1007,8 +823,8 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t border-gray-200">
-            <tr className="bg-[#D0E2F2]/40 font-bold">
+          <tfoot className="border-t border-[#CDE7E7]">
+            <tr className="bg-[#DDF0F0]/40 font-bold">
               <td className="px-3 py-2">SMP Total</td>
               <td className="px-3 py-2 text-right">{fmt(smpGrandTotal)}</td>
             </tr>
@@ -1223,7 +1039,7 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
     totals: { smp: number; svk: number; add: number };
   }) {
     const isCash  = mode === 'CASH';
-    const hdrCls  = isCash ? 'bg-emerald-700' : 'bg-blue-700';
+    const hdrCls  = isCash ? 'bg-[#E3F6EC] text-[#0A7A4B]' : 'bg-[#E4F0FB] text-[#0B5E99]';
     const totBg   = isCash ? 'bg-emerald-100' : 'bg-blue-100';
     const totClr  = isCash ? 'text-green-700' : 'text-blue-700';
     const grand   = totals.smp + totals.svk + totals.add;
@@ -1239,21 +1055,21 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
     }
 
     return (
-      <div className="overflow-auto max-h-[186px] rounded-lg border border-gray-200">
+      <div className="overflow-auto max-h-[186px] rounded-xl border border-[#CDE7E7] scroll-fee scroll-fee-h1">
         <table className="w-full text-[11px]">
-          <thead className={`sticky top-0 z-10 ${hdrCls} text-white`}>
+          <thead className={`sticky top-0 z-10 ${hdrCls}`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
               <th className="px-2 py-1.5 text-left font-semibold min-w-[130px]">Student Name</th>
               <th className="px-2 py-1.5 text-left font-semibold">Reg No</th>
               <th className="px-2 py-1.5 text-center font-semibold">Yr / Course</th>
-              <th className="px-2 py-1.5 text-left font-semibold border-l border-white/30">SMP Rpt</th>
+              <th className="px-2 py-1.5 text-left font-semibold border-l border-[#CDE7E7]">SMP Rpt</th>
               <th className="px-2 py-1.5 text-left font-semibold">SVK Rpt</th>
               <th className="px-2 py-1.5 text-left font-semibold">Add Rpt</th>
-              <th className={`${hCell} border-l border-white/30`}>SMP</th>
+              <th className={`${hCell} border-l border-[#CDE7E7]`}>SMP</th>
               <th className={hCell}>SVK</th>
               <th className={hCell}>Add</th>
-              <th className={`${hCell} border-l border-white/30`}>{isCash ? 'Cash Total' : 'UPI Total'}</th>
+              <th className={`${hCell} border-l border-[#CDE7E7]`}>{isCash ? 'Cash Total' : 'UPI Total'}</th>
             </tr>
           </thead>
           <tbody>
@@ -1270,27 +1086,27 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
                   <td className="px-2 py-1.5 font-medium truncate max-w-[160px]">{r.studentName}</td>
                   <td className="px-2 py-1.5 text-gray-500">{r.regNumber || '—'}</td>
                   <td className="px-2 py-1.5 text-center text-gray-500">{yShort} / {r.course}</td>
-                  <td className="px-2 py-1.5 border-l border-gray-100 font-mono">{r.receiptNumber || '—'}</td>
+                  <td className="px-2 py-1.5 border-l border-[#E3F1F1] font-mono">{r.receiptNumber || '—'}</td>
                   <td className="px-2 py-1.5 text-gray-500 font-mono">{r.svkReceiptNumber || '—'}</td>
                   <td className="px-2 py-1.5 text-gray-500 font-mono">{r.additionalReceiptNumber || '—'}</td>
-                  <td className={`${cell} border-l border-gray-100`}>{smpAmt > 0 ? fmt(smpAmt) : '—'}</td>
+                  <td className={`${cell} border-l border-[#E3F1F1]`}>{smpAmt > 0 ? fmt(smpAmt) : '—'}</td>
                   <td className={cell}>{svkAmt > 0 ? fmt(svkAmt) : '—'}</td>
                   <td className={cell}>{addAmt > 0 ? fmt(addAmt) : '—'}</td>
-                  <td className={`${cell} font-bold border-l border-gray-100`}>{fmt(rowTot)}</td>
+                  <td className={`${cell} font-bold border-l border-[#E3F1F1]`}>{fmt(rowTot)}</td>
                 </tr>
               );
             })}
           </tbody>
-          <tfoot className={`sticky bottom-0 z-10 ${totBg} font-bold border-t-2 border-gray-300 text-[11px]`}>
+          <tfoot className={`sticky bottom-0 z-10 ${totBg} font-semibold border-t border-[#CDE7E7] text-[11px]`}>
             <tr>
               <td className="px-2 py-2 text-center text-gray-400">—</td>
               <td className="px-2 py-2" colSpan={6}>
                 {sectionRecords.length} payment{sectionRecords.length !== 1 ? 's' : ''}
               </td>
-              <td className={`px-2 py-2 text-right ${totClr} border-l border-gray-200`}>{fmt(totals.smp)}</td>
+              <td className={`px-2 py-2 text-right ${totClr} border-l border-[#CDE7E7]`}>{fmt(totals.smp)}</td>
               <td className={`px-2 py-2 text-right ${totClr}`}>{fmt(totals.svk)}</td>
               <td className={`px-2 py-2 text-right ${totClr}`}>{fmt(totals.add)}</td>
-              <td className={`px-2 py-2 text-right ${totClr} border-l border-gray-200`}>{fmt(grand)}</td>
+              <td className={`px-2 py-2 text-right ${totClr} border-l border-[#CDE7E7]`}>{fmt(grand)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1300,12 +1116,12 @@ function DayBreakdownModal({ day, records, onClose }: { day: DayEntry; records: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl">
+      <div className="absolute inset-0 bg-[#0B2E30]/45" onClick={onClose} aria-hidden="true" />
+      <div className="font-wp relative bg-white rounded-2xl border border-[#CDE7E7] shadow-2xl w-full max-w-5xl">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-[#CDE7E7] bg-[#F2FAFA] rounded-t-2xl">
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Daily Collections — {day.dateLabel}</h2>
+            <h2 className="text-sm font-semibold text-[#0B6567]">Daily Collections — {day.dateLabel}</h2>
             <p className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap gap-x-3">
               <span>{day.receiptCount} receipt{day.receiptCount !== 1 ? 's' : ''}</span>
               <span>·</span>
@@ -1425,7 +1241,7 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
         <StatChipRow entries={[
           { label: 'Cash',     value: fmt(totals.cashTotal), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
           { label: 'UPI',      value: fmt(totals.upiTotal),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
-          { label: 'Total',    value: fmt(totals.dayTotal),  color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Total',    value: fmt(totals.dayTotal),  color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'    },
           { label: 'Receipts', value: totals.receiptCount,   color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
         ]} />
         {showAllYears && (
@@ -1439,7 +1255,7 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
       </div>
 
       {/* Filters */}
-      <FilterPanel hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); setModeFilter('ALL'); }}>
+      <FilterPanel collapsible={false} hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); setModeFilter('ALL'); }}>
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -1452,27 +1268,27 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
       </FilterPanel>
 
       {/* Day-wise summary table — 13 columns */}
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee scroll-fee-h2">
         <table className="w-full text-[11px]">
-          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+          <thead className={`sticky top-0 z-10 ${ACCENT}`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Date</th>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Receipts</th>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>Cash</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>UPI</th>
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30" rowSpan={2}>Day Total</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Cash</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Day Total</th>
             </tr>
             <tr>
-              <th className="px-2 py-1 text-right font-semibold border-l border-white/30">SMP</th>
+              <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">SMP</th>
               <th className="px-2 py-1 text-right font-semibold">SVK</th>
               <th className="px-2 py-1 text-right font-semibold">Add</th>
-              <th className="px-2 py-1 text-right font-semibold bg-emerald-600">Total</th>
-              <th className="px-2 py-1 text-right font-semibold border-l border-white/30">SMP</th>
+              <th className="px-2 py-1 text-right font-semibold bg-[#E3F6EC] text-[#0A7A4B]">Total</th>
+              <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">SMP</th>
               <th className="px-2 py-1 text-right font-semibold">SVK</th>
               <th className="px-2 py-1 text-right font-semibold">Add</th>
-              <th className="px-2 py-1 text-right font-semibold bg-blue-600">Total</th>
+              <th className="px-2 py-1 text-right font-semibold bg-[#E4F0FB] text-[#0B5E99]">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -1486,15 +1302,15 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
                 <td className="px-2 py-1.5 font-medium text-emerald-700 underline-offset-2 hover:underline">{e.dateLabel}</td>
                 <td className="px-2 py-1.5 text-center text-gray-600">{e.receiptCount}</td>
                 <td className="px-2 py-1.5 text-center text-gray-600">{e.studentCount}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-green-800">{e.smpCash > 0 ? fmt(e.smpCash) : '—'}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1] text-green-800">{e.smpCash > 0 ? fmt(e.smpCash) : '—'}</td>
                 <td className="px-2 py-1.5 text-right text-green-800">{e.svkCash > 0 ? fmt(e.svkCash) : '—'}</td>
                 <td className="px-2 py-1.5 text-right text-green-800">{e.addCash > 0 ? fmt(e.addCash) : '—'}</td>
                 <td className="px-2 py-1.5 text-right font-semibold text-green-700 bg-green-50">{e.cashTotal > 0 ? fmt(e.cashTotal) : '—'}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-blue-800">{e.smpUpi > 0 ? fmt(e.smpUpi) : '—'}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1] text-blue-800">{e.smpUpi > 0 ? fmt(e.smpUpi) : '—'}</td>
                 <td className="px-2 py-1.5 text-right text-blue-800">{e.svkUpi > 0 ? fmt(e.svkUpi) : '—'}</td>
                 <td className="px-2 py-1.5 text-right text-blue-800">{e.addUpi > 0 ? fmt(e.addUpi) : '—'}</td>
                 <td className="px-2 py-1.5 text-right font-semibold text-blue-700 bg-blue-50">{e.upiTotal > 0 ? fmt(e.upiTotal) : '—'}</td>
-                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.dayTotal)}</td>
+                <td className="px-2 py-1.5 text-right font-bold border-l border-[#E3F1F1]">{fmt(e.dayTotal)}</td>
               </tr>
             ))}
             {filteredDays.length === 0 && (
@@ -1512,15 +1328,15 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
                 <td className="px-2 py-2">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-center">{totals.receiptCount}</td>
                 <td className="px-2 py-2 text-center">{totals.studentCount}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-green-800">{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-green-800">{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
                 <td className="px-2 py-2 text-right text-green-800">{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
                 <td className="px-2 py-2 text-right text-green-800">{totals.addCash > 0 ? fmt(totals.addCash) : '—'}</td>
                 <td className="px-2 py-2 text-right font-bold text-green-700">{fmt(totals.cashTotal)}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-blue-800">{totals.smpUpi > 0 ? fmt(totals.smpUpi) : '—'}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-blue-800">{totals.smpUpi > 0 ? fmt(totals.smpUpi) : '—'}</td>
                 <td className="px-2 py-2 text-right text-blue-800">{totals.svkUpi > 0 ? fmt(totals.svkUpi) : '—'}</td>
                 <td className="px-2 py-2 text-right text-blue-800">{totals.addUpi > 0 ? fmt(totals.addUpi) : '—'}</td>
                 <td className="px-2 py-2 text-right font-bold text-blue-700">{fmt(totals.upiTotal)}</td>
-                <td className="px-2 py-2 text-right font-bold border-l border-gray-200">{fmt(totals.dayTotal)}</td>
+                <td className="px-2 py-2 text-right font-bold border-l border-[#CDE7E7]">{fmt(totals.dayTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -1608,7 +1424,7 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
         <StatChipRow entries={[
           { label: 'Cash',      value: fmt(totals.smpCash + totals.svkCash + totals.addCash), color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
           { label: 'UPI',       value: fmt(totals.smpUpi  + totals.svkUpi  + totals.addUpi),  color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
-          { label: 'Total',     value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-gray-200'    },
+          { label: 'Total',     value: fmt(totals.dayTotal),                                   color: 'text-gray-900',    bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'    },
           { label: 'Days',      value: `${filteredDays.length} / ${allDays.length}`,            color: 'text-purple-700',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
         ]} />
         {showAllYears && (
@@ -1622,7 +1438,7 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
       </div>
 
       {/* Filters */}
-      <FilterPanel hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); }}>
+      <FilterPanel collapsible={false} hasActiveFilters={hasFilter} onClear={() => { setDateFrom(''); setDateTo(''); }}>
         <span className="text-xs text-gray-500 font-medium">From</span>
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} />
         <span className="text-xs text-gray-500 font-medium">To</span>
@@ -1630,38 +1446,38 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
       </FilterPanel>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee scroll-fee-h2">
         <table className="w-full text-[11px] whitespace-nowrap">
-          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+          <thead className={`sticky top-0 z-10 ${ACCENT}`}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold" rowSpan={2}>Date</th>
               <th className="px-2 py-2 text-center font-semibold" rowSpan={2}>Students</th>
-              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>SMP</th>
-              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>SVK</th>
-              <th className="px-2 py-2 text-center font-semibold border-l border-white/30" colSpan={2}>Additional</th>
-              <th className="px-2 py-2 text-right font-semibold border-l border-white/30" rowSpan={2}>Day Total</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>SMP</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>SVK</th>
+              <th className="px-2 py-2 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>Additional</th>
+              <th className="px-2 py-2 text-right font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Day Total</th>
             </tr>
             <tr>
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
-              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
-              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 bg-emerald-700/80">Cash</th>
-              <th className="px-2 py-1.5 text-right font-semibold bg-blue-700/80">UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] bg-[#E3F6EC] text-[#0A7A4B]">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-[#E4F0FB] text-[#0B5E99]">UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] bg-[#E3F6EC] text-[#0A7A4B]">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-[#E4F0FB] text-[#0B5E99]">UPI</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] bg-[#E3F6EC] text-[#0A7A4B]">Cash</th>
+              <th className="px-2 py-1.5 text-right font-semibold bg-[#E4F0FB] text-[#0B5E99]">UPI</th>
             </tr>
           </thead>
           <tbody>
             {filteredDays.map((e, i) => (
               <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-3 py-1.5 font-medium text-[#3B5B8A]">{e.dateLabel}</td>
+                <td className="px-3 py-1.5 font-medium text-[#0B6567]">{e.dateLabel}</td>
                 <td className="px-2 py-1.5 text-center text-gray-600">{e.studentCount}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.smpCash)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1] text-emerald-700">{n(e.smpCash)}</td>
                 <td className="px-2 py-1.5 text-right text-blue-700">{n(e.smpUpi)}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.svkCash)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1] text-emerald-700">{n(e.svkCash)}</td>
                 <td className="px-2 py-1.5 text-right text-blue-700">{n(e.svkUpi)}</td>
-                <td className="px-2 py-1.5 text-right border-l border-gray-100 text-emerald-700">{n(e.addCash)}</td>
+                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1] text-emerald-700">{n(e.addCash)}</td>
                 <td className="px-2 py-1.5 text-right text-blue-700">{n(e.addUpi)}</td>
-                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.dayTotal)}</td>
+                <td className="px-2 py-1.5 text-right font-bold border-l border-[#E3F1F1]">{fmt(e.dayTotal)}</td>
               </tr>
             ))}
             {filteredDays.length === 0 && (
@@ -1677,13 +1493,13 @@ function DaySummaryTab({ feeRecords, academicYear, showAllYears }: { feeRecords:
               <tr>
                 <td className="px-3 py-2 text-gray-700">Total — {filteredDays.length} day{filteredDays.length !== 1 ? 's' : ''}</td>
                 <td className="px-2 py-2 text-center text-gray-700">{totals.studentCount}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.smpCash)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-emerald-700">{n(totals.smpCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.smpUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.svkCash)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-emerald-700">{n(totals.svkCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.svkUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-emerald-700">{n(totals.addCash)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-emerald-700">{n(totals.addCash)}</td>
                 <td className="px-2 py-2 text-right text-blue-700">{n(totals.addUpi)}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(totals.dayTotal)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(totals.dayTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -1714,11 +1530,11 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="shrink-0">
-        <CommonFilters fp={fp} extra={
+        <CommonFilters collapsible={false} fp={fp} extra={
           <>
             <span className="text-xs text-gray-500">{entries.length} day{entries.length !== 1 ? 's' : ''}</span>
             {grandTotal > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#3B5B8A]/30 bg-[#D0E2F2]/50 text-xs font-semibold text-[#3B5B8A]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#0F8B8D]/30 bg-[#DDF0F0]/50 text-xs font-semibold text-[#0B6567]">
                 {fmt(grandTotal)}
               </span>
             )}
@@ -1734,27 +1550,27 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
           </>
         } />
       </div>
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee scroll-fee-h1">
         <table className="w-full text-[11px] whitespace-nowrap">
-          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+          <thead className={`sticky top-0 z-10 ${ACCENT}`}>
             <tr>
               <th className="px-2 py-1.5 text-left font-semibold">Date</th>
               {SMP_FEE_HEADS.map(({ key, label }) => (
                 <th key={key} className="px-2 py-1.5 text-right font-semibold">{label}</th>
               ))}
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30">Total</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Total</th>
             </tr>
           </thead>
           <tbody>
             {entries.map((e, i) => (
               <tr key={e.dateKey} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-2 py-1.5 font-medium text-[#3B5B8A]">{e.dateLabel}</td>
+                <td className="px-2 py-1.5 font-medium text-[#0B6567]">{e.dateLabel}</td>
                 {SMP_FEE_HEADS.map(({ key }) => (
                   <td key={key} className="px-2 py-1.5 text-right">
                     {e.heads[key] > 0 ? fmt(e.heads[key]) : '—'}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-right font-bold border-l border-gray-100">{fmt(e.total)}</td>
+                <td className="px-2 py-1.5 text-right font-bold border-l border-[#E3F1F1]">{fmt(e.total)}</td>
               </tr>
             ))}
             {entries.length === 0 && (
@@ -1772,7 +1588,7 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
                 {SMP_FEE_HEADS.map(({ key }) => (
                   <td key={key} className="px-2 py-2 text-right">{fmt(grandHeads[key])}</td>
                 ))}
-                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(grandTotal)}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -1862,50 +1678,50 @@ function BankRemittanceTable({
   const cell = 'px-4 py-2.5 text-sm';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
+    <div className="rounded-xl border border-[#CDE7E7] overflow-hidden">
       {label && (
-        <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+        <div className="px-4 py-2 bg-gray-100 border-b border-[#CDE7E7]">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-4 py-2 text-left font-semibold" rowSpan={2}>Fee Head</th>
-            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-[#2e4a72]/70" colSpan={2}>Aided</th>
-            <th className="px-4 py-2 text-center font-semibold border-l border-white/20 bg-slate-600/60" colSpan={2}>Unaided</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20" rowSpan={2}>Total</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-[#CDE7E7] bg-[#DDF0F0] text-[#0B6567]" colSpan={2}>Aided</th>
+            <th className="px-4 py-2 text-center font-semibold border-l border-[#CDE7E7] bg-[#EEF1F5] text-[#3A4250]" colSpan={2}>Unaided</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Total</th>
           </tr>
           <tr>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-[#2e4a72]/50">Cash</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-[#2e4a72]/50">Pay</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-white/20 bg-slate-700/40">Cash</th>
-            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-slate-700/40">Pay</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-[#CDE7E7] bg-[#E6F4F4] text-[#0B6567]">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-[#E6F4F4] text-[#0B6567]">Pay</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold border-l border-[#CDE7E7] bg-[#F3F5F8] text-[#3A4250]">Cash</th>
+            <th className="px-4 py-1.5 text-right text-xs font-semibold bg-[#F3F5F8] text-[#3A4250]">Pay</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-[#EEF6F6]">
           {rows.map((row, i) => {
             const rowTotal = row.aidedCash + row.aidedPay + row.unaidedCash + row.unaidedPay;
             return (
               <tr key={row.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className={`${cell} font-semibold text-gray-700`}>{row.name}</td>
-                <td className={`${cell} text-right border-l border-gray-100 ${row.aidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.aidedCash > 0 ? fmt(row.aidedCash) : '—'}</td>
+                <td className={`${cell} text-right border-l border-[#E3F1F1] ${row.aidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.aidedCash > 0 ? fmt(row.aidedCash) : '—'}</td>
                 <td className={`${cell} text-right ${row.aidedPay > 0 ? 'text-blue-700 font-medium' : 'text-gray-300'}`}>{row.aidedPay > 0 ? fmt(row.aidedPay) : '—'}</td>
-                <td className={`${cell} text-right border-l border-gray-100 ${row.unaidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.unaidedCash > 0 ? fmt(row.unaidedCash) : '—'}</td>
+                <td className={`${cell} text-right border-l border-[#E3F1F1] ${row.unaidedCash > 0 ? 'text-emerald-700 font-medium' : 'text-gray-300'}`}>{row.unaidedCash > 0 ? fmt(row.unaidedCash) : '—'}</td>
                 <td className={`${cell} text-right ${row.unaidedPay > 0 ? 'text-blue-700 font-medium' : 'text-gray-300'}`}>{row.unaidedPay > 0 ? fmt(row.unaidedPay) : '—'}</td>
-                <td className={`${cell} text-right font-bold border-l border-gray-100 text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+                <td className={`${cell} text-right font-bold border-l border-[#E3F1F1] text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">
           <tr>
             <td className="px-4 py-2.5 font-bold">Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totAidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-[#CDE7E7] ${totAidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totAidedCash > 0 ? fmt(totAidedCash) : '—'}</td>
             <td className={`px-4 py-2.5 text-right ${totAidedPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{totAidedPay > 0 ? fmt(totAidedPay) : '—'}</td>
-            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${totUnaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totUnaidedCash > 0 ? fmt(totUnaidedCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-[#CDE7E7] ${totUnaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totUnaidedCash > 0 ? fmt(totUnaidedCash) : '—'}</td>
             <td className={`px-4 py-2.5 text-right ${totUnaidedPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{totUnaidedPay > 0 ? fmt(totUnaidedPay) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
+            <td className="px-4 py-2.5 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(grandTotal)}</td>
           </tr>
         </tfoot>
       </table>
@@ -2099,9 +1915,9 @@ function RemittanceAbstractTable({
   const cell = 'px-3 py-1.5 text-sm';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
+    <div className="rounded-xl border border-[#CDE7E7] overflow-hidden w-full flex flex-col">
       {label && (
-        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-[#CDE7E7] flex items-center justify-between gap-2">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
           {onPrint && (
             <button
@@ -2114,15 +1930,15 @@ function RemittanceAbstractTable({
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-3 py-1.5 text-left font-semibold"></th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20 bg-[#2e4a72]/70">Aided</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20 bg-slate-600/60">Unaided</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Total</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7] bg-[#DDF0F0] text-[#0B6567]">Aided</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7] bg-[#EEF1F5] text-[#3A4250]">Unaided</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Total</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-[#EEF6F6]">
           {groups.map((group, gi) => (
             <Fragment key={group[0]!.name}>
               {group.map((row) => {
@@ -2130,33 +1946,33 @@ function RemittanceAbstractTable({
                 return (
                   <tr key={row.name} className={gi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className={`${cell} font-semibold text-gray-700`}>{row.name}</td>
-                    <td className={`${cell} text-right border-l border-gray-100 ${row.aided   > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.aided   > 0 ? fmt(row.aided)   : '—'}</td>
-                    <td className={`${cell} text-right border-l border-gray-100 ${row.unaided > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.unaided > 0 ? fmt(row.unaided) : '—'}</td>
-                    <td className={`${cell} text-right font-bold border-l border-gray-100 text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+                    <td className={`${cell} text-right border-l border-[#E3F1F1] ${row.aided   > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.aided   > 0 ? fmt(row.aided)   : '—'}</td>
+                    <td className={`${cell} text-right border-l border-[#E3F1F1] ${row.unaided > 0 ? (row.mode === 'cash' ? 'text-emerald-700' : 'text-blue-700') + ' font-medium' : 'text-gray-300'}`}>{row.unaided > 0 ? fmt(row.unaided) : '—'}</td>
+                    <td className={`${cell} text-right font-bold border-l border-[#E3F1F1] text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
                   </tr>
                 );
               })}
             </Fragment>
           ))}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">
           <tr>
             <td className="px-3 py-2">Total</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${totUnaided > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(grandTotal)}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${totAided   > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totAided   > 0 ? fmt(totAided)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${totUnaided > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{totUnaided > 0 ? fmt(totUnaided) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(grandTotal)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td className="px-3 py-2 text-emerald-700">Total Cash</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${aidedCash   > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{aidedCash   > 0 ? fmt(aidedCash)   : '—'}</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${unaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{unaidedCash > 0 ? fmt(unaidedCash) : '—'}</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-emerald-700">{fmt(aidedCash + unaidedCash)}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${aidedCash   > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{aidedCash   > 0 ? fmt(aidedCash)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${unaidedCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{unaidedCash > 0 ? fmt(unaidedCash) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-emerald-700">{fmt(aidedCash + unaidedCash)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td className="px-3 py-2 text-blue-700">Total UPI</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${aidedUpi   > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{aidedUpi   > 0 ? fmt(aidedUpi)   : '—'}</td>
-            <td className={`px-3 py-2 text-right border-l border-gray-200 ${unaidedUpi > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{unaidedUpi > 0 ? fmt(unaidedUpi) : '—'}</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-blue-700">{fmt(aidedUpi + unaidedUpi)}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${aidedUpi   > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{aidedUpi   > 0 ? fmt(aidedUpi)   : '—'}</td>
+            <td className={`px-3 py-2 text-right border-l border-[#CDE7E7] ${unaidedUpi > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{unaidedUpi > 0 ? fmt(unaidedUpi) : '—'}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-blue-700">{fmt(aidedUpi + unaidedUpi)}</td>
           </tr>
         </tfoot>
       </table>
@@ -2200,9 +2016,9 @@ function DenominationCalculator({
   const cell = 'px-3 py-1 text-sm';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
+    <div className="rounded-xl border border-[#CDE7E7] overflow-hidden w-full flex flex-col">
       {label && (
-        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-[#CDE7E7] flex items-center gap-2">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider truncate shrink-0">{label}</span>
           <div className="flex items-center gap-1.5 ml-auto min-w-0">
             {onSave && (
@@ -2232,45 +2048,45 @@ function DenominationCalculator({
         <p className="px-3 py-1 text-[10px] text-red-600 bg-red-50 border-b border-red-100">{error}</p>
       )}
       <table className="w-full text-sm">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-3 py-1.5 text-left font-semibold">Denomination</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Count</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Amount</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Count</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Amount</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-[#EEF6F6]">
           {DENOMINATIONS.map((d, i) => {
             const count  = Number(counts[d]) || 0;
             const amount = d * count;
             return (
               <tr key={d} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className={`${cell} font-semibold text-gray-700`}>₹{d}{d <= 2 ? ' coin' : ''}</td>
-                <td className={`${cell} text-right border-l border-gray-100`}>
+                <td className={`${cell} text-right border-l border-[#E3F1F1]`}>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={counts[d] ?? ''}
                     onChange={(e) => handleChange(d, e.target.value)}
                     placeholder="0"
-                    className="w-14 text-right border border-gray-200 rounded px-1.5 py-0 text-sm leading-5 focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]"
+                    className="w-14 text-right border border-[#CDE7E7] rounded px-1.5 py-0 text-sm leading-5 focus:outline-none focus:ring-1 focus:ring-[#0F8B8D]"
                   />
                 </td>
-                <td className={`${cell} text-right border-l border-gray-100 font-medium ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
+                <td className={`${cell} text-right border-l border-[#E3F1F1] font-medium ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">
           <tr>
             <td className="px-3 py-2" colSpan={2}>Total Cash</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(total)}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(total)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td className="px-3 py-2 text-gray-500 font-medium" colSpan={2}>Target</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-700">{fmt(targetCash)}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-gray-700">{fmt(targetCash)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td
               colSpan={3}
               className={`px-3 py-2 text-center ${
@@ -2353,9 +2169,9 @@ function DenominationAllocationTable({
   const cell = 'px-3 py-1 text-sm';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden w-full flex flex-col">
+    <div className="rounded-xl border border-[#CDE7E7] overflow-hidden w-full flex flex-col">
       {label && (
-        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center justify-between gap-2">
+        <div className="px-3 py-1.5 bg-gray-100 border-b border-[#CDE7E7] flex items-center justify-between gap-2">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
           <div className="flex items-center gap-1.5">
             <button
@@ -2373,36 +2189,36 @@ function DenominationAllocationTable({
         </div>
       )}
       <table className="w-full text-sm">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-3 py-1.5 text-left font-semibold">Denomination</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Count</th>
-            <th className="px-3 py-1.5 text-right font-semibold border-l border-white/20">Amount</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Count</th>
+            <th className="px-3 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Amount</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-[#EEF6F6]">
           {DENOMINATIONS.map((d, i) => {
             const count  = current.alloc[d];
             const amount = d * count;
             return (
               <tr key={d} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className={`${cell} font-semibold text-gray-700`}>₹{d}{d <= 2 ? ' coin' : ''}</td>
-                <td className={`${cell} text-right border-l border-gray-100 tabular-nums ${count > 0 ? 'text-gray-800 font-medium' : 'text-gray-300'}`}>{count > 0 ? count : '—'}</td>
-                <td className={`${cell} text-right border-l border-gray-100 font-medium tabular-nums ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
+                <td className={`${cell} text-right border-l border-[#E3F1F1] tabular-nums ${count > 0 ? 'text-gray-800 font-medium' : 'text-gray-300'}`}>{count > 0 ? count : '—'}</td>
+                <td className={`${cell} text-right border-l border-[#E3F1F1] font-medium tabular-nums ${amount > 0 ? 'text-gray-800' : 'text-gray-300'}`}>{amount > 0 ? fmt(amount) : '—'}</td>
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">
           <tr>
             <td className="px-3 py-2" colSpan={2}>Allocated</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-900">{fmt(allocated)}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(allocated)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td className="px-3 py-2 text-gray-500 font-medium" colSpan={2}>Required</td>
-            <td className="px-3 py-2 text-right border-l border-gray-200 text-gray-700">{fmt(current.amount)}</td>
+            <td className="px-3 py-2 text-right border-l border-[#CDE7E7] text-gray-700">{fmt(current.amount)}</td>
           </tr>
-          <tr className="border-t border-gray-200">
+          <tr className="border-t border-[#CDE7E7]">
             <td
               colSpan={3}
               className={`px-3 py-2 text-center ${current.shortfall > 0 ? 'text-red-700' : 'text-emerald-700'}`}
@@ -2458,20 +2274,20 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
   const moneyCls = (v: number, pos: string) => v > 0 ? pos : 'text-gray-300';
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-4 py-2 bg-gray-100 border-b border-gray-200">
+    <div className="rounded-xl border border-[#CDE7E7] overflow-hidden">
+      <div className="px-4 py-2 bg-gray-100 border-b border-[#CDE7E7]">
         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Bank Account Summary</span>
       </div>
       <table className="w-full text-sm">
-        <thead className={`${ACCENT} text-white`}>
+        <thead className={`${ACCENT}`}>
           <tr>
             <th className="px-4 py-2 text-left font-semibold">Bank</th>
             <th className="px-4 py-2 text-left font-semibold">Account No.</th>
             <th className="px-4 py-2 text-left font-semibold">Challan</th>
             <th className="px-4 py-2 text-left font-semibold">Fee Head</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Cash (Challan)</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-[#CDE7E7]">Cash (Challan)</th>
             <th className="px-4 py-2 text-right font-semibold">Pay (UPI)</th>
-            <th className="px-4 py-2 text-right font-semibold border-l border-white/20">Total</th>
+            <th className="px-4 py-2 text-right font-semibold border-l border-[#CDE7E7]">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -2558,12 +2374,12 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
             <td className="px-4 py-2 text-right font-bold border-l border-emerald-300 text-emerald-900">{(svkCash + svkPay) > 0 ? fmt(svkCash + svkPay) : '—'}</td>
           </tr>
         </tbody>
-        <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">
           <tr>
             <td className="px-4 py-2.5" colSpan={4}>Grand Total</td>
-            <td className={`px-4 py-2.5 text-right border-l border-gray-200 ${grandCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
+            <td className={`px-4 py-2.5 text-right border-l border-[#CDE7E7] ${grandCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{grandCash > 0 ? fmt(grandCash) : '—'}</td>
             <td className={`px-4 py-2.5 text-right ${grandPay > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{grandPay > 0 ? fmt(grandPay) : '—'}</td>
-            <td className="px-4 py-2.5 text-right border-l border-gray-200 text-gray-900">{fmt(grandCash + grandPay)}</td>
+            <td className="px-4 py-2.5 text-right border-l border-[#CDE7E7] text-gray-900">{fmt(grandCash + grandPay)}</td>
           </tr>
         </tfoot>
       </table>
@@ -3286,19 +3102,19 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
     { tot: 0, gov: 0, svk: 0, smp: 0 },
   );
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+    <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
       <table className="w-full text-[11px]">
-        <thead className={`${headerColor} text-white`}>
+        <thead className={`${headerColor}`}>
           <tr>
             <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
             <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
             <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
             <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
             <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Fee Remittance (₹)</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
           </tr>
           <tr>
-            <th className="px-2 py-1 text-right font-semibold border-l border-white/30">To Govt.</th>
+            <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
             <th className="px-2 py-1 text-right font-semibold">To SVK</th>
             <th className="px-2 py-1 text-right font-semibold">To SMP</th>
           </tr>
@@ -3311,7 +3127,7 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
               <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
               <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
               <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-              <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+              <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
               <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
               <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
             </tr>
@@ -3325,7 +3141,7 @@ function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColo
             <tr>
               <td className="px-2 py-2" colSpan={4}>GRAND TOTAL</td>
               <td className="px-2 py-2 text-right">{fmt(totals.tot)}</td>
-              <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.gov)}</td>
+              <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.gov)}</td>
               <td className="px-2 py-2 text-right">{fmt(totals.svk)}</td>
               <td className="px-2 py-2 text-right">{fmt(totals.smp)}</td>
             </tr>
@@ -3671,18 +3487,18 @@ function RemittanceModal({
   const payeeLabel   = payee === 'GOV' ? 'Government (K2)' : payee === 'SVK' ? 'SVK Management' : 'SMP';
   const refLabel     = payee === 'GOV' ? 'K2 Challan Ref'  : 'Cheque / NEFT Ref';
   const challanLabel = payee === 'GOV' ? 'K2 Challan Copy' : 'Payment Proof Copy';
-  const inp     = 'w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]/50 focus:border-[#3B5B8A]';
+  const inp     = 'w-full rounded-xl border border-[#CDE7E7] px-2.5 py-1.5 text-sm bg-white text-[#262B35] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/25 focus:border-[#0F8B8D]';
   const amtInp  = inp + ' text-right tabular-nums [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
   const fileInp = 'w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-xs file:font-semibold file:text-gray-700 hover:file:bg-gray-200';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+      <div className="absolute inset-0 bg-[#0B2E30]/45" onClick={onClose} />
+      <div className="font-wp relative bg-white rounded-2xl border border-[#CDE7E7] shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#CDE7E7] bg-[#F2FAFA]">
           <div>
-            <p className="text-sm font-bold text-gray-800">{editing ? 'Edit Remittance' : 'Record Remittance'}</p>
+            <p className="text-sm font-semibold text-[#0B6567]">{editing ? 'Edit Remittance' : 'Record Remittance'}</p>
             <p className="text-xs text-gray-400 mt-0.5">{payeeLabel}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -3720,13 +3536,13 @@ function RemittanceModal({
 
           {payee === 'GOV' ? (
             <>
-              <div className="border-t border-gray-100 pt-3 space-y-2">
+              <div className="border-t border-[#E3F1F1] pt-3 space-y-2">
                 <p className="text-xs font-bold uppercase text-gray-400 mb-1">Amount, K2 Challan Ref &amp; Soft Copy per Fee Head</p>
                 {GOV_HEADS.map(({ key, label }) => {
                   const existingChallan = editing?.govHeadChallans?.[key];
                   const showExisting = existingChallan && !headChallanRemoved[key] && !headChallanFiles[key];
                   return (
-                    <div key={key} className="border border-gray-100 rounded-lg p-1.5 space-y-1">
+                    <div key={key} className="border border-[#E3F1F1] rounded-lg p-1.5 space-y-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm text-gray-600 w-16 shrink-0">{label}</span>
                         <input
@@ -3767,9 +3583,9 @@ function RemittanceModal({
                   );
                 })}
               </div>
-              <div className="flex justify-between items-center bg-[#D0E2F2]/40 border border-[#3B5B8A]/25 rounded-lg px-3 py-2">
-                <span className="text-sm font-bold text-[#3B5B8A]">Total</span>
-                <span className="text-base font-bold text-[#3B5B8A] tabular-nums">{fmt(govTotal)}</span>
+              <div className="flex justify-between items-center bg-[#DDF0F0]/40 border border-[#0F8B8D]/25 rounded-lg px-3 py-2">
+                <span className="text-sm font-bold text-[#0B6567]">Total</span>
+                <span className="text-base font-bold text-[#0B6567] tabular-nums">{fmt(govTotal)}</span>
               </div>
             </>
           ) : (
@@ -3789,7 +3605,7 @@ function RemittanceModal({
           <div>
             <label className="text-xs font-semibold text-gray-500 block mb-0.5">{challanLabel} (optional)</label>
             {editing?.challanUrl && !removeChallan && !challanFile ? (
-              <div className="flex items-center gap-2 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+              <div className="flex items-center gap-2 text-xs bg-gray-50 border border-[#CDE7E7] rounded px-2 py-1.5">
                 <a href={editing.challanUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
                 <button type="button" className="text-gray-500 hover:text-gray-700" onClick={() => downloadFile(editing.challanUrl!, `${payeeLabel}_${phase}.pdf`)}>Download</button>
                 <button type="button" className="ml-auto text-gray-400 hover:text-red-500 shrink-0" onClick={() => setRemoveChallan(true)}>Remove</button>
@@ -3817,15 +3633,16 @@ function RemittanceModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 justify-end px-5 py-3 border-t border-gray-100">
-          <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary" size="sm"
+        <div className="flex gap-2 justify-end px-5 py-3 border-t border-[#E3F1F1]">
+          <button type="button" onClick={onClose} className={BTN_GRAY}>Cancel</button>
+          <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
+            className={BTN_PRIMARY}
           >
             {saving ? (challanFile ? 'Uploading…' : 'Saving…') : 'Save'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -4099,8 +3916,8 @@ function FeeDistributionTab({
     <div className="space-y-5">
       {/* Metrics strip */}
       <StatChipRow entries={[
-        { label: 'Total Students',    value: filteredStudents.length,   color: 'text-[#3B5B8A]',   bg: 'bg-[#D0E2F2]/40',    border: 'border-[#3B5B8A]/25'   },
-        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),     color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200'   },
+        { label: 'Total Students',    value: filteredStudents.length,   color: 'text-[#0B6567]',   bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
+        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),     color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'   },
         { label: 'To Government',     value: fmt(grandTotals.gov),      color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
         { label: 'To SVK Management', value: fmt(grandTotals.svk),      color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
         { label: 'To SMP',            value: fmt(grandTotals.smp),      color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
@@ -4151,31 +3968,31 @@ function FeeDistributionTab({
             <h2 className="text-sm font-semibold text-gray-700">SMP Students Statistics Summary</h2>
             <button
               onClick={() => exportStudentStatsAndDistSummaryPdf(studentStats, grandStatTotals, aidedFiltered.length, aidedTotals, unaidedFiltered.length, unaidedTotals, filteredStudents.length, grandTotals, academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
             >
               PDF
             </button>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
             <table className="w-full text-[11px]">
-              <thead className={`${ACCENT} text-white`}>
+              <thead className={`${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>1st Year</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>2nd Year</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>3rd Year</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" rowSpan={2}>Grand Total</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>1st Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>2nd Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>3rd Year</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Grand Total</th>
                 </tr>
                 <tr>
-                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                   <th className="px-2 py-1 font-semibold">SNQ</th>
                   <th className="px-2 py-1 font-semibold">Total</th>
-                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                   <th className="px-2 py-1 font-semibold">Lateral</th>
                   <th className="px-2 py-1 font-semibold">SNQ</th>
                   <th className="px-2 py-1 font-semibold">Total</th>
-                  <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                  <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                   <th className="px-2 py-1 font-semibold">SNQ</th>
                   <th className="px-2 py-1 font-semibold">Total</th>
                 </tr>
@@ -4188,17 +4005,17 @@ function FeeDistributionTab({
                     <tr key={c} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
                       <td className="px-2 py-1.5 font-semibold">{c} <span className="text-gray-400 font-normal">({courseType})</span></td>
-                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr1.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]">{st.yr1.reg || '—'}</td>
                       <td className="px-2 py-1.5 text-center">{st.yr1.snq || '—'}</td>
                       <td className="px-2 py-1.5 text-center font-semibold">{st.yr1.total || '—'}</td>
-                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr2.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]">{st.yr2.reg || '—'}</td>
                       <td className="px-2 py-1.5 text-center">{st.yr2.lat || '—'}</td>
                       <td className="px-2 py-1.5 text-center">{st.yr2.snq || '—'}</td>
                       <td className="px-2 py-1.5 text-center font-semibold">{st.yr2.total || '—'}</td>
-                      <td className="px-2 py-1.5 text-center border-l border-gray-100">{st.yr3.reg || '—'}</td>
+                      <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]">{st.yr3.reg || '—'}</td>
                       <td className="px-2 py-1.5 text-center">{st.yr3.snq || '—'}</td>
                       <td className="px-2 py-1.5 text-center font-semibold">{st.yr3.total || '—'}</td>
-                      <td className="px-2 py-1.5 text-center font-bold border-l border-gray-100">{st.grand || '—'}</td>
+                      <td className="px-2 py-1.5 text-center font-bold border-l border-[#E3F1F1]">{st.grand || '—'}</td>
                     </tr>
                   );
                 })}
@@ -4206,17 +4023,17 @@ function FeeDistributionTab({
               <tfoot className={TFOOT}>
                 <tr>
                   <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
-                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr1.reg}</td>
+                  <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr1.reg}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr1.snq}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr1.total}</td>
-                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr2.reg}</td>
+                  <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr2.reg}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr2.lat}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr2.snq}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr2.total}</td>
-                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr3.reg}</td>
+                  <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr3.reg}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr3.snq}</td>
                   <td className="px-2 py-2 text-center">{grandStatTotals.yr3.total}</td>
-                  <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.grand}</td>
+                  <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.grand}</td>
                 </tr>
               </tfoot>
             </table>
@@ -4228,9 +4045,9 @@ function FeeDistributionTab({
       {show('summary') && (
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
-          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
             <table className="w-full text-[11px]">
-              <thead className={`${ACCENT} text-white`}>
+              <thead className={`${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 font-semibold">Course Type</th>
                   <th className="px-2 py-1.5 text-center font-semibold">Students</th>
@@ -4280,12 +4097,12 @@ function FeeDistributionTab({
             <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)</h2>
             <button
               onClick={() => exportRemittanceDistPdf(aidedDist, 'Aided Courses (CE, ME, EC, CS)', academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
             >
               PDF
             </button>
           </div>
-          <RemittanceTable dist={aidedDist} headerColor="bg-indigo-600" />
+          <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" />
         </div>
       )}
 
@@ -4296,12 +4113,12 @@ function FeeDistributionTab({
             <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Unaided Course (EE)</h2>
             <button
               onClick={() => exportRemittanceDistPdf(unaidedDist, 'Unaided Course (EE)', academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
             >
               PDF
             </button>
           </div>
-          <RemittanceTable dist={unaidedDist} headerColor="bg-amber-600" />
+          <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" />
         </div>
       )}
 
@@ -4309,9 +4126,9 @@ function FeeDistributionTab({
       {show('combined') && (
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700">Combined Fee Remittance Abstract (Aided &amp; Unaided)</h2>
-          <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
             <table className="w-full text-[11px]">
-              <thead className={`${ACCENT} text-white`}>
+              <thead className={`${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
@@ -4319,10 +4136,10 @@ function FeeDistributionTab({
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
                   <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
                   <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Fee Remittance (₹)</th>
+                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
                 </tr>
                 <tr>
-                  <th className="px-2 py-1 text-right font-semibold border-l border-white/30">To Govt.</th>
+                  <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
                   <th className="px-2 py-1 text-right font-semibold">To SVK</th>
                   <th className="px-2 py-1 text-right font-semibold">To SMP</th>
                 </tr>
@@ -4336,7 +4153,7 @@ function FeeDistributionTab({
                     <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
                     <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
                     <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                    <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
                   </tr>
@@ -4349,7 +4166,7 @@ function FeeDistributionTab({
                     <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
                     <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
                     <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                    <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
                   </tr>
@@ -4363,7 +4180,7 @@ function FeeDistributionTab({
                   <tr>
                     <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
                     <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                    <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(grandTotals.gov)}</td>
+                    <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotals.gov)}</td>
                     <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
                     <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
                   </tr>
@@ -4375,7 +4192,7 @@ function FeeDistributionTab({
       )}
 
       {/* Distribution Rules legend */}
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 text-[10px] text-gray-500 space-y-1">
+      <div className="bg-gray-50 rounded-xl border border-[#CDE7E7] p-3 text-[10px] text-gray-500 space-y-1">
         <p className="font-semibold text-gray-600 text-xs mb-1">Distribution Rules</p>
         <p><span className="font-medium text-indigo-700">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP | Fine → 100% Govt</p>
         <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP | Fine → 100% Govt</p>
@@ -4383,9 +4200,9 @@ function FeeDistributionTab({
       </div>
 
       {/* ── Remittance Tracker ── */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+      <div className="bg-white rounded-xl border border-[#CDE7E7] overflow-hidden" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-[#E3F1F1]">
           <div>
             <h3 className="text-xs font-bold text-gray-800">Remittance Tracker</h3>
             <p className="text-[10px] text-gray-400 mt-0.5">Record outgoing payments to Govt, SVK &amp; SMP — phase by phase</p>
@@ -4393,7 +4210,7 @@ function FeeDistributionTab({
         </div>
 
         {/* Payee tabs */}
-        <div className="px-4 py-2.5 border-b border-gray-100">
+        <div className="px-4 py-2.5 border-b border-[#E3F1F1]">
           <SegmentedToggle
             options={[
               { value: 'GOV',  label: 'Government (K2)' },
@@ -4424,7 +4241,7 @@ function FeeDistributionTab({
                       border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
                     },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
                       <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
                       <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
                     </div>
@@ -4432,9 +4249,9 @@ function FeeDistributionTab({
                 </div>
 
                 {/* Headwise phase table */}
-                <div className="overflow-auto rounded-lg border border-gray-200">
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
-                    <thead className="bg-[#D0E2F2]/40 border-b border-[#3B5B8A]/20">
+                    <thead className={THEAD}>
                       <tr>
                         <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
                         <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
@@ -4444,7 +4261,7 @@ function FeeDistributionTab({
                         <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-[#EEF6F6]">
                       {GOV_HEADS.map(({ key, label }, i) => {
                         const payable = govPayableByHead[key];
                         const paid    = govPaidByHead[key];
@@ -4468,7 +4285,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
                       <tr>
                         <td className="px-3 py-1.5 text-gray-800">Total</td>
                         <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
@@ -4493,7 +4310,7 @@ function FeeDistributionTab({
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
                     {govRemittances.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
                         <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
                         <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
                         <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
@@ -4536,7 +4353,7 @@ function FeeDistributionTab({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[#3B5B8A] hover:text-[#2e4a72] border border-[#3B5B8A]/25 hover:border-[#3B5B8A]/50 bg-[#D0E2F2]/40 hover:bg-[#D0E2F2]/70 rounded-full px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-[#0B6567] hover:text-[#0B6567] border border-[#0F8B8D]/25 hover:border-[#0F8B8D]/50 bg-[#DDF0F0]/40 hover:bg-[#DDF0F0]/70 rounded-full px-3 py-1.5 transition-colors"
                   >
                     <span className="text-sm leading-none">+</span> Record Govt Payment
                   </button>
@@ -4559,7 +4376,7 @@ function FeeDistributionTab({
                         body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
                       },
                     )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
                   >
                     PDF
                   </button>
@@ -4592,7 +4409,7 @@ function FeeDistributionTab({
                       border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
                     },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
                       <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
                       <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
                     </div>
@@ -4600,9 +4417,9 @@ function FeeDistributionTab({
                 </div>
 
                 {/* Head / Total Payable / Phase / Balance table */}
-                <div className="overflow-auto rounded-lg border border-gray-200">
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
-                    <thead className="bg-[#D0E2F2]/40 border-b border-[#3B5B8A]/20">
+                    <thead className={THEAD}>
                       <tr>
                         <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
                         <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
@@ -4636,7 +4453,7 @@ function FeeDistributionTab({
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
                     {rem.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
                         <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
                         <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
                         <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
@@ -4679,7 +4496,7 @@ function FeeDistributionTab({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[#3B5B8A] hover:text-[#2e4a72] border border-[#3B5B8A]/25 hover:border-[#3B5B8A]/50 bg-[#D0E2F2]/40 hover:bg-[#D0E2F2]/70 rounded-full px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-[#0B6567] hover:text-[#0B6567] border border-[#0F8B8D]/25 hover:border-[#0F8B8D]/50 bg-[#DDF0F0]/40 hover:bg-[#DDF0F0]/70 rounded-full px-3 py-1.5 transition-colors"
                   >
                     <span className="text-sm leading-none">+</span> Record {label} Payment
                   </button>
@@ -4701,7 +4518,7 @@ function FeeDistributionTab({
                         body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
                       },
                     )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
                   >
                     PDF
                   </button>
@@ -4733,7 +4550,7 @@ function FeeDistributionTab({
                 {/* Summary cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
+                    { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-[#CDE7E7]'   },
                     { label: 'Total Remitted', value: totalPaid,   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
                     {
                       label: 'Balance',
@@ -4744,7 +4561,7 @@ function FeeDistributionTab({
                     },
                     { label: 'Entries', value: allRemittances.length as unknown as number, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', isCount: true },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
                       <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
                       <p className={`text-base font-bold ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</p>
                     </div>
@@ -4769,16 +4586,16 @@ function FeeDistributionTab({
                         body: allRemittances.map((r) => [r.payeeLabel, r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
                       },
                     )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
                   >
                     PDF
                   </button>
                 </div>
 
                 {/* Payee summary table */}
-                <div className="overflow-auto rounded-lg border border-gray-200">
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
-                    <thead className={`${ACCENT} text-white`}>
+                    <thead className={`${ACCENT}`}>
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Payee</th>
                         <th className="px-3 py-2 text-right font-semibold">Payable</th>
@@ -4786,7 +4603,7 @@ function FeeDistributionTab({
                         <th className="px-3 py-2 text-right font-semibold">Balance</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-[#EEF6F6]">
                       {rows.map((row, i) => {
                         const bal = row.payable - row.paid;
                         return (
@@ -4801,7 +4618,7 @@ function FeeDistributionTab({
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold">
+                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
                       <tr>
                         <td className="px-3 py-2 text-gray-800">Grand Total</td>
                         <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
@@ -4819,7 +4636,7 @@ function FeeDistributionTab({
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase text-gray-400">All Payments — Chronological</p>
                     {allRemittances.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100">
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
                         <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded ${
                           r.payeeLabel === 'Govt' ? 'bg-red-100 text-red-700' :
                           r.payeeLabel === 'SVK'  ? 'bg-violet-100 text-violet-700' :
@@ -5319,7 +5136,7 @@ function BudgetTab({
   const grandAided     = heads.reduce((s, h) => s + (smpBreakupByHead.get(h.head)?.aided ?? 0), 0);
   const grandUnaided   = heads.reduce((s, h) => s + (smpBreakupByHead.get(h.head)?.unaided ?? 0), 0);
 
-  const inp = 'w-full rounded border border-gray-300 px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]/50 focus:border-[#3B5B8A]';
+  const inp = 'w-full rounded-xl border border-[#CDE7E7] px-2 py-1 text-xs bg-white text-[#262B35] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/25 focus:border-[#0F8B8D]';
   const amtInp = inp + ' text-right tabular-nums';
 
   if (loading) {
@@ -5331,7 +5148,7 @@ function BudgetTab({
       {/* shrink-0 + a separate scrollable body below (not page-level scroll) keeps this bar
           always visible without fighting the page's own sticky "Back to Reports" bar —
           same toolbar-above-scroll-region pattern used by the other report tabs. */}
-      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#CDE7E7] bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-wrap gap-8 text-sm">
           <div><div className="text-gray-400 text-xs">Total Allotted</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandAllotted)}</div></div>
           <div><div className="text-gray-400 text-xs">Total Spent</div><div className="font-bold text-lg text-gray-800 tabular-nums">{fmt(grandSpent)}</div></div>
@@ -5341,7 +5158,7 @@ function BudgetTab({
           {savedAt && !dirty && <span className="text-[11px] text-gray-400">Saved {new Date(savedAt).toLocaleString('en-IN')}</span>}
           {dirty && <span className="text-[11px] text-amber-600">Unsaved changes</span>}
           <ExportBar onPdf={() => exportBudgetPdf(heads, smpBreakupByHead, academicYear)} onExcel={() => exportBudgetExcel(heads, smpBreakupByHead, academicYear)} />
-          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Budget'}</Button>
+          <button type="button" onClick={handleSave} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Saving…' : 'Save Budget'}</button>
         </div>
       </div>
 
@@ -5353,12 +5170,12 @@ function BudgetTab({
           const suggestion = smpAllottedByHead.get(h.head);
           const breakup    = smpBreakupByHead.get(h.head);
           return (
-            <div key={`${h.head}-${idx}`} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-              <div className={`${ACCENT} flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-white`}>
+            <div key={`${h.head}-${idx}`} className="rounded-xl border border-[#CDE7E7] bg-white overflow-hidden">
+              <div className={`${ACCENT} flex flex-wrap items-center justify-between gap-3 px-3 py-2`}>
                 <div className="flex items-baseline gap-2">
                   <span className="font-semibold text-sm">{h.label}</span>
                   {breakup && (
-                    <span className="text-[11px] text-white/75 whitespace-nowrap">
+                    <span className="text-[11px] text-[#0B6567]/75 whitespace-nowrap">
                       (Aided: {fmt(breakup.aided)} &nbsp;·&nbsp; Unaided: {fmt(breakup.unaided)})
                     </span>
                   )}
@@ -5369,17 +5186,17 @@ function BudgetTab({
                     <input type="number" className={amtInp + ' w-32 text-gray-900 text-base font-bold py-1.5'} value={h.allotted || ''} onChange={e => updateAllotted(idx, e.target.value)} />
                   </label>
                   {suggestion !== undefined && (
-                    <button type="button" title={`Refresh suggestion (₹${fmt(suggestion)})`} onClick={() => refreshSuggestion(idx)} className="rounded-full bg-white/15 px-2 py-1 hover:bg-white/25 transition-colors">↻</button>
+                    <button type="button" title={`Refresh suggestion (₹${fmt(suggestion)})`} onClick={() => refreshSuggestion(idx)} className="rounded-full bg-[#0F8B8D]/10 px-2 py-1 hover:bg-[#0F8B8D]/10 transition-colors">↻</button>
                   )}
                   {h.head === 'other' && (
-                    <button type="button" onClick={() => removeHead(idx)} className="rounded-full bg-white/15 px-2 py-1 hover:bg-white/25 transition-colors">Remove</button>
+                    <button type="button" onClick={() => removeHead(idx)} className="rounded-full bg-[#0F8B8D]/10 px-2 py-1 hover:bg-[#0F8B8D]/20 transition-colors">Remove</button>
                   )}
                 </div>
               </div>
 
               <div className="overflow-auto">
                 <table className="w-full text-[11px]">
-                  <thead className="bg-gray-50 text-gray-500">
+                  <thead className={THEAD}>
                     <tr>
                       <th className="px-2 py-1.5 text-left font-semibold">Description</th>
                       <th className="px-2 py-1.5 text-left font-semibold w-32">Date</th>
@@ -5390,7 +5207,7 @@ function BudgetTab({
                   </thead>
                   <tbody>
                     {h.expenses.map(e => (
-                      <tr key={e.id} className="border-t border-gray-100">
+                      <tr key={e.id} className="border-t border-[#E3F1F1]">
                         <td className="px-2 py-1"><input className={inp} value={e.description} onChange={ev => updateExpense(idx, e.id, 'description', ev.target.value)} placeholder="Expense description" /></td>
                         <td className="px-2 py-1"><input type="date" className={inp} value={e.date} onChange={ev => updateExpense(idx, e.id, 'date', ev.target.value)} /></td>
                         <td className="px-2 py-1"><input type="number" className={amtInp + ' font-semibold text-gray-900'} value={e.amount || ''} onChange={ev => updateExpense(idx, e.id, 'amount', ev.target.value)} /></td>
@@ -5407,8 +5224,8 @@ function BudgetTab({
                 </table>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-3 py-2">
-                <button type="button" onClick={() => addExpense(idx)} className="text-xs font-medium text-[#3B5B8A] hover:underline">+ Add Expense</button>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E3F1F1] bg-gray-50 px-3 py-2">
+                <button type="button" onClick={() => addExpense(idx)} className="text-xs font-medium text-[#0B6567] hover:underline">+ Add Expense</button>
                 <div className="flex gap-5 text-xs items-baseline">
                   <span className="text-gray-500">Spent: <span className="font-bold text-sm text-gray-800 tabular-nums">{fmt(spent)}</span></span>
                   <span className="text-gray-500">Balance: <span className={`font-bold text-sm tabular-nums ${balance < 0 ? 'text-red-600' : 'text-green-700'}`}>{fmt(balance)}</span></span>
@@ -5419,16 +5236,16 @@ function BudgetTab({
         })}
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2">
+      <div className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-white px-3 py-2">
         <input className={inp + ' max-w-xs'} placeholder="Custom head name (e.g. Cultural Fee)" value={newHeadLabel} onChange={e => setNewHeadLabel(e.target.value)} />
-        <button type="button" onClick={addCustomHead} className="text-xs font-medium text-[#3B5B8A] hover:underline whitespace-nowrap">+ Add Custom Head</button>
+        <button type="button" onClick={addCustomHead} className="text-xs font-medium text-[#0B6567] hover:underline whitespace-nowrap">+ Add Custom Head</button>
       </div>
 
       {/* ── Detailed summary table ── */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
-        <div className={`${ACCENT} px-3 py-2 text-white font-semibold text-sm`}>Budget Summary</div>
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+        <div className={`${ACCENT} px-3 py-2 font-semibold text-sm`}>Budget Summary</div>
         <table className="w-full text-[12px]">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className={THEAD}>
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Fee Head</th>
               <th className="px-3 py-2 text-right font-semibold">Aided (₹)</th>
@@ -5745,7 +5562,7 @@ function FeeReg1Tab({
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
                 selectedDate
                   ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                  : 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]'
               }`}
               title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
             >All</button>
@@ -5794,11 +5611,11 @@ function FeeReg1Tab({
       </FilterPanel>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#CDE7E7] flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto scroll-fee scroll-fee-h2">
         <table className="w-full table-fixed text-[11px] border-collapse">
           <Reg1ColGroup />
-          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+          <thead className={`sticky top-0 z-10 ${ACCENT}`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Date</th>
@@ -5806,16 +5623,16 @@ function FeeReg1Tab({
               <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Name</th>
               <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Course</th>
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap" rowSpan={2}>Year</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>SMP</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>SVK</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>RC</th>
-              <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={2}>Ins</th>
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap" rowSpan={2}>Total</th>
-              <th className="px-2 py-1.5 font-semibold border-l border-white/30" rowSpan={2}>Remarks</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>SMP</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>SVK</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>RC</th>
+              <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={2}>Ins</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] whitespace-nowrap" rowSpan={2}>Total</th>
+              <th className="px-2 py-1.5 font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Remarks</th>
             </tr>
             <tr>
               {(['Cash','Pay','Cash','Pay','Cash','Pay','Cash','Pay'] as const).map((h, i) => (
-                <th key={i} className={`px-2 py-1 text-right text-[10px] font-semibold ${i % 2 === 0 ? 'border-l border-white/30' : ''}`}>{h}</th>
+                <th key={i} className={`px-2 py-1 text-right text-[10px] font-semibold ${i % 2 === 0 ? 'border-l border-[#CDE7E7]' : ''}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -5837,16 +5654,16 @@ function FeeReg1Tab({
                   <td className={`${tdL} font-medium max-w-[130px] truncate`}>{student?.studentNameSSLC ?? r.record.studentName}</td>
                   <td className={`${tdC} font-semibold`}>{r.record.course}</td>
                   <td className={`${tdL} whitespace-nowrap`}>{r.record.year}</td>
-                  <td className={`${td} border-l border-gray-100 ${r.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smpCash > 0 ? fmt(r.smpCash) : '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] ${r.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smpCash > 0 ? fmt(r.smpCash) : '—'}</td>
                   <td className={`${td} ${r.smpPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.smpPay  > 0 ? fmt(r.smpPay)  : '—'}</td>
-                  <td className={`${td} border-l border-gray-100 ${r.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.svkCash > 0 ? fmt(r.svkCash) : '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] ${r.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.svkCash > 0 ? fmt(r.svkCash) : '—'}</td>
                   <td className={`${td} ${r.svkPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.svkPay  > 0 ? fmt(r.svkPay)  : '—'}</td>
-                  <td className={`${td} border-l border-gray-100 ${r.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.rcCash  > 0 ? fmt(r.rcCash)  : '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] ${r.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.rcCash  > 0 ? fmt(r.rcCash)  : '—'}</td>
                   <td className={`${td} ${r.rcPay   > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.rcPay   > 0 ? fmt(r.rcPay)   : '—'}</td>
-                  <td className={`${td} border-l border-gray-100 ${r.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.insCash > 0 ? fmt(r.insCash) : '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] ${r.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.insCash > 0 ? fmt(r.insCash) : '—'}</td>
                   <td className={`${td} ${r.insPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{r.insPay  > 0 ? fmt(r.insPay)  : '—'}</td>
-                  <td className={`${td} border-l border-gray-100 font-semibold text-gray-800`}>{r.total > 0 ? fmt(r.total) : '—'}</td>
-                  <td className={`${tdL} border-l border-gray-100 text-gray-500 max-w-[160px] truncate`}>{r.record.remarks || '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] font-semibold text-gray-800`}>{r.total > 0 ? fmt(r.total) : '—'}</td>
+                  <td className={`${tdL} border-l border-[#E3F1F1] text-gray-500 max-w-[160px] truncate`}>{r.record.remarks || '—'}</td>
                 </tr>
               );
             })}
@@ -5856,20 +5673,20 @@ function FeeReg1Tab({
       {rows.length > 0 && (
         <table className="w-full table-fixed text-[11px] border-collapse shrink-0">
           <Reg1ColGroup />
-          <tfoot className="bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]">
+          <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[11px] text-[#0B6567]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
-                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.smpCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smpCash > 0 ? fmt(totals.smpCash) : '—'}</td>
                 <td className={`px-2 py-2 text-right ${totals.smpPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.smpPay  > 0 ? fmt(totals.smpPay)  : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.svkCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.svkCash > 0 ? fmt(totals.svkCash) : '—'}</td>
                 <td className={`px-2 py-2 text-right ${totals.svkPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.svkPay  > 0 ? fmt(totals.svkPay)  : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.rcCash  > 0 ? fmt(totals.rcCash)  : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.rcCash  > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.rcCash  > 0 ? fmt(totals.rcCash)  : '—'}</td>
                 <td className={`px-2 py-2 text-right ${totals.rcPay   > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.rcPay   > 0 ? fmt(totals.rcPay)   : '—'}</td>
-                <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.insCash > 0 ? fmt(totals.insCash) : '—'}</td>
+                <td className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.insCash > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.insCash > 0 ? fmt(totals.insCash) : '—'}</td>
                 <td className={`px-2 py-2 text-right ${totals.insPay  > 0 ? 'text-blue-700'    : 'text-gray-300'}`}>{totals.insPay  > 0 ? fmt(totals.insPay)  : '—'}</td>
-                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.total)}</td>
-                <td className="px-2 py-2 border-l border-gray-200"></td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.total)}</td>
+                <td className="px-2 py-2 border-l border-[#CDE7E7]"></td>
               </tr>
           </tfoot>
         </table>
@@ -6107,12 +5924,12 @@ function AdditionalFeeReceiptsTab({
   const [mode, setMode] = useState<'receipts' | 'collect'>('receipts');
   const segBtn = (active: boolean) =>
     `px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-      active ? 'bg-[#3B5B8A] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+      active ? 'bg-[#0F8B8D] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
     }`;
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <div className="flex shrink-0">
-        <div className="inline-flex rounded-full border border-[#3B5B8A]/30 overflow-hidden shadow-sm">
+        <div className="inline-flex rounded-full border border-[#0F8B8D]/30 overflow-hidden shadow-sm">
           <button type="button" onClick={() => setMode('receipts')} className={segBtn(mode === 'receipts')}>Receipts</button>
           <button type="button" onClick={() => setMode('collect')}  className={segBtn(mode === 'collect')}>Collect Dues (Bulk)</button>
         </div>
@@ -6395,7 +6212,7 @@ function BulkAdditionalCollectPanel({
       </FilterPanel>
 
       {/* Heads to collect + batch settings */}
-      <div className="shrink-0 bg-white rounded-lg border border-gray-200 px-3 py-2 flex flex-wrap items-center gap-2">
+      <div className="shrink-0 bg-white rounded-xl border border-[#CDE7E7] px-3 py-2 flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mr-1">Heads</span>
         {allHeads.length === 0 ? (
           <span className="text-xs text-gray-400">No additional heads in this year's fee structures.</span>
@@ -6407,20 +6224,20 @@ function BulkAdditionalCollectPanel({
               type="button"
               onClick={() => toggleHead(h.key)}
               className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                on ? 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]' : 'border-gray-200 bg-white text-gray-400 line-through hover:border-[#3B5B8A]/40'
+                on ? 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]' : 'border-[#CDE7E7] bg-white text-gray-400 line-through hover:border-[#0F8B8D]/40'
               }`}
             >{h.label}</button>
           );
         })}
         <div className="flex-1" />
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fs} title="Collection date" />
-        <div className="inline-flex rounded-full border border-[#3B5B8A]/25 overflow-hidden">
+        <div className="inline-flex rounded-full border border-[#0F8B8D]/25 overflow-hidden">
           {(['CASH', 'UPI'] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setPayMode(m)}
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${payMode === m ? 'bg-[#3B5B8A] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${payMode === m ? 'bg-[#0F8B8D] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
             >{m}</button>
           ))}
         </div>
@@ -6429,7 +6246,7 @@ function BulkAdditionalCollectPanel({
           value={remarks}
           onChange={(e) => setRemarks(e.target.value)}
           placeholder="Remarks (optional)"
-          className="w-44 rounded-full border border-[#3B5B8A]/25 px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3B5B8A]/30"
+          className="w-44 rounded-full border border-[#0F8B8D]/25 px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30"
         />
         <span className="text-xs text-gray-600 whitespace-nowrap font-medium">
           {selectedRows.length} selected · {fmt(selTotal)}
@@ -6447,10 +6264,10 @@ function BulkAdditionalCollectPanel({
       </div>
 
       {error && (
-        <div className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+        <div className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
       )}
       {lastBatch && lastBatch.length > 0 && (
-        <div className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 flex flex-wrap items-center gap-3 text-xs text-emerald-800">
+        <div className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 flex flex-wrap items-center gap-3 text-xs text-emerald-800">
           <span>
             Collected <strong>{fmt(batchTotal)}</strong> from <strong>{lastBatch.length}</strong> student{lastBatch.length !== 1 ? 's' : ''} — receipts{' '}
             <strong>{lastBatch[0].additionalReceiptNumber}</strong>
@@ -6460,16 +6277,16 @@ function BulkAdditionalCollectPanel({
           <button
             type="button"
             onClick={printBatch}
-            className="rounded-full bg-[#3B5B8A] px-3.5 py-1.5 font-semibold text-white hover:bg-[#2e4a72] shadow-sm"
+            className="rounded-full bg-[#0F8B8D] px-3.5 py-1.5 font-semibold text-white hover:bg-[#0B6567] shadow-sm"
           >Print these {lastBatch.length} receipt{lastBatch.length !== 1 ? 's' : ''} (4 per A4)</button>
           <button type="button" onClick={() => setLastBatch(null)} className="text-emerald-700 hover:underline">Dismiss</button>
         </div>
       )}
 
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#CDE7E7] flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto scroll-fee scroll-fee-h1">
           <table className="w-full text-[11px] border-collapse">
-            <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+            <thead className={`sticky top-0 z-10 ${ACCENT}`}>
               <tr>
                 <th className="px-2 py-1.5 text-center w-8">
                   <input
@@ -6487,9 +6304,9 @@ function BulkAdditionalCollectPanel({
                 <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Year</th>
                 <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Adm Type/Cat</th>
                 {selectedHeads.map((h) => (
-                  <th key={h.key} className="px-2 py-1.5 text-right font-semibold whitespace-nowrap border-l border-white/30">{h.label}</th>
+                  <th key={h.key} className="px-2 py-1.5 text-right font-semibold whitespace-nowrap border-l border-[#CDE7E7]">{h.label}</th>
                 ))}
-                <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30">Total</th>
+                <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -6505,7 +6322,7 @@ function BulkAdditionalCollectPanel({
                   <tr
                     key={r.student.id}
                     onClick={() => toggleOne(r.student.id)}
-                    className={`cursor-pointer ${isSel ? 'bg-[#D0E2F2]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    className={`cursor-pointer ${isSel ? 'bg-[#DDF0F0]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                   >
                     <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={isSel} onChange={() => toggleOne(r.student.id)} className="cursor-pointer" />
@@ -6519,12 +6336,12 @@ function BulkAdditionalCollectPanel({
                     {selectedHeads.map((h) => {
                       const v = r.pending[h.key] ?? 0;
                       return (
-                        <td key={h.key} className={`px-2 py-1.5 text-right tabular-nums border-l border-gray-100 ${v > 0 ? 'text-blue-700' : 'text-gray-300'}`}>
+                        <td key={h.key} className={`px-2 py-1.5 text-right tabular-nums border-l border-[#E3F1F1] ${v > 0 ? 'text-blue-700' : 'text-gray-300'}`}>
                           {v > 0 ? fmt(v) : '—'}
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1.5 text-right tabular-nums font-semibold border-l border-gray-100">{fmt(r.total)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums font-semibold border-l border-[#E3F1F1]">{fmt(r.total)}</td>
                   </tr>
                 );
               })}
@@ -6534,9 +6351,9 @@ function BulkAdditionalCollectPanel({
                 <tr>
                   <td className="px-2 py-2" colSpan={7}>Selected — {selectedRows.length} of {rows.length}</td>
                   {selectedHeads.map((h, idx) => (
-                    <td key={h.key} className="px-2 py-2 text-right tabular-nums border-l border-gray-200">{headTotals[idx] > 0 ? fmt(headTotals[idx]) : '—'}</td>
+                    <td key={h.key} className="px-2 py-2 text-right tabular-nums border-l border-[#CDE7E7]">{headTotals[idx] > 0 ? fmt(headTotals[idx]) : '—'}</td>
                   ))}
-                  <td className="px-2 py-2 text-right tabular-nums border-l border-gray-200">{fmt(selTotal)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums border-l border-[#CDE7E7]">{fmt(selTotal)}</td>
                 </tr>
               </tfoot>
             )}
@@ -6732,7 +6549,7 @@ function AdditionalFeeReceiptsList({
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
                 selectedDate
                   ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                  : 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]'
               }`}
               title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
             >All</button>
@@ -6760,7 +6577,7 @@ function AdditionalFeeReceiptsList({
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shadow-sm transition-colors ${
               selected.size === 0
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-[#3B5B8A] text-white hover:bg-[#2e4a72]'
+                : 'bg-[#0F8B8D] text-white hover:bg-[#0B6567]'
             }`}
           >
             Print Receipts (4 per A4)
@@ -6789,15 +6606,15 @@ function AdditionalFeeReceiptsList({
         <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} title="To date" />
       </FilterPanel>
 
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#CDE7E7] flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto scroll-fee scroll-fee-h1">
           <table className="w-full table-fixed text-[11px] border-collapse">
             <colgroup>
               <col style={{ width: '4%' }} /><col style={{ width: '4%' }} /><col style={{ width: '9%' }} />
               <col style={{ width: '10%' }} /><col style={{ width: '20%' }} /><col style={{ width: '7%' }} />
               <col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col style={{ width: '18%' }} /><col style={{ width: '10%' }} />
             </colgroup>
-            <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+            <thead className={`sticky top-0 z-10 ${ACCENT}`}>
               <tr>
                 <th className="px-2 py-1.5 text-center">
                   <input
@@ -6830,7 +6647,7 @@ function AdditionalFeeReceiptsList({
                 const items = r.additionalPaid.filter((h) => h.amount > 0);
                 const total = items.reduce((s, h) => s + h.amount, 0);
                 return (
-                  <tr key={r.id} className={isSelected ? 'bg-[#D0E2F2]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <tr key={r.id} className={isSelected ? 'bg-[#DDF0F0]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-2 py-1 text-center">
                       <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)} className="cursor-pointer" />
                     </td>
@@ -7271,7 +7088,7 @@ function BlueRegisterTab({
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${
                 selectedDate
                   ? 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                  : 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
+                  : 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]'
               }`}
               title={selectedDate ? 'Show all dates' : 'Jump back to the latest date'}
             >All</button>
@@ -7293,8 +7110,8 @@ function BlueRegisterTab({
             onClick={() => setShowSvk((v) => !v)}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               showSvk
-                ? 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
-                : 'border-gray-200 bg-white text-gray-500 hover:border-[#3B5B8A]/40'
+                ? 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]'
+                : 'border-[#CDE7E7] bg-white text-gray-500 hover:border-[#0F8B8D]/40'
             }`}
             title="Toggle the SVK fee column"
           >
@@ -7305,8 +7122,8 @@ function BlueRegisterTab({
             onClick={() => setShowAdditional((v) => !v)}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               showAdditional
-                ? 'border-[#3B5B8A]/40 bg-[#D0E2F2] text-[#3B5B8A]'
-                : 'border-gray-200 bg-white text-gray-500 hover:border-[#3B5B8A]/40'
+                ? 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]'
+                : 'border-[#CDE7E7] bg-white text-gray-500 hover:border-[#0F8B8D]/40'
             }`}
             title="Toggle additional fee columns (Red Cross, Insurance, etc.)"
           >
@@ -7344,11 +7161,11 @@ function BlueRegisterTab({
       </FilterPanel>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#CDE7E7] flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-auto scroll-fee scroll-fee-h1">
         <table className="w-full table-fixed text-[11px] border-collapse">
           <BlueRegColGroup />
-          <thead className={`sticky top-0 z-10 ${ACCENT} text-white`}>
+          <thead className={`sticky top-0 z-10 ${ACCENT}`}>
             <tr>
               <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Date</th>
@@ -7357,15 +7174,15 @@ function BlueRegisterTab({
               <th className="px-2 py-1.5 font-semibold whitespace-nowrap">Year</th>
               <th className="px-2 py-1.5 font-semibold">Name of the Student</th>
               {SMP_FEE_HEADS.map((h) => (
-                <th key={h.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">{h.label}</th>
+                <th key={h.key} className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] whitespace-nowrap">{h.label}</th>
               ))}
               {showSvk && (
-                <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">SVK</th>
+                <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] whitespace-nowrap">SVK</th>
               )}
               {visibleAddCols.map((c) => (
-                <th key={c.key} className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap" title={c.label}>{blueRegShortLabel(c.label)}</th>
+                <th key={c.key} className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] whitespace-nowrap" title={c.label}>{blueRegShortLabel(c.label)}</th>
               ))}
-              <th className="px-2 py-1.5 text-right font-semibold border-l border-white/30 whitespace-nowrap">Total</th>
+              <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7] whitespace-nowrap">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -7388,15 +7205,15 @@ function BlueRegisterTab({
                   <td className={`${tdL} whitespace-nowrap`}>{r.record.year}</td>
                   <td className={`${tdL} font-medium max-w-[160px] truncate`}>{student?.studentNameSSLC ?? r.record.studentName}</td>
                   {SMP_FEE_HEADS.map((h) => (
-                    <td key={h.key} className={`${td} border-l border-gray-100 ${r.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smp[h.key] > 0 ? fmt(r.smp[h.key]) : '—'}</td>
+                    <td key={h.key} className={`${td} border-l border-[#E3F1F1] ${r.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{r.smp[h.key] > 0 ? fmt(r.smp[h.key]) : '—'}</td>
                   ))}
                   {showSvk && (
-                    <td className={`${td} border-l border-gray-100 ${r.svk > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{r.svk > 0 ? fmt(r.svk) : '—'}</td>
+                    <td className={`${td} border-l border-[#E3F1F1] ${r.svk > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{r.svk > 0 ? fmt(r.svk) : '—'}</td>
                   )}
                   {visibleAddCols.map((c) => (
-                    <td key={c.key} className={`${td} border-l border-gray-100 ${(r.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(r.additional[c.key] ?? 0) > 0 ? fmt(r.additional[c.key]) : '—'}</td>
+                    <td key={c.key} className={`${td} border-l border-[#E3F1F1] ${(r.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(r.additional[c.key] ?? 0) > 0 ? fmt(r.additional[c.key]) : '—'}</td>
                   ))}
-                  <td className={`${td} border-l border-gray-100 font-semibold text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
+                  <td className={`${td} border-l border-[#E3F1F1] font-semibold text-gray-800`}>{rowTotal > 0 ? fmt(rowTotal) : '—'}</td>
                 </tr>
               );
             })}
@@ -7406,20 +7223,20 @@ function BlueRegisterTab({
       {rows.length > 0 && (
         <table className="w-full table-fixed text-[11px] border-collapse shrink-0">
           <BlueRegColGroup />
-          <tfoot className="bg-[#B9D4EC] border-t-2 border-[#3B5B8A]/40 font-semibold text-[11px] text-[#3B5B8A]">
+          <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[11px] text-[#0B6567]">
               <tr>
                 <td className="px-2 py-2 text-center text-gray-400">—</td>
                 <td className="px-2 py-2 whitespace-nowrap" colSpan={5}>Total — {rows.length} record{rows.length !== 1 ? 's' : ''}</td>
                 {SMP_FEE_HEADS.map((h) => (
-                  <td key={h.key} className={`px-2 py-2 text-right border-l border-gray-200 ${totals.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smp[h.key] > 0 ? fmt(totals.smp[h.key]) : '—'}</td>
+                  <td key={h.key} className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.smp[h.key] > 0 ? 'text-emerald-700' : 'text-gray-300'}`}>{totals.smp[h.key] > 0 ? fmt(totals.smp[h.key]) : '—'}</td>
                 ))}
                 {showSvk && (
-                  <td className={`px-2 py-2 text-right border-l border-gray-200 ${totals.svkTotal > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{totals.svkTotal > 0 ? fmt(totals.svkTotal) : '—'}</td>
+                  <td className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${totals.svkTotal > 0 ? 'text-purple-700' : 'text-gray-300'}`}>{totals.svkTotal > 0 ? fmt(totals.svkTotal) : '—'}</td>
                 )}
                 {visibleAddCols.map((c) => (
-                  <td key={c.key} className={`px-2 py-2 text-right border-l border-gray-200 ${(totals.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(totals.additional[c.key] ?? 0) > 0 ? fmt(totals.additional[c.key]) : '—'}</td>
+                  <td key={c.key} className={`px-2 py-2 text-right border-l border-[#CDE7E7] ${(totals.additional[c.key] ?? 0) > 0 ? 'text-blue-700' : 'text-gray-300'}`}>{(totals.additional[c.key] ?? 0) > 0 ? fmt(totals.additional[c.key]) : '—'}</td>
                 ))}
-                <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(totals.smpTotal + (showSvk ? totals.svkTotal : 0) + (showAdditional ? totals.addTotal : 0))}</td>
+                <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.smpTotal + (showSvk ? totals.svkTotal : 0) + (showAdditional ? totals.addTotal : 0))}</td>
               </tr>
           </tfoot>
         </table>
@@ -7448,47 +7265,31 @@ interface CommonFilterProps {
   clearFilters: () => void;
 }
 
-function CommonFilters({ fp, extra, search }: { fp: CommonFilterProps; extra?: ReactNode; search?: ReactNode }) {
+function CommonFilters({ fp, extra, search, collapsible }: { fp: CommonFilterProps; extra?: ReactNode; search?: ReactNode; collapsible?: boolean }) {
   return (
     <div className="space-y-1.5">
       {fp.stats.total > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-[#3B5B8A]/50 bg-[#D0E2F2] text-[#3B5B8A]"          onClick={() => fp.setFeeStatusFilter('ALL')} />
-          <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter === 'PAID'}         colorClass="border-green-400 bg-green-100 text-green-700"       onClick={() => fp.setFeeStatusFilter('PAID')} />
-          <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter === 'NOT_PAID'}     colorClass="border-red-400 bg-red-100 text-red-700"             onClick={() => fp.setFeeStatusFilter('NOT_PAID')} />
-          <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter === 'FEE_DUES'}     colorClass="border-amber-400 bg-amber-100 text-amber-700"       onClick={() => fp.setFeeStatusFilter('FEE_DUES')} />
-          <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-emerald-400 bg-emerald-100 text-emerald-700" onClick={() => fp.setFeeStatusFilter('NO_FEE_DUES')} />
+          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-[#0F8B8D] bg-[#0F8B8D]/10 text-[#0B6567]"          onClick={() => fp.setFeeStatusFilter('ALL')} />
+          <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter === 'PAID'}         colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]"       onClick={() => fp.setFeeStatusFilter('PAID')} />
+          <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter === 'NOT_PAID'}     colorClass="border-[#E11D48]/50 bg-[#E11D48]/[0.08] text-[#A5173A]"             onClick={() => fp.setFeeStatusFilter('NOT_PAID')} />
+          <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter === 'FEE_DUES'}     colorClass="border-[#D97706]/60 bg-[#D97706]/10 text-[#9A5B00]"       onClick={() => fp.setFeeStatusFilter('FEE_DUES')} />
+          <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]" onClick={() => fp.setFeeStatusFilter('NO_FEE_DUES')} />
         </div>
       )}
-      <FilterPanel search={search} right={extra} hasActiveFilters={fp.hasActiveFilters} onClear={fp.clearFilters}>
-        <select value={fp.aidedFilter} onChange={(e) => fp.setAidedFilter(e.target.value as 'AIDED' | 'UNAIDED' | '')} className={fs}>
-          <option value="">Aided &amp; Unaided</option>
-          <option value="AIDED">Aided (CE, ME, EC, CS)</option>
-          <option value="UNAIDED">Unaided (EE)</option>
-        </select>
-        <select value={fp.courseFilter} onChange={(e) => fp.setCourseFilter(e.target.value as Course | '')} className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={fp.yearFilter} onChange={(e) => fp.setYearFilter(e.target.value as Year | '')} className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={fp.admTypeFilter} onChange={(e) => fp.setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-          <option value="">All Adm Types</option>
-          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={fp.admCatFilter} onChange={(e) => fp.setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
-          <option value="">All Adm Cats</option>
-          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={fp.feeStatusFilter} onChange={(e) => fp.setFeeStatusFilter(e.target.value as FeeStatus)} className={fs}>
-          <option value="ALL">All Fee Status</option>
-          <option value="PAID">Paid</option>
-          <option value="NOT_PAID">Not Paid</option>
-          <option value="FEE_DUES">Fee Dues</option>
-          <option value="NO_FEE_DUES">No Fee Dues</option>
-        </select>
+      <FilterPanel search={search} right={extra} hasActiveFilters={fp.hasActiveFilters} onClear={fp.clearFilters} collapsible={collapsible}>
+        <FilterDropdown<'AIDED' | 'UNAIDED'> color="teal" value={fp.aidedFilter} onChange={(v) => fp.setAidedFilter(v)} placeholder="Aided & Unaided"
+          options={[{ value: 'AIDED', label: 'Aided (CE, ME, EC, CS)' }, { value: 'UNAIDED', label: 'Unaided (EE)' }]} />
+        <FilterDropdown<Course> color="teal" value={fp.courseFilter} onChange={(v) => fp.setCourseFilter(v)} placeholder="All Courses"
+          options={COURSES.map((c) => ({ value: c, label: c }))} />
+        <FilterDropdown<Year> color="teal" value={fp.yearFilter} onChange={(v) => fp.setYearFilter(v)} placeholder="All Years"
+          options={YEARS.map((y) => ({ value: y, label: y }))} />
+        <FilterDropdown<AdmType> color="teal" value={fp.admTypeFilter} onChange={(v) => fp.setAdmTypeFilter(v)} placeholder="All Adm Types"
+          options={ADM_TYPES.map((t) => ({ value: t, label: t }))} />
+        <FilterDropdown<AdmCat> color="teal" value={fp.admCatFilter} onChange={(v) => fp.setAdmCatFilter(v)} placeholder="All Adm Cats"
+          options={ADM_CATS.map((c) => ({ value: c, label: c }))} />
+        <FilterDropdown<Exclude<FeeStatus, 'ALL'>> color="teal" value={fp.feeStatusFilter === 'ALL' ? '' : fp.feeStatusFilter} onChange={(v) => fp.setFeeStatusFilter(v || 'ALL')} placeholder="All Fee Status"
+          options={[{ value: 'PAID', label: 'Paid' }, { value: 'NOT_PAID', label: 'Not Paid' }, { value: 'FEE_DUES', label: 'Fee Dues' }, { value: 'NO_FEE_DUES', label: 'No Fee Dues' }]} />
       </FilterPanel>
     </div>
   );
@@ -7678,9 +7479,9 @@ function WPFeeDistributionTab({
     XLSX.writeFile(wb, `WP_Fee_Distribution_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  const numInp = 'w-12 text-center border border-gray-200 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#3B5B8A]/50 focus:border-[#3B5B8A] [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+  const numInp = 'w-12 text-center border border-[#CDE7E7] rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#0F8B8D]/50 focus:border-[#0F8B8D] [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
-  if (loading) return <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>;
+  if (loading) return <PageSpinner />;
 
   return (
     <div className="space-y-5">
@@ -7692,8 +7493,8 @@ function WPFeeDistributionTab({
       </div>
 
       <StatChipRow entries={[
-        { label: 'Total WP Students',  value: allSynthetic.length,       color: 'text-[#3B5B8A]',   bg: 'bg-[#D0E2F2]/40',    border: 'border-[#3B5B8A]/25'   },
-        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),      color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-gray-200'   },
+        { label: 'Total WP Students',  value: allSynthetic.length,       color: 'text-[#0B6567]',   bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
+        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),      color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'   },
         { label: 'To Government',     value: fmt(grandTotals.gov),       color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
         { label: 'To SVK Management', value: fmt(grandTotals.svk),       color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
         { label: 'To SMP',            value: fmt(grandTotals.smp),       color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
@@ -7714,38 +7515,38 @@ function WPFeeDistributionTab({
             <button
               onClick={handleSave}
               disabled={saving || !dirty}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#3B5B8A] hover:bg-[#2e4a72] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F8B8D] hover:bg-[#0B6567] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               onClick={() => exportStudentStatsAndDistSummaryPdf(studentStatsForExport, grandStatTotals, aidedSynthetic.length, aidedTotals, unaidedSynthetic.length, unaidedTotals, allSynthetic.length, grandTotals, academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
             >
               PDF
             </button>
           </div>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
           <table className="w-full text-[11px]">
-            <thead className={`${ACCENT} text-white`}>
+            <thead className={`${ACCENT}`}>
               <tr>
                 <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                 <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>1st Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={4}>2nd Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>3rd Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" rowSpan={2}>Grand Total</th>
+                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>1st Year</th>
+                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>2nd Year</th>
+                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>3rd Year</th>
+                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Grand Total</th>
               </tr>
               <tr>
-                <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                 <th className="px-2 py-1 font-semibold">SNQ</th>
                 <th className="px-2 py-1 font-semibold">Total</th>
-                <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                 <th className="px-2 py-1 font-semibold">Lateral</th>
                 <th className="px-2 py-1 font-semibold">SNQ</th>
                 <th className="px-2 py-1 font-semibold">Total</th>
-                <th className="px-2 py-1 font-semibold border-l border-white/30">Regular</th>
+                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
                 <th className="px-2 py-1 font-semibold">SNQ</th>
                 <th className="px-2 py-1 font-semibold">Total</th>
               </tr>
@@ -7759,17 +7560,17 @@ function WPFeeDistributionTab({
                   <tr key={c} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
                     <td className="px-2 py-1.5 font-semibold">{c} <span className="text-gray-400 font-normal">({courseType})</span></td>
-                    <td className="px-2 py-1.5 text-center border-l border-gray-100"><input type="number" min="0" className={numInp} value={cc.yr1.reg || ''} onChange={e => updateCount(c, 'yr1', 'reg', e.target.value)} placeholder="0" /></td>
+                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr1.reg || ''} onChange={e => updateCount(c, 'yr1', 'reg', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr1.snq || ''} onChange={e => updateCount(c, 'yr1', 'snq', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center font-semibold">{st.yr1.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center border-l border-gray-100"><input type="number" min="0" className={numInp} value={cc.yr2.reg || ''} onChange={e => updateCount(c, 'yr2', 'reg', e.target.value)} placeholder="0" /></td>
+                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr2.reg || ''} onChange={e => updateCount(c, 'yr2', 'reg', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr2.lat || ''} onChange={e => updateCount(c, 'yr2', 'lat', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr2.snq || ''} onChange={e => updateCount(c, 'yr2', 'snq', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center font-semibold">{st.yr2.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center border-l border-gray-100"><input type="number" min="0" className={numInp} value={cc.yr3.reg || ''} onChange={e => updateCount(c, 'yr3', 'reg', e.target.value)} placeholder="0" /></td>
+                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr3.reg || ''} onChange={e => updateCount(c, 'yr3', 'reg', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr3.snq || ''} onChange={e => updateCount(c, 'yr3', 'snq', e.target.value)} placeholder="0" /></td>
                     <td className="px-2 py-1.5 text-center font-semibold">{st.yr3.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center font-bold border-l border-gray-100">{st.grand || '—'}</td>
+                    <td className="px-2 py-1.5 text-center font-bold border-l border-[#E3F1F1]">{st.grand || '—'}</td>
                   </tr>
                 );
               })}
@@ -7777,17 +7578,17 @@ function WPFeeDistributionTab({
             <tfoot className={TFOOT}>
               <tr>
                 <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
-                <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr1.reg}</td>
+                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr1.reg}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr1.snq}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr1.total}</td>
-                <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr2.reg}</td>
+                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr2.reg}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr2.lat}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr2.snq}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr2.total}</td>
-                <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.yr3.reg}</td>
+                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr3.reg}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr3.snq}</td>
                 <td className="px-2 py-2 text-center">{grandStatTotals.yr3.total}</td>
-                <td className="px-2 py-2 text-center border-l border-gray-200">{grandStatTotals.grand}</td>
+                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.grand}</td>
               </tr>
             </tfoot>
           </table>
@@ -7797,9 +7598,9 @@ function WPFeeDistributionTab({
       {/* ── Fee Distribution Summary ── */}
       <div className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-700">WP Fee Distribution Summary</h2>
-        <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
           <table className="w-full text-[11px]">
-            <thead className={`${ACCENT} text-white`}>
+            <thead className={`${ACCENT}`}>
               <tr>
                 <th className="px-2 py-1.5 font-semibold">Course Type</th>
                 <th className="px-2 py-1.5 text-center font-semibold">Students</th>
@@ -7847,12 +7648,12 @@ function WPFeeDistributionTab({
           <h2 className="text-sm font-semibold text-gray-700">WP Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)</h2>
           <button
             onClick={() => exportRemittanceDistPdf(aidedDist, 'WP Aided Courses (CE, ME, EC, CS)', academicYear)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
           >
             PDF
           </button>
         </div>
-        <RemittanceTable dist={aidedDist} headerColor="bg-indigo-600" />
+        <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" />
       </div>
 
       {/* ── Unaided Course Fee Remittance Abstract ── */}
@@ -7861,20 +7662,20 @@ function WPFeeDistributionTab({
           <h2 className="text-sm font-semibold text-gray-700">WP Fee Remittance Abstract — Unaided Course (EE)</h2>
           <button
             onClick={() => exportRemittanceDistPdf(unaidedDist, 'WP Unaided Course (EE)', academicYear)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-gray-200 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
           >
             PDF
           </button>
         </div>
-        <RemittanceTable dist={unaidedDist} headerColor="bg-amber-600" />
+        <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" />
       </div>
 
       {/* ── Combined Fee Remittance Abstract ── */}
       <div className="space-y-2">
         <h2 className="text-sm font-semibold text-gray-700">Combined WP Fee Remittance Abstract (Aided &amp; Unaided)</h2>
-        <div className="bg-white rounded-lg border border-gray-200 overflow-auto">
+        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
           <table className="w-full text-[11px]">
-            <thead className={`${ACCENT} text-white`}>
+            <thead className={`${ACCENT}`}>
               <tr>
                 <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                 <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
@@ -7882,10 +7683,10 @@ function WPFeeDistributionTab({
                 <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
                 <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
                 <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-white/30" colSpan={3}>Fee Remittance (₹)</th>
+                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
               </tr>
               <tr>
-                <th className="px-2 py-1 text-right font-semibold border-l border-white/30">To Govt.</th>
+                <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
                 <th className="px-2 py-1 text-right font-semibold">To SVK</th>
                 <th className="px-2 py-1 text-right font-semibold">To SMP</th>
               </tr>
@@ -7899,7 +7700,7 @@ function WPFeeDistributionTab({
                   <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
                   <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
                   <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                  <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
                   <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
                   <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
                 </tr>
@@ -7912,7 +7713,7 @@ function WPFeeDistributionTab({
                   <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
                   <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
                   <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                  <td className="px-2 py-1.5 text-right border-l border-gray-100">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
                   <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
                   <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
                 </tr>
@@ -7926,7 +7727,7 @@ function WPFeeDistributionTab({
                 <tr>
                   <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
                   <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                  <td className="px-2 py-2 text-right border-l border-gray-200">{fmt(grandTotals.gov)}</td>
+                  <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotals.gov)}</td>
                   <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
                   <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
                 </tr>
@@ -7937,7 +7738,7 @@ function WPFeeDistributionTab({
       </div>
 
       {/* Distribution Rules legend */}
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 text-[10px] text-gray-500 space-y-1">
+      <div className="bg-gray-50 rounded-xl border border-[#CDE7E7] p-3 text-[10px] text-gray-500 space-y-1">
         <p className="font-semibold text-gray-600 text-xs mb-1">Distribution Rules</p>
         <p><span className="font-medium text-indigo-700">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP</p>
         <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP</p>
@@ -8338,56 +8139,54 @@ export function FeeReportsPage() {
   };
 
   return (
-    <div className={activeTab === null ? 'flex flex-col' : 'h-full flex flex-col'} style={{ animation: 'page-enter 0.22s ease-out' }}>
-      {activeTab === null ? (
-        /* Header — hub only, stays at top, not sticky */
-        <div className="shrink-0 pt-4 pb-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-[3px] h-7 rounded-full bg-[#3B5B8A] shrink-0" />
-            <div>
-              {academicYear && <p className="text-[11px] font-semibold uppercase tracking-widest text-[#3B5B8A]/70 leading-none">{academicYear}</p>}
-              <h2 className="text-xl font-black text-gray-800 leading-none tracking-tight mt-px">Fee Reports</h2>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Back-to-hub bar — replaces the header entirely inside a report. Same technique as
-           Dashboard's own sticky toolbar (Dashboard.tsx): negative margin + sticky top offset
-           on the SAME element, with a tall flex-column parent (this whole page) so the sticky
-           range has room to work. -mt-4/-mx-4 cancel the page's p-4 padding unconditionally
-           (flush with the app header at rest); -top-4 matches that offset so it locks in the
-           exact same flush position once scrolled — no gap at rest or while scrolling. */
-        <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+    <div
+      className="font-wp -m-4 p-4 min-h-[calc(100%+2rem)] h-[calc(100%+2rem)] flex flex-col gap-3 overflow-auto"
+      style={{ background: 'linear-gradient(160deg, #F4FBFB 0%, #FCFEFE 45%, #EFF8F8 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
+      {/* Page header — eyebrow + title + year chip; inside a report: back pill + report-name title + year toggle */}
+      <div className="flex-shrink-0 flex items-center gap-3 min-w-0">
+        {activeTab !== null && (
           <button
             onClick={() => setActiveTab(null)}
-            className="flex items-center gap-1.5 rounded-full border border-[#3B5B8A]/25 bg-white px-3 py-1.5 text-xs font-semibold text-[#3B5B8A] hover:bg-[#D0E2F2]/40 hover:border-[#3B5B8A]/50 transition-colors"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#CDE7E7] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#0B6567] hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] transition-colors cursor-pointer"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-            Back to Reports
+            Reports
           </button>
-          <span className="text-gray-300">/</span>
-          <span className="text-sm font-semibold text-gray-700">{activeMeta?.label}</span>
-          <div className="flex-1" />
-          {DATE_TAB_IDS.has(activeTab) && (
-            <button
-              onClick={() => setShowAllYears((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                showAllYears
-                  ? 'bg-amber-500 border-amber-500 text-white shadow-sm'
-                  : 'bg-white border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50'
-              }`}
-              title={showAllYears ? 'Showing all payments collected in this financial year (incl. prior-year dues) — click to show current year only' : 'Click to also show prior-year dues collected in this financial year'}
-            >
-              {showAllYears ? 'Incl. Prior Dues' : 'Current Year Only'}
-            </button>
-          )}
+        )}
+        <div className="min-w-0">
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Fee Reports{activeMeta ? ` · ${activeMeta.group}` : ''}
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px] truncate" style={{ color: TEAL_INK }}>{activeMeta ? activeMeta.label : 'Fee Reports'}</h2>
+            {academicYear && (
+              <span className="rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums" style={{ borderColor: '#0F8B8D66', color: TEAL_INK }}>
+                {academicYear}
+              </span>
+            )}
+          </div>
         </div>
-      )}
+        <div className="flex-1" />
+        {activeTab !== null && DATE_TAB_IDS.has(activeTab) && (
+          <button
+            onClick={() => setShowAllYears((v) => !v)}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11.5px] font-medium transition-colors cursor-pointer ${
+              showAllYears
+                ? 'bg-[#D97706] border-[#D97706] text-white'
+                : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/40 hover:text-[#0B6567]'
+            }`}
+            title={showAllYears ? 'Showing all payments collected in this financial year (incl. prior-year dues) — click to show current year only' : 'Click to also show prior-year dues collected in this financial year'}
+          >
+            {showAllYears ? 'Incl. Prior Dues' : 'Current Year Only'}
+          </button>
+        )}
+      </div>
 
       {/* Content */}
-      <div className={activeTab === null ? 'flex flex-col pt-3' : 'flex-1 min-h-0 flex flex-col pt-3'}>
+      <div className={activeTab === null ? 'flex flex-col' : 'flex-1 min-h-0 flex flex-col'}>
         {loading ? (
-          <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
+          <PageSpinner />
         ) : !academicYear ? (
           <p className="text-sm text-gray-400 py-8 text-center">No academic year configured.</p>
         ) : activeTab === null ? (
