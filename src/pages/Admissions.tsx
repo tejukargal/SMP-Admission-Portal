@@ -557,6 +557,25 @@ export function Admissions() {
     setCourseFilter('ALL');
   }
 
+  // Saved Lists: the active (regular / lateral) view drives one shared control bar
+  const isLatView = savedListView === 'lateral';
+  const activeSnaps = isLatView ? lateralSnapshots : snapshots;
+  const activeSnap = isLatView ? selectedLateralSnapshot : selectedSnapshot;
+  const activeExportingPdf = isLatView ? lateralSnapshotExportingPdf : snapshotExportingPdf;
+  const activeExportingExcel = isLatView ? lateralSnapshotExportingExcel : snapshotExportingExcel;
+  const activeDeletingId = isLatView ? deletingLateralSnapshotId : deletingSnapshotId;
+
+  function snapshotRowVisible(s: MeritListSnapshot['students'][number]): boolean {
+    const st = s as unknown as Student;
+    if (!matchesQuotaCourse(st)) return false;
+    return !debouncedSearch.trim() || matchesSearch(st, debouncedSearch.trim());
+  }
+
+  function fmtSnapDate(iso: string): string {
+    const d = new Date(iso);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
   const tabGroups: { id: Tab; label: string; count: number; color: string }[][] = [
     [
       { id: 'pending', label: 'Pending', count: pendingStudents.length, color: AMBER },
@@ -889,6 +908,35 @@ export function Admissions() {
             </button>
           </div>
         )}
+
+        {/* Saved list actions — export / delete the selected phase */}
+        {activeTab === 'saved' && activeSnap && (
+          <div className="flex-shrink-0 flex items-center gap-2 ml-auto pl-2">
+            <button
+              onClick={() => (isLatView ? handleLateralSnapshotExportPdf(activeSnap) : handleSnapshotExportPdf(activeSnap))}
+              disabled={activeExportingPdf}
+              className={BTN_GRAY}
+            >
+              {activeExportingPdf ? 'Generating…' : 'Save PDF'}
+            </button>
+            <button
+              onClick={() => (isLatView ? handleLateralSnapshotExportExcel(activeSnap) : handleSnapshotExportExcel(activeSnap))}
+              disabled={activeExportingExcel}
+              className={BTN_GREEN}
+            >
+              {activeExportingExcel ? 'Generating…' : 'Save Excel'}
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => void (isLatView ? handleDeleteLateralSnapshot(activeSnap.id) : handleDeleteSnapshot(activeSnap.id))}
+                disabled={activeDeletingId !== null}
+                className={BTN_RED}
+              >
+                {activeDeletingId === activeSnap.id ? 'Deleting…' : 'Delete Phase'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -907,28 +955,59 @@ export function Admissions() {
             <div className="flex-1 flex items-center justify-center text-sm text-red-500">{snapshotsError}</div>
           ) : (
             <>
-              {/* Regular / Lateral toggle */}
-              <div className="flex-shrink-0 flex items-center gap-1.5">
-                <button
-                  onClick={() => setSavedListView('regular')}
-                  className={`px-3.5 py-1.5 text-[12px] font-medium rounded-full border transition-colors cursor-pointer ${
-                    savedListView === 'regular'
-                      ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
-                      : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#8B5CF6]/50 hover:text-[#6A44B8]'
-                  }`}
-                >
-                  Regular {snapshots.length > 0 && <span className="ml-1 opacity-75">({snapshots.length})</span>}
-                </button>
-                <button
-                  onClick={() => setSavedListView('lateral')}
-                  className={`px-3.5 py-1.5 text-[12px] font-medium rounded-full border transition-colors cursor-pointer ${
-                    savedListView === 'lateral'
-                      ? 'bg-[#0F8B8D] border-[#0F8B8D] text-white'
-                      : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/50 hover:text-[#0B6567]'
-                  }`}
-                >
-                  Lateral {lateralSnapshots.length > 0 && <span className="ml-1 opacity-75">({lateralSnapshots.length})</span>}
-                </button>
+              {/* Sub-bar: view switch · phase pills · meta (actions live in the tabs row) */}
+              <div className="flex-shrink-0 flex items-center gap-2.5 min-w-0">
+                <div className="shrink-0 inline-flex items-center rounded-full border border-[#CDE7E7] bg-[#F2FAFA] p-0.5">
+                  <button
+                    onClick={() => setSavedListView('regular')}
+                    className={`px-3 py-1 text-[12px] font-medium rounded-full transition-colors cursor-pointer ${
+                      savedListView === 'regular' ? 'bg-[#8B5CF6] text-white' : 'text-[#5B6371] hover:text-[#6A44B8]'
+                    }`}
+                  >
+                    Regular {snapshots.length > 0 && <span className="ml-0.5 opacity-75">({snapshots.length})</span>}
+                  </button>
+                  <button
+                    onClick={() => setSavedListView('lateral')}
+                    className={`px-3 py-1 text-[12px] font-medium rounded-full transition-colors cursor-pointer ${
+                      savedListView === 'lateral' ? 'bg-[#0F8B8D] text-white' : 'text-[#5B6371] hover:text-[#0B6567]'
+                    }`}
+                  >
+                    Lateral {lateralSnapshots.length > 0 && <span className="ml-0.5 opacity-75">({lateralSnapshots.length})</span>}
+                  </button>
+                </div>
+
+                {activeSnaps.length > 0 && (
+                  <>
+                    <span className="w-px h-5 shrink-0" style={{ background: HAIRLINE }} />
+                    <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-0.5">
+                      {activeSnaps.map((snap) => {
+                        const isSelected = snap.id === (isLatView ? selectedLateralSnapshotId : selectedSnapshotId);
+                        return (
+                          <button
+                            key={snap.id}
+                            onClick={() => (isLatView ? setSelectedLateralSnapshotId(snap.id) : setSelectedSnapshotId(snap.id))}
+                            title={`Saved ${fmtSnapDate(snap.savedAt)}`}
+                            className={`shrink-0 px-3 py-1 rounded-full border text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                              isSelected
+                                ? (isLatView ? 'bg-[#0F8B8D] border-[#0F8B8D] text-white' : 'bg-[#8B5CF6] border-[#8B5CF6] text-white')
+                                : (isLatView
+                                    ? 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/50 hover:text-[#0B6567]'
+                                    : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#8B5CF6]/50 hover:text-[#6A44B8]')
+                            }`}
+                          >
+                            Phase {snap.phase}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {activeSnap && (
+                  <span className="shrink-0 ml-auto text-[11.5px] text-[#5B6371] whitespace-nowrap tabular-nums">
+                    {activeSnap.students.length} student{activeSnap.students.length !== 1 ? 's' : ''} · saved {fmtSnapDate(activeSnap.savedAt)}
+                  </span>
+                )}
               </div>
 
               {/* ── Regular snapshots ── */}
@@ -940,49 +1019,8 @@ export function Admissions() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
-                      {snapshots.map((snap) => {
-                        const d = new Date(snap.savedAt);
-                        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                        const isSelected = snap.id === selectedSnapshotId;
-                        return (
-                          <button
-                            key={snap.id}
-                            onClick={() => setSelectedSnapshotId(snap.id)}
-                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
-                                : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#8B5CF6]/50 hover:text-[#6A44B8]'
-                            }`}
-                          >
-                            <span>Phase {snap.phase}</span>
-                            <span className={`text-[10px] ${isSelected ? 'text-purple-200' : 'text-gray-400'}`}>{dateStr}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
                     {selectedSnapshot && (
-                      <div className="flex-shrink-0 flex items-center gap-2">
-                        <button onClick={() => handleSnapshotExportPdf(selectedSnapshot)} disabled={snapshotExportingPdf} className={BTN_GRAY}>
-                          {snapshotExportingPdf ? 'Generating…' : 'Save PDF'}
-                        </button>
-                        <button onClick={() => handleSnapshotExportExcel(selectedSnapshot)} disabled={snapshotExportingExcel} className={BTN_GREEN}>
-                          {snapshotExportingExcel ? 'Generating…' : 'Save Excel'}
-                        </button>
-                        {isAdmin && (
-                          <button onClick={() => void handleDeleteSnapshot(selectedSnapshot.id)} disabled={deletingSnapshotId !== null} className={`${BTN_RED} ml-auto`}>
-                            {deletingSnapshotId === selectedSnapshot.id ? 'Deleting…' : 'Delete Phase'}
-                          </button>
-                        )}
-                        <span className={`text-xs text-gray-400 ${isAdmin ? '' : 'ml-auto'}`}>
-                          {selectedSnapshot.students.length} student{selectedSnapshot.students.length !== 1 ? 's' : ''} · Phase {selectedSnapshot.phase}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedSnapshot && (
-                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
                         <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
                           <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                             <tr>
@@ -1002,7 +1040,7 @@ export function Admissions() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#EEF6F6]">
-                            {sortByMerit(selectedSnapshot.students).map((student, idx) => (
+                            {sortByMerit(selectedSnapshot.students).map((student, idx) => ({ student, idx })).filter(({ student }) => snapshotRowVisible(student)).map(({ student, idx }) => (
                               <tr key={idx} className="hover:bg-[#F6FBFB] transition-colors">
                                 <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                                 <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
@@ -1049,49 +1087,8 @@ export function Admissions() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex-shrink-0 flex items-center gap-2 flex-wrap">
-                      {lateralSnapshots.map((snap) => {
-                        const d = new Date(snap.savedAt);
-                        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                        const isSelected = snap.id === selectedLateralSnapshotId;
-                        return (
-                          <button
-                            key={snap.id}
-                            onClick={() => setSelectedLateralSnapshotId(snap.id)}
-                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#0F8B8D] border-[#0F8B8D] text-white'
-                                : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/50 hover:text-[#0B6567]'
-                            }`}
-                          >
-                            <span>Phase {snap.phase}</span>
-                            <span className={`text-[10px] ${isSelected ? 'text-teal-200' : 'text-gray-400'}`}>{dateStr}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
                     {selectedLateralSnapshot && (
-                      <div className="flex-shrink-0 flex items-center gap-2">
-                        <button onClick={() => handleLateralSnapshotExportPdf(selectedLateralSnapshot)} disabled={lateralSnapshotExportingPdf} className={BTN_GRAY}>
-                          {lateralSnapshotExportingPdf ? 'Generating…' : 'Save PDF'}
-                        </button>
-                        <button onClick={() => handleLateralSnapshotExportExcel(selectedLateralSnapshot)} disabled={lateralSnapshotExportingExcel} className={BTN_GREEN}>
-                          {lateralSnapshotExportingExcel ? 'Generating…' : 'Save Excel'}
-                        </button>
-                        {isAdmin && (
-                          <button onClick={() => void handleDeleteLateralSnapshot(selectedLateralSnapshot.id)} disabled={deletingLateralSnapshotId !== null} className={`${BTN_RED} ml-auto`}>
-                            {deletingLateralSnapshotId === selectedLateralSnapshot.id ? 'Deleting…' : 'Delete Phase'}
-                          </button>
-                        )}
-                        <span className={`text-xs text-gray-400 ${isAdmin ? '' : 'ml-auto'}`}>
-                          {selectedLateralSnapshot.students.length} student{selectedLateralSnapshot.students.length !== 1 ? 's' : ''} · Phase {selectedLateralSnapshot.phase}
-                        </span>
-                      </div>
-                    )}
-
-                    {selectedLateralSnapshot && (
-                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
                         <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
                           <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                             <tr>
@@ -1115,7 +1112,7 @@ export function Admissions() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#EEF6F6]">
-                            {sortByLateralMerit(selectedLateralSnapshot.students).map((student, idx) => {
+                            {sortByLateralMerit(selectedLateralSnapshot.students).map((student, idx) => ({ student, idx })).filter(({ student }) => snapshotRowVisible(student)).map(({ student, idx }) => {
                               const lMax = student.priorQualification === 'ITI' ? student.itiMaxTotal : student.pucMaxTotal;
                               const lObt = student.priorQualification === 'ITI' ? student.itiObtainedTotal : student.pucObtainedTotal;
                               const lPct = student.priorQualification === 'ITI' ? student.itiPercentage : student.pucPercentage;
@@ -1179,7 +1176,7 @@ export function Admissions() {
             <p className="text-xs text-gray-300">Students enrolled with ITI or PUC prior qualification appear here.</p>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
             <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
               <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                 <tr>
@@ -1248,7 +1245,7 @@ export function Admissions() {
             <p className="text-xs text-gray-300">Students enrolled with ITI or PUC prior qualification appear here.</p>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
             <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
               <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                 <tr>
@@ -1326,7 +1323,7 @@ export function Admissions() {
 
       ) : activeTab === 'merit' ? (
         /* ── Merit list table ─────────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
           <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
             <thead className="bg-[#F2FAFA] sticky top-0 z-10">
               <tr>
@@ -1382,7 +1379,7 @@ export function Admissions() {
 
       ) : (
         /* ── Pending / Cancelled table ────────────────────────────────────── */
-        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col scroll-adm">
           <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
             <thead className="bg-[#F2FAFA] sticky top-0 z-10">
               <tr>

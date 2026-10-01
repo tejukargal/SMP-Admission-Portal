@@ -719,3 +719,33 @@
 .enroll-skin .enroll-dd-error { border-color: #E11D48; background-color: #FFF5F7; }
 .enroll-skin .enroll-dd-error:focus-visible,
 .enroll-skin .enroll-dd-error.enroll-dd-open { box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.16); }
+
+/* ── Admissions tables — thin teal scrollbar starting below the ~33px sticky
+   header (py-2 + 16px text); the gutter beside the header is painted in the
+   header band colours (#F2FAFA / #CDE7E7). Static values. ─────────────────── */
+.scroll-adm::-webkit-scrollbar {
+  width: 8px;
+  height: 12px;
+}
+.scroll-adm::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-adm::-webkit-scrollbar-track:vertical {
+  margin-top: 33px;
+}
+.scroll-adm::-webkit-scrollbar:vertical {
+  background: linear-gradient(to bottom, #F2FAFA 0 32px, #CDE7E7 32px 33px, transparent 33px);
+}
+.scroll-adm::-webkit-scrollbar-thumb {
+  background: #CDE7E7;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-adm::-webkit-scrollbar-thumb:hover {
+  background: #8CC9CA;
+  background-clip: padding-box;
+}
+.scroll-adm::-webkit-scrollbar-corner {
+  background: transparent;
+}
