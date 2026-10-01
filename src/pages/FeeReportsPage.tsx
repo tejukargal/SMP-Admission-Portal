@@ -6,7 +6,7 @@ import { useFeeOverrides } from '../hooks/useFeeOverrides';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getRefundRecordsByAcademicYear, isFeeNettingRefund, type RefundRecord } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
-import { fs, THEAD, THEAD_DARK, TFOOT, BTN_GRAY, BTN_PRIMARY, TEAL_INK, HAIRLINE, Chip, ExportBar, ClearButton, StatChipRow, SegmentedToggle, SearchBox, FilterPanel } from '../components/feeReports/feeReportUi';
+import { fs, THEAD, THEAD_DARK, TFOOT, BTN_GRAY, BTN_PRIMARY, ReportCard, TEAL_INK, HAIRLINE, Chip, ExportBar, ClearButton, StatChipRow, SegmentedToggle, SearchBox, FilterPanel } from '../components/feeReports/feeReportUi';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { PageSpinner } from '../components/common/PageSpinner';
 import * as XLSX from 'xlsx';
@@ -3096,15 +3096,15 @@ function calcDistribution(
   return rows;
 }
 
-function RemittanceTable({ dist, headerColor }: { dist: FeeDistRow[]; headerColor: string }) {
+function RemittanceTable({ dist, headerColor, className }: { dist: FeeDistRow[]; headerColor: string; className?: string }) {
   const totals = dist.reduce(
     (a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }),
     { tot: 0, gov: 0, svk: 0, smp: 0 },
   );
   return (
-    <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+    <div className={className ?? "bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee"}>
       <table className="w-full text-[11px]">
-        <thead className={`${headerColor}`}>
+        <thead className={`sticky top-0 z-10 ${headerColor}`}>
           <tr>
             <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
             <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
@@ -3670,6 +3670,8 @@ function FeeDistributionTab({
   const [courseFilter2,    setCourseFilter2]    = useState<Course | ''>('');
   const [admTypeFilter2,   setAdmTypeFilter2]   = useState<'' | 'REGULAR' | 'LATERAL' | 'REPEATER' | 'SNQ'>('');
   const [tableView,        setTableView]        = useState<TableView>('all');
+  const [section,          setSection]          = useState<'distribution' | 'tracker'>('distribution');
+  const [showRules,        setShowRules]        = useState(false);
 
   // ── Look-up maps ──
   const structMap = useMemo(() => {
@@ -3911,71 +3913,104 @@ function FeeDistributionTab({
   }
 
   const show = (v: TableView) => tableView === 'all' || tableView === v;
+  const VIEW_PILLS: { id: TableView; label: string }[] = [
+    { id: 'all', label: 'All' }, { id: 'studentstats', label: 'Student Stats' }, { id: 'summary', label: 'Summary' },
+    { id: 'aided', label: 'Aided' }, { id: 'unaided', label: 'Unaided' }, { id: 'combined', label: 'Combined' },
+  ];
 
   return (
-    <div className="space-y-5">
-      {/* Metrics strip */}
-      <StatChipRow entries={[
-        { label: 'Total Students',    value: filteredStudents.length,   color: 'text-[#0B6567]',   bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
-        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),     color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'   },
-        { label: 'To Government',     value: fmt(grandTotals.gov),      color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
-        { label: 'To SVK Management', value: fmt(grandTotals.svk),      color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
-        { label: 'To SMP',            value: fmt(grandTotals.smp),      color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
-        { label: 'Aided Students',    value: aidedFiltered.length,      color: 'text-indigo-700', bg: 'bg-indigo-50',  border: 'border-indigo-200' },
-        { label: 'Unaided Students',  value: unaidedFiltered.length,    color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200'  },
-      ]} />
-
-      {/* Filters */}
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      {/* Toolbar — filters inline with export / clear */}
       <FilterPanel
+        collapsible={false}
         right={<ExportBar onExcel={exportDistExcel} />}
         hasActiveFilters={!!(courseTypeFilter || yearFilter2 || courseFilter2 || admTypeFilter2 || tableView !== 'all')}
         onClear={clearFilters}
       >
-        <select value={courseTypeFilter} onChange={e => setCourseTypeFilter(e.target.value as DistCourseType)} className={fs}>
-          <option value="">All Courses</option>
-          <option value="Aided">Aided (CE, ME, EC, CS)</option>
-          <option value="Unaided">Unaided (EE)</option>
-        </select>
-        <select value={yearFilter2} onChange={e => setYearFilter2(e.target.value as Year | '')} className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={courseFilter2} onChange={e => setCourseFilter2(e.target.value as Course | '')} className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={admTypeFilter2} onChange={e => setAdmTypeFilter2(e.target.value as typeof admTypeFilter2)} className={fs}>
-          <option value="">All Adm Types</option>
-          <option value="REGULAR">Regular</option>
-          <option value="LATERAL">Lateral</option>
-          <option value="REPEATER">Repeater</option>
-          <option value="SNQ">SNQ</option>
-        </select>
-        <select value={tableView} onChange={e => setTableView(e.target.value as TableView)} className={fs}>
-          <option value="all">All Tables</option>
-          <option value="studentstats">Student Statistics Only</option>
-          <option value="summary">Summary Only</option>
-          <option value="aided">Aided Distribution Only</option>
-          <option value="unaided">Unaided Distribution Only</option>
-          <option value="combined">Combined Distribution Only</option>
-        </select>
+        <FilterDropdown<'Aided' | 'Unaided'> color="teal" value={courseTypeFilter} onChange={(v) => setCourseTypeFilter(v)} placeholder="Aided & Unaided"
+          options={[{ value: 'Aided', label: 'Aided (CE, ME, EC, CS)' }, { value: 'Unaided', label: 'Unaided (EE)' }]} />
+        <FilterDropdown<Year> color="teal" value={yearFilter2} onChange={(v) => setYearFilter2(v)} placeholder="All Years"
+          options={YEARS.map((y) => ({ value: y, label: y }))} />
+        <FilterDropdown<Course> color="teal" value={courseFilter2} onChange={(v) => setCourseFilter2(v)} placeholder="All Courses"
+          options={COURSES.map((c) => ({ value: c, label: c }))} />
+        <FilterDropdown<'REGULAR' | 'LATERAL' | 'REPEATER' | 'SNQ'> color="teal" value={admTypeFilter2} onChange={(v) => setAdmTypeFilter2(v)} placeholder="All Adm Types"
+          options={[{ value: 'REGULAR', label: 'Regular' }, { value: 'LATERAL', label: 'Lateral' }, { value: 'REPEATER', label: 'Repeater' }, { value: 'SNQ', label: 'SNQ' }]} />
       </FilterPanel>
 
-      {/* ── Student Statistics Summary ── */}
-      {show('studentstats') && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">SMP Students Statistics Summary</h2>
+      {/* Metrics strip */}
+      <StatChipRow compact entries={[
+        { label: 'Students',  value: filteredStudents.length,   color: 'text-[#0B6567]', bg: 'bg-[#0F8B8D]/[0.08]', border: 'border-[#0F8B8D]/30' },
+        { label: 'Total Fee', value: fmt(grandTotals.tot),      color: 'text-[#262B35]', bg: 'bg-white',            border: 'border-[#CDE7E7]'    },
+        { label: 'Govt',      value: fmt(grandTotals.gov),      color: 'text-[#A5173A]', bg: 'bg-[#E11D48]/[0.06]', border: 'border-[#E11D48]/30' },
+        { label: 'SVK',       value: fmt(grandTotals.svk),      color: 'text-violet-700', bg: 'bg-violet-50',       border: 'border-violet-200'   },
+        { label: 'SMP',       value: fmt(grandTotals.smp),      color: 'text-[#0A7A4B]', bg: 'bg-[#0FA968]/[0.07]', border: 'border-[#0FA968]/35' },
+        { label: 'Aided',     value: aidedFiltered.length,      color: 'text-[#3730A3]', bg: 'bg-[#EEF0FE]',        border: 'border-[#4F46E5]/25' },
+        { label: 'Unaided',   value: unaidedFiltered.length,    color: 'text-[#9A5B00]', bg: 'bg-[#FEF5E4]',        border: 'border-[#D97706]/30' },
+      ]} />
+
+      {/* Section bar — Distribution | Remittance Tracker, and table-view pills */}
+      <div className="shrink-0 flex items-center gap-2 flex-wrap">
+        <SegmentedToggle
+          options={[{ value: 'distribution', label: 'Distribution' }, { value: 'tracker', label: 'Remittance Tracker' }]}
+          value={section}
+          onChange={(v) => setSection(v as 'distribution' | 'tracker')}
+        />
+        {section === 'distribution' ? (
+          <>
+            <span className="w-px h-5 mx-1 shrink-0" style={{ background: HAIRLINE }} />
+            <SegmentedToggle
+              options={VIEW_PILLS.map(({ id, label }) => ({ value: id, label }))}
+              value={tableView}
+              onChange={(v) => setTableView(v as TableView)}
+            />
             <button
-              onClick={() => exportStudentStatsAndDistSummaryPdf(studentStats, grandStatTotals, aidedFiltered.length, aidedTotals, unaidedFiltered.length, unaidedTotals, filteredStudents.length, grandTotals, academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+              onClick={() => setShowRules((v) => !v)}
+              className={`${BTN_GRAY} ml-auto inline-flex items-center gap-1.5 ${showRules ? '!border-[#0F8B8D]/50 !bg-[#0F8B8D]/10 !text-[#0B6567]' : ''}`}
+              aria-expanded={showRules}
             >
-              PDF
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+              Rules
             </button>
-          </div>
-          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-            <table className="w-full text-[11px]">
-              <thead className={`${ACCENT}`}>
+          </>
+        ) : (
+          <>
+            <span className="w-px h-5 mx-1 shrink-0" style={{ background: HAIRLINE }} />
+            <SegmentedToggle
+              options={[
+                { value: 'GOV',  label: 'Government (K2)' },
+                { value: 'SVK',  label: 'SVK Management'   },
+                { value: 'SMP',  label: 'SMP'              },
+                { value: 'CONSOLIDATED', label: 'Consolidated' },
+              ]}
+              value={trackerTab}
+              onChange={(v) => { setTrackerTab(v as RemittancePayee | 'CONSOLIDATED'); setDeleteConfirming(null); setEditingRemittance(null); }}
+            />
+          </>
+        )}
+      </div>
+
+      {section === 'distribution' ? (
+        <div className="flex-1 min-h-0 overflow-auto scroll-fee">
+          <div className="flex flex-col gap-4 pb-1">
+            {showRules && (
+              <ReportCard title="Distribution Rules" className="">
+                <div className="p-3 text-[11px] text-[#5B6371] space-y-1 bg-[#F9FCFC]">
+                  <p><span className="font-medium text-[#3730A3]">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP | Fine → 100% Govt</p>
+                  <p><span className="font-medium text-[#9A5B00]">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP | Fine → 100% Govt</p>
+                  <p className="text-[#8A93A3]">Library fee applies only to 1st Year students and Lateral entry 2nd Year students. Fine is based on actual paid amounts from fee records.</p>
+                </div>
+              </ReportCard>
+            )}
+
+            {show('studentstats') && (
+              <ReportCard
+                title="SMP Students Statistics Summary"
+                className=""
+                actions={<button onClick={() => exportStudentStatsAndDistSummaryPdf(studentStats, grandStatTotals, aidedFiltered.length, aidedTotals, unaidedFiltered.length, unaidedTotals, filteredStudents.length, grandTotals, academicYear)} className={BTN_GRAY}>PDF</button>}
+              >
+                <div>
+                  <table className="w-full text-[11px]">
+              <thead className={`sticky top-0 z-10 ${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
@@ -4037,16 +4072,14 @@ function FeeDistributionTab({
                 </tr>
               </tfoot>
             </table>
-          </div>
-        </div>
-      )}
+                </div>
+              </ReportCard>
+            )}
 
-      {/* ── Fee Distribution Summary ── */}
-      {show('summary') && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700">Fee Distribution Summary</h2>
-          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-            <table className="w-full text-[11px]">
+            {show('summary') && (
+              <ReportCard title="Fee Distribution Summary" className="">
+                <div>
+                  <table className="w-full text-[11px]">
               <thead className={`${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 font-semibold">Course Type</th>
@@ -4086,49 +4119,33 @@ function FeeDistributionTab({
                 </tr>
               </tfoot>
             </table>
-          </div>
-        </div>
-      )}
+                </div>
+              </ReportCard>
+            )}
 
-      {/* ── Aided Courses Fee Remittance Abstract ── */}
-      {show('aided') && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)</h2>
-            <button
-              onClick={() => exportRemittanceDistPdf(aidedDist, 'Aided Courses (CE, ME, EC, CS)', academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-            >
-              PDF
-            </button>
-          </div>
-          <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" />
-        </div>
-      )}
+            {show('aided') && (
+              <ReportCard
+                title="Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)"
+                actions={<button onClick={() => exportRemittanceDistPdf(aidedDist, 'Aided Courses (CE, ME, EC, CS)', academicYear)} className={BTN_GRAY}>PDF</button>}
+              >
+                <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" className="" />
+              </ReportCard>
+            )}
 
-      {/* ── Unaided Course Fee Remittance Abstract ── */}
-      {show('unaided') && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Fee Remittance Abstract — Unaided Course (EE)</h2>
-            <button
-              onClick={() => exportRemittanceDistPdf(unaidedDist, 'Unaided Course (EE)', academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-            >
-              PDF
-            </button>
-          </div>
-          <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" />
-        </div>
-      )}
+            {show('unaided') && (
+              <ReportCard
+                title="Fee Remittance Abstract — Unaided Course (EE)"
+                actions={<button onClick={() => exportRemittanceDistPdf(unaidedDist, 'Unaided Course (EE)', academicYear)} className={BTN_GRAY}>PDF</button>}
+              >
+                <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" className="" />
+              </ReportCard>
+            )}
 
-      {/* ── Combined Fee Remittance Abstract ── */}
-      {show('combined') && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700">Combined Fee Remittance Abstract (Aided &amp; Unaided)</h2>
-          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-            <table className="w-full text-[11px]">
-              <thead className={`${ACCENT}`}>
+            {show('combined') && (
+              <ReportCard title="Combined Fee Remittance Abstract (Aided &amp; Unaided)">
+                <div>
+                  <table className="w-full text-[11px]">
+              <thead className={`sticky top-0 z-10 ${ACCENT}`}>
                 <tr>
                   <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
                   <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
@@ -4187,49 +4204,23 @@ function FeeDistributionTab({
                 </tfoot>
               )}
             </table>
+                </div>
+              </ReportCard>
+            )}
           </div>
         </div>
-      )}
-
-      {/* Distribution Rules legend */}
-      <div className="bg-gray-50 rounded-xl border border-[#CDE7E7] p-3 text-[10px] text-gray-500 space-y-1">
-        <p className="font-semibold text-gray-600 text-xs mb-1">Distribution Rules</p>
-        <p><span className="font-medium text-indigo-700">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP | Fine → 100% Govt</p>
-        <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP | Fine → 100% Govt</p>
-        <p className="text-gray-400">Library fee applies only to 1st Year students and Lateral entry 2nd Year students. Fine is based on actual paid amounts from fee records.</p>
-      </div>
-
-      {/* ── Remittance Tracker ── */}
-      <div className="bg-white rounded-xl border border-[#CDE7E7] overflow-hidden" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-[#E3F1F1]">
-          <div>
-            <h3 className="text-xs font-bold text-gray-800">Remittance Tracker</h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">Record outgoing payments to Govt, SVK &amp; SMP — phase by phase</p>
-          </div>
-        </div>
-
-        {/* Payee tabs */}
-        <div className="px-4 py-2.5 border-b border-[#E3F1F1]">
-          <SegmentedToggle
-            options={[
-              { value: 'GOV',  label: 'Government (K2)' },
-              { value: 'SVK',  label: 'SVK Management'   },
-              { value: 'SMP',  label: 'SMP'              },
-              { value: 'CONSOLIDATED', label: 'Consolidated' },
-            ]}
-            value={trackerTab}
-            onChange={(v) => { setTrackerTab(v as RemittancePayee | 'CONSOLIDATED'); setDeleteConfirming(null); setEditingRemittance(null); }}
-          />
-        </div>
-
-        <div className="p-4 space-y-4">
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          <div className="flex-1 min-h-0 overflow-auto scroll-fee pr-0.5">
           {/* ── GOV panel ── */}
           {trackerTab === 'GOV' && (() => {
             const balance = grandTotals.gov - govTotalPaid;
             return (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
                   {[
                     { label: 'Total Payable', value: grandTotals.gov, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
                     { label: 'Total Paid',    value: govTotalPaid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
@@ -4241,14 +4232,48 @@ function FeeDistributionTab({
                       border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
                     },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
-                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
-                      <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Headwise phase table */}
+                <div className="flex items-center gap-2 order-1">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
+                  >
+                    <span className="text-sm leading-none">+</span> Record Govt Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      'Government (K2)',
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...govPhases, 'Balance'],
+                        body: GOV_HEADS.map(({ key, label }) => {
+                          const payableH = govPayableByHead[key];
+                          const paidH    = govPaidByHead[key];
+                          const balH     = payableH - paidH;
+                          return [label, numPdf(payableH), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.[key] ?? 0)), balH === 0 ? 'Settled' : numPdf(balH)];
+                        }),
+                        foot: ['Total', numPdf(grandTotals.gov), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.total ?? 0)), balance === 0 ? 'Settled' : numPdf(balance)],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className={BTN_GRAY}
+                  >
+                    PDF
+                  </button>
+                </div>
+</div>
+</div>
+<div className="flex flex-col gap-3">
+{/* Headwise phase table */}
                 <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
                     <thead className={THEAD}>
@@ -4332,13 +4357,13 @@ function FeeDistributionTab({
                         ) : (
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
-                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded px-2 py-0.5 transition-colors"
+                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
                               onClick={() => { setEditingRemittance(r); setShowModal(true); }}
                             >
                               Edit
                             </button>
                             <button
-                              className="text-[11px] font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 bg-red-50 hover:bg-red-100 rounded px-2 py-0.5 transition-colors"
+                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
                               onClick={() => setDeleteConfirming(r.id)}
                             >
                               Delete
@@ -4350,40 +4375,12 @@ function FeeDistributionTab({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[#0B6567] hover:text-[#0B6567] border border-[#0F8B8D]/25 hover:border-[#0F8B8D]/50 bg-[#DDF0F0]/40 hover:bg-[#DDF0F0]/70 rounded-full px-3 py-1.5 transition-colors"
-                  >
-                    <span className="text-sm leading-none">+</span> Record Govt Payment
-                  </button>
-                  <button
-                    onClick={() => exportRemittanceTrackerPdf(
-                      'Government (K2)',
-                      academicYear,
-                      {
-                        head: ['Head', 'Total Payable', ...govPhases, 'Balance'],
-                        body: GOV_HEADS.map(({ key, label }) => {
-                          const payableH = govPayableByHead[key];
-                          const paidH    = govPaidByHead[key];
-                          const balH     = payableH - paidH;
-                          return [label, numPdf(payableH), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.[key] ?? 0)), balH === 0 ? 'Settled' : numPdf(balH)];
-                        }),
-                        foot: ['Total', numPdf(grandTotals.gov), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.total ?? 0)), balance === 0 ? 'Settled' : numPdf(balance)],
-                      },
-                      {
-                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
-                        body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
-                      },
-                    )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-                  >
-                    PDF
-                  </button>
                 </div>
+</div>
               </>
             );
           })()}
+
 
           {/* ── SVK / SMP panel (shared layout) ── */}
           {(trackerTab === 'SVK' || trackerTab === 'SMP') && (() => {
@@ -4397,7 +4394,10 @@ function FeeDistributionTab({
             const phaseTotals = new Map(phases.map((ph) => [ph, rem.filter((r) => r.phase === ph).reduce((s, r) => s + r.amount, 0)]));
             return (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
                   {[
                     { label: 'Total Payable', value: payable, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
                     { label: 'Total Paid',    value: paid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
@@ -4409,14 +4409,47 @@ function FeeDistributionTab({
                       border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
                     },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
-                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
-                      <p className={`text-base font-bold ${c.color}`}>{fmt(c.value)}</p>
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Head / Total Payable / Phase / Balance table */}
+                <div className="flex items-center gap-2 order-1">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
+                  >
+                    <span className="text-sm leading-none">+</span> Record {label} Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      isSVK ? 'SVK Management' : 'SMP',
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...phases, 'Balance'],
+                        body: [[
+                          isSVK ? 'SVK Management' : 'SMP',
+                          numPdf(payable),
+                          ...phases.map((ph) => numPdf(phaseTotals.get(ph) ?? 0)),
+                          balance === 0 ? 'Settled' : numPdf(balance),
+                        ]],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className={BTN_GRAY}
+                  >
+                    PDF
+                  </button>
+                </div>
+</div>
+</div>
+<div className="flex flex-col gap-3">
+{/* Head / Total Payable / Phase / Balance table */}
                 <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
                     <thead className={THEAD}>
@@ -4475,13 +4508,13 @@ function FeeDistributionTab({
                         ) : (
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
-                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 hover:bg-blue-100 rounded px-2 py-0.5 transition-colors"
+                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
                               onClick={() => { setEditingRemittance(r); setShowModal(true); }}
                             >
                               Edit
                             </button>
                             <button
-                              className="text-[11px] font-semibold text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 bg-red-50 hover:bg-red-100 rounded px-2 py-0.5 transition-colors"
+                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
                               onClick={() => setDeleteConfirming(r.id)}
                             >
                               Delete
@@ -4493,39 +4526,12 @@ function FeeDistributionTab({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[#0B6567] hover:text-[#0B6567] border border-[#0F8B8D]/25 hover:border-[#0F8B8D]/50 bg-[#DDF0F0]/40 hover:bg-[#DDF0F0]/70 rounded-full px-3 py-1.5 transition-colors"
-                  >
-                    <span className="text-sm leading-none">+</span> Record {label} Payment
-                  </button>
-                  <button
-                    onClick={() => exportRemittanceTrackerPdf(
-                      isSVK ? 'SVK Management' : 'SMP',
-                      academicYear,
-                      {
-                        head: ['Head', 'Total Payable', ...phases, 'Balance'],
-                        body: [[
-                          isSVK ? 'SVK Management' : 'SMP',
-                          numPdf(payable),
-                          ...phases.map((ph) => numPdf(phaseTotals.get(ph) ?? 0)),
-                          balance === 0 ? 'Settled' : numPdf(balance),
-                        ]],
-                      },
-                      {
-                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
-                        body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
-                      },
-                    )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-                  >
-                    PDF
-                  </button>
                 </div>
+</div>
               </>
             );
           })()}
+
 
           {/* ── Consolidated panel ── */}
           {trackerTab === 'CONSOLIDATED' && (() => {
@@ -4547,8 +4553,11 @@ function FeeDistributionTab({
 
             return (
               <>
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+{/* Summary cards */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
                   {[
                     { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-[#CDE7E7]'   },
                     { label: 'Total Remitted', value: totalPaid,   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
@@ -4561,14 +4570,14 @@ function FeeDistributionTab({
                     },
                     { label: 'Entries', value: allRemittances.length as unknown as number, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', isCount: true },
                   ].map((c) => (
-                    <div key={c.label} className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2`}>
-                      <p className="text-xs font-semibold uppercase text-gray-400 mb-0.5">{c.label}</p>
-                      <p className={`text-base font-bold ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</p>
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-start order-1">
                   <button
                     onClick={() => exportRemittanceTrackerPdf(
                       'Consolidated',
@@ -4586,13 +4595,16 @@ function FeeDistributionTab({
                         body: allRemittances.map((r) => [r.payeeLabel, r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
                       },
                     )}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
+                    className={BTN_GRAY}
                   >
                     PDF
                   </button>
                 </div>
+                </div>
 
-                {/* Payee summary table */}
+                </div>
+<div className="flex flex-col gap-3">
+{/* Payee summary table */}
                 <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
                   <table className="w-full text-sm">
                     <thead className={`${ACCENT}`}>
@@ -4663,11 +4675,15 @@ function FeeDistributionTab({
                 {allRemittances.length === 0 && (
                   <p className="text-sm text-gray-400 text-center py-4">No remittances recorded yet.</p>
                 )}
+</div>
+</div>
               </>
             );
           })()}
+
+          </div>
         </div>
-      </div>
+      )}
 
       {showModal && trackerTab !== 'CONSOLIDATED' && (
         <RemittanceModal

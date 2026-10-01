@@ -75,11 +75,11 @@ export function ClearButton({ active, onClick }: { active: boolean; onClick: () 
 
 // ── Stat chip strip ──────────────────────────────────────────────────────────
 export interface StatChipEntry { label: string; value: string | number; color: string; bg: string; border: string; }
-export function StatChipRow({ entries }: { entries: StatChipEntry[] }) {
+export function StatChipRow({ entries, compact = false }: { entries: StatChipEntry[]; compact?: boolean }) {
   return (
-    <div className="shrink-0 flex flex-wrap gap-2">
+    <div className={compact ? 'shrink-0 flex gap-1.5 overflow-x-auto no-scrollbar' : 'shrink-0 flex flex-wrap gap-2'}>
       {entries.map((c) => (
-        <div key={c.label} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+        <div key={c.label} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} py-[5px] whitespace-nowrap ${compact ? 'flex-1 justify-center px-2.5' : 'px-3'}`}>
           <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
           <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{c.value}</span>
         </div>
@@ -205,5 +205,29 @@ export function FilterPanel({
         </div>
       </div>}
     </div>
+  );
+}
+
+// ── Report card: slim titled header strip (title + actions) over a flex body ──
+export function ReportCard({
+  title, subtitle, actions, className = '', children,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`flex flex-col min-h-0 rounded-2xl border bg-white overflow-hidden ${className}`} style={{ borderColor: HAIRLINE }}>
+      <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b bg-[#F2FAFA]" style={{ borderColor: HAIRLINE }}>
+        <div className="min-w-0">
+          <h3 className="text-[12px] font-medium text-[#0B6567] truncate">{title}</h3>
+          {subtitle && <p className="text-[10.5px] text-[#8A93A3] truncate">{subtitle}</p>}
+        </div>
+        {actions && <div className="shrink-0 flex items-center gap-1.5">{actions}</div>}
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+    </section>
   );
 }
