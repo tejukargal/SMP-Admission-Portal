@@ -10,7 +10,8 @@ import { SMP_FEE_HEADS } from '../types';
 import { saveMeritListSnapshot, saveLateralMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/common/Button';
+import { FilterDropdown } from '../components/common/FilterDropdown';
+import { MINT, CORAL, AMBER, inkOf, pastel, COURSE_HEX } from '../components/dashboard/dashTokens';
 import { PageSpinner } from '../components/common/PageSpinner';
 import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
@@ -29,6 +30,38 @@ const AIDED_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS'];
 const UNAIDED_COURSES: Course[] = ['EE'];
 
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
+
+const TEAL = '#0F8B8D';
+const TEAL_INK = '#0B6567';
+const HAIRLINE = '#CDE7E7';
+
+const OUTLINE_PILL_BTN =
+  'rounded-full border border-[#CDE7E7] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] transition-colors hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] hover:text-[#0B6567] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30';
+const ICON_PILL_BTN =
+  'w-[30px] h-[30px] rounded-full border border-[#CDE7E7] bg-white inline-flex items-center justify-center text-[#0B6567] transition-colors hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30';
+
+const BTN_BASE = 'rounded-full border px-3 py-1.5 text-[11.5px] font-medium transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap';
+const BTN_GRAY = `${BTN_BASE} border-[#CDE7E7] bg-white text-[#262B35] hover:border-[#0F8B8D]/40 hover:bg-[#0F8B8D]/[0.06] hover:text-[#0B6567] focus:ring-[#0F8B8D]/30`;
+const BTN_GREEN = `${BTN_BASE} border-[#0FA968]/45 bg-[#0FA968]/[0.08] text-[#0A7A4B] hover:bg-[#0FA968]/[0.15] focus:ring-[#0FA968]/30`;
+const BTN_RED = `${BTN_BASE} border-[#E11D48]/40 bg-[#E11D48]/[0.07] text-[#A5173A] hover:bg-[#E11D48]/[0.13] focus:ring-[#E11D48]/30`;
+const BTN_PURPLE = `${BTN_BASE} border-[#8B5CF6]/45 bg-[#8B5CF6]/[0.08] text-[#6A44B8] hover:bg-[#8B5CF6]/[0.15] focus:ring-[#8B5CF6]/30`;
+const BTN_AMBER = `${BTN_BASE} border-[#D97706]/45 bg-[#D97706]/[0.08] text-[#9A5B00] hover:bg-[#D97706]/[0.15] focus:ring-[#D97706]/30`;
+
+/** Compact pill action button for table rows (pastel tone). */
+function ActionBtn({ tone = 'neutral', loading, disabled, onClick, children }: {
+  tone?: 'neutral' | 'mint' | 'coral' | 'amber';
+  loading?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const cls = tone === 'mint' ? BTN_GREEN : tone === 'coral' ? BTN_RED : tone === 'amber' ? BTN_AMBER : BTN_GRAY;
+  return (
+    <button type="button" onClick={onClick} disabled={disabled || loading} className={`${cls} !py-1 !text-[11px]`}>
+      {loading ? '…' : children}
+    </button>
+  );
+}
 
 function sortStudents(list: Student[]): Student[] {
   return list.slice().sort((a, b) => {
@@ -62,6 +95,15 @@ export function Admissions() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [quotaFilter, setQuotaFilter] = useState<QuotaFilter>('all');
   const [courseFilter, setCourseFilter] = useState<Course | 'ALL'>('ALL');
+  const [showFilters, setShowFilters] = useState(() => {
+    try { return localStorage.getItem('smp_admissions_filters_visible') === 'true'; } catch { return false; }
+  });
+  const [showStats, setShowStats] = useState(() => {
+    try { return localStorage.getItem('smp_admissions_stats_visible') !== 'false'; } catch { return true; }
+  });
+  const hasNonSearchFilters = quotaFilter !== 'all' || courseFilter !== 'ALL';
+  const hasActiveFilters = !!searchTerm || hasNonSearchFilters;
+  useEffect(() => { if (hasNonSearchFilters) setShowFilters(true); }, [hasNonSearchFilters]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState('');
   const [toastError, setToastError] = useState(false);
@@ -499,346 +541,350 @@ export function Admissions() {
     activeTab === 'cancelled' ? cancelledStudents :
     meritStudents;
 
+  const isLateralTab = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
+  const totalPending = courseStats.reduce((s, c) => s + (isLateralTab ? c.pendingLateral : c.pendingRegular), 0);
+  const totalCancelled = courseStats.reduce((s, c) => s + c.cancelled, 0);
+
+  function handleCourseChipClick(c: Course) {
+    if (courseFilter === c) { setCourseFilter('ALL'); return; }
+    if (!availableCourses.includes(c)) setQuotaFilter('all');
+    setCourseFilter(c);
+  }
+
+  function clearAllFilters() {
+    setSearchTerm('');
+    setQuotaFilter('all');
+    setCourseFilter('ALL');
+  }
+
+  const tabGroups: { id: Tab; label: string; count: number; color: string }[][] = [
+    [
+      { id: 'pending', label: 'Pending', count: pendingStudents.length, color: AMBER },
+      { id: 'merit', label: 'Merit List', count: meritStudents.length, color: TEAL },
+    ],
+    [
+      { id: 'pendingLateral', label: 'Pending Lateral', count: pendingLateralStudents.length, color: '#F97316' },
+      { id: 'meritLateral', label: 'Merit List Lateral', count: meritLateralStudents.length, color: '#0EA5E9' },
+    ],
+    [
+      { id: 'saved', label: 'Saved Lists', count: snapshots.length + lateralSnapshots.length, color: '#8B5CF6' },
+      { id: 'cancelled', label: 'Cancelled', count: cancelledStudents.length, color: CORAL },
+    ],
+  ];
+
   return (
     <>
-    <div className="h-full flex flex-col gap-1.5" style={{ animation: 'page-enter 0.22s ease-out' }}>
+    <div
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F4FBFB 0%, #FCFEFE 45%, #EFF8F8 100%)', animation: 'page-enter 0.22s ease-out' }}
+    >
 
       {/* Page header */}
-      <div className="flex-shrink-0 flex items-center gap-3 min-w-0 relative">
+      <div className="flex-shrink-0 flex items-center gap-4 min-w-0 relative">
         <div className="shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 leading-tight">Admissions</h2>
-          {academicYear && (
-            <p className="text-[10px] text-gray-400 leading-tight">{academicYear}</p>
-          )}
-        </div>
-
-        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-            <span className="text-yellow-600 font-medium">Pending</span>
-            <span className="font-bold tabular-nums text-yellow-800">{pendingStudents.length}</span>
-          </div>
-          <div className="flex items-center gap-1 bg-red-50 border border-red-200 rounded px-2 py-1 text-xs shadow-sm whitespace-nowrap shrink-0">
-            <span className="text-red-600 font-medium">Cancelled</span>
-            <span className="font-bold tabular-nums text-red-800">{cancelledStudents.length}</span>
+          <p className="text-[9px] font-medium uppercase tracking-[1px] text-[#8A93A3] leading-none">
+            SMP Admissions · Admissions
+          </p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: TEAL_INK }}>Admissions</h2>
+            {academicYear && (
+              <span className="rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums" style={{ borderColor: `${TEAL}66`, color: TEAL_INK }}>
+                {academicYear}
+              </span>
+            )}
           </div>
         </div>
-
-        <Button variant="secondary" size="sm" onClick={() => void navigate('/students')} className="ml-auto shrink-0">
-          Students →
-        </Button>
 
         {/* Toast */}
-        {toastMsg && (
-          <div
-            className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-2 border text-xs font-medium px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap pointer-events-auto ${
-              toastError
-                ? 'bg-red-50 border-red-200 text-red-800'
-                : 'bg-green-50 border-green-200 text-green-800'
-            }`}
-            style={{ animation: 'toast-in 0.2s ease-out' }}
-          >
-            <span className={toastError ? 'text-red-500' : 'text-green-500'}>
-              {toastError ? '✕' : '✓'}
-            </span>
-            {toastMsg}
-            <button
-              onClick={() => setToastMsg('')}
-              className={`leading-none ml-1 ${toastError ? 'text-red-400 hover:text-red-600' : 'text-green-400 hover:text-green-600'}`}
+        {toastMsg && (() => {
+          const c = toastError ? CORAL : MINT;
+          return (
+            <div
+              className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium whitespace-nowrap pointer-events-auto bg-white"
+              style={{ animation: 'toast-in 0.2s ease-out', borderColor: `${c}66`, color: inkOf(c), boxShadow: `0 4px 14px ${c}26` }}
             >
-              ×
-            </button>
-          </div>
-        )}
+              <span className="w-4 h-4 rounded-full flex items-center justify-center text-white shrink-0 text-[9px] font-bold" style={{ background: c }}>
+                {toastError ? '✕' : '✓'}
+              </span>
+              {toastMsg}
+              <button
+                onClick={() => setToastMsg('')}
+                className="ml-1 leading-none opacity-60 hover:opacity-100 cursor-pointer"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })()}
+
+        <button
+          onClick={() => void navigate('/students')}
+          className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium text-white hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/40 focus-visible:ring-offset-2 cursor-pointer transition-[filter]"
+          style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_INK})`, boxShadow: `0 3px 10px ${TEAL}40` }}
+        >
+          Students
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
       </div>
 
-      {/* Filter bar: Search · Quota · Course */}
-      <div className="flex-shrink-0 flex items-center gap-3 bg-white rounded-lg border border-gray-200 shadow-sm px-3 py-2 flex-wrap">
-        {/* Search */}
-        <div className="relative shrink-0">
-          <input
-            type="text"
-            placeholder="Search name / father / mobile…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-52 rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 pr-6"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 leading-none text-sm"
+      {/* Toolbar card — search + status totals + collapsible filters/course stats + actions */}
+      <div className="flex-shrink-0 rounded-2xl border bg-white overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(11,101,103,0.06)]" style={{ borderColor: HAIRLINE }}>
+        <div className="flex items-center gap-2 px-2.5 py-2">
+
+          {/* Search */}
+          <div className="relative shrink-0 w-56">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: TEAL_INK }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search name / father / mobile…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full rounded-full border border-[#0F8B8D]/40 bg-[#F2FAFA] py-2 text-[14px] font-medium text-[#0B6567] placeholder:text-[#0B6567]/55 placeholder:font-normal focus:outline-none focus:bg-white focus:border-[#0F8B8D] focus:ring-2 focus:ring-[#0F8B8D]/20 transition-all duration-150 pl-9 ${searchTerm ? 'pr-8' : 'pr-3'}`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] transition-colors duration-150 shrink-0"
+                aria-label="Clear search"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Collapsible inline filter selects */}
+          <div className="flex-1 min-w-0">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: showFilters ? 'minmax(0, 1fr)' : '0fr',
+                opacity: showFilters ? 1 : 0,
+                transition: 'grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
             >
-              ×
+              <div className="overflow-hidden">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
+                  <FilterDropdown<'aided' | 'unaided'>
+                    color="teal"
+                    value={quotaFilter === 'all' ? '' : quotaFilter}
+                    onChange={(v) => handleQuotaChange(v || 'all')}
+                    placeholder="Quota"
+                    options={[{ value: 'aided', label: 'Aided' }, { value: 'unaided', label: 'UnAided' }]}
+                  />
+                  <FilterDropdown<Course>
+                    color="teal"
+                    value={courseFilter === 'ALL' ? '' : courseFilter}
+                    onChange={(v) => setCourseFilter(v || 'ALL')}
+                    placeholder="Course"
+                    options={availableCourses.map((c) => ({ value: c, label: c }))}
+                  />
+
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Clear */}
+          {hasActiveFilters && (
+            <>
+              <span className="w-px h-5 shrink-0 ml-auto" style={{ background: HAIRLINE }} />
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#D97706]/10 px-3 py-1.5 text-[11.5px] font-medium text-[#D97706] hover:bg-[#D97706]/[0.16] transition-colors cursor-pointer"
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                Clear
+              </button>
+            </>
+          )}
+
+          {/* Enrollment Log: labelled when collapsed, icon-only when expanded */}
+          {allStudents.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowEnrollmentLog(true)}
+              className={`${showFilters ? ICON_PILL_BTN : OUTLINE_PILL_BTN} shrink-0 inline-flex items-center gap-1.5 cursor-pointer ${hasActiveFilters ? '' : 'ml-auto'}`}
+              title={showFilters ? 'Enrollment Log' : undefined}
+              aria-label="Enrollment Log"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
+              {!showFilters && 'Enrollment Log'}
             </button>
           )}
-        </div>
 
-        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-
-        {/* Quota filter */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quota</span>
-          {(['aided', 'unaided', 'all'] as const).map((q) => (
+          {/* Stats chips toggle */}
+          {allStudents.length > 0 && (
             <button
-              key={q}
-              onClick={() => handleQuotaChange(q)}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                quotaFilter === q
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {q === 'aided' ? 'Aided' : q === 'unaided' ? 'UnAided' : 'All'}
-            </button>
-          ))}
-        </div>
-
-        <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-
-        {/* Course filter */}
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Course</span>
-          <button
-            onClick={() => setCourseFilter('ALL')}
-            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-              courseFilter === 'ALL'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            All
-          </button>
-          {availableCourses.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCourseFilter(c)}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                courseFilter === c
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {allStudents.length > 0 && (
-          <>
-            <span className="text-gray-200 text-sm select-none shrink-0">|</span>
-            <button
-              onClick={() => setShowEnrollmentLog(true)}
-              className="rounded border border-sky-200 px-2.5 py-1 text-xs text-sky-700 bg-sky-50 hover:bg-sky-100 hover:border-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-400 transition-colors font-medium shrink-0"
-            >
-              Enrollment Log
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Course-wise stats strip */}
-      {allStudents.length > 0 && (() => {
-        const isLateral      = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
-        const totalPending   = isLateral
-          ? courseStats.reduce((s, c) => s + c.pendingLateral, 0)
-          : courseStats.reduce((s, c) => s + c.pendingRegular, 0);
-        const totalCancelled = courseStats.reduce((s, c) => s + c.cancelled, 0);
-        const courseColors: Record<Course, string> = {
-          CE: 'text-amber-600', ME: 'text-green-600', EC: 'text-sky-600', CS: 'text-teal-600', EE: 'text-violet-600',
-        };
-        const pendingColor = 'text-emerald-700';
-        const pendingLabelColor = 'text-emerald-400';
-        return (
-          <div
-            className="flex-shrink-0 bg-white/60 rounded-lg border border-gray-200 flex items-center px-3 py-1.5"
-            style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06)' }}
-          >
-            {/* Legend */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600">Pending</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-red-500">Cancelled</span>
-              </div>
-            </div>
-
-            <span className="w-px h-5 bg-gray-200 shrink-0 mx-3" />
-
-            {/* Per-course blocks */}
-            <div className="flex items-center gap-0 flex-1 min-w-0 overflow-x-auto">
-              {courseStats.map(({ course, pendingRegular, pendingLateral, cancelled }, i) => {
-                const pending = isLateral ? pendingLateral : pendingRegular;
-                const isEmpty = pending === 0 && cancelled === 0;
-                return (
-                  <div key={course} className={`flex items-center shrink-0 ${isEmpty ? 'opacity-25' : ''}`}>
-                    {i > 0 && <span className="w-px h-4 bg-gray-200 mx-3 shrink-0" />}
-                    <span className={`text-[10px] font-bold uppercase ${courseColors[course]} mr-2 shrink-0`}>{course}</span>
-                    <div className="flex flex-col items-center">
-                      <span className={`text-sm font-black tabular-nums leading-none ${pendingColor}`}>{pending}</span>
-                      <span className={`text-[8px] font-semibold uppercase tracking-wide leading-none mt-px ${pendingLabelColor}`}>Pend</span>
-                    </div>
-                    <span className="w-px h-4 bg-gray-100 mx-1.5 shrink-0" />
-                    <div className="flex flex-col items-center">
-                      <span className="text-sm font-black tabular-nums text-red-500 leading-none">{cancelled}</span>
-                      <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide leading-none mt-px">Canc</span>
-                    </div>
-                  </div>
-                );
+              type="button"
+              onClick={() => setShowStats((v) => {
+                const n = !v;
+                try { localStorage.setItem('smp_admissions_stats_visible', String(n)); } catch { /* ignore */ }
+                return n;
               })}
-            </div>
+              className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+                showStats
+                  ? 'bg-[#0F8B8D]/10 border-[#0F8B8D]/50 text-[#0B6567]'
+                  : 'border-[#CDE7E7] bg-white text-[#0B6567]/70 hover:bg-[#0F8B8D]/[0.06] hover:text-[#0B6567]'
+              }`}
+              title="Toggle pending / cancelled stats"
+              aria-label="Toggle pending / cancelled stats"
+              aria-expanded={showStats}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </button>
+          )}
 
-            {/* Totals */}
-            <span className="w-px h-5 bg-gray-200 shrink-0 mx-3" />
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Total</span>
-              <div className="flex flex-col items-center">
-                <span className={`text-sm font-black tabular-nums leading-none ${pendingColor}`}>{totalPending}</span>
-                <span className={`text-[8px] font-semibold uppercase tracking-wide leading-none mt-px ${pendingLabelColor}`}>Pend</span>
-              </div>
-              <span className="w-px h-4 bg-gray-100 shrink-0" />
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-black tabular-nums text-red-500 leading-none">{totalCancelled}</span>
-                <span className="text-[8px] font-semibold text-red-300 uppercase tracking-wide leading-none mt-px">Canc</span>
+          {/* Filter toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => {
+              const n = !v;
+              try { localStorage.setItem('smp_admissions_filters_visible', String(n)); } catch { /* ignore */ }
+              return n;
+            })}
+            className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
+              showFilters || hasNonSearchFilters
+                ? 'bg-[#0F8B8D]/10 border-[#0F8B8D]/30 text-[#0F8B8D]'
+                : 'border-[#CDE7E7] text-[#5B6371] hover:bg-[#EFF8F8] hover:text-[#262B35]'
+            }`}
+            title="Toggle filters"
+            aria-label="Toggle filters"
+            aria-expanded={showFilters}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Collapsible stats row: totals + course-wise Pending · Cancelled chips */}
+        {allStudents.length > 0 && (
+          <div
+            className="grid"
+            style={{
+              gridTemplateRows: showStats ? '1fr' : '0fr',
+              opacity: showStats ? 1 : 0,
+              transition: 'grid-template-rows 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="flex items-center gap-2 px-3 pt-0.5 pb-2.5">
+                <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap" style={pastel(AMBER)} title={isLateralTab ? 'Pending lateral admissions' : 'Pending admissions'}>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: AMBER }} />
+                  Pending
+                  <span className="tabular-nums font-semibold">{totalPending}</span>
+                </div>
+                <div className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap" style={pastel(CORAL)} title="Cancelled admissions">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CORAL }} />
+                  Cancelled
+                  <span className="tabular-nums font-semibold">{totalCancelled}</span>
+                </div>
+
+                <span className="w-px h-4 shrink-0" style={{ background: HAIRLINE }} />
+
+                <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto no-scrollbar px-px py-0.5">
+                  {courseStats.map(({ course, pendingRegular, pendingLateral, cancelled }) => {
+                    const pending = isLateralTab ? pendingLateral : pendingRegular;
+                    const selected = courseFilter === course;
+                    const empty = pending === 0 && cancelled === 0;
+                    const c = COURSE_HEX[course];
+                    return (
+                      <button
+                        key={course}
+                        type="button"
+                        onClick={() => handleCourseChipClick(course)}
+                        title={`${course} — ${pending} pending · ${cancelled} cancelled`}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-[6px] text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97] ${
+                          empty && !selected ? 'opacity-50 hover:opacity-100' : ''
+                        }`}
+                        style={selected
+                          ? { background: c, borderColor: c, color: '#fff' }
+                          : { background: '#fff', borderColor: `${c}73`, color: inkOf(c) }}
+                      >
+                        {!selected && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c }} />}
+                        <span>{course}</span>
+                        <span className="tabular-nums font-semibold" style={selected ? undefined : { color: inkOf(AMBER) }}>{pending}</span>
+                        <span className={selected ? 'opacity-60' : 'text-[#C5CBD6]'}>·</span>
+                        <span className="tabular-nums font-semibold" style={selected ? undefined : { color: inkOf(CORAL) }}>{cancelled}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
-        );
-      })()}
+        )}
+      </div>
 
       {/* Tabs */}
-      <div className="flex-shrink-0 flex items-center border-b border-gray-200 bg-white rounded-t-lg overflow-x-auto">
-        {/* ── Normal tabs ── */}
-        {([
-          { id: 'pending', label: 'Pending',   count: pendingStudents.length, badge: 'bg-yellow-100 text-yellow-700' },
-          { id: 'merit',   label: 'Merit List', count: meritStudents.length,  badge: 'bg-blue-100 text-blue-700' },
-        ] as { id: Tab; label: string; count: number; badge: string }[]).map(({ id, label, count, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {label}
-            {count > 0 && (
-              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${badge}`}>
-                {count}
-              </span>
-            )}
-          </button>
+      <div className="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        {tabGroups.map((group, gi) => (
+          <div key={gi} className="flex-shrink-0 flex items-center gap-1.5">
+            {gi > 0 && <span className="w-px h-5 mx-1 shrink-0" style={{ background: HAIRLINE }} />}
+            {group.map(({ id, label, count, color }) => {
+              const selected = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-[6px] text-[12px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.97] hover:brightness-[0.97]"
+                  style={selected
+                    ? { background: color, borderColor: color, color: '#fff' }
+                    : { background: '#fff', borderColor: `${color}73`, color: inkOf(color) }}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span
+                      className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold tabular-nums"
+                      style={selected ? { background: 'rgba(255,255,255,0.25)', color: '#fff' } : pastel(color)}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         ))}
 
-        {/* ── Separator ── */}
-        <div className="flex-shrink-0 self-stretch w-px bg-gray-300 mx-1" />
-
-        {/* ── Lateral tabs ── */}
-        {([
-          { id: 'pendingLateral', label: 'Pending Lateral',    count: pendingLateralStudents.length, badge: 'bg-orange-100 text-orange-700' },
-          { id: 'meritLateral',   label: 'Merit List Lateral', count: meritLateralStudents.length,   badge: 'bg-teal-100 text-teal-700' },
-        ] as { id: Tab; label: string; count: number; badge: string }[]).map(({ id, label, count, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {label}
-            {count > 0 && (
-              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${badge}`}>
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-
-        {/* ── Separator ── */}
-        <div className="flex-shrink-0 self-stretch w-px bg-gray-300 mx-1" />
-
-        {/* ── Utility tabs (Cancelled, Saved Lists) ── */}
-        {([
-          { id: 'saved',     label: 'Saved Lists', count: snapshots.length + lateralSnapshots.length,  badge: 'bg-purple-100 text-purple-700' },
-          { id: 'cancelled', label: 'Cancelled',   count: cancelledStudents.length,                    badge: 'bg-red-100 text-red-700' },
-        ] as { id: Tab; label: string; count: number; badge: string }[]).map(({ id, label, count, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {label}
-            {count > 0 && (
-              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold ${badge}`}>
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-
-        {/* Merit list export buttons — only shown when merit tab is active */}
+        {/* Merit list actions — only on merit tabs */}
         {activeTab === 'merit' && meritStudents.length > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-2 ml-auto pr-3">
+          <div className="flex-shrink-0 flex items-center gap-2 ml-auto pl-2">
             {isAdmin && (
-              <button
-                onClick={() => void handleSaveMeritList()}
-                disabled={savingMeritList}
-                className="rounded border border-purple-300 px-2.5 py-1 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => void handleSaveMeritList()} disabled={savingMeritList} className={BTN_PURPLE}>
                 {savingMeritList ? 'Saving…' : 'Save Merit List'}
               </button>
             )}
-            <button
-              onClick={handleExportPdf}
-              disabled={exportingPdf}
-              className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleExportPdf} disabled={exportingPdf} className={BTN_GRAY}>
               {exportingPdf ? 'Generating…' : 'Save PDF'}
             </button>
-            <button
-              onClick={handleExportExcel}
-              disabled={exportingExcel}
-              className="rounded border border-green-300 px-2.5 py-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleExportExcel} disabled={exportingExcel} className={BTN_GREEN}>
               {exportingExcel ? 'Generating…' : 'Save Excel'}
             </button>
           </div>
         )}
 
-        {/* Lateral merit list export buttons */}
         {activeTab === 'meritLateral' && meritLateralStudents.length > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-2 ml-auto pr-3">
+          <div className="flex-shrink-0 flex items-center gap-2 ml-auto pl-2">
             {isAdmin && (
-              <button
-                onClick={() => void handleSaveLateralMeritList()}
-                disabled={savingLateralMeritList}
-                className="rounded border border-purple-300 px-2.5 py-1 text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => void handleSaveLateralMeritList()} disabled={savingLateralMeritList} className={BTN_PURPLE}>
                 {savingLateralMeritList ? 'Saving…' : 'Save Merit List'}
               </button>
             )}
-            <button
-              onClick={handleExportLateralPdf}
-              disabled={exportingLateralPdf}
-              className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleExportLateralPdf} disabled={exportingLateralPdf} className={BTN_GRAY}>
               {exportingLateralPdf ? 'Generating…' : 'Save PDF'}
             </button>
-            <button
-              onClick={handleExportLateralExcel}
-              disabled={exportingLateralExcel}
-              className="rounded border border-green-300 px-2.5 py-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleExportLateralExcel} disabled={exportingLateralExcel} className={BTN_GREEN}>
               {exportingLateralExcel ? 'Generating…' : 'Save Excel'}
             </button>
           </div>
@@ -865,20 +911,20 @@ export function Admissions() {
               <div className="flex-shrink-0 flex items-center gap-1.5">
                 <button
                   onClick={() => setSavedListView('regular')}
-                  className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                  className={`px-3.5 py-1.5 text-[12px] font-medium rounded-full border transition-colors cursor-pointer ${
                     savedListView === 'regular'
-                      ? 'bg-purple-600 border-purple-600 text-white shadow-sm'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-purple-300 hover:text-purple-700'
+                      ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
+                      : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#8B5CF6]/50 hover:text-[#6A44B8]'
                   }`}
                 >
                   Regular {snapshots.length > 0 && <span className="ml-1 opacity-75">({snapshots.length})</span>}
                 </button>
                 <button
                   onClick={() => setSavedListView('lateral')}
-                  className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                  className={`px-3.5 py-1.5 text-[12px] font-medium rounded-full border transition-colors cursor-pointer ${
                     savedListView === 'lateral'
-                      ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
-                      : 'bg-white border-gray-300 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+                      ? 'bg-[#0F8B8D] border-[#0F8B8D] text-white'
+                      : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/50 hover:text-[#0B6567]'
                   }`}
                 >
                   Lateral {lateralSnapshots.length > 0 && <span className="ml-1 opacity-75">({lateralSnapshots.length})</span>}
@@ -903,10 +949,10 @@ export function Admissions() {
                           <button
                             key={snap.id}
                             onClick={() => setSelectedSnapshotId(snap.id)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-colors cursor-pointer ${
                               isSelected
-                                ? 'bg-purple-600 border-purple-600 text-white shadow-sm'
-                                : 'bg-white border-gray-300 text-gray-600 hover:border-purple-300 hover:text-purple-700'
+                                ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
+                                : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#8B5CF6]/50 hover:text-[#6A44B8]'
                             }`}
                           >
                             <span>Phase {snap.phase}</span>
@@ -918,14 +964,14 @@ export function Admissions() {
 
                     {selectedSnapshot && (
                       <div className="flex-shrink-0 flex items-center gap-2">
-                        <button onClick={() => handleSnapshotExportPdf(selectedSnapshot)} disabled={snapshotExportingPdf} className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => handleSnapshotExportPdf(selectedSnapshot)} disabled={snapshotExportingPdf} className={BTN_GRAY}>
                           {snapshotExportingPdf ? 'Generating…' : 'Save PDF'}
                         </button>
-                        <button onClick={() => handleSnapshotExportExcel(selectedSnapshot)} disabled={snapshotExportingExcel} className="rounded border border-green-300 px-2.5 py-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => handleSnapshotExportExcel(selectedSnapshot)} disabled={snapshotExportingExcel} className={BTN_GREEN}>
                           {snapshotExportingExcel ? 'Generating…' : 'Save Excel'}
                         </button>
                         {isAdmin && (
-                          <button onClick={() => void handleDeleteSnapshot(selectedSnapshot.id)} disabled={deletingSnapshotId !== null} className="rounded border border-red-200 px-2.5 py-1 text-xs text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
+                          <button onClick={() => void handleDeleteSnapshot(selectedSnapshot.id)} disabled={deletingSnapshotId !== null} className={`${BTN_RED} ml-auto`}>
                             {deletingSnapshotId === selectedSnapshot.id ? 'Deleting…' : 'Delete Phase'}
                           </button>
                         )}
@@ -936,28 +982,28 @@ export function Admissions() {
                     )}
 
                     {selectedSnapshot && (
-                      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-                        <table className="min-w-full divide-y divide-gray-200 text-xs">
-                          <thead className="bg-gray-50 sticky top-0 z-10">
+                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+                        <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+                          <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                             <tr>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
-                              <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-12">ಲಿಂಗ</th>
-                              <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
-                              <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-28">ಆದಾಯ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
-                              <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಗ+ವಿ %</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಗರಿಷ್ಠ ಅಂಕ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಗಳಿಸಿದ ಅಂಕ</th>
-                              <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಶೇಕಡಾ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
+                              <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-12">ಲಿಂಗ</th>
+                              <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
+                              <th className="px-3 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-28">ಆದಾಯ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
+                              <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಗ+ವಿ %</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಗರಿಷ್ಠ ಅಂಕ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಗಳಿಸಿದ ಅಂಕ</th>
+                              <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಶೇಕಡಾ</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
+                          <tbody className="divide-y divide-[#EEF6F6]">
                             {sortByMerit(selectedSnapshot.students).map((student, idx) => (
-                              <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                              <tr key={idx} className="hover:bg-[#F6FBFB] transition-colors">
                                 <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                                 <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                                 <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -985,7 +1031,7 @@ export function Admissions() {
                             ))}
                           </tbody>
                         </table>
-                        <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+                        <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
                           Phase {selectedSnapshot.phase} · {selectedSnapshot.students.length} student{selectedSnapshot.students.length !== 1 ? 's' : ''} · saved {new Date(selectedSnapshot.savedAt).toLocaleString('en-IN')} · sorted by SSLC % (highest first)
                         </div>
                       </div>
@@ -1012,10 +1058,10 @@ export function Admissions() {
                           <button
                             key={snap.id}
                             onClick={() => setSelectedLateralSnapshotId(snap.id)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-colors cursor-pointer ${
                               isSelected
-                                ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
-                                : 'bg-white border-gray-300 text-gray-600 hover:border-teal-300 hover:text-teal-700'
+                                ? 'bg-[#0F8B8D] border-[#0F8B8D] text-white'
+                                : 'bg-white border-[#CDE7E7] text-[#5B6371] hover:border-[#0F8B8D]/50 hover:text-[#0B6567]'
                             }`}
                           >
                             <span>Phase {snap.phase}</span>
@@ -1027,14 +1073,14 @@ export function Admissions() {
 
                     {selectedLateralSnapshot && (
                       <div className="flex-shrink-0 flex items-center gap-2">
-                        <button onClick={() => handleLateralSnapshotExportPdf(selectedLateralSnapshot)} disabled={lateralSnapshotExportingPdf} className="rounded border border-gray-300 px-2.5 py-1 text-xs text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => handleLateralSnapshotExportPdf(selectedLateralSnapshot)} disabled={lateralSnapshotExportingPdf} className={BTN_GRAY}>
                           {lateralSnapshotExportingPdf ? 'Generating…' : 'Save PDF'}
                         </button>
-                        <button onClick={() => handleLateralSnapshotExportExcel(selectedLateralSnapshot)} disabled={lateralSnapshotExportingExcel} className="rounded border border-green-300 px-2.5 py-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 focus:outline-none focus:ring-1 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={() => handleLateralSnapshotExportExcel(selectedLateralSnapshot)} disabled={lateralSnapshotExportingExcel} className={BTN_GREEN}>
                           {lateralSnapshotExportingExcel ? 'Generating…' : 'Save Excel'}
                         </button>
                         {isAdmin && (
-                          <button onClick={() => void handleDeleteLateralSnapshot(selectedLateralSnapshot.id)} disabled={deletingLateralSnapshotId !== null} className="rounded border border-red-200 px-2.5 py-1 text-xs text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-300 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
+                          <button onClick={() => void handleDeleteLateralSnapshot(selectedLateralSnapshot.id)} disabled={deletingLateralSnapshotId !== null} className={`${BTN_RED} ml-auto`}>
                             {deletingLateralSnapshotId === selectedLateralSnapshot.id ? 'Deleting…' : 'Delete Phase'}
                           </button>
                         )}
@@ -1045,36 +1091,36 @@ export function Admissions() {
                     )}
 
                     {selectedLateralSnapshot && (
-                      <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-                        <table className="min-w-full divide-y divide-gray-200 text-xs">
-                          <thead className="bg-gray-50 sticky top-0 z-10">
+                      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+                        <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+                          <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                             <tr>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
-                              <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-12">ಲಿಂಗ</th>
-                              <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
-                              <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-28">ಆದಾಯ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
-                              <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಗ+ವಿ %</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-28">SSLC ಅಂಕ</th>
-                              <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಶೇಕಡಾ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-16">ಅರ್ಹತೆ</th>
-                              <th className="px-2 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-32">Trade/Combination</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC ಗರಿಷ್ಠ</th>
-                              <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC ಗಳಿಸಿದ</th>
-                              <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC %</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
+                              <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-12">ಲಿಂಗ</th>
+                              <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
+                              <th className="px-3 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-28">ಆದಾಯ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
+                              <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಗ+ವಿ %</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-28">SSLC ಅಂಕ</th>
+                              <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಶೇಕಡಾ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-16">ಅರ್ಹತೆ</th>
+                              <th className="px-2 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-32">Trade/Combination</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC ಗರಿಷ್ಠ</th>
+                              <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC ಗಳಿಸಿದ</th>
+                              <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC %</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
+                          <tbody className="divide-y divide-[#EEF6F6]">
                             {sortByLateralMerit(selectedLateralSnapshot.students).map((student, idx) => {
                               const lMax = student.priorQualification === 'ITI' ? student.itiMaxTotal : student.pucMaxTotal;
                               const lObt = student.priorQualification === 'ITI' ? student.itiObtainedTotal : student.pucObtainedTotal;
                               const lPct = student.priorQualification === 'ITI' ? student.itiPercentage : student.pucPercentage;
                               return (
-                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                <tr key={idx} className="hover:bg-[#F6FBFB] transition-colors">
                                   <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                                   <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -1109,7 +1155,7 @@ export function Admissions() {
                             })}
                           </tbody>
                         </table>
-                        <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+                        <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
                           Phase {selectedLateralSnapshot.phase} · {selectedLateralSnapshot.students.length} student{selectedLateralSnapshot.students.length !== 1 ? 's' : ''} · saved {new Date(selectedLateralSnapshot.savedAt).toLocaleString('en-IN')} · sorted by ITI/PUC % (highest first)
                         </div>
                       </div>
@@ -1133,31 +1179,31 @@ export function Admissions() {
             <p className="text-xs text-gray-300">Students enrolled with ITI or PUC prior qualification appear here.</p>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-            <table className="min-w-full divide-y divide-gray-200 text-xs">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+            <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+              <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Name (SSLC)</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Year</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Gender</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Prior Qual</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Adm Type</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Adm Cat</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Mobile</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Enrolled On</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-8">#</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">Name (SSLC)</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-24">Reg No</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-14">Course</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-20">Year</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-14">Gender</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-16">Prior Qual</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-20">Adm Type</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-16">Adm Cat</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Mobile</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Enrolled On</th>
                   {isAdmin && (
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-44">Actions</th>
+                    <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-44">Actions</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-[#EEF6F6]">
                 {pendingLateralStudents.map((student, idx) => (
                   <tr
                     key={student.id}
-                    className="hover:bg-gray-50 transition-colors cursor-context-menu"
+                    className="hover:bg-[#F6FBFB] transition-colors cursor-context-menu"
                     onContextMenu={(e) => handleContextMenu(e, student)}
                   >
                     <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
@@ -1174,32 +1220,9 @@ export function Admissions() {
                     {isAdmin && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex gap-1.5">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={actionLoading !== null}
-                            onClick={() => navigate(`/enroll?edit=${student.id}`)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="!bg-green-600 !hover:bg-green-700 border-transparent text-white"
-                            loading={actionLoading === student.id}
-                            disabled={actionLoading !== null && actionLoading !== student.id}
-                            onClick={() => void handleConfirmClick(student)}
-                          >
-                            Confirm
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={actionLoading === student.id}
-                            disabled={actionLoading !== null && actionLoading !== student.id}
-                            onClick={() => void handleAction(student, 'CANCELLED')}
-                          >
-                            Cancel
-                          </Button>
+                          <ActionBtn disabled={actionLoading !== null} onClick={() => navigate(`/enroll?edit=${student.id}`)}>Edit</ActionBtn>
+                          <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleConfirmClick(student)}>Confirm</ActionBtn>
+                          <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                         </div>
                       </td>
                     )}
@@ -1207,7 +1230,7 @@ export function Admissions() {
                 ))}
               </tbody>
             </table>
-            <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+            <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
               {pendingLateralStudents.length} student{pendingLateralStudents.length !== 1 ? 's' : ''} · lateral entry (ITI/PUC)
             </div>
           </div>
@@ -1225,34 +1248,34 @@ export function Admissions() {
             <p className="text-xs text-gray-300">Students enrolled with ITI or PUC prior qualification appear here.</p>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-            <table className="min-w-full divide-y divide-gray-200 text-xs">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+          <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+            <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+              <thead className="bg-[#F2FAFA] sticky top-0 z-10">
                 <tr>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-12">ಲಿಂಗ</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-28">ಆದಾಯ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-28">SSLC ಅಂಕ</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಶೇಕಡಾ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-16">ಅರ್ಹತೆ</th>
-                  <th className="px-2 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-32">Trade/Combination</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC ಗರಿಷ್ಠ</th>
-                  <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC ಗಳಿಸಿದ</th>
-                  <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ITI/PUC %</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-12">ಲಿಂಗ</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
+                  <th className="px-3 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-28">ಆದಾಯ</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-28">SSLC ಅಂಕ</th>
+                  <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಶೇಕಡಾ</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-16">ಅರ್ಹತೆ</th>
+                  <th className="px-2 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-32">Trade/Combination</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC ಗರಿಷ್ಠ</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC ಗಳಿಸಿದ</th>
+                  <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ITI/PUC %</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-[#EEF6F6]">
                 {meritLateralStudents.map((student, idx) => {
                   const lMax = student.priorQualification === 'ITI' ? student.itiMaxTotal : student.pucMaxTotal;
                   const lObt = student.priorQualification === 'ITI' ? student.itiObtainedTotal : student.pucObtainedTotal;
                   const lPct = student.priorQualification === 'ITI' ? student.itiPercentage : student.pucPercentage;
                   return (
-                    <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={student.id} className="hover:bg-[#F6FBFB] transition-colors">
                       <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                       <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -1279,7 +1302,7 @@ export function Admissions() {
                 })}
               </tbody>
             </table>
-            <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+            <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
               {meritLateralStudents.length} student{meritLateralStudents.length !== 1 ? 's' : ''} · sorted by ITI/PUC % (highest first)
             </div>
           </div>
@@ -1303,28 +1326,28 @@ export function Admissions() {
 
       ) : activeTab === 'merit' ? (
         /* ── Merit list table ─────────────────────────────────────────────── */
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 text-xs">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+          <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+            <thead className="bg-[#F2FAFA] sticky top-0 z-10">
               <tr>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-12">ಲಿಂಗ</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-28">ಆದಾಯ</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಗ+ವಿ %</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಗರಿಷ್ಠ ಅಂಕ</th>
-                <th className="px-2 py-2 text-center font-semibold text-gray-600 whitespace-nowrap w-20">ಗಳಿಸಿದ ಅಂಕ</th>
-                <th className="px-2 py-2 text-right font-semibold text-gray-600 whitespace-nowrap w-20">ಶೇಕಡಾ</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-8">ಕ್ರ.ಸಂ</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-14">ಮೆರಿಟ್ ನಂ.</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ಅಭ್ಯರ್ಥಿಯ ಹೆಸರು</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-12">ಲಿಂಗ</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">ತಂದೆಯ ಹೆಸರು</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಹುಟ್ಟಿದ ದಿನಾಂಕ</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಅರ್ಹ ಪ್ರವರ್ಗ</th>
+                <th className="px-3 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-28">ಆದಾಯ</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-24">ಗ+ವಿ ಅಂಕ</th>
+                <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಗ+ವಿ %</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಗರಿಷ್ಠ ಅಂಕ</th>
+                <th className="px-2 py-2 text-center font-medium text-[#0B6567] whitespace-nowrap w-20">ಗಳಿಸಿದ ಅಂಕ</th>
+                <th className="px-2 py-2 text-right font-medium text-[#0B6567] whitespace-nowrap w-20">ಶೇಕಡಾ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[#EEF6F6]">
               {meritStudents.map((student, idx) => (
-                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={student.id} className="hover:bg-[#F6FBFB] transition-colors">
                   <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                   <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -1352,39 +1375,39 @@ export function Admissions() {
               ))}
             </tbody>
           </table>
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+          <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
             {meritStudents.length} student{meritStudents.length !== 1 ? 's' : ''} · sorted by SSLC % (highest first)
           </div>
         </div>
 
       ) : (
         /* ── Pending / Cancelled table ────────────────────────────────────── */
-        <div className="flex-1 min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 text-xs">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-[#CDE7E7] overflow-auto flex flex-col">
+          <table className="min-w-full divide-y divide-[#E3F1F1] text-xs">
+            <thead className="bg-[#F2FAFA] sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-8">#</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">Name (SSLC)</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-24">Reg No</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Course</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Year</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-14">Gender</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-20">Adm Type</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-16">Adm Cat</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Mobile</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-28">Enrolled On</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-8">#</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap">Name (SSLC)</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-24">Reg No</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-14">Course</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-20">Year</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-14">Gender</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-20">Adm Type</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-16">Adm Cat</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Mobile</th>
+                <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Enrolled On</th>
                 {isAdmin && (
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap w-44">Actions</th>
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-44">Actions</th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[#EEF6F6]">
               {displayStudents.map((student, idx) => {
                 const hasFeePaid = activeTab === 'cancelled' && (cancelledFeePaid.get(student.id) ?? 0) > 0;
                 return (
                 <tr
                   key={student.id}
-                  className={`transition-colors cursor-context-menu ${hasFeePaid ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}`}
+                  className={`transition-colors cursor-context-menu ${hasFeePaid ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-[#F6FBFB]'}`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
                   title={hasFeePaid ? 'Fee was paid before this seat was cancelled — refund available via right-click menu' : undefined}
                 >
@@ -1410,43 +1433,12 @@ export function Admissions() {
                       <div className="flex gap-1.5">
                         {activeTab === 'pending' ? (
                           <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={actionLoading !== null}
-                              onClick={() => navigate(`/enroll?edit=${student.id}`)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="!bg-green-600 !hover:bg-green-700 border-transparent text-white"
-                              loading={actionLoading === student.id}
-                              disabled={actionLoading !== null && actionLoading !== student.id}
-                              onClick={() => void handleConfirmClick(student)}
-                            >
-                              Confirm
-                            </Button>
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              loading={actionLoading === student.id}
-                              disabled={actionLoading !== null && actionLoading !== student.id}
-                              onClick={() => void handleAction(student, 'CANCELLED')}
-                            >
-                              Cancel
-                            </Button>
+                            <ActionBtn disabled={actionLoading !== null} onClick={() => navigate(`/enroll?edit=${student.id}`)}>Edit</ActionBtn>
+                            <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleConfirmClick(student)}>Confirm</ActionBtn>
+                            <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                           </>
                         ) : (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            loading={actionLoading === student.id}
-                            disabled={actionLoading !== null && actionLoading !== student.id}
-                            onClick={() => void handleAction(student, 'PENDING')}
-                          >
-                            Restore to Pending
-                          </Button>
+                          <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'PENDING')}>Restore to Pending</ActionBtn>
                         )}
                       </div>
                     </td>
@@ -1456,7 +1448,7 @@ export function Admissions() {
               })}
             </tbody>
           </table>
-          <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 mt-auto">
+          <div className="px-3 py-2 border-t border-[#E3F1F1] text-[11.5px] text-[#5B6371] mt-auto">
             {displayStudents.length} student{displayStudents.length !== 1 ? 's' : ''}
           </div>
         </div>
@@ -1472,13 +1464,13 @@ export function Admissions() {
           onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }}
         />
         <div
-          className="fixed z-50 bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[220px]"
+          className="font-wp fixed z-50 bg-white border border-[#CDE7E7] rounded-2xl overflow-hidden min-w-[220px]"
           style={{ left: contextMenu.x, top: contextMenu.y, boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
           <div className="px-3 pt-2.5 pb-2 border-b border-gray-100 flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+            <span className="w-6 h-6 rounded-full bg-[#0F8B8D]/10 text-[#0B6567] text-[10px] font-bold flex items-center justify-center flex-shrink-0">
               {contextMenu.student.studentNameSSLC.charAt(0)}
             </span>
             <span className="text-[12px] font-semibold text-gray-800 truncate">{contextMenu.student.studentNameSSLC}</span>
