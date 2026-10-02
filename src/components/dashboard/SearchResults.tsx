@@ -51,7 +51,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
   while (hit !== -1) {
     if (hit > i) out.push(text.slice(i, hit));
     out.push(
-      <mark key={hit} className="rounded-[3px] px-[1px] text-inherit" style={{ background: `${PERI}38`, color: 'inherit' }}>
+      <mark key={hit} className="rounded-[5px] px-[2px] -mx-[1px] text-inherit" style={{ background: `${PERI}1F`, color: 'inherit', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}>
         {text.slice(hit, hit + needle.length)}
       </mark>,
     );
