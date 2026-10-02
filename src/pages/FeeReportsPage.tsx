@@ -16,7 +16,7 @@ import { buildDatewiseHeadwise } from '../utils/feeReportData';
 import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportData';
 import { isConfirmedActive } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
-import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts, GovHeadRefs, FeeRemittance, BudgetHeadEntry, BudgetHeadKey, BudgetExpenseItem, WPStudentCounts, WPCourseYearCounts, StudentFeeOverride, FeeAdditionalHead } from '../types';
+import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, RemittanceScope, GovHeadAmounts, GovHeadRefs, FeeRemittance, BudgetHeadEntry, BudgetHeadKey, BudgetExpenseItem, WPStudentCounts, WPCourseYearCounts, StudentFeeOverride, FeeAdditionalHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
 import { useFeeRemittances } from '../hooks/useFeeRemittances';
@@ -3160,6 +3160,117 @@ function RemittanceTable({ dist, headerColor, className }: { dist: FeeDistRow[];
   );
 }
 
+type DistTotals = { tot: number; gov: number; svk: number; smp: number };
+
+function DistSummaryTable({ aidedCount, unaidedCount, totalCount, aidedTotals, unaidedTotals, grandTotals }: {
+  aidedCount: number; unaidedCount: number; totalCount: number;
+  aidedTotals: DistTotals; unaidedTotals: DistTotals; grandTotals: DistTotals;
+}) {
+  const rows = [
+    { label: 'Aided Courses (CE, ME, EC, CS)', count: aidedCount,   t: aidedTotals,   bg: 'bg-indigo-50' },
+    { label: 'Unaided Course (EE)',            count: unaidedCount, t: unaidedTotals, bg: 'bg-amber-50'  },
+  ];
+  return (
+    <div>
+      <table className="w-full text-[11px]">
+        <thead className={`${ACCENT}`}>
+          <tr>
+            <th className="px-2 py-1.5 font-semibold">Course Type</th>
+            <th className="px-2 py-1.5 text-center font-semibold">Students</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Total Fee Allotted</th>
+            <th className="px-2 py-1.5 text-right font-semibold">To Government</th>
+            <th className="px-2 py-1.5 text-right font-semibold">To SVK Management</th>
+            <th className="px-2 py-1.5 text-right font-semibold">To SMP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className={r.bg}>
+              <td className="px-2 py-1.5 font-semibold">{r.label}</td>
+              <td className="px-2 py-1.5 text-center">{r.count}</td>
+              <td className="px-2 py-1.5 text-right">{fmt(r.t.tot)}</td>
+              <td className="px-2 py-1.5 text-right text-red-700">{fmt(r.t.gov)}</td>
+              <td className="px-2 py-1.5 text-right text-violet-700">{fmt(r.t.svk)}</td>
+              <td className="px-2 py-1.5 text-right text-green-700">{fmt(r.t.smp)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className={TFOOT}>
+          <tr>
+            <td className="px-2 py-2">GRAND TOTAL</td>
+            <td className="px-2 py-2 text-center">{totalCount}</td>
+            <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
+            <td className="px-2 py-2 text-right text-red-700">{fmt(grandTotals.gov)}</td>
+            <td className="px-2 py-2 text-right text-violet-700">{fmt(grandTotals.svk)}</td>
+            <td className="px-2 py-2 text-right text-green-700">{fmt(grandTotals.smp)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function CombinedDistTable({ aidedDist, unaidedDist, grandTotals, emptyText = 'No data for the selected filters.' }: {
+  aidedDist: FeeDistRow[]; unaidedDist: FeeDistRow[]; grandTotals: DistTotals; emptyText?: string;
+}) {
+  const groups = [
+    { key: 'a', label: 'Aided',   dist: aidedDist,   offset: 0,                labelCls: 'text-indigo-700', stripe: 'bg-indigo-50/40' },
+    { key: 'u', label: 'Unaided', dist: unaidedDist, offset: aidedDist.length, labelCls: 'text-amber-700',  stripe: 'bg-amber-50/40'  },
+  ];
+  const empty = aidedDist.length === 0 && unaidedDist.length === 0;
+  return (
+    <div>
+      <table className="w-full text-[11px]">
+        <thead className={`sticky top-0 z-10 ${ACCENT}`}>
+          <tr>
+            <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+            <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
+            <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
+            <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
+            <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
+            <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
+          </tr>
+          <tr>
+            <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
+            <th className="px-2 py-1 text-right font-semibold">To SVK</th>
+            <th className="px-2 py-1 text-right font-semibold">To SMP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.flatMap((g) => g.dist.map((r, i) => (
+            <tr key={`${g.key}-${r.slNo}`} className={i % 2 === 0 ? g.stripe : 'bg-white'}>
+              <td className="px-2 py-1.5 text-center text-gray-400">{g.offset + i + 1}</td>
+              <td className={`px-2 py-1.5 font-medium ${g.labelCls}`}>{g.label}</td>
+              <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
+              <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
+              <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
+              <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
+              <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
+              <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
+              <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
+            </tr>
+          )))}
+          {empty && (
+            <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">{emptyText}</td></tr>
+          )}
+        </tbody>
+        {!empty && (
+          <tfoot className={TFOOT}>
+            <tr>
+              <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
+              <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
+              <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotals.gov)}</td>
+              <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
+              <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
 // ── Shared PDF helpers for Fee Distribution tab exports ──────────────────────
 
 const PDF_HEAD: [number, number, number] = [55, 65, 81];
@@ -3387,12 +3498,16 @@ function RemittanceModal({
   existingPhases,
   editing,
   onClose,
+  scope = 'main',
+  heads = GOV_HEADS,
 }: {
   payee: RemittancePayee;
   academicYear: AcademicYear;
   existingPhases: string[];
   editing?: FeeRemittance | null;
   onClose: () => void;
+  scope?: RemittanceScope;
+  heads?: { key: keyof GovHeadAmounts; label: string }[];
 }) {
   const nextNum = existingPhases.reduce((max, ph) => {
     const n = parseInt(ph);
@@ -3414,7 +3529,7 @@ function RemittanceModal({
   const [saving,      setSaving]      = useState(false);
   const [err,         setErr]         = useState('');
 
-  const govTotal = GOV_HEADS.reduce((s, { key }) => s + (govHeads[key] || 0), 0);
+  const govTotal = heads.reduce((s, { key }) => s + (govHeads[key] || 0), 0);
 
   function validateFile(file: File): string | null {
     if (file.size > 5 * 1024 * 1024) return 'File must be under 5 MB';
@@ -3483,9 +3598,9 @@ function RemittanceModal({
           headChallans: headChallanFiles,
           removeHeadChallans: headChallanRemoved,
           previousHeadChallans: editing.govHeadChallans,
-        });
+        }, scope);
       } else {
-        await addFeeRemittance(payload, { challanFile: challanFile ?? undefined, headChallans: headChallanFiles });
+        await addFeeRemittance(payload, { challanFile: challanFile ?? undefined, headChallans: headChallanFiles }, scope);
       }
       onClose();
     } catch (e) {
@@ -3548,7 +3663,7 @@ function RemittanceModal({
             <>
               <div className="border-t border-[#E3F1F1] pt-3 space-y-2">
                 <p className="text-xs font-bold uppercase text-gray-400 mb-1">Amount, K2 Challan Ref &amp; Soft Copy per Fee Head</p>
-                {GOV_HEADS.map(({ key, label }) => {
+                {heads.map(({ key, label }) => {
                   const existingChallan = editing?.govHeadChallans?.[key];
                   const showExisting = existingChallan && !headChallanRemoved[key] && !headChallanFiles[key];
                   return (
@@ -3659,6 +3774,596 @@ function RemittanceModal({
   );
 }
 
+// ── Remittance Tracker panel (shared by Fee Distribution & WP Fee Distribution) ──
+
+function govPayableFromDist(dist: FeeDistRow[]): GovHeadAmounts {
+  const sg = (fn: (t: string) => boolean) => dist.filter((r) => fn(r.feeType)).reduce((s, r) => s + r.toGov, 0);
+  return {
+    tuition:  sg((t) => t.startsWith('Tuition')),
+    dvp:      sg((t) => t === 'DVP'),
+    adm:      sg((t) => t === 'ADMISSION'),
+    lab:      sg((t) => t === 'LAB'),
+    rr:       sg((t) => t === 'RR'),
+    magazine: sg((t) => t === 'MAGAZINE'),
+    idCard:   sg((t) => t === 'ID CARD'),
+    fine:     sg((t) => t === 'FINE'),
+  };
+}
+
+/** Remount with `key={trackerTab}` so edit/delete-confirm state resets on payee switch. */
+function RemittanceTrackerPanel({
+  scope,
+  academicYear,
+  trackerTab,
+  payable: grandTotals,
+  govPayableByHead,
+  heads = GOV_HEADS,
+  pdfLabelPrefix = '',
+}: {
+  scope: RemittanceScope;
+  academicYear: string;
+  trackerTab: RemittancePayee | 'CONSOLIDATED';
+  payable: { gov: number; svk: number; smp: number };
+  govPayableByHead: GovHeadAmounts;
+  heads?: { key: keyof GovHeadAmounts; label: string }[];
+  pdfLabelPrefix?: string;
+}) {
+  // ── Remittance tracker ────────────────────────────────────────────────────
+  const { remittances } = useFeeRemittances((academicYear as AcademicYear) || null, scope);
+
+  const govRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'GOV').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+  const svkRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'SVK').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+  const smpRemittances = useMemo(
+    () => remittances.filter((r) => r.payee === 'SMP').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
+    [remittances],
+  );
+
+  const govPaidByHead = useMemo((): GovHeadAmounts => {
+    const h = { ...EMPTY_GOV_HEADS };
+    for (const r of govRemittances) if (r.govHeads) for (const k of Object.keys(h) as (keyof GovHeadAmounts)[]) h[k] += r.govHeads[k] ?? 0;
+    return h;
+  }, [govRemittances]);
+
+  const govPhaseMap = useMemo(() => {
+    const m = new Map<string, GovHeadAmounts & { total: number }>();
+    for (const r of govRemittances) {
+      if (!r.govHeads) continue;
+      const e = m.get(r.phase) ?? { ...EMPTY_GOV_HEADS, total: 0 };
+      for (const k of Object.keys(EMPTY_GOV_HEADS) as (keyof GovHeadAmounts)[]) e[k] += r.govHeads[k] ?? 0;
+      e.total += r.amount;
+      m.set(r.phase, e);
+    }
+    return m;
+  }, [govRemittances]);
+
+  const govPhases     = useMemo(() => [...govPhaseMap.keys()].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999)), [govPhaseMap]);
+  const govTotalPaid  = useMemo(() => govRemittances.reduce((s, r) => s + r.amount, 0), [govRemittances]);
+  const svkPaid       = useMemo(() => svkRemittances.reduce((s, r) => s + r.amount, 0), [svkRemittances]);
+  const smpPaid       = useMemo(() => smpRemittances.reduce((s, r) => s + r.amount, 0), [smpRemittances]);
+
+  const [showModal,        setShowModal]        = useState(false);
+  const [editingRemittance, setEditingRemittance] = useState<FeeRemittance | null>(null);
+  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null);
+
+  function getAttachments(r: FeeRemittance): { label: string; url: string }[] {
+    const list: { label: string; url: string }[] = [];
+    if (r.govHeadChallans) {
+      for (const { key, label } of GOV_HEADS) {
+        const c = r.govHeadChallans[key];
+        if (c) list.push({ label, url: c.url });
+      }
+    }
+    if (r.challanUrl) list.push({ label: r.govHeadChallans ? 'Payment Copy' : 'Attachment', url: r.challanUrl });
+    return list;
+  }
+
+  async function handleDelete(id: string) {
+    const r = remittances.find((r) => r.id === id);
+    try { await deleteFeeRemittance(id, r?.challanPath, r?.govHeadChallans, scope); } catch { /* snapshot listener auto-updates on success */ }
+    setDeleteConfirming(null);
+  }
+
+  return (
+    <>
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          <div className="flex-1 min-h-0 overflow-auto scroll-fee pr-0.5">
+          {/* ── GOV panel ── */}
+          {trackerTab === 'GOV' && (() => {
+            const balance = grandTotals.gov - govTotalPaid;
+            return (
+              <>
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
+                  {[
+                    { label: 'Total Payable', value: grandTotals.gov, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
+                    { label: 'Total Paid',    value: govTotalPaid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                    {
+                      label: 'Balance',
+                      value: balance,
+                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                  ].map((c) => (
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 order-1">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
+                  >
+                    <span className="text-sm leading-none">+</span> Record Govt Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      `${pdfLabelPrefix}Government (K2)`,
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...govPhases, 'Balance'],
+                        body: heads.map(({ key, label }) => {
+                          const payableH = govPayableByHead[key];
+                          const paidH    = govPaidByHead[key];
+                          const balH     = payableH - paidH;
+                          return [label, numPdf(payableH), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.[key] ?? 0)), balH === 0 ? 'Settled' : numPdf(balH)];
+                        }),
+                        foot: ['Total', numPdf(grandTotals.gov), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.total ?? 0)), balance === 0 ? 'Settled' : numPdf(balance)],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className={BTN_GRAY}
+                  >
+                    PDF
+                  </button>
+                </div>
+</div>
+</div>
+<div className="flex flex-col gap-3">
+{/* Headwise phase table */}
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
+                  <table className="w-full text-sm">
+                    <thead className={THEAD}>
+                      <tr>
+                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
+                        {govPhases.map((ph) => (
+                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
+                        ))}
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EEF6F6]">
+                      {heads.map(({ key, label }, i) => {
+                        const payable = govPayableByHead[key];
+                        const paid    = govPaidByHead[key];
+                        const bal     = payable - paid;
+                        return (
+                          <tr key={key} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
+                            <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
+                            {govPhases.map((ph) => {
+                              const amt = govPhaseMap.get(ph)?.[key] ?? 0;
+                              return (
+                                <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
+                                  {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
+                                </td>
+                              );
+                            })}
+                            <td className={`px-3 py-1.5 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {bal === 0 ? '✓' : fmt(bal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
+                      <tr>
+                        <td className="px-3 py-1.5 text-gray-800">Total</td>
+                        <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
+                        {govPhases.map((ph) => {
+                          const tot = govPhaseMap.get(ph)?.total ?? 0;
+                          return (
+                            <td key={ph} className="px-3 py-1.5 text-right text-gray-800">
+                              {tot > 0 ? fmt(tot) : <span className="text-gray-300 font-normal">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={`px-3 py-1.5 text-right ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {balance === 0 ? '✓' : fmt(balance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Phase log */}
+                {govRemittances.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
+                    {govRemittances.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
+                        {deleteConfirming === r.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
+                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
+                              onClick={() => setDeleteConfirming(r.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                </div>
+</div>
+              </>
+            );
+          })()}
+
+
+          {/* ── SVK / SMP panel (shared layout) ── */}
+          {(trackerTab === 'SVK' || trackerTab === 'SMP') && (() => {
+            const isSVK      = trackerTab === 'SVK';
+            const rem        = isSVK ? svkRemittances : smpRemittances;
+            const paid       = isSVK ? svkPaid        : smpPaid;
+            const payable    = isSVK ? grandTotals.svk : grandTotals.smp;
+            const balance    = payable - paid;
+            const label      = isSVK ? 'SVK' : 'SMP';
+            const phases     = [...new Set(rem.map((r) => r.phase))].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+            const phaseTotals = new Map(phases.map((ph) => [ph, rem.filter((r) => r.phase === ph).reduce((s, r) => s + r.amount, 0)]));
+            return (
+              <>
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
+                  {[
+                    { label: 'Total Payable', value: payable, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
+                    { label: 'Total Paid',    value: paid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                    {
+                      label: 'Balance',
+                      value: balance,
+                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                  ].map((c) => (
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 order-1">
+                  <button
+                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
+                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
+                  >
+                    <span className="text-sm leading-none">+</span> Record {label} Payment
+                  </button>
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      `${pdfLabelPrefix}${isSVK ? 'SVK Management' : 'SMP'}`,
+                      academicYear,
+                      {
+                        head: ['Head', 'Total Payable', ...phases, 'Balance'],
+                        body: [[
+                          isSVK ? 'SVK Management' : 'SMP',
+                          numPdf(payable),
+                          ...phases.map((ph) => numPdf(phaseTotals.get(ph) ?? 0)),
+                          balance === 0 ? 'Settled' : numPdf(balance),
+                        ]],
+                      },
+                      {
+                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className={BTN_GRAY}
+                  >
+                    PDF
+                  </button>
+                </div>
+</div>
+</div>
+<div className="flex flex-col gap-3">
+{/* Head / Total Payable / Phase / Balance table */}
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
+                  <table className="w-full text-sm">
+                    <thead className={THEAD}>
+                      <tr>
+                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
+                        {phases.map((ph) => (
+                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
+                        ))}
+                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-white">
+                        <td className="px-3 py-1.5 font-medium text-gray-700">{isSVK ? 'SVK Management' : 'SMP'}</td>
+                        <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
+                        {phases.map((ph) => {
+                          const amt = phaseTotals.get(ph) ?? 0;
+                          return (
+                            <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
+                              {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={`px-3 py-1.5 text-right font-semibold ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {balance === 0 ? '✓' : fmt(balance)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {rem.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
+                    {rem.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
+                        {deleteConfirming === r.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
+                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
+                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
+                              onClick={() => setDeleteConfirming(r.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                </div>
+</div>
+              </>
+            );
+          })()}
+
+
+          {/* ── Consolidated panel ── */}
+          {trackerTab === 'CONSOLIDATED' && (() => {
+            const totalPayable = grandTotals.gov + grandTotals.svk + grandTotals.smp;
+            const totalPaid    = govTotalPaid + svkPaid + smpPaid;
+            const totalBalance = totalPayable - totalPaid;
+
+            const rows = [
+              { label: 'Government (K2)', payable: grandTotals.gov, paid: govTotalPaid, color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+              { label: 'SVK Management',  payable: grandTotals.svk, paid: svkPaid,      color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
+              { label: 'SMP',             payable: grandTotals.smp, paid: smpPaid,      color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
+            ];
+
+            const allRemittances = [
+              ...govRemittances.map((r) => ({ ...r, payeeLabel: 'Govt' })),
+              ...svkRemittances.map((r) => ({ ...r, payeeLabel: 'SVK'  })),
+              ...smpRemittances.map((r) => ({ ...r, payeeLabel: 'SMP'  })),
+            ].sort((a, b) => a.date.localeCompare(b.date));
+
+            return (
+              <>
+                <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-3">
+{/* Summary cards */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+<div className="flex items-center gap-1.5 order-2">
+                  {[
+                    { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-[#CDE7E7]'   },
+                    { label: 'Total Remitted', value: totalPaid,   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
+                    {
+                      label: 'Balance',
+                      value: totalBalance,
+                      color:  totalBalance > 0 ? 'text-amber-700'   : totalBalance < 0 ? 'text-red-600'   : 'text-emerald-700',
+                      bg:     totalBalance > 0 ? 'bg-amber-50'      : totalBalance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
+                      border: totalBalance > 0 ? 'border-amber-200' : totalBalance < 0 ? 'border-red-300' : 'border-emerald-200',
+                    },
+                    { label: 'Entries', value: allRemittances.length as unknown as number, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', isCount: true },
+                  ].map((c) => (
+                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
+                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
+                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-start order-1">
+                  <button
+                    onClick={() => exportRemittanceTrackerPdf(
+                      `${pdfLabelPrefix}Consolidated`,
+                      academicYear,
+                      {
+                        head: ['Payee', 'Payable', 'Remitted', 'Balance'],
+                        body: rows.map((row) => {
+                          const bal = row.payable - row.paid;
+                          return [row.label, numPdf(row.payable), numPdf(row.paid), bal === 0 ? 'Settled' : numPdf(bal)];
+                        }),
+                        foot: ['Grand Total', numPdf(totalPayable), numPdf(totalPaid), totalBalance === 0 ? 'Settled' : numPdf(totalBalance)],
+                      },
+                      {
+                        head: ['Payee', 'Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
+                        body: allRemittances.map((r) => [r.payeeLabel, r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
+                      },
+                    )}
+                    className={BTN_GRAY}
+                  >
+                    PDF
+                  </button>
+                </div>
+                </div>
+
+                </div>
+<div className="flex flex-col gap-3">
+{/* Payee summary table */}
+                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
+                  <table className="w-full text-sm">
+                    <thead className={`${ACCENT}`}>
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Payee</th>
+                        <th className="px-3 py-2 text-right font-semibold">Payable</th>
+                        <th className="px-3 py-2 text-right font-semibold">Remitted</th>
+                        <th className="px-3 py-2 text-right font-semibold">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EEF6F6]">
+                      {rows.map((row, i) => {
+                        const bal = row.payable - row.paid;
+                        return (
+                          <tr key={row.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <td className="px-3 py-2 font-medium text-gray-700">{row.label}</td>
+                            <td className="px-3 py-2 text-right text-gray-600">{fmt(row.payable)}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${row.color}`}>{fmt(row.paid)}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {bal === 0 ? '✓ Settled' : fmt(bal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
+                      <tr>
+                        <td className="px-3 py-2 text-gray-800">Grand Total</td>
+                        <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
+                        <td className="px-3 py-2 text-right text-green-700">{fmt(totalPaid)}</td>
+                        <td className={`px-3 py-2 text-right ${totalBalance > 0 ? 'text-amber-700' : totalBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {totalBalance === 0 ? '✓ Settled' : fmt(totalBalance)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Combined payment log */}
+                {allRemittances.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase text-gray-400">All Payments — Chronological</p>
+                    {allRemittances.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
+                        <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded ${
+                          r.payeeLabel === 'Govt' ? 'bg-red-100 text-red-700' :
+                          r.payeeLabel === 'SVK'  ? 'bg-violet-100 text-violet-700' :
+                                                    'bg-green-100 text-green-700'
+                        }`}>{r.payeeLabel}</span>
+                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
+                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
+                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
+                        {(() => {
+                          const count = getAttachments(r).length;
+                          if (count === 0) return null;
+                          return (
+                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
+                              📎{count > 1 ? count : ''}
+                            </span>
+                          );
+                        })()}
+                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {allRemittances.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">No remittances recorded yet.</p>
+                )}
+</div>
+</div>
+              </>
+            );
+          })()}
+
+          </div>
+        </div>
+
+      {showModal && trackerTab !== 'CONSOLIDATED' && (
+        <RemittanceModal
+          payee={trackerTab}
+          academicYear={academicYear as AcademicYear}
+          existingPhases={
+            trackerTab === 'GOV' ? govPhases :
+            trackerTab === 'SVK' ? svkRemittances.map((r) => r.phase) :
+                                   smpRemittances.map((r) => r.phase)
+          }
+          editing={editingRemittance}
+          onClose={() => { setShowModal(false); setEditingRemittance(null); }}
+          scope={scope}
+          heads={heads}
+        />
+      )}
+    </>
+  );
+}
+
 // ── Tab: Fee Distribution ─────────────────────────────────────────────────────
 
 function FeeDistributionTab({
@@ -3741,82 +4446,9 @@ function FeeDistributionTab({
     smp: aidedTotals.smp + unaidedTotals.smp,
   }), [aidedTotals, unaidedTotals]);
 
-  // ── Remittance tracker ────────────────────────────────────────────────────
-  const { remittances } = useFeeRemittances((academicYear as AcademicYear) || null);
-
-  const govRemittances = useMemo(
-    () => remittances.filter((r) => r.payee === 'GOV').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
-    [remittances],
-  );
-  const svkRemittances = useMemo(
-    () => remittances.filter((r) => r.payee === 'SVK').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
-    [remittances],
-  );
-  const smpRemittances = useMemo(
-    () => remittances.filter((r) => r.payee === 'SMP').sort((a, b) => (parseInt(a.phase) || 999) - (parseInt(b.phase) || 999)),
-    [remittances],
-  );
-
-  const govPayableByHead = useMemo((): GovHeadAmounts => {
-    const all = [...aidedDist, ...unaidedDist];
-    const sg = (fn: (t: string) => boolean) => all.filter((r) => fn(r.feeType)).reduce((s, r) => s + r.toGov, 0);
-    return {
-      tuition:  sg((t) => t.startsWith('Tuition')),
-      dvp:      sg((t) => t === 'DVP'),
-      adm:      sg((t) => t === 'ADMISSION'),
-      lab:      sg((t) => t === 'LAB'),
-      rr:       sg((t) => t === 'RR'),
-      magazine: sg((t) => t === 'MAGAZINE'),
-      idCard:   sg((t) => t === 'ID CARD'),
-      fine:     sg((t) => t === 'FINE'),
-    };
-  }, [aidedDist, unaidedDist]);
-
-  const govPaidByHead = useMemo((): GovHeadAmounts => {
-    const h = { ...EMPTY_GOV_HEADS };
-    for (const r of govRemittances) if (r.govHeads) for (const k of Object.keys(h) as (keyof GovHeadAmounts)[]) h[k] += r.govHeads[k] ?? 0;
-    return h;
-  }, [govRemittances]);
-
-  const govPhaseMap = useMemo(() => {
-    const m = new Map<string, GovHeadAmounts & { total: number }>();
-    for (const r of govRemittances) {
-      if (!r.govHeads) continue;
-      const e = m.get(r.phase) ?? { ...EMPTY_GOV_HEADS, total: 0 };
-      for (const k of Object.keys(EMPTY_GOV_HEADS) as (keyof GovHeadAmounts)[]) e[k] += r.govHeads[k] ?? 0;
-      e.total += r.amount;
-      m.set(r.phase, e);
-    }
-    return m;
-  }, [govRemittances]);
-
-  const govPhases     = useMemo(() => [...govPhaseMap.keys()].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999)), [govPhaseMap]);
-  const govTotalPaid  = useMemo(() => govRemittances.reduce((s, r) => s + r.amount, 0), [govRemittances]);
-  const svkPaid       = useMemo(() => svkRemittances.reduce((s, r) => s + r.amount, 0), [svkRemittances]);
-  const smpPaid       = useMemo(() => smpRemittances.reduce((s, r) => s + r.amount, 0), [smpRemittances]);
-
+  // ── Remittance tracker (panel owns remittance data; the payee toggle lives in the section bar) ──
+  const govPayableByHead = useMemo(() => govPayableFromDist([...aidedDist, ...unaidedDist]), [aidedDist, unaidedDist]);
   const [trackerTab,       setTrackerTab]       = useState<RemittancePayee | 'CONSOLIDATED'>('GOV');
-  const [showModal,        setShowModal]        = useState(false);
-  const [editingRemittance, setEditingRemittance] = useState<FeeRemittance | null>(null);
-  const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null);
-
-  function getAttachments(r: FeeRemittance): { label: string; url: string }[] {
-    const list: { label: string; url: string }[] = [];
-    if (r.govHeadChallans) {
-      for (const { key, label } of GOV_HEADS) {
-        const c = r.govHeadChallans[key];
-        if (c) list.push({ label, url: c.url });
-      }
-    }
-    if (r.challanUrl) list.push({ label: r.govHeadChallans ? 'Payment Copy' : 'Attachment', url: r.challanUrl });
-    return list;
-  }
-
-  async function handleDelete(id: string) {
-    const r = remittances.find((r) => r.id === id);
-    try { await deleteFeeRemittance(id, r?.challanPath, r?.govHeadChallans); } catch { /* snapshot listener auto-updates on success */ }
-    setDeleteConfirming(null);
-  }
 
   // ── Student statistics for summary table ──
   const studentStats = useMemo(() => {
@@ -3994,7 +4626,7 @@ function FeeDistributionTab({
                 { value: 'CONSOLIDATED', label: 'Consolidated' },
               ]}
               value={trackerTab}
-              onChange={(v) => { setTrackerTab(v as RemittancePayee | 'CONSOLIDATED'); setDeleteConfirming(null); setEditingRemittance(null); }}
+              onChange={(v) => setTrackerTab(v as RemittancePayee | 'CONSOLIDATED')}
             />
           </>
         )}
@@ -4089,48 +4721,10 @@ function FeeDistributionTab({
 
             {show('summary') && (
               <ReportCard title="Fee Distribution Summary" className="">
-                <div>
-                  <table className="w-full text-[11px]">
-              <thead className={`${ACCENT}`}>
-                <tr>
-                  <th className="px-2 py-1.5 font-semibold">Course Type</th>
-                  <th className="px-2 py-1.5 text-center font-semibold">Students</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">Total Fee Allotted</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">To Government</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">To SVK Management</th>
-                  <th className="px-2 py-1.5 text-right font-semibold">To SMP</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="bg-indigo-50">
-                  <td className="px-2 py-1.5 font-semibold">Aided Courses (CE, ME, EC, CS)</td>
-                  <td className="px-2 py-1.5 text-center">{aidedFiltered.length}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(aidedTotals.tot)}</td>
-                  <td className="px-2 py-1.5 text-right text-red-700">{fmt(aidedTotals.gov)}</td>
-                  <td className="px-2 py-1.5 text-right text-violet-700">{fmt(aidedTotals.svk)}</td>
-                  <td className="px-2 py-1.5 text-right text-green-700">{fmt(aidedTotals.smp)}</td>
-                </tr>
-                <tr className="bg-amber-50">
-                  <td className="px-2 py-1.5 font-semibold">Unaided Course (EE)</td>
-                  <td className="px-2 py-1.5 text-center">{unaidedFiltered.length}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(unaidedTotals.tot)}</td>
-                  <td className="px-2 py-1.5 text-right text-red-700">{fmt(unaidedTotals.gov)}</td>
-                  <td className="px-2 py-1.5 text-right text-violet-700">{fmt(unaidedTotals.svk)}</td>
-                  <td className="px-2 py-1.5 text-right text-green-700">{fmt(unaidedTotals.smp)}</td>
-                </tr>
-              </tbody>
-              <tfoot className={TFOOT}>
-                <tr>
-                  <td className="px-2 py-2">GRAND TOTAL</td>
-                  <td className="px-2 py-2 text-center">{filteredStudents.length}</td>
-                  <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                  <td className="px-2 py-2 text-right text-red-700">{fmt(grandTotals.gov)}</td>
-                  <td className="px-2 py-2 text-right text-violet-700">{fmt(grandTotals.svk)}</td>
-                  <td className="px-2 py-2 text-right text-green-700">{fmt(grandTotals.smp)}</td>
-                </tr>
-              </tfoot>
-            </table>
-                </div>
+                <DistSummaryTable
+                  aidedCount={aidedFiltered.length} unaidedCount={unaidedFiltered.length} totalCount={filteredStudents.length}
+                  aidedTotals={aidedTotals} unaidedTotals={unaidedTotals} grandTotals={grandTotals}
+                />
               </ReportCard>
             )}
 
@@ -4154,559 +4748,19 @@ function FeeDistributionTab({
 
             {show('combined') && (
               <ReportCard title="Combined Fee Remittance Abstract (Aided &amp; Unaided)">
-                <div>
-                  <table className="w-full text-[11px]">
-              <thead className={`sticky top-0 z-10 ${ACCENT}`}>
-                <tr>
-                  <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
-                  <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
-                  <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
-                  <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
-                  <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
-                  <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
-                  <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
-                </tr>
-                <tr>
-                  <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
-                  <th className="px-2 py-1 text-right font-semibold">To SVK</th>
-                  <th className="px-2 py-1 text-right font-semibold">To SMP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {aidedDist.map((r, i) => (
-                  <tr key={`a-${r.slNo}`} className={i % 2 === 0 ? 'bg-indigo-50/40' : 'bg-white'}>
-                    <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
-                    <td className="px-2 py-1.5 font-medium text-indigo-700">Aided</td>
-                    <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
-                    <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
-                    <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
-                    <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                    <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
-                  </tr>
-                ))}
-                {unaidedDist.map((r, i) => (
-                  <tr key={`u-${r.slNo}`} className={i % 2 === 0 ? 'bg-amber-50/40' : 'bg-white'}>
-                    <td className="px-2 py-1.5 text-center text-gray-400">{aidedDist.length + i + 1}</td>
-                    <td className="px-2 py-1.5 font-medium text-amber-700">Unaided</td>
-                    <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
-                    <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
-                    <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
-                    <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                    <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
-                  </tr>
-                ))}
-                {aidedDist.length === 0 && unaidedDist.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">No data for the selected filters.</td></tr>
-                )}
-              </tbody>
-              {(aidedDist.length > 0 || unaidedDist.length > 0) && (
-                <tfoot className={TFOOT}>
-                  <tr>
-                    <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
-                    <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                    <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotals.gov)}</td>
-                    <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
-                    <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-                </div>
+                <CombinedDistTable aidedDist={aidedDist} unaidedDist={unaidedDist} grandTotals={grandTotals} />
               </ReportCard>
             )}
           </div>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 flex flex-col gap-3">
-          <div className="flex-1 min-h-0 overflow-auto scroll-fee pr-0.5">
-          {/* ── GOV panel ── */}
-          {trackerTab === 'GOV' && (() => {
-            const balance = grandTotals.gov - govTotalPaid;
-            return (
-              <>
-                <div className="flex flex-col gap-4">
-<div className="flex flex-col gap-3">
-<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-<div className="flex items-center gap-1.5 order-2">
-                  {[
-                    { label: 'Total Payable', value: grandTotals.gov, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
-                    { label: 'Total Paid',    value: govTotalPaid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
-                    {
-                      label: 'Balance',
-                      value: balance,
-                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
-                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
-                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
-                    },
-                  ].map((c) => (
-                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
-                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
-                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2 order-1">
-                  <button
-                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
-                  >
-                    <span className="text-sm leading-none">+</span> Record Govt Payment
-                  </button>
-                  <button
-                    onClick={() => exportRemittanceTrackerPdf(
-                      'Government (K2)',
-                      academicYear,
-                      {
-                        head: ['Head', 'Total Payable', ...govPhases, 'Balance'],
-                        body: GOV_HEADS.map(({ key, label }) => {
-                          const payableH = govPayableByHead[key];
-                          const paidH    = govPaidByHead[key];
-                          const balH     = payableH - paidH;
-                          return [label, numPdf(payableH), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.[key] ?? 0)), balH === 0 ? 'Settled' : numPdf(balH)];
-                        }),
-                        foot: ['Total', numPdf(grandTotals.gov), ...govPhases.map((ph) => numPdf(govPhaseMap.get(ph)?.total ?? 0)), balance === 0 ? 'Settled' : numPdf(balance)],
-                      },
-                      {
-                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
-                        body: govRemittances.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
-                      },
-                    )}
-                    className={BTN_GRAY}
-                  >
-                    PDF
-                  </button>
-                </div>
-</div>
-</div>
-<div className="flex flex-col gap-3">
-{/* Headwise phase table */}
-                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
-                  <table className="w-full text-sm">
-                    <thead className={THEAD}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
-                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
-                        {govPhases.map((ph) => (
-                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
-                        ))}
-                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#EEF6F6]">
-                      {GOV_HEADS.map(({ key, label }, i) => {
-                        const payable = govPayableByHead[key];
-                        const paid    = govPaidByHead[key];
-                        const bal     = payable - paid;
-                        return (
-                          <tr key={key} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                            <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
-                            <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
-                            {govPhases.map((ph) => {
-                              const amt = govPhaseMap.get(ph)?.[key] ?? 0;
-                              return (
-                                <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
-                                  {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
-                                </td>
-                              );
-                            })}
-                            <td className={`px-3 py-1.5 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                              {bal === 0 ? '✓' : fmt(bal)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
-                      <tr>
-                        <td className="px-3 py-1.5 text-gray-800">Total</td>
-                        <td className="px-3 py-1.5 text-right text-gray-800">{fmt(grandTotals.gov)}</td>
-                        {govPhases.map((ph) => {
-                          const tot = govPhaseMap.get(ph)?.total ?? 0;
-                          return (
-                            <td key={ph} className="px-3 py-1.5 text-right text-gray-800">
-                              {tot > 0 ? fmt(tot) : <span className="text-gray-300 font-normal">—</span>}
-                            </td>
-                          );
-                        })}
-                        <td className={`px-3 py-1.5 text-right ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {balance === 0 ? '✓' : fmt(balance)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Phase log */}
-                {govRemittances.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
-                    {govRemittances.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
-                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
-                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {(() => {
-                          const count = getAttachments(r).length;
-                          if (count === 0) return null;
-                          return (
-                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
-                              📎{count > 1 ? count : ''}
-                            </span>
-                          );
-                        })()}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
-                        {deleteConfirming === r.id ? (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
-                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
-                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
-                              onClick={() => setDeleteConfirming(r.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                </div>
-</div>
-              </>
-            );
-          })()}
-
-
-          {/* ── SVK / SMP panel (shared layout) ── */}
-          {(trackerTab === 'SVK' || trackerTab === 'SMP') && (() => {
-            const isSVK      = trackerTab === 'SVK';
-            const rem        = isSVK ? svkRemittances : smpRemittances;
-            const paid       = isSVK ? svkPaid        : smpPaid;
-            const payable    = isSVK ? grandTotals.svk : grandTotals.smp;
-            const balance    = payable - paid;
-            const label      = isSVK ? 'SVK' : 'SMP';
-            const phases     = [...new Set(rem.map((r) => r.phase))].sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
-            const phaseTotals = new Map(phases.map((ph) => [ph, rem.filter((r) => r.phase === ph).reduce((s, r) => s + r.amount, 0)]));
-            return (
-              <>
-                <div className="flex flex-col gap-4">
-<div className="flex flex-col gap-3">
-<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-<div className="flex items-center gap-1.5 order-2">
-                  {[
-                    { label: 'Total Payable', value: payable, color: 'text-red-700',   bg: 'bg-red-50',   border: 'border-red-200'   },
-                    { label: 'Total Paid',    value: paid,    color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
-                    {
-                      label: 'Balance',
-                      value: balance,
-                      color:  balance > 0 ? 'text-amber-700'   : balance < 0 ? 'text-red-600'   : 'text-emerald-700',
-                      bg:     balance > 0 ? 'bg-amber-50'      : balance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
-                      border: balance > 0 ? 'border-amber-200' : balance < 0 ? 'border-red-300' : 'border-emerald-200',
-                    },
-                  ].map((c) => (
-                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
-                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
-                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{fmt(c.value)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2 order-1">
-                  <button
-                    onClick={() => { setEditingRemittance(null); setShowModal(true); }}
-                    className={`${BTN_PRIMARY} inline-flex items-center gap-1.5`}
-                  >
-                    <span className="text-sm leading-none">+</span> Record {label} Payment
-                  </button>
-                  <button
-                    onClick={() => exportRemittanceTrackerPdf(
-                      isSVK ? 'SVK Management' : 'SMP',
-                      academicYear,
-                      {
-                        head: ['Head', 'Total Payable', ...phases, 'Balance'],
-                        body: [[
-                          isSVK ? 'SVK Management' : 'SMP',
-                          numPdf(payable),
-                          ...phases.map((ph) => numPdf(phaseTotals.get(ph) ?? 0)),
-                          balance === 0 ? 'Settled' : numPdf(balance),
-                        ]],
-                      },
-                      {
-                        head: ['Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
-                        body: rem.map((r) => [r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
-                      },
-                    )}
-                    className={BTN_GRAY}
-                  >
-                    PDF
-                  </button>
-                </div>
-</div>
-</div>
-<div className="flex flex-col gap-3">
-{/* Head / Total Payable / Phase / Balance table */}
-                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
-                  <table className="w-full text-sm">
-                    <thead className={THEAD}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-bold text-gray-700">Head</th>
-                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28">Total Payable</th>
-                        {phases.map((ph) => (
-                          <th key={ph} className="px-3 py-2 text-right font-bold text-gray-700 w-28">{ph}</th>
-                        ))}
-                        <th className="px-3 py-2 text-right font-bold text-gray-700 w-28 bg-amber-50/60">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="bg-white">
-                        <td className="px-3 py-1.5 font-medium text-gray-700">{isSVK ? 'SVK Management' : 'SMP'}</td>
-                        <td className="px-3 py-1.5 text-right text-gray-600">{fmt(payable)}</td>
-                        {phases.map((ph) => {
-                          const amt = phaseTotals.get(ph) ?? 0;
-                          return (
-                            <td key={ph} className="px-3 py-1.5 text-right text-gray-600">
-                              {amt > 0 ? fmt(amt) : <span className="text-gray-300">—</span>}
-                            </td>
-                          );
-                        })}
-                        <td className={`px-3 py-1.5 text-right font-semibold ${balance > 0 ? 'text-amber-700' : balance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {balance === 0 ? '✓' : fmt(balance)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {rem.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase text-gray-400">Payment Log</p>
-                    {rem.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
-                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
-                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {(() => {
-                          const count = getAttachments(r).length;
-                          if (count === 0) return null;
-                          return (
-                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
-                              📎{count > 1 ? count : ''}
-                            </span>
-                          );
-                        })()}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
-                        {deleteConfirming === r.id ? (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button className="text-xs text-red-600 font-semibold hover:text-red-800" onClick={() => handleDelete(r.id)}>Confirm</button>
-                            <button className="text-xs text-gray-400 hover:text-gray-600"            onClick={() => setDeleteConfirming(null)}>Cancel</button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              className="rounded-full border border-[#0F8B8D]/40 bg-[#0F8B8D]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#0B6567] hover:bg-[#0F8B8D]/[0.14] transition-colors cursor-pointer"
-                              onClick={() => { setEditingRemittance(r); setShowModal(true); }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="rounded-full border border-[#E11D48]/40 bg-[#E11D48]/[0.07] px-2.5 py-0.5 text-[11px] font-medium text-[#A5173A] hover:bg-[#E11D48]/[0.13] transition-colors cursor-pointer"
-                              onClick={() => setDeleteConfirming(r.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                </div>
-</div>
-              </>
-            );
-          })()}
-
-
-          {/* ── Consolidated panel ── */}
-          {trackerTab === 'CONSOLIDATED' && (() => {
-            const totalPayable = grandTotals.gov + grandTotals.svk + grandTotals.smp;
-            const totalPaid    = govTotalPaid + svkPaid + smpPaid;
-            const totalBalance = totalPayable - totalPaid;
-
-            const rows = [
-              { label: 'Government (K2)', payable: grandTotals.gov, paid: govTotalPaid, color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
-              { label: 'SVK Management',  payable: grandTotals.svk, paid: svkPaid,      color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-200' },
-              { label: 'SMP',             payable: grandTotals.smp, paid: smpPaid,      color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
-            ];
-
-            const allRemittances = [
-              ...govRemittances.map((r) => ({ ...r, payeeLabel: 'Govt' })),
-              ...svkRemittances.map((r) => ({ ...r, payeeLabel: 'SVK'  })),
-              ...smpRemittances.map((r) => ({ ...r, payeeLabel: 'SMP'  })),
-            ].sort((a, b) => a.date.localeCompare(b.date));
-
-            return (
-              <>
-                <div className="flex flex-col gap-4">
-<div className="flex flex-col gap-3">
-{/* Summary cards */}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-<div className="flex items-center gap-1.5 order-2">
-                  {[
-                    { label: 'Total Payable', value: totalPayable, color: 'text-gray-800',   bg: 'bg-gray-50',   border: 'border-[#CDE7E7]'   },
-                    { label: 'Total Remitted', value: totalPaid,   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200'  },
-                    {
-                      label: 'Balance',
-                      value: totalBalance,
-                      color:  totalBalance > 0 ? 'text-amber-700'   : totalBalance < 0 ? 'text-red-600'   : 'text-emerald-700',
-                      bg:     totalBalance > 0 ? 'bg-amber-50'      : totalBalance < 0 ? 'bg-red-50'      : 'bg-emerald-50',
-                      border: totalBalance > 0 ? 'border-amber-200' : totalBalance < 0 ? 'border-red-300' : 'border-emerald-200',
-                    },
-                    { label: 'Entries', value: allRemittances.length as unknown as number, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', isCount: true },
-                  ].map((c) => (
-                    <div key={c.label} className={`inline-flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} px-3 py-[5px] whitespace-nowrap`}>
-                      <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
-                      <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{'isCount' in c && c.isCount ? c.value : fmt(c.value as number)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-start order-1">
-                  <button
-                    onClick={() => exportRemittanceTrackerPdf(
-                      'Consolidated',
-                      academicYear,
-                      {
-                        head: ['Payee', 'Payable', 'Remitted', 'Balance'],
-                        body: rows.map((row) => {
-                          const bal = row.payable - row.paid;
-                          return [row.label, numPdf(row.payable), numPdf(row.paid), bal === 0 ? 'Settled' : numPdf(bal)];
-                        }),
-                        foot: ['Grand Total', numPdf(totalPayable), numPdf(totalPaid), totalBalance === 0 ? 'Settled' : numPdf(totalBalance)],
-                      },
-                      {
-                        head: ['Payee', 'Phase', 'Date', 'Mode', 'Reference', 'Remarks', 'Amount'],
-                        body: allRemittances.map((r) => [r.payeeLabel, r.phase, r.date, r.paymentMode, r.reference || '-', r.remarks || '-', numPdf(r.amount)]),
-                      },
-                    )}
-                    className={BTN_GRAY}
-                  >
-                    PDF
-                  </button>
-                </div>
-                </div>
-
-                </div>
-<div className="flex flex-col gap-3">
-{/* Payee summary table */}
-                <div className="overflow-auto rounded-xl border border-[#CDE7E7] scroll-fee">
-                  <table className="w-full text-sm">
-                    <thead className={`${ACCENT}`}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold">Payee</th>
-                        <th className="px-3 py-2 text-right font-semibold">Payable</th>
-                        <th className="px-3 py-2 text-right font-semibold">Remitted</th>
-                        <th className="px-3 py-2 text-right font-semibold">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#EEF6F6]">
-                      {rows.map((row, i) => {
-                        const bal = row.payable - row.paid;
-                        return (
-                          <tr key={row.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                            <td className="px-3 py-2 font-medium text-gray-700">{row.label}</td>
-                            <td className="px-3 py-2 text-right text-gray-600">{fmt(row.payable)}</td>
-                            <td className={`px-3 py-2 text-right font-semibold ${row.color}`}>{fmt(row.paid)}</td>
-                            <td className={`px-3 py-2 text-right font-semibold ${bal > 0 ? 'text-amber-700' : bal < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                              {bal === 0 ? '✓ Settled' : fmt(bal)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-[#E6F4F4] border-t border-[#CDE7E7] font-semibold text-[#0B6567]">
-                      <tr>
-                        <td className="px-3 py-2 text-gray-800">Grand Total</td>
-                        <td className="px-3 py-2 text-right text-gray-800">{fmt(totalPayable)}</td>
-                        <td className="px-3 py-2 text-right text-green-700">{fmt(totalPaid)}</td>
-                        <td className={`px-3 py-2 text-right ${totalBalance > 0 ? 'text-amber-700' : totalBalance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {totalBalance === 0 ? '✓ Settled' : fmt(totalBalance)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Combined payment log */}
-                {allRemittances.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase text-gray-400">All Payments — Chronological</p>
-                    {allRemittances.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-gray-50 border border-[#E3F1F1]">
-                        <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded ${
-                          r.payeeLabel === 'Govt' ? 'bg-red-100 text-red-700' :
-                          r.payeeLabel === 'SVK'  ? 'bg-violet-100 text-violet-700' :
-                                                    'bg-green-100 text-green-700'
-                        }`}>{r.payeeLabel}</span>
-                        <span className="font-semibold text-gray-700 shrink-0 whitespace-nowrap">{r.phase}</span>
-                        <span className="text-gray-500 shrink-0 whitespace-nowrap">{r.date}</span>
-                        <span className="text-gray-400 shrink-0 whitespace-nowrap">{r.paymentMode}</span>
-                        {(() => {
-                          const count = getAttachments(r).length;
-                          if (count === 0) return null;
-                          return (
-                            <span className="text-gray-400 shrink-0 text-sm leading-none" title="Attached file(s) — view/download from Edit">
-                              📎{count > 1 ? count : ''}
-                            </span>
-                          );
-                        })()}
-                        <span className="font-semibold text-gray-800 ml-auto tabular-nums shrink-0 whitespace-nowrap">{fmt(r.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {allRemittances.length === 0 && (
-                  <p className="text-sm text-gray-400 text-center py-4">No remittances recorded yet.</p>
-                )}
-</div>
-</div>
-              </>
-            );
-          })()}
-
-          </div>
-        </div>
-      )}
-
-      {showModal && trackerTab !== 'CONSOLIDATED' && (
-        <RemittanceModal
-          payee={trackerTab}
-          academicYear={academicYear as AcademicYear}
-          existingPhases={
-            trackerTab === 'GOV' ? govPhases :
-            trackerTab === 'SVK' ? svkRemittances.map((r) => r.phase) :
-                                   smpRemittances.map((r) => r.phase)
-          }
-          editing={editingRemittance}
-          onClose={() => { setShowModal(false); setEditingRemittance(null); }}
+        <RemittanceTrackerPanel
+          key={trackerTab}
+          scope="main"
+          academicYear={academicYear}
+          trackerTab={trackerTab}
+          payable={grandTotals}
+          govPayableByHead={govPayableByHead}
         />
       )}
     </div>
@@ -7369,6 +7423,94 @@ function buildWPSyntheticStudents(counts: WPStudentCounts): Student[] {
   return list;
 }
 
+type WPAdmFilter = '' | 'REGULAR' | 'LATERAL' | 'SNQ';
+
+const WP_YEAR_KEY: Record<string, 'yr1' | 'yr2' | 'yr3'> = { '1ST YEAR': 'yr1', '2ND YEAR': 'yr2', '3RD YEAR': 'yr3' };
+
+/** Zeroes count buckets excluded by the WP tab's filter bar, so the filtered counts can
+ *  flow through buildWPSyntheticStudents → calcDistribution unchanged. */
+function filterWPCounts(
+  counts: WPStudentCounts,
+  f: { courseType: '' | 'Aided' | 'Unaided'; year: Year | ''; course: Course | ''; admType: WPAdmFilter },
+): WPStudentCounts {
+  const out = emptyWPCounts();
+  for (const c of COURSES) {
+    if (f.courseType === 'Aided'   && !(AIDED_COURSES as Course[]).includes(c))   continue;
+    if (f.courseType === 'Unaided' && !(UNAIDED_COURSES as Course[]).includes(c)) continue;
+    if (f.course && f.course !== c) continue;
+    for (const yrKey of ['yr1', 'yr2', 'yr3'] as const) {
+      if (f.year && WP_YEAR_KEY[f.year] !== yrKey) continue;
+      const b = counts[c][yrKey];
+      out[c][yrKey] = {
+        reg: !f.admType || f.admType === 'REGULAR' ? b.reg : 0,
+        lat: !f.admType || f.admType === 'LATERAL' ? b.lat : 0,
+        snq: !f.admType || f.admType === 'SNQ'     ? b.snq : 0,
+      };
+    }
+  }
+  return out;
+}
+
+function sumDist(dist: FeeDistRow[]): DistTotals {
+  return dist.reduce((a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }), { tot: 0, gov: 0, svk: 0, smp: 0 });
+}
+
+type WPStats = Record<Course, { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number }>;
+
+// Shape matching exportStudentStatsAndDistSummaryPdf's expected studentStats type
+function wpStatsFromCounts(c: WPStudentCounts): WPStats {
+  const stats = {} as WPStats;
+  for (const course of COURSES) {
+    const cc = c[course];
+    const yr1Total = cc.yr1.reg + cc.yr1.lat + cc.yr1.snq;
+    const yr2Total = cc.yr2.reg + cc.yr2.lat + cc.yr2.snq;
+    const yr3Total = cc.yr3.reg + cc.yr3.lat + cc.yr3.snq;
+    stats[course] = {
+      yr1: { reg: cc.yr1.reg, snq: cc.yr1.snq, total: yr1Total },
+      yr2: { reg: cc.yr2.reg, lat: cc.yr2.lat, snq: cc.yr2.snq, total: yr2Total },
+      yr3: { reg: cc.yr3.reg, snq: cc.yr3.snq, total: yr3Total },
+      grand: yr1Total + yr2Total + yr3Total,
+    };
+  }
+  return stats;
+}
+
+function wpGrandOf(stats: WPStats) {
+  const gt = { yr1: { reg: 0, snq: 0, total: 0 }, yr2: { reg: 0, lat: 0, snq: 0, total: 0 }, yr3: { reg: 0, snq: 0, total: 0 }, grand: 0 };
+  for (const c of COURSES) {
+    const st = stats[c];
+    gt.yr1.reg += st.yr1.reg; gt.yr1.snq += st.yr1.snq; gt.yr1.total += st.yr1.total;
+    gt.yr2.reg += st.yr2.reg; gt.yr2.lat += st.yr2.lat; gt.yr2.snq += st.yr2.snq; gt.yr2.total += st.yr2.total;
+    gt.yr3.reg += st.yr3.reg; gt.yr3.snq += st.yr3.snq; gt.yr3.total += st.yr3.total;
+    gt.grand += st.grand;
+  }
+  return gt;
+}
+
+/** Splits WP counts into aided/unaided distributions + totals via the shared calcDistribution. */
+function wpDistFor(c: WPStudentCounts, structMap: Map<string, FeeStructure>, fineMap: Map<string, number>) {
+  const all     = buildWPSyntheticStudents(c);
+  const aided   = all.filter(s => (AIDED_COURSES as Course[]).includes(s.course));
+  const unaided = all.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course));
+  const aidedDist     = calcDistribution(aided,   true,  structMap, fineMap);
+  const unaidedDist   = calcDistribution(unaided, false, structMap, fineMap);
+  const aidedTotals   = sumDist(aidedDist);
+  const unaidedTotals = sumDist(unaidedDist);
+  return {
+    allCount: all.length, aidedCount: aided.length, unaidedCount: unaided.length,
+    aidedDist, unaidedDist, aidedTotals, unaidedTotals,
+    grandTotals: {
+      tot: aidedTotals.tot + unaidedTotals.tot,
+      gov: aidedTotals.gov + unaidedTotals.gov,
+      svk: aidedTotals.svk + unaidedTotals.svk,
+      smp: aidedTotals.smp + unaidedTotals.smp,
+    },
+  };
+}
+
+/** WP has no fee records, hence no fine — the Govt tracker omits the Fine head. */
+const WP_GOV_HEADS = GOV_HEADS.filter((h) => h.key !== 'fine');
+
 function WPFeeDistributionTab({
   feeStructures,
   academicYear,
@@ -7376,11 +7518,23 @@ function WPFeeDistributionTab({
   feeStructures: FeeStructure[];
   academicYear: string;
 }) {
+  type DistCourseType = '' | 'Aided' | 'Unaided';
+  type TableView = 'all' | 'studentstats' | 'summary' | 'aided' | 'unaided' | 'combined';
+
   const [counts,   setCounts]   = useState<WPStudentCounts>(emptyWPCounts);
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [dirty,    setDirty]    = useState(false);
   const [savedAt,  setSavedAt]  = useState<string | null>(null);
+
+  const [courseTypeFilter, setCourseTypeFilter] = useState<DistCourseType>('');
+  const [yearFilter,       setYearFilter]       = useState<Year | ''>('');
+  const [courseFilter,     setCourseFilter]     = useState<Course | ''>('');
+  const [admTypeFilter,    setAdmTypeFilter]    = useState<WPAdmFilter>('');
+  const [tableView,        setTableView]        = useState<TableView>('all');
+  const [section,          setSection]          = useState<'distribution' | 'tracker'>('distribution');
+  const [trackerTab,       setTrackerTab]       = useState<RemittancePayee | 'CONSOLIDATED'>('GOV');
+  const [showRules,        setShowRules]        = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -7426,51 +7580,32 @@ function WPFeeDistributionTab({
 
   const emptyFineMap = useMemo(() => new Map<string, number>(), []);
 
-  const allSynthetic    = useMemo(() => buildWPSyntheticStudents(counts), [counts]);
-  const aidedSynthetic  = useMemo(() => allSynthetic.filter(s => (AIDED_COURSES as Course[]).includes(s.course)),   [allSynthetic]);
-  const unaidedSynthetic = useMemo(() => allSynthetic.filter(s => (UNAIDED_COURSES as Course[]).includes(s.course)), [allSynthetic]);
+  const filteredCounts = useMemo(
+    () => filterWPCounts(counts, { courseType: courseTypeFilter, year: yearFilter, course: courseFilter, admType: admTypeFilter }),
+    [counts, courseTypeFilter, yearFilter, courseFilter, admTypeFilter],
+  );
 
-  const aidedDist   = useMemo(() => calcDistribution(aidedSynthetic,   true,  structMap, emptyFineMap), [aidedSynthetic,   structMap, emptyFineMap]);
-  const unaidedDist = useMemo(() => calcDistribution(unaidedSynthetic, false, structMap, emptyFineMap), [unaidedSynthetic, structMap, emptyFineMap]);
+  // Filtered — drives every distribution table, chip and export.
+  const { allCount, aidedCount, unaidedCount, aidedDist, unaidedDist, aidedTotals, unaidedTotals, grandTotals } =
+    useMemo(() => wpDistFor(filteredCounts, structMap, emptyFineMap), [filteredCounts, structMap, emptyFineMap]);
 
-  const aidedTotals   = useMemo(() => aidedDist.reduce(  (a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }), { tot: 0, gov: 0, svk: 0, smp: 0 }), [aidedDist]);
-  const unaidedTotals = useMemo(() => unaidedDist.reduce((a, r) => ({ tot: a.tot + r.totalCollected, gov: a.gov + r.toGov, svk: a.svk + r.toSVK, smp: a.smp + r.toSMP }), { tot: 0, gov: 0, svk: 0, smp: 0 }), [unaidedDist]);
-  const grandTotals   = useMemo(() => ({
-    tot: aidedTotals.tot + unaidedTotals.tot,
-    gov: aidedTotals.gov + unaidedTotals.gov,
-    svk: aidedTotals.svk + unaidedTotals.svk,
-    smp: aidedTotals.smp + unaidedTotals.smp,
-  }), [aidedTotals, unaidedTotals]);
+  // Unfiltered — drives the remittance tracker so payable/balance never shift with the filter bar.
+  const fullDist = useMemo(() => wpDistFor(counts, structMap, emptyFineMap), [counts, structMap, emptyFineMap]);
+  const govPayableByHead = useMemo(() => govPayableFromDist([...fullDist.aidedDist, ...fullDist.unaidedDist]), [fullDist]);
 
-  // Shape matching exportStudentStatsAndDistSummaryPdf's expected studentStats type
-  const studentStatsForExport = useMemo(() => {
-    const stats = {} as Record<Course, { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number }>;
-    for (const c of COURSES) {
-      const cc = counts[c];
-      const yr1Total = cc.yr1.reg + cc.yr1.lat + cc.yr1.snq;
-      const yr2Total = cc.yr2.reg + cc.yr2.lat + cc.yr2.snq;
-      const yr3Total = cc.yr3.reg + cc.yr3.lat + cc.yr3.snq;
-      stats[c] = {
-        yr1: { reg: cc.yr1.reg, snq: cc.yr1.snq, total: yr1Total },
-        yr2: { reg: cc.yr2.reg, lat: cc.yr2.lat, snq: cc.yr2.snq, total: yr2Total },
-        yr3: { reg: cc.yr3.reg, snq: cc.yr3.snq, total: yr3Total },
-        grand: yr1Total + yr2Total + yr3Total,
-      };
-    }
-    return stats;
-  }, [counts]);
+  // Entry table always shows every row (unfiltered); exports follow the filters.
+  const entryStats    = useMemo(() => wpStatsFromCounts(counts),         [counts]);
+  const filteredStats = useMemo(() => wpStatsFromCounts(filteredCounts), [filteredCounts]);
+  const entryGrand    = useMemo(() => wpGrandOf(entryStats),    [entryStats]);
+  const filteredGrand = useMemo(() => wpGrandOf(filteredStats), [filteredStats]);
 
-  const grandStatTotals = useMemo(() => {
-    const gt = { yr1: { reg: 0, snq: 0, total: 0 }, yr2: { reg: 0, lat: 0, snq: 0, total: 0 }, yr3: { reg: 0, snq: 0, total: 0 }, grand: 0 };
-    for (const c of COURSES) {
-      const st = studentStatsForExport[c];
-      gt.yr1.reg += st.yr1.reg; gt.yr1.snq += st.yr1.snq; gt.yr1.total += st.yr1.total;
-      gt.yr2.reg += st.yr2.reg; gt.yr2.lat += st.yr2.lat; gt.yr2.snq += st.yr2.snq; gt.yr2.total += st.yr2.total;
-      gt.yr3.reg += st.yr3.reg; gt.yr3.snq += st.yr3.snq; gt.yr3.total += st.yr3.total;
-      gt.grand += st.grand;
-    }
-    return gt;
-  }, [studentStatsForExport]);
+  function clearFilters() {
+    setCourseTypeFilter('');
+    setYearFilter('');
+    setCourseFilter('');
+    setAdmTypeFilter('');
+    setTableView('all');
+  }
 
   async function exportWPDistExcel() {
     await needXlsx();
@@ -7480,18 +7615,19 @@ function WPFeeDistributionTab({
       ['Sl No', 'Course', '1st Yr Regular', '1st Yr SNQ', '1st Yr Total', '2nd Yr Regular', '2nd Yr Lateral', '2nd Yr SNQ', '2nd Yr Total', '3rd Yr Regular', '3rd Yr SNQ', '3rd Yr Total', 'Grand Total'],
     ];
     COURSES.forEach((c, i) => {
-      const st = studentStatsForExport[c];
+      const st = filteredStats[c];
       const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
       statsRows.push([i + 1, `${c} (${courseType})`, st.yr1.reg, st.yr1.snq, st.yr1.total, st.yr2.reg, st.yr2.lat, st.yr2.snq, st.yr2.total, st.yr3.reg, st.yr3.snq, st.yr3.total, st.grand]);
     });
-    statsRows.push(['', 'GRAND TOTAL', grandStatTotals.yr1.reg, grandStatTotals.yr1.snq, grandStatTotals.yr1.total, grandStatTotals.yr2.reg, grandStatTotals.yr2.lat, grandStatTotals.yr2.snq, grandStatTotals.yr2.total, grandStatTotals.yr3.reg, grandStatTotals.yr3.snq, grandStatTotals.yr3.total, grandStatTotals.grand]);
+    const g = filteredGrand;
+    statsRows.push(['', 'GRAND TOTAL', g.yr1.reg, g.yr1.snq, g.yr1.total, g.yr2.reg, g.yr2.lat, g.yr2.snq, g.yr2.total, g.yr3.reg, g.yr3.snq, g.yr3.total, g.grand]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(statsRows), 'WP Student Statistics');
 
     const sumRows: (string | number)[][] = [
       ['Course Type', 'Total Students', 'Total Fee Allotted', 'To Government', 'To SVK Management', 'To SMP'],
-      ['Aided Courses (CE, ME, EC, CS)', aidedSynthetic.length, aidedTotals.tot, aidedTotals.gov, aidedTotals.svk, aidedTotals.smp],
-      ['Unaided Course (EE)', unaidedSynthetic.length, unaidedTotals.tot, unaidedTotals.gov, unaidedTotals.svk, unaidedTotals.smp],
-      ['GRAND TOTAL', allSynthetic.length, grandTotals.tot, grandTotals.gov, grandTotals.svk, grandTotals.smp],
+      ['Aided Courses (CE, ME, EC, CS)', aidedCount, aidedTotals.tot, aidedTotals.gov, aidedTotals.svk, aidedTotals.smp],
+      ['Unaided Course (EE)', unaidedCount, unaidedTotals.tot, unaidedTotals.gov, unaidedTotals.svk, unaidedTotals.smp],
+      ['GRAND TOTAL', allCount, grandTotals.tot, grandTotals.gov, grandTotals.svk, grandTotals.smp],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumRows), 'Distribution Summary');
 
@@ -7515,271 +7651,242 @@ function WPFeeDistributionTab({
     XLSX.writeFile(wb, `WP_Fee_Distribution_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  const numInp = 'w-12 text-center border border-[#CDE7E7] rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-[#0F8B8D]/50 focus:border-[#0F8B8D] [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+  const numInp = 'w-12 text-center border border-[#CDE7E7] rounded px-1 py-0.5 text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-[#0F8B8D]/50 focus:border-[#0F8B8D] [appearance:none] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+  const show = (v: TableView) => tableView === 'all' || tableView === v;
+  const VIEW_PILLS: { id: TableView; label: string }[] = [
+    { id: 'all', label: 'All' }, { id: 'studentstats', label: 'Student Stats' }, { id: 'summary', label: 'Summary' },
+    { id: 'aided', label: 'Aided' }, { id: 'unaided', label: 'Unaided' }, { id: 'combined', label: 'Combined' },
+  ];
 
   if (loading) return <PageSpinner />;
 
-  return (
-    <div className="space-y-5">
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[11px] text-amber-800 leading-relaxed">
-        Working Professional (Evening College) admissions are entered manually here since they aren't tracked as
-        separate student records — they are admitted exactly like a Lateral-entry admission. Fill in the counts per
-        course/year/category below; the fee calculation and remittance-split rules are identical to the main Fee
-        Distribution tab. This tab is independent — it does not affect the Fee Distribution or Budget tabs.
-      </div>
+  const countCell = (c: Course, yrKey: 'yr1' | 'yr2' | 'yr3', field: keyof WPCourseYearCounts, border = false) => (
+    <td className={`px-2 py-1.5 text-center${border ? ' border-l border-[#E3F1F1]' : ''}`}>
+      <input type="number" min="0" className={numInp} value={counts[c][yrKey][field] || ''} onChange={e => updateCount(c, yrKey, field, e.target.value)} placeholder="0" />
+    </td>
+  );
 
-      <StatChipRow entries={[
-        { label: 'Total WP Students',  value: allSynthetic.length,       color: 'text-[#0B6567]',   bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
-        { label: 'Total Fee Allotted', value: fmt(grandTotals.tot),      color: 'text-gray-700',   bg: 'bg-gray-50',    border: 'border-[#CDE7E7]'   },
-        { label: 'To Government',     value: fmt(grandTotals.gov),       color: 'text-red-700',    bg: 'bg-red-50',     border: 'border-red-200'    },
-        { label: 'To SVK Management', value: fmt(grandTotals.svk),       color: 'text-violet-700', bg: 'bg-violet-50',  border: 'border-violet-200' },
-        { label: 'To SMP',            value: fmt(grandTotals.smp),       color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200'  },
-        { label: 'Aided WP Students', value: aidedSynthetic.length,      color: 'text-indigo-700', bg: 'bg-indigo-50',  border: 'border-indigo-200' },
-        { label: 'Unaided WP Students', value: unaidedSynthetic.length,  color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200'  },
+  return (
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      {/* Toolbar — filters inline with export / clear */}
+      <FilterPanel
+        collapsible={false}
+        right={<ExportBar onExcel={exportWPDistExcel} />}
+        hasActiveFilters={!!(courseTypeFilter || yearFilter || courseFilter || admTypeFilter || tableView !== 'all')}
+        onClear={clearFilters}
+      >
+        <FilterDropdown<'Aided' | 'Unaided'> color="teal" value={courseTypeFilter} onChange={(v) => setCourseTypeFilter(v)} placeholder="Aided & Unaided"
+          options={[{ value: 'Aided', label: 'Aided (CE, ME, EC, CS)' }, { value: 'Unaided', label: 'Unaided (EE)' }]} />
+        <FilterDropdown<Year> color="teal" value={yearFilter} onChange={(v) => setYearFilter(v)} placeholder="All Years"
+          options={YEARS.map((y) => ({ value: y, label: y }))} />
+        <FilterDropdown<Course> color="teal" value={courseFilter} onChange={(v) => setCourseFilter(v)} placeholder="All Courses"
+          options={COURSES.map((c) => ({ value: c, label: c }))} />
+        <FilterDropdown<'REGULAR' | 'LATERAL' | 'SNQ'> color="teal" value={admTypeFilter} onChange={(v) => setAdmTypeFilter(v)} placeholder="All Adm Types"
+          options={[{ value: 'REGULAR', label: 'Regular' }, { value: 'LATERAL', label: 'Lateral' }, { value: 'SNQ', label: 'SNQ' }]} />
+      </FilterPanel>
+
+      {/* Metrics strip */}
+      <StatChipRow compact entries={[
+        { label: 'WP Students', value: allCount,             color: 'text-[#0B6567]',  bg: 'bg-[#0F8B8D]/[0.08]', border: 'border-[#0F8B8D]/30' },
+        { label: 'Total Fee',   value: fmt(grandTotals.tot), color: 'text-[#262B35]',  bg: 'bg-white',            border: 'border-[#CDE7E7]'    },
+        { label: 'Govt',        value: fmt(grandTotals.gov), color: 'text-[#A5173A]',  bg: 'bg-[#E11D48]/[0.06]', border: 'border-[#E11D48]/30' },
+        { label: 'SVK',         value: fmt(grandTotals.svk), color: 'text-violet-700', bg: 'bg-violet-50',        border: 'border-violet-200'   },
+        { label: 'SMP',         value: fmt(grandTotals.smp), color: 'text-[#0A7A4B]',  bg: 'bg-[#0FA968]/[0.07]', border: 'border-[#0FA968]/35' },
+        { label: 'Aided',       value: aidedCount,           color: 'text-[#3730A3]',  bg: 'bg-[#EEF0FE]',        border: 'border-[#4F46E5]/25' },
+        { label: 'Unaided',     value: unaidedCount,         color: 'text-[#9A5B00]',  bg: 'bg-[#FEF5E4]',        border: 'border-[#D97706]/30' },
       ]} />
 
-      <div className="flex justify-end">
-        <ExportBar onExcel={exportWPDistExcel} />
+      {/* Section bar — Distribution | Remittance Tracker, and table-view pills */}
+      <div className="shrink-0 flex items-center gap-2 flex-wrap">
+        <SegmentedToggle
+          options={[{ value: 'distribution', label: 'Distribution' }, { value: 'tracker', label: 'Remittance Tracker' }]}
+          value={section}
+          onChange={(v) => setSection(v as 'distribution' | 'tracker')}
+        />
+        {section === 'distribution' ? (
+          <>
+            <span className="w-px h-5 mx-1 shrink-0" style={{ background: HAIRLINE }} />
+            <SegmentedToggle
+              options={VIEW_PILLS.map(({ id, label }) => ({ value: id, label }))}
+              value={tableView}
+              onChange={(v) => setTableView(v as TableView)}
+            />
+            <button
+              onClick={() => setShowRules((v) => !v)}
+              className={`${BTN_GRAY} ml-auto inline-flex items-center gap-1.5 ${showRules ? '!border-[#0F8B8D]/50 !bg-[#0F8B8D]/10 !text-[#0B6567]' : ''}`}
+              aria-expanded={showRules}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+              Rules
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="w-px h-5 mx-1 shrink-0" style={{ background: HAIRLINE }} />
+            <SegmentedToggle
+              options={[
+                { value: 'GOV',  label: 'Government (K2)' },
+                { value: 'SVK',  label: 'SVK Management'   },
+                { value: 'SMP',  label: 'SMP'              },
+                { value: 'CONSOLIDATED', label: 'Consolidated' },
+              ]}
+              value={trackerTab}
+              onChange={(v) => setTrackerTab(v as RemittancePayee | 'CONSOLIDATED')}
+            />
+          </>
+        )}
       </div>
 
-      {/* ── WP Student Statistics (manual entry) ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">WP Students Statistics Summary (Manual Entry)</h2>
-          <div className="flex items-center gap-2">
-            {savedAt && <span className="text-[10px] text-gray-400">Saved {new Date(savedAt).toLocaleString()}</span>}
-            <button
-              onClick={handleSave}
-              disabled={saving || !dirty}
-              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0F8B8D] hover:bg-[#0B6567] disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              onClick={() => exportStudentStatsAndDistSummaryPdf(studentStatsForExport, grandStatTotals, aidedSynthetic.length, aidedTotals, unaidedSynthetic.length, unaidedTotals, allSynthetic.length, grandTotals, academicYear)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-            >
-              PDF
-            </button>
+      {section === 'distribution' ? (
+        <div className="flex-1 min-h-0 overflow-auto scroll-fee">
+          <div className="flex flex-col gap-4 pb-1">
+            {showRules && (
+              <ReportCard title="Distribution Rules" className="">
+                <div className="p-3 text-[11px] text-[#5B6371] space-y-1 bg-[#F9FCFC]">
+                  <p>Working Professional (Evening College) admissions aren't tracked as fee records, so counts are entered manually in the WP Students Statistics table. This tab is independent — it does not affect the Fee Distribution or Budget tabs.</p>
+                  <p><span className="font-medium text-[#3730A3]">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP</p>
+                  <p><span className="font-medium text-[#9A5B00]">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP</p>
+                  <p className="text-[#8A93A3]">All WP admissions are treated as Lateral-entry, so Library fee applies to WP 1st and 2nd Year counts, and 2nd Year tuition is charged at the 1st Year rate — same as regular Lateral entrants. Fine is not applicable (no fee records). The Remittance Tracker's payable always uses the full, unfiltered counts.</p>
+                </div>
+              </ReportCard>
+            )}
+
+            {show('studentstats') && (
+              <ReportCard
+                title="WP Students Statistics (Manual Entry)"
+                className=""
+                actions={
+                  <div className="flex items-center gap-2">
+                    {dirty
+                      ? <span className="text-[10px] font-medium text-amber-600">Unsaved changes</span>
+                      : savedAt && <span className="text-[10px] text-gray-400">Saved {new Date(savedAt).toLocaleString()}</span>}
+                    <button onClick={handleSave} disabled={saving || !dirty} className={`${BTN_PRIMARY} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => exportStudentStatsAndDistSummaryPdf(filteredStats, filteredGrand, aidedCount, aidedTotals, unaidedCount, unaidedTotals, allCount, grandTotals, academicYear)}
+                      className={BTN_GRAY}
+                    >
+                      PDF
+                    </button>
+                  </div>
+                }
+              >
+                <div>
+                  <table className="w-full text-[11px]">
+                    <thead className={`sticky top-0 z-10 ${ACCENT}`}>
+                      <tr>
+                        <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
+                        <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
+                        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>1st Year</th>
+                        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>2nd Year</th>
+                        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>3rd Year</th>
+                        <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Grand Total</th>
+                      </tr>
+                      <tr>
+                        <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
+                        <th className="px-2 py-1 font-semibold">SNQ</th>
+                        <th className="px-2 py-1 font-semibold">Total</th>
+                        <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
+                        <th className="px-2 py-1 font-semibold">Lateral</th>
+                        <th className="px-2 py-1 font-semibold">SNQ</th>
+                        <th className="px-2 py-1 font-semibold">Total</th>
+                        <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
+                        <th className="px-2 py-1 font-semibold">SNQ</th>
+                        <th className="px-2 py-1 font-semibold">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {COURSES.map((c, i) => {
+                        const st = entryStats[c];
+                        const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
+                        return (
+                          <tr key={c} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                            <td className="px-2 py-1.5 font-semibold">{c} <span className="text-gray-400 font-normal">({courseType})</span></td>
+                            {countCell(c, 'yr1', 'reg', true)}
+                            {countCell(c, 'yr1', 'snq')}
+                            <td className="px-2 py-1.5 text-center font-semibold">{st.yr1.total || '—'}</td>
+                            {countCell(c, 'yr2', 'reg', true)}
+                            {countCell(c, 'yr2', 'lat')}
+                            {countCell(c, 'yr2', 'snq')}
+                            <td className="px-2 py-1.5 text-center font-semibold">{st.yr2.total || '—'}</td>
+                            {countCell(c, 'yr3', 'reg', true)}
+                            {countCell(c, 'yr3', 'snq')}
+                            <td className="px-2 py-1.5 text-center font-semibold">{st.yr3.total || '—'}</td>
+                            <td className="px-2 py-1.5 text-center font-bold border-l border-[#E3F1F1]">{st.grand || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className={TFOOT}>
+                      <tr>
+                        <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
+                        <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{entryGrand.yr1.reg}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr1.snq}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr1.total}</td>
+                        <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{entryGrand.yr2.reg}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr2.lat}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr2.snq}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr2.total}</td>
+                        <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{entryGrand.yr3.reg}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr3.snq}</td>
+                        <td className="px-2 py-2 text-center">{entryGrand.yr3.total}</td>
+                        <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{entryGrand.grand}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </ReportCard>
+            )}
+
+            {show('summary') && (
+              <ReportCard title="WP Fee Distribution Summary" className="">
+                <DistSummaryTable
+                  aidedCount={aidedCount} unaidedCount={unaidedCount} totalCount={allCount}
+                  aidedTotals={aidedTotals} unaidedTotals={unaidedTotals} grandTotals={grandTotals}
+                />
+              </ReportCard>
+            )}
+
+            {show('aided') && (
+              <ReportCard
+                title="WP Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)"
+                actions={<button onClick={() => exportRemittanceDistPdf(aidedDist, 'WP Aided Courses (CE, ME, EC, CS)', academicYear)} className={BTN_GRAY}>PDF</button>}
+              >
+                <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" className="" />
+              </ReportCard>
+            )}
+
+            {show('unaided') && (
+              <ReportCard
+                title="WP Fee Remittance Abstract — Unaided Course (EE)"
+                actions={<button onClick={() => exportRemittanceDistPdf(unaidedDist, 'WP Unaided Course (EE)', academicYear)} className={BTN_GRAY}>PDF</button>}
+              >
+                <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" className="" />
+              </ReportCard>
+            )}
+
+            {show('combined') && (
+              <ReportCard title="Combined WP Fee Remittance Abstract (Aided &amp; Unaided)">
+                <CombinedDistTable aidedDist={aidedDist} unaidedDist={unaidedDist} grandTotals={grandTotals} emptyText="No counts entered yet." />
+              </ReportCard>
+            )}
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-          <table className="w-full text-[11px]">
-            <thead className={`${ACCENT}`}>
-              <tr>
-                <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
-                <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>1st Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>2nd Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>3rd Year</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" rowSpan={2}>Grand Total</th>
-              </tr>
-              <tr>
-                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
-                <th className="px-2 py-1 font-semibold">SNQ</th>
-                <th className="px-2 py-1 font-semibold">Total</th>
-                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
-                <th className="px-2 py-1 font-semibold">Lateral</th>
-                <th className="px-2 py-1 font-semibold">SNQ</th>
-                <th className="px-2 py-1 font-semibold">Total</th>
-                <th className="px-2 py-1 font-semibold border-l border-[#CDE7E7]">Regular</th>
-                <th className="px-2 py-1 font-semibold">SNQ</th>
-                <th className="px-2 py-1 font-semibold">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COURSES.map((c, i) => {
-                const st = studentStatsForExport[c];
-                const cc = counts[c];
-                const courseType = (AIDED_COURSES as Course[]).includes(c) ? 'Aided' : 'Unaided';
-                return (
-                  <tr key={c} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
-                    <td className="px-2 py-1.5 font-semibold">{c} <span className="text-gray-400 font-normal">({courseType})</span></td>
-                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr1.reg || ''} onChange={e => updateCount(c, 'yr1', 'reg', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr1.snq || ''} onChange={e => updateCount(c, 'yr1', 'snq', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center font-semibold">{st.yr1.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr2.reg || ''} onChange={e => updateCount(c, 'yr2', 'reg', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr2.lat || ''} onChange={e => updateCount(c, 'yr2', 'lat', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr2.snq || ''} onChange={e => updateCount(c, 'yr2', 'snq', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center font-semibold">{st.yr2.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center border-l border-[#E3F1F1]"><input type="number" min="0" className={numInp} value={cc.yr3.reg || ''} onChange={e => updateCount(c, 'yr3', 'reg', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center"><input type="number" min="0" className={numInp} value={cc.yr3.snq || ''} onChange={e => updateCount(c, 'yr3', 'snq', e.target.value)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5 text-center font-semibold">{st.yr3.total || '—'}</td>
-                    <td className="px-2 py-1.5 text-center font-bold border-l border-[#E3F1F1]">{st.grand || '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className={TFOOT}>
-              <tr>
-                <td className="px-2 py-2" colSpan={2}>GRAND TOTAL</td>
-                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr1.reg}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr1.snq}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr1.total}</td>
-                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr2.reg}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr2.lat}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr2.snq}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr2.total}</td>
-                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.yr3.reg}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr3.snq}</td>
-                <td className="px-2 py-2 text-center">{grandStatTotals.yr3.total}</td>
-                <td className="px-2 py-2 text-center border-l border-[#CDE7E7]">{grandStatTotals.grand}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Fee Distribution Summary ── */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700">WP Fee Distribution Summary</h2>
-        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-          <table className="w-full text-[11px]">
-            <thead className={`${ACCENT}`}>
-              <tr>
-                <th className="px-2 py-1.5 font-semibold">Course Type</th>
-                <th className="px-2 py-1.5 text-center font-semibold">Students</th>
-                <th className="px-2 py-1.5 text-right font-semibold">Total Fee Allotted</th>
-                <th className="px-2 py-1.5 text-right font-semibold">To Government</th>
-                <th className="px-2 py-1.5 text-right font-semibold">To SVK Management</th>
-                <th className="px-2 py-1.5 text-right font-semibold">To SMP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="bg-indigo-50">
-                <td className="px-2 py-1.5 font-semibold">Aided Courses (CE, ME, EC, CS)</td>
-                <td className="px-2 py-1.5 text-center">{aidedSynthetic.length}</td>
-                <td className="px-2 py-1.5 text-right">{fmt(aidedTotals.tot)}</td>
-                <td className="px-2 py-1.5 text-right text-red-700">{fmt(aidedTotals.gov)}</td>
-                <td className="px-2 py-1.5 text-right text-violet-700">{fmt(aidedTotals.svk)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700">{fmt(aidedTotals.smp)}</td>
-              </tr>
-              <tr className="bg-amber-50">
-                <td className="px-2 py-1.5 font-semibold">Unaided Course (EE)</td>
-                <td className="px-2 py-1.5 text-center">{unaidedSynthetic.length}</td>
-                <td className="px-2 py-1.5 text-right">{fmt(unaidedTotals.tot)}</td>
-                <td className="px-2 py-1.5 text-right text-red-700">{fmt(unaidedTotals.gov)}</td>
-                <td className="px-2 py-1.5 text-right text-violet-700">{fmt(unaidedTotals.svk)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700">{fmt(unaidedTotals.smp)}</td>
-              </tr>
-            </tbody>
-            <tfoot className={TFOOT}>
-              <tr>
-                <td className="px-2 py-2">GRAND TOTAL</td>
-                <td className="px-2 py-2 text-center">{allSynthetic.length}</td>
-                <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                <td className="px-2 py-2 text-right text-red-700">{fmt(grandTotals.gov)}</td>
-                <td className="px-2 py-2 text-right text-violet-700">{fmt(grandTotals.svk)}</td>
-                <td className="px-2 py-2 text-right text-green-700">{fmt(grandTotals.smp)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Aided Courses Fee Remittance Abstract ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">WP Fee Remittance Abstract — Aided Courses (CE, ME, EC, CS)</h2>
-          <button
-            onClick={() => exportRemittanceDistPdf(aidedDist, 'WP Aided Courses (CE, ME, EC, CS)', academicYear)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            PDF
-          </button>
-        </div>
-        <RemittanceTable dist={aidedDist} headerColor="bg-[#EEF0FE] text-[#3730A3]" />
-      </div>
-
-      {/* ── Unaided Course Fee Remittance Abstract ── */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">WP Fee Remittance Abstract — Unaided Course (EE)</h2>
-          <button
-            onClick={() => exportRemittanceDistPdf(unaidedDist, 'WP Unaided Course (EE)', academicYear)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 border border-[#CDE7E7] hover:border-gray-400 bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            PDF
-          </button>
-        </div>
-        <RemittanceTable dist={unaidedDist} headerColor="bg-[#FEF5E4] text-[#9A5B00]" />
-      </div>
-
-      {/* ── Combined Fee Remittance Abstract ── */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700">Combined WP Fee Remittance Abstract (Aided &amp; Unaided)</h2>
-        <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
-          <table className="w-full text-[11px]">
-            <thead className={`${ACCENT}`}>
-              <tr>
-                <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Sl</th>
-                <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Course Type</th>
-                <th className="px-2 py-1.5 font-semibold" rowSpan={2}>Fee Type</th>
-                <th className="px-2 py-1.5 text-center font-semibold" rowSpan={2}>Students</th>
-                <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Fee Amt (₹)</th>
-                <th className="px-2 py-1.5 text-right font-semibold" rowSpan={2}>Total Allotted</th>
-                <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={3}>Fee Remittance (₹)</th>
-              </tr>
-              <tr>
-                <th className="px-2 py-1 text-right font-semibold border-l border-[#CDE7E7]">To Govt.</th>
-                <th className="px-2 py-1 text-right font-semibold">To SVK</th>
-                <th className="px-2 py-1 text-right font-semibold">To SMP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {aidedDist.map((r, i) => (
-                <tr key={`a-${r.slNo}`} className={i % 2 === 0 ? 'bg-indigo-50/40' : 'bg-white'}>
-                  <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
-                  <td className="px-2 py-1.5 font-medium text-indigo-700">Aided</td>
-                  <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
-                  <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
-                  <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                  <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
-                  <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
-                  <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
-                </tr>
-              ))}
-              {unaidedDist.map((r, i) => (
-                <tr key={`u-${r.slNo}`} className={i % 2 === 0 ? 'bg-amber-50/40' : 'bg-white'}>
-                  <td className="px-2 py-1.5 text-center text-gray-400">{aidedDist.length + i + 1}</td>
-                  <td className="px-2 py-1.5 font-medium text-amber-700">Unaided</td>
-                  <td className="px-2 py-1.5 font-medium">{r.feeType}</td>
-                  <td className="px-2 py-1.5 text-center">{r.studentCount}</td>
-                  <td className="px-2 py-1.5 text-right">{fmt(r.feeAmountPerStudent)}</td>
-                  <td className="px-2 py-1.5 text-right font-semibold">{fmt(r.totalCollected)}</td>
-                  <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{r.toGov > 0 ? fmt(r.toGov) : '—'}</td>
-                  <td className="px-2 py-1.5 text-right">{r.toSVK > 0 ? fmt(r.toSVK) : '—'}</td>
-                  <td className="px-2 py-1.5 text-right">{r.toSMP > 0 ? fmt(r.toSMP) : '—'}</td>
-                </tr>
-              ))}
-              {aidedDist.length === 0 && unaidedDist.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">No counts entered yet.</td></tr>
-              )}
-            </tbody>
-            {(aidedDist.length > 0 || unaidedDist.length > 0) && (
-              <tfoot className={TFOOT}>
-                <tr>
-                  <td className="px-2 py-2" colSpan={5}>GRAND TOTAL</td>
-                  <td className="px-2 py-2 text-right">{fmt(grandTotals.tot)}</td>
-                  <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(grandTotals.gov)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(grandTotals.svk)}</td>
-                  <td className="px-2 py-2 text-right">{fmt(grandTotals.smp)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* Distribution Rules legend */}
-      <div className="bg-gray-50 rounded-xl border border-[#CDE7E7] p-3 text-[10px] text-gray-500 space-y-1">
-        <p className="font-semibold text-gray-600 text-xs mb-1">Distribution Rules</p>
-        <p><span className="font-medium text-indigo-700">Aided (CE, ME, EC, CS):</span> Tuition / DVP / Admission → 50% Govt + 50% SVK | Lab / RR / Magazine / ID Card → 50% Govt + 50% SMP | Sports / Association / Library / SWF / TWF / NSS → 100% SMP</p>
-        <p><span className="font-medium text-amber-700">Unaided (EE):</span> Tuition / DVP / Admission → 100% SVK | All other fees → 100% SMP</p>
-        <p className="text-gray-400">All WP admissions are treated as Lateral-entry (2nd Year direct entry), so Library fee applies to WP 1st Year and 2nd Year counts, and tuition is charged at the 1st Year rate for 2nd Year counts — same as regular Lateral entrants. Fine is not applicable here since no fee records exist for manually entered counts.</p>
-      </div>
+      ) : (
+        <RemittanceTrackerPanel
+          key={trackerTab}
+          scope="wp"
+          academicYear={academicYear}
+          trackerTab={trackerTab}
+          payable={fullDist.grandTotals}
+          govPayableByHead={govPayableByHead}
+          heads={WP_GOV_HEADS}
+          pdfLabelPrefix="WP — "
+        />
+      )}
     </div>
   );
 }

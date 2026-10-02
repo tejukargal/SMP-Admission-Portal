@@ -18,6 +18,14 @@ service firebase.storage {
         && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
     }
 
+    // WP Fee Distribution tracker — same layout as remittanceChallans
+    match /wpRemittanceChallans/{remittanceId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
+    }
+
     // ── Cash deposit slips (bank challan / CDM receipt scans) ──────────────
     match /cashDepositSlips/{depositId}/{allPaths=**} {
       allow read: if request.auth != null;

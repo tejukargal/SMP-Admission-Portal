@@ -415,6 +415,8 @@ export interface ExamFeeRecord {
 
 export type RemittancePayee = 'GOV' | 'SVK' | 'SMP';
 export type RemittanceMode  = 'Online' | 'NEFT' | 'Cheque';
+/** Which tracker a remittance belongs to — main Fee Distribution or WP Fee Distribution */
+export type RemittanceScope = 'main' | 'wp';
 
 /** Per-fee-head amounts for a Government (K2) remittance */
 export interface GovHeadAmounts {

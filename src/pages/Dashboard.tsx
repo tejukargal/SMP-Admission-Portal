@@ -472,6 +472,12 @@ export function Dashboard() {
   // ↑/↓ move between result cards (paging in more when stepping past the last one),
   // Enter opens the active student's latest enrollment, Esc clears the search.
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // The input keeps focus while a modal/menu opened from the results is up, so its
+    // keys must yield: the first Esc closes the overlay (its own handler), and only
+    // the next Esc — with nothing open — clears the search.
+    const overlayOpen = !!(feeHistoryStudent || collectFeeStudent || ctxMenu
+      || studyCertStudent || tcStudent || pcStudent || cccStudent);
+    if (overlayOpen) return;
     if (e.key === 'Escape') {
       if (inputValue) { e.preventDefault(); setInputValue(''); }
       return;
