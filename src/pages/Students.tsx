@@ -961,47 +961,62 @@ export function Students() {
         </div>
       </div>
 
-      {/* Recently Enrolled — filter-independent quick-access cards */}
+      {/* Recently Enrolled — filter-independent compact list, styled like the main table */}
       {recentlyEnrolled.length > 0 && (
         <div
-          className="flex-shrink-0 rounded-2xl border border-[#CFE3F2] bg-white px-3 py-2.5"
-          style={{ background: 'linear-gradient(135deg, #EEF6FC 0%, #FFFFFF 60%)', animation: 'content-enter 0.26s ease-out' }}
+          className="flex-shrink-0 bg-white rounded-2xl border border-[#CFE3F2] overflow-hidden transition-shadow duration-200 hover:shadow-[0_4px_16px_rgba(11,60,94,0.06)]"
+          style={{ animation: 'content-enter 0.26s ease-out' }}
         >
-          <div className="flex items-center gap-2 mb-2">
+          {/* Title band — same tint, hairline and type as the table header */}
+          <div className="h-8 px-3 flex items-center gap-2 bg-[#E6F1FA] border-b border-[#C3DCEF]">
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: MINT, boxShadow: `0 0 0 3px ${MINT}26` }} />
-            <span className="text-[10px] font-medium uppercase tracking-[0.8px] text-[#075E93]">Recently Enrolled</span>
-            <span className="rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] px-2 py-[2px] text-[10px] font-medium leading-none tabular-nums">
+            <span className="text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#075E93]">Recently Enrolled</span>
+            <span className="rounded-full border border-[#0B7BC0]/40 bg-white text-[#075E93] px-1.5 py-[2px] text-[9.5px] font-medium leading-none tabular-nums">
               {recentlyEnrolled.length}
             </span>
-            <span className="ml-auto text-[10.5px] font-medium text-[#8A93A3] tabular-nums">Today · {todayStr}</span>
+            <span className="ml-auto text-[10px] font-medium text-[#5B8DB5] tabular-nums">Today · {todayStr}</span>
           </div>
-          <div className="flex items-stretch gap-2 overflow-x-auto no-scrollbar">
-            {recentlyEnrolled.map((student) => {
-              const active = contextMenu?.student.id === student.id;
-              return (
-                <div
-                  key={student.id}
-                  className={`shrink-0 min-w-[260px] max-w-[340px] flex items-center gap-3 rounded-xl border bg-white px-3 py-2 cursor-context-menu transition-[box-shadow,border-color] duration-150 hover:shadow-[0_4px_14px_rgba(11,60,94,0.08)] ${
-                    active ? 'border-[#0B7BC0] shadow-[0_0_0_3px_rgba(11,123,192,0.15)]' : 'border-[#CFE3F2] hover:border-[#0B7BC0]/45'
-                  }`}
-                  onContextMenu={(e) => handleContextMenu(e, student)}
-                  title="Right-click for actions"
-                >
-                  <RingAvatar name={student.studentNameSSLC} course={student.course} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="text-[12.5px] font-semibold text-[#075E93] truncate">{student.studentNameSSLC}</p>
-                      <LinePill value="New" color={MINT} />
-                    </div>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-black tabular-nums">{student.regNumber || '—'}</span>
-                      <LinePill value={student.course} color={DEPT_DOT[student.course]} />
-                      <LinePill value={student.year} color={YEAR_COLOR[student.year]} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="overflow-x-auto no-scrollbar">
+            <table
+              className="w-full text-xs border-separate border-spacing-0"
+              style={{ tableLayout: 'fixed', minWidth: COL_W.idx + COL_W.name + COL_W.reg + COL_W.course + COL_W.year + COL_W.gender + COL_W.admType + COL_W.mobile + 90 }}
+            >
+              <colgroup>
+                {[COL_W.idx, COL_W.name, COL_W.reg, COL_W.course, COL_W.year, COL_W.gender, COL_W.admType, COL_W.mobile, 90].map((w, i) => (
+                  <col key={i} style={{ width: w }} />
+                ))}
+              </colgroup>
+              <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EAF2F9]">
+                {recentlyEnrolled.map((student, idx) => (
+                  <tr
+                    key={student.id}
+                    className={`transition-colors cursor-context-menu ${
+                      contextMenu?.student.id === student.id ? 'bg-[#0B7BC0]/[0.10]' : 'hover:bg-[#F3F9FD]'
+                    }`}
+                    onContextMenu={(e) => handleContextMenu(e, student)}
+                    title="Right-click for actions"
+                  >
+                    <td className="px-3 py-1.5 text-[11px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{idx + 1}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap overflow-hidden">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <RingAvatar name={student.studentNameSSLC} course={student.course} />
+                        <span className="text-[12.5px] font-medium text-[#075E93] truncate min-w-0" title={student.studentNameSSLC}>{student.studentNameSSLC}</span>
+                        <LinePill value="New" color={MINT} />
+                      </div>
+                    </td>
+                    <td className={`${TD_NUM} !py-1.5`}>{student.regNumber || '—'}</td>
+                    <td className={`${TD} !py-1.5`}><LinePill value={student.course} color={DEPT_DOT[student.course]} minWidth={34} /></td>
+                    <td className={`${TD} !py-1.5`}><LinePill value={student.year} color={YEAR_COLOR[student.year]} minWidth={66} /></td>
+                    <td className={`${TD} !py-1.5`}><LinePill value={student.gender} color={GENDER_COLOR[student.gender]} minWidth={40} /></td>
+                    <td className={`${TD} !py-1.5`}><LinePill value={student.admType} color={ADM_TYPE_COLOR[student.admType]} minWidth={70} /></td>
+                    <td className={`${TD_NUM} !py-1.5`}>{student.studentMobile}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap text-right text-[11px] font-medium text-[#8A93A3] tabular-nums">
+                      {new Date(student.updatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
