@@ -9,6 +9,14 @@ import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
 interface TooltipState { label: string; y: number; x: number }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
+function IconCashBook() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/>
+      <path d="M2 10h20L12 3z"/>
+    </svg>
+  );
+}
 function IconDashboard() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -149,6 +157,7 @@ const ADMIN_ITEMS = [
   { to: '/fees',           label: 'Collect Fee',    Icon: IconFee          },
   { to: '/fee-register',   label: 'Fee Register',   Icon: IconRegister     },
   { to: '/fee-reports',    label: 'Fee Reports',    Icon: IconReports      },
+  { to: '/cash-book',      label: 'Cash & Bank',    Icon: IconCashBook     },
   // 'Messaging' (Bulk SMS) is temporarily off the sidebar while unfinished —
   // reachable from Settings → Messaging tab in the meantime. Restore this
   // entry when asked.

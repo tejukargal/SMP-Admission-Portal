@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useTransition } from 'react';
+import { CashInHandAlert } from '../components/cashBook/CashInHandAlert';
 import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
@@ -1722,6 +1723,9 @@ const [barsReady, setBarsReady] = useState(false);
         /* ── Metric cards (bento) ───────────────────────────────────── */
         <div className="pb-4">
           <div className="space-y-4 min-w-0">
+
+            {/* Cash-in-hand reminder (admin only; renders nothing for staff) */}
+            {isAdmin && <CashInHandAlert variant="card" />}
 
             {/* Overview bento — Total (largest) · Course intake · Boys / Girls */}
             <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">

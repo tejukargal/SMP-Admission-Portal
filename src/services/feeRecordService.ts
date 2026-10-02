@@ -9,6 +9,8 @@ import {
   writeBatch,
   runTransaction,
   getDoc,
+  onSnapshot,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import type { FeeRecord, FeeRecordFormData, FeeAdditionalHead, AcademicYear, Course, Year, AdmCat, Student } from '../types';
@@ -17,6 +19,21 @@ import { SMP_FEE_HEADS } from '../types';
 const AIDED_COURSES = new Set<Course>(['CE', 'ME', 'EC', 'CS']);
 
 const COL = 'feeRecords';
+
+/** Live listener for every fee record paid on/after `startDate` (YYYY-MM-DD), across
+ *  all academic years — feeds the cash-in-hand ledger. */
+export function subscribeFeeRecordsSince(
+  startDate: string,
+  onData: (records: FeeRecord[]) => void,
+  onError: (err: Error) => void,
+): Unsubscribe {
+  const q = query(collection(db, COL), where('date', '>=', startDate));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeRecord))),
+    onError,
+  );
+}
 
 // Keyed by the SMP receipt when there is one (unchanged for every such record).
 // SVK-only / Additional-only payments have no SMP receipt, so they fall back to

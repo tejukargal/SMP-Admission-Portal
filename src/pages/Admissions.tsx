@@ -16,6 +16,7 @@ import { PageSpinner } from '../components/common/PageSpinner';
 import { AdmissionLetterModal } from '../components/common/AdmissionLetterModal';
 import { ManageDocumentsModal } from '../components/documents/ManageDocumentsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
+import { Modal } from '../components/common/Modal';
 import { SeatCancellationRefundModal } from '../components/common/SeatCancellationRefundModal';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { EnrollmentBreakdownModal } from '../components/student/EnrollmentBreakdownModal';
@@ -469,7 +470,7 @@ export function Admissions() {
   async function handleAction(
     student: Student,
     newStatus: 'CONFIRMED' | 'CANCELLED' | 'PENDING'
-  ) {
+  ): Promise<boolean> {
     setActionLoading(student.id);
     try {
       await updateStudentStatus(student.id, newStatus);
@@ -490,9 +491,11 @@ export function Admissions() {
       }
       setToastError(false);
       setToastMsg(msgs[newStatus] ?? 'Updated.');
+      return true;
     } catch {
       setToastError(true);
       setToastMsg('Failed to update status. Please try again.');
+      return false;
     } finally {
       setActionLoading(null);
     }
@@ -502,9 +505,14 @@ export function Admissions() {
   const [allottedCatStudent, setAllottedCatStudent] = useState<Student | null>(null);
   const [savingAllottedCat, setSavingAllottedCat] = useState(false);
 
+  // Confirm is a two-step flow: a summary prompt first, then (only on success)
+  // the Allotted Category modal.
+  const [confirmTarget, setConfirmTarget] = useState<Student | null>(null);
+
   async function handleConfirmClick(student: Student) {
-    await handleAction(student, 'CONFIRMED');
-    setAllottedCatStudent(student);
+    const ok = await handleAction(student, 'CONFIRMED');
+    setConfirmTarget(null);
+    if (ok) setAllottedCatStudent(student);
   }
 
   async function handleSaveAllottedCat(allottedCategory: string) {
@@ -1218,7 +1226,7 @@ export function Admissions() {
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex gap-1.5">
                           <ActionBtn disabled={actionLoading !== null} onClick={() => navigate(`/enroll?edit=${student.id}`)}>Edit</ActionBtn>
-                          <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleConfirmClick(student)}>Confirm</ActionBtn>
+                          <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => setConfirmTarget(student)}>Confirm</ActionBtn>
                           <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                         </div>
                       </td>
@@ -1431,7 +1439,7 @@ export function Admissions() {
                         {activeTab === 'pending' ? (
                           <>
                             <ActionBtn disabled={actionLoading !== null} onClick={() => navigate(`/enroll?edit=${student.id}`)}>Edit</ActionBtn>
-                            <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleConfirmClick(student)}>Confirm</ActionBtn>
+                            <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => setConfirmTarget(student)}>Confirm</ActionBtn>
                             <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                           </>
                         ) : (
@@ -1574,6 +1582,37 @@ export function Admissions() {
         onClose={() => setRefundHistoryStudent(null)}
       />
     )}
+
+    <Modal
+      open={!!confirmTarget}
+      title="Confirm Admission?"
+      variant="primary"
+      confirmLabel="Yes, Confirm"
+      loading={!!confirmTarget && actionLoading === confirmTarget.id}
+      onConfirm={() => { if (confirmTarget) void handleConfirmClick(confirmTarget); }}
+      onCancel={() => { if (actionLoading === null) setConfirmTarget(null); }}
+      message={confirmTarget && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[#0FA968]/30 bg-[#0FA968]/[0.06] px-4 py-3">
+            <p className="text-[15px] font-semibold text-gray-900">{confirmTarget.studentNameSSLC}</p>
+            <p className="mt-0.5 text-xs text-gray-600">
+              {[confirmTarget.course, confirmTarget.year, confirmTarget.category, confirmTarget.admType, confirmTarget.admCat]
+                .filter(Boolean).join(' · ')}
+            </p>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              {confirmTarget.meritNumber && (<><dt className="text-gray-500">Merit No.</dt><dd className="font-medium text-gray-800">{confirmTarget.meritNumber}</dd></>)}
+              {confirmTarget.regNumber && (<><dt className="text-gray-500">Reg No.</dt><dd className="font-medium text-gray-800">{confirmTarget.regNumber}</dd></>)}
+              {confirmTarget.fatherName && (<><dt className="text-gray-500">Father</dt><dd className="font-medium text-gray-800">{confirmTarget.fatherName}</dd></>)}
+              {(confirmTarget.studentMobile || confirmTarget.fatherMobile) && (<><dt className="text-gray-500">Mobile</dt><dd className="font-medium text-gray-800">{confirmTarget.studentMobile || confirmTarget.fatherMobile}</dd></>)}
+            </dl>
+          </div>
+          <p>
+            This student will move to the <span className="font-semibold text-gray-900">{isWPStudent(confirmTarget) ? 'WP Students' : 'Students'}</span> list
+            {confirmTarget.regNumber ? ' and receive an admission status update' : ''}. You will then be asked for the allotted category.
+          </p>
+        </div>
+      )}
+    />
 
     {allottedCatStudent && (
       <AllottedCategoryModal

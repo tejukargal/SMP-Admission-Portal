@@ -648,3 +648,54 @@ export interface ExamResult {
   importedAt: string;              // ISO
   updatedAt: string;               // ISO
 }
+
+// ─── Cash in Hand / Bank Deposits ──────────────────────────────────────────────
+
+/** Bank account a fee portion is deposited to.
+ *  SBI = SBI Ppl (SMP + all Additional heads); SVK = Canara SVK Mgt (SVK portion). */
+export type CashAccount = 'SBI' | 'SVK';
+
+export type CashDepositMode = 'Challan' | 'CDM' | 'Other';
+
+/** A record that cash collected on one or more days was deposited to a bank account. */
+export interface CashDeposit {
+  id: string;
+  account: CashAccount;
+  depositDate: string;                  // 'YYYY-MM-DD' — date the cash reached the bank
+  collectionDates: string[];            // collection days covered (sorted)
+  amountByDate: Record<string, number>; // cash deposited per collection day (snapshot at recording time)
+  amount: number;                       // total deposited
+  depositMode: CashDepositMode;
+  reference: string;                    // challan / CDM txn / UTR no.
+  denominations?: Record<string, number>; // optional note/coin count of the cash handed over
+  slipUrl?: string;                     // optional scanned deposit slip
+  slipPath?: string;
+  remarks: string;
+  createdBy: string;                    // uid
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Stored at settings/cash_tracking */
+export interface CashTrackingSettings {
+  startDate: string;    // 'YYYY-MM-DD' — cash collected before this is treated as already deposited
+  overdueDays: number;  // cash held longer than this many days is flagged overdue
+  updatedAt: string;
+}
+
+/** Bank credit details for one day's UPI collections to one account. Optional —
+ *  without it, UPI is assumed credited on the collection date. Doc id: `${account}__${collectionDate}`. */
+export interface UpiCredit {
+  id: string;
+  account: CashAccount;
+  collectionDate: string;   // 'YYYY-MM-DD' — day the UPI payments were received
+  creditDate: string;       // 'YYYY-MM-DD' — day the bank credited/settled them
+  amount: number;           // UPI total for that day at the time of confirming (mismatch check)
+  reference: string;        // UTR / settlement ref (optional, may be '')
+  remarks: string;
+  createdBy: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}

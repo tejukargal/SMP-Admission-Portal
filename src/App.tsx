@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StudentAuthProvider, useStudentAuth } from './contexts/StudentAuthContext';
 import { FiltersProvider } from './contexts/FiltersContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { CashInHandProvider } from './contexts/CashInHandContext';
 import { Layout } from './components/layout/Layout';
 import { pageLoaders, preloadCommonRoutes } from './routePreload';
 import { PageSpinner } from './components/common/PageSpinner';
@@ -31,6 +32,7 @@ const Settings = lazy(pageLoaders.settings);
 const CollectFee = lazy(pageLoaders.collectFee);
 const FeeRegister = lazy(pageLoaders.feeRegister);
 const FeeReportsPage = lazy(pageLoaders.feeReports);
+const CashBook = lazy(pageLoaders.cashBook);
 const Messaging = lazy(pageLoaders.messaging);
 const Inquiries = lazy(pageLoaders.inquiries);
 const StudentReports = lazy(pageLoaders.studentReports);
@@ -78,6 +80,7 @@ function AppRoutes() {
   return (
     <SettingsProvider>
     <FiltersProvider>
+    <CashInHandProvider>
     <Layout>
       <Suspense fallback={<PageSpinner />}>
         <Routes>
@@ -100,6 +103,10 @@ function AppRoutes() {
             element={isAdmin ? <FeeReportsPage /> : <Navigate to="/dashboard" replace />}
           />
           <Route
+            path="/cash-book"
+            element={isAdmin ? <CashBook /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route
             path="/messaging"
             element={isAdmin ? <Messaging /> : <Navigate to="/dashboard" replace />}
           />
@@ -116,6 +123,7 @@ function AppRoutes() {
         </Routes>
       </Suspense>
     </Layout>
+    </CashInHandProvider>
     </FiltersProvider>
     </SettingsProvider>
   );

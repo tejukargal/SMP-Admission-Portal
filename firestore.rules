@@ -254,6 +254,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Cash Deposits (cash-in-hand → bank remittance tracking) ───────────────
+    match /cashDeposits/{docId} {
+      allow read:   if isActiveUser();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['account', 'depositDate', 'collectionDates', 'amount', 'reference']);
+      allow update, delete: if isAdmin();
+    }
+
+    // ── UPI Credits (bank credit date / UTR per UPI collection day) ─────────────
+    match /upiCredits/{docId} {
+      allow read:   if isActiveUser();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['account', 'collectionDate', 'creditDate', 'amount']);
+      allow update, delete: if isAdmin();
+    }
+
     // ── Denomination Abstracts (Bank Remittance cash-count verification) ───────
     match /denominationAbstracts/{docId} {
       allow read:  if isActiveUser();

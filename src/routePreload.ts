@@ -28,6 +28,7 @@ export const pageLoaders = {
   feeReports: once(() =>
     import('./pages/FeeReportsPage').then((m) => ({ default: m.FeeReportsPage }))
   ),
+  cashBook: once(() => import('./pages/CashBook').then((m) => ({ default: m.CashBook }))),
   messaging: once(() => import('./pages/Messaging').then((m) => ({ default: m.Messaging }))),
   studentMessages: once(() =>
     import('./pages/StudentMessages').then((m) => ({ default: m.StudentMessages }))
@@ -50,6 +51,7 @@ const routeToLoader: Record<string, Loader> = {
   '/fees': pageLoaders.collectFee,
   '/fee-register': pageLoaders.feeRegister,
   '/fee-reports': pageLoaders.feeReports,
+  '/cash-book': pageLoaders.cashBook,
   '/messaging': pageLoaders.messaging,
   '/student-messages': pageLoaders.studentMessages,
   '/inquiries': pageLoaders.inquiries,

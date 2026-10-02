@@ -10,6 +10,7 @@ import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/
 import type { RefundRecord } from '../services/refundService';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
+import { CashInHandAlert } from '../components/cashBook/CashInHandAlert';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
 import { prefetchCollectFee, prefetchFeeHistory, invalidateFeePrefetch } from '../components/fee/feeModalPrefetch';
 import type {
@@ -555,6 +556,8 @@ export function CollectFee() {
       className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
       style={{ background: 'linear-gradient(160deg, #F6FBFB 0%, #FCFDFD 45%, #F2F9F9 100%)', animation: 'page-enter 0.22s ease-out' }}
     >
+
+      <CashInHandAlert variant="banner" />
 
       {/* Page header + stat chips */}
       <div className="flex-shrink-0 flex items-center gap-4 min-w-0">

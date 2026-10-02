@@ -1,6 +1,8 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
+import { useNavigate } from 'react-router-dom';
+import { useCashInHand } from '../../contexts/CashInHandContext';
 
 // Soft pastel-leaning tones (same family as the revamped pages' accents), with a
 // gentle slate interleaved between each course colour so it stays dominant
@@ -55,6 +57,32 @@ function YearPill({ year }: { year: string }) {
   );
 }
 
+/** Cash-in-hand reminder pill — amber while cash is held, red once overdue. Admin only;
+ *  hidden when nothing is pending. Opens the Cash & Bank page. */
+function CashBadge({ compact = false }: { compact?: boolean }) {
+  const { enabled, configured, summary } = useCashInHand();
+  const navigate = useNavigate();
+  if (!enabled || !configured || summary.total <= 0) return null;
+  const overdue = summary.isOverdue;
+  const tone = overdue
+    ? { border: 'rgba(225,29,72,0.45)', bg: '#FFF1F3', ink: '#A5173A', dot: '#E11D48' }
+    : { border: 'rgba(217,119,6,0.45)', bg: '#FFF8EB', ink: '#9A5B00', dot: '#D97706' };
+  const amount = `₹${summary.total.toLocaleString('en-IN')}`;
+  const held = summary.daysHeld > 0 ? `${summary.daysHeld} day${summary.daysHeld === 1 ? '' : 's'}` : 'today';
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/cash-book')}
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap cursor-pointer transition-shadow hover:shadow-[0_3px_10px_rgba(15,23,42,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+      style={{ borderColor: tone.border, background: tone.bg, color: tone.ink }}
+      title={`Cash in hand not yet deposited to bank — SBI ₹${summary.byAccount.SBI.pending.toLocaleString('en-IN')}, SVK ₹${summary.byAccount.SVK.pending.toLocaleString('en-IN')}. Oldest: ${summary.oldestDate ?? '—'}. Click to record a deposit.`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${overdue ? 'animate-pulse' : ''}`} style={{ background: tone.dot }} />
+      {compact ? amount : <>{amount} cash in hand <span className="opacity-70">· {overdue ? `overdue ${held}` : held}</span></>}
+    </button>
+  );
+}
+
 interface HeaderProps {
   onMenuClick: () => void;
 }
@@ -102,10 +130,11 @@ export function Header({ onMenuClick }: HeaderProps) {
             <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <div className="flex-1 min-w-0 flex items-center">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="inline-flex items-center rounded-full p-[3px] border" style={{ background: '#F3F5F8', borderColor: HAIRLINE }}>
             <YearPill year={year} />
           </span>
+          <CashBadge compact />
         </div>
         <button
           onClick={() => { void logout(); }}
@@ -153,8 +182,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           </span>
         </span>
 
-        {/* Right — logout */}
-        <div className="flex-1 flex justify-end">
+        {/* Right — cash-in-hand reminder + logout */}
+        <div className="flex-1 flex justify-end items-center gap-2.5">
+          <CashBadge />
           <button
             onClick={() => { void logout(); }}
             className="group inline-flex items-center gap-2 rounded-full border bg-white pl-[4px] pr-3.5 py-[4px] text-[12.5px] font-medium text-[#3F4654] transition-all cursor-pointer hover:border-[#E11D48]/40 hover:bg-[#FFF5F7] hover:text-[#A5173A] hover:shadow-[0_3px_10px_rgba(225,29,72,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E11D48]/30"
