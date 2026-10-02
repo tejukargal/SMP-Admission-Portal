@@ -70,7 +70,7 @@ function FactChip({ icon, children, title }: { icon: ReactNode; children: ReactN
   return (
     <span
       title={title}
-      className="inline-flex items-center gap-1 h-6 rounded-full border bg-white px-2.5 text-[11px] font-medium leading-none tabular-nums whitespace-nowrap"
+      className="inline-flex items-center gap-1 h-7 rounded-full border bg-white px-2 text-[11px] font-medium leading-none tabular-nums whitespace-nowrap"
       style={{ borderColor: PERI_BORDER, color: MUTED }}
     >
       <span className="flex" style={{ color: PERI }}>{icon}</span>
@@ -98,7 +98,7 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
   }
   if (due > 0) {
     return (
-      <div className="sr-pop text-right leading-none">
+      <div className="sr-pop text-center leading-none">
         <p className="text-[18px] font-semibold tabular-nums tracking-[-0.2px]" style={{ color: DUE }}>
           ₹{due.toLocaleString('en-IN')}
         </p>
@@ -107,8 +107,8 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
     );
   }
   return (
-    <span className="sr-pop inline-flex items-center gap-1 h-7 rounded-full border px-3 text-[11.5px] font-medium" style={pill(PAID)}>
-      <CheckCircle size={14} weight="fill" /> No dues
+    <span className="sr-pop inline-flex items-center justify-center gap-1 w-[98px] h-7 rounded-full border text-[11px] font-medium" style={pill(PAID)}>
+      <CheckCircle size={12} weight="fill" /> No Dues
     </span>
   );
 }
@@ -150,10 +150,10 @@ function EnrollmentRow({
       />
 
       <span className="text-[12px] font-semibold tabular-nums" style={{ color: INK }}>{s.academicYear}</span>
-      <span className="justify-self-start inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-medium leading-none whitespace-nowrap" style={pill(yearHex)}>
+      <span className="justify-self-start inline-flex items-center justify-center w-[68px] h-7 rounded-full border text-[11px] font-medium leading-none whitespace-nowrap" style={pill(yearHex)}>
         {s.year?.replace(' YEAR', ' YR') || '—'}
       </span>
-      <span className="justify-self-start inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-semibold leading-none" style={pill(courseHex)}>
+      <span className="justify-self-start inline-flex items-center justify-center w-[46px] h-7 rounded-full border text-[11px] font-semibold leading-none" style={pill(courseHex)}>
         {s.course || '—'}
       </span>
       <span className="min-w-0 truncate text-[11.5px] font-medium" style={{ color: MUTED }} title={meta}>
@@ -165,7 +165,7 @@ function EnrollmentRow({
           </span>
         )}
       </span>
-      <span className="justify-self-start inline-flex items-center h-7 rounded-full border px-2.5 text-[10.5px] font-medium leading-none tracking-[0.2px]" style={pill(dot)}>
+      <span className="justify-self-start inline-flex items-center justify-center w-[96px] h-7 rounded-full border text-[10.5px] font-medium leading-none tracking-[0.2px]" style={pill(dot)}>
         {s.admissionStatus || 'PENDING'}
       </span>
 
@@ -330,11 +330,12 @@ export function SearchResults({
             } as CSSProperties}
           >
             {/* Profile header */}
+            {/* pr-5 puts the fee block on the same right edge as the row fee buttons */}
             <div
-              className="grid items-center gap-4 px-4 pt-2 pb-[7px]"
-              style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', background: 'linear-gradient(135deg,#F3F4FF 0%,#FFFFFF 70%)' }}
+              className="flex items-center gap-3 pl-4 pr-5 pt-1.5 pb-[5px]"
+              style={{ background: 'linear-gradient(135deg,#F3F4FF 0%,#FFFFFF 70%)' }}
             >
-             <div className="flex items-center gap-3 min-w-0">
+             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="relative shrink-0">
                 <span
                   className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold text-white border-2 border-white"
@@ -366,40 +367,38 @@ export function SearchResults({
                     Aadhaar: <Highlight text={group.nameAadhar} query={query} />
                   </p>
                 )}
-                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                <div className="mt-1 flex items-end gap-1.5 flex-wrap">
                   {mobile && <FactChip icon={<Phone size={12} weight="bold" />} title="Mobile"><Highlight text={mobile} query={query} /></FactChip>}
                   <FactChip icon={<Cake size={12} weight="bold" />} title="Date of birth">{group.dob || '—'}</FactChip>
                   <FactChip icon={<Stack size={12} weight="bold" />}>
                     {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
                   </FactChip>
+                  {/* Register No — primary identity: name-style type in a periwinkle pill
+                      (same pastel accent as the year/course pills). */}
+                  {regNo ? (
+                    <span
+                      title="Register No"
+                      className="inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[15px] font-semibold leading-none tabular-nums whitespace-nowrap"
+                      style={{ ...pill(PERI), color: PERI_INK }}
+                    >
+                      <IdentificationCard size={14} weight="bold" style={{ color: PERI }} />
+                      <Highlight text={regNo} query={query} />
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 h-7 rounded-full border border-dashed bg-white px-2.5 text-[11.5px] font-medium leading-none whitespace-nowrap"
+                      style={{ borderColor: `${PERI}66`, color: FAINT }}
+                    >
+                      <IdentificationCard size={13} weight="bold" /> No Reg No
+                    </span>
+                  )}
                 </div>
               </div>
 
              </div>
 
-              {/* Register No — the student's primary identity, centred in the header.
-                  Outline pill (like the course pills), sized to match the Enroll button. */}
-              {regNo ? (
-                <span
-                  title="Register No"
-                  className="inline-flex items-center gap-2 h-[34px] rounded-full border bg-white px-4 text-[14px] font-semibold leading-none tabular-nums tracking-[0.4px] whitespace-nowrap"
-                  style={{ borderColor: `${PERI}73`, color: PERI_INK }}
-                >
-                  <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.8px]" style={{ color: FAINT }}>
-                    <IdentificationCard size={14} weight="bold" style={{ color: PERI }} /> Reg No
-                  </span>
-                  <Highlight text={regNo} query={query} />
-                </span>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 h-[34px] rounded-full border border-dashed bg-white px-4 text-[12px] font-medium leading-none whitespace-nowrap"
-                  style={{ borderColor: `${PERI}66`, color: FAINT }}
-                >
-                  <IdentificationCard size={14} weight="bold" /> No Reg No
-                </span>
-              )}
-
-              <div className="flex justify-end min-w-0">
+              {/* Same 98px column as the row fee pills, so header and row statuses line up */}
+              <div className="shrink-0 min-w-[98px] flex justify-center">
                 <FeeSummary due={groupDue.get(group.key)} loading={feeLoading} />
               </div>
             </div>

@@ -582,37 +582,57 @@ function DocumentsTab({
 }
 
 // ─── Fee history tab ──────────────────────────────────────────────────────────
+// Minimal ledger: an identity strip (name + reg no + overall figures) on top, then
+// one quiet section per academic year — a single header line, a slim receipt list,
+// and the per-head split folded behind a "Fee heads" toggle.
 
-/** Allotted / Paid / Due stat block used in the year-card header. */
-function FeeStat({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+const LEDGER_LINE = '#E6EAF0';
+const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+/** Inline "Label ₹value" figure used in the identity strip and year headers. */
+function Figure({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex flex-col items-end min-w-0">
-      <span className="text-[8.5px] font-medium uppercase tracking-[0.8px] leading-none" style={{ color: inkOf(color) }}>{label}</span>
-      <span className="mt-1 text-[13px] font-semibold tabular-nums leading-none" style={{ color: inkOf(color) }}>{value}</span>
-      {sub && <span className="mt-1 text-[9.5px] font-medium text-[#8A93A3] tabular-nums whitespace-nowrap">{sub}</span>}
-    </div>
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-[10.5px] font-medium text-[#8A93A3]">{label}</span>
+      <span className="text-[12.5px] font-semibold tabular-nums" style={{ color: color ?? '#262B35' }}>{value}</span>
+    </span>
   );
 }
 
-/** Pastel summary tile for the overall fee totals. */
-function SumTile({ label, value, sub, color, emphasis }: { label: string; value: number; sub?: string; color: string; emphasis?: boolean }) {
+/** Due / No-dues status pill: solid when due (themed), soft outline when cleared. */
+function DueStatusPill({ due, size = 'md' }: { due: number | null; size?: 'md' | 'lg' }) {
+  const theme = useModalTheme(STUDENT_DEFAULT_THEME);
+  const h = size === 'lg' ? 'h-8 px-3.5 text-[12.5px]' : 'h-7 px-3 text-[11.5px]';
+  if (due === null) {
+    return (
+      <span className={`inline-flex items-center rounded-full border bg-white font-medium whitespace-nowrap ${h}`} style={{ borderColor: `${AMBER}66`, color: inkOf(AMBER) }}>
+        No structure set
+      </span>
+    );
+  }
+  if (due > 0) {
+    return (
+      <span
+        className={`inline-flex items-center rounded-full font-semibold tabular-nums text-white whitespace-nowrap ${h}`}
+        style={{ background: theme.due, boxShadow: `0 2px 8px ${theme.due}40`, animation: 'stat-pop 0.3s ease-out' }}
+      >
+        Due {rupees(due)}
+      </span>
+    );
+  }
   return (
-    <div
-      className="flex-1 min-w-[120px] rounded-xl border px-3.5 py-2.5"
-      style={{
-        background: `linear-gradient(135deg, ${color}${emphasis ? '22' : '14'}, ${color}05)`,
-        borderColor: `${color}${emphasis ? '5C' : '38'}`,
-        boxShadow: emphasis ? `0 3px 12px ${color}1F` : undefined,
-      }}
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border font-medium whitespace-nowrap ${h}`}
+      style={{ background: `${theme.paid}12`, borderColor: `${theme.paid}66`, color: inkOf(theme.paid), animation: 'stat-pop 0.3s ease-out' }}
     >
-      <div className="text-[9px] font-medium uppercase tracking-[0.8px]" style={{ color: inkOf(color) }}>{label}</div>
-      <div className="mt-0.5 text-[17px] font-semibold tabular-nums" style={{ color: inkOf(color) }}>₹{value.toLocaleString()}</div>
-      {sub && <div className="text-[10px] font-medium text-[#B45309] mt-0.5">{sub}</div>}
-    </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      No dues
+    </span>
   );
 }
 
 function FeeTab({
+  student,
   yearData,
   loading,
   error,
@@ -622,6 +642,7 @@ function FeeTab({
   overallDue,
   refundedByYear,
 }: {
+  student: Student;
   yearData: YearData[];
   loading: boolean;
   error: string | null;
@@ -631,39 +652,77 @@ function FeeTab({
   overallDue: number;
   refundedByYear: Map<string, number>;
 }) {
-  const [expandedDues, setExpandedDues] = useState<Set<string>>(new Set());
+  const [expandedHeads, setExpandedHeads] = useState<Set<string>>(new Set());
   const [receiptDetailRecord, setReceiptDetailRecord] = useState<FeeRecord | null>(null);
   const theme = useModalTheme(STUDENT_DEFAULT_THEME);
 
-  function toggleDues(ay: string) {
-    setExpandedDues((prev) => {
+  function toggleHeads(ay: string) {
+    setExpandedHeads((prev) => {
       const next = new Set(prev);
       if (next.has(ay)) next.delete(ay); else next.add(ay);
       return next;
     });
   }
 
+  // ── Identity strip: always shown (even while loading) so the tab opens on who it is.
+  const identity = (
+    <div
+      className="rounded-2xl border bg-white px-4 py-3"
+      style={{ borderColor: `${theme.accent}40`, animation: 'content-enter 0.25s ease-out' }}
+    >
+      <div className="flex items-center gap-3 flex-wrap">
+        <h4 className="text-[17px] font-semibold leading-tight tracking-[-0.2px] truncate max-w-[420px]" style={{ color: theme.accentInk }} title={student.studentNameSSLC}>
+          {student.studentNameSSLC}
+        </h4>
+        {student.regNumber ? (
+          <span
+            className="inline-flex items-center gap-1.5 h-8 rounded-full border px-3 text-[15px] font-semibold leading-none tabular-nums"
+            style={{ background: `${theme.accent}12`, borderColor: `${theme.accent}66`, color: theme.accentInk }}
+            title="Register No"
+          >
+            <span className="text-[9px] font-medium uppercase tracking-[0.8px] text-[#8A93A3]">Reg</span>
+            {student.regNumber}
+          </span>
+        ) : (
+          <span className="inline-flex items-center h-8 rounded-full border border-dashed bg-white px-3 text-[11.5px] font-medium text-[#8A93A3]" style={{ borderColor: `${theme.accent}59` }}>
+            No Reg No
+          </span>
+        )}
+        <div className="ml-auto">
+          {loading ? <div className="skeleton h-8 w-28 !rounded-full" /> : !error && yearData.length > 0 && <DueStatusPill due={overallDue} size="lg" />}
+        </div>
+      </div>
+      {!loading && !error && yearData.length > 0 && (
+        <div className="mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
+          <Figure label="Allotted" value={rupees(overallAllotted)} />
+          {overallFine > 0 && <span className="text-[10.5px] font-medium" style={{ color: inkOf(AMBER) }}>incl. fine {rupees(overallFine)}</span>}
+          <span className="text-[#D5DAE2]">·</span>
+          <Figure label="Paid" value={rupees(overallPaid)} color={inkOf(theme.paid)} />
+          <span className="text-[#D5DAE2]">·</span>
+          <Figure label="Due" value={rupees(Math.max(0, overallDue))} color={overallDue > 0 ? inkOf(theme.due) : inkOf(theme.paid)} />
+          <span className="ml-auto text-[10.5px] font-medium text-[#8A93A3]">
+            {yearData.length} academic year{yearData.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="px-5 py-4 space-y-3">
-        <div className="flex gap-2">
-          {[1, 2, 3].map((i) => <div key={i} className="skeleton flex-1 h-16 !rounded-xl" />)}
-        </div>
+        {identity}
         {Array.from({ length: 2 }).map((_, yi) => (
-          <div key={yi} className="rounded-2xl border border-[#E3EDF5] bg-white overflow-hidden">
-            <div className="px-4 py-3 flex items-center gap-4 bg-[#F5F9FC]">
-              <div className="skeleton h-5 w-20 !rounded-full" />
-              <div className="skeleton h-3 w-40 rounded" />
-              <div className="ml-auto flex gap-6">
-                <div className="skeleton h-8 w-16 rounded-lg" />
-                <div className="skeleton h-8 w-16 rounded-lg" />
-                <div className="skeleton h-8 w-16 rounded-lg" />
-              </div>
+          <div key={yi} className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: LEDGER_LINE }}>
+            <div className="px-4 py-3 flex items-center gap-3">
+              <div className="skeleton h-4 w-16 rounded" />
+              <div className="skeleton h-3 w-44 rounded" />
+              <div className="ml-auto skeleton h-7 w-24 !rounded-full" />
             </div>
-            <div className="px-4 py-3 space-y-2">
+            <div className="px-4 pb-3 space-y-2.5">
               {Array.from({ length: 2 + yi }).map((_, i) => (
                 <div key={i} className="flex gap-3">
-                  {['w-16', 'w-20', 'flex-1', 'w-20', 'w-20', 'w-20'].map((w, j) => (
+                  {['w-20', 'w-32', 'w-12', 'flex-1', 'w-16'].map((w, j) => (
                     <div key={j} className={`skeleton h-3 ${w} rounded`} />
                   ))}
                 </div>
@@ -677,55 +736,31 @@ function FeeTab({
 
   if (error) {
     return (
-      <EmptyState color={CORAL} icon={Ico.big(<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>)} title={error} />
+      <div className="px-5 py-4 space-y-3">
+        {identity}
+        <EmptyState color={CORAL} icon={Ico.big(<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>)} title={error} />
+      </div>
     );
   }
 
   if (yearData.length === 0) {
     return (
-      <EmptyState
-        color={theme.paid}
-        icon={Ico.big(<><rect x="1" y="5" width="22" height="14" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></>)}
-        title="No fee records found for this student."
-      />
+      <div className="px-5 py-4 space-y-3">
+        {identity}
+        <EmptyState
+          color={theme.paid}
+          icon={Ico.big(<><rect x="1" y="5" width="22" height="14" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></>)}
+          title="No fee records found for this student."
+        />
+      </div>
     );
   }
 
-  const overallPct = overallAllotted > 0 ? Math.min(100, Math.max(0, (overallPaid / overallAllotted) * 100)) : 0;
-
   return (
     <div className="px-5 py-4 space-y-3">
-      {/* Overall summary */}
-      <div className="rounded-2xl border border-[#CFE3F2] bg-white px-3.5 py-3" style={{ animation: 'content-enter 0.3s ease-out' }}>
-        <div className="flex flex-wrap gap-2">
-          <SumTile
-            label="Total Allotted"
-            value={overallAllotted}
-            color="#5B6371"
-            sub={overallFine > 0 ? `+Fine ₹${overallFine.toLocaleString()}` : undefined}
-          />
-          <SumTile label="Total Paid" value={overallPaid} color={theme.paid} />
-          <SumTile label="Total Due" value={overallDue} color={overallDue > 0 ? theme.due : theme.paid} emphasis />
-        </div>
-        {overallAllotted > 0 && (
-          <div className="mt-2.5 flex items-center gap-2.5">
-            <div className="flex-1 h-2 rounded-full overflow-hidden bg-[#EEF2F6]">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${overallPct}%`,
-                  background: overallDue > 0 ? `linear-gradient(90deg, ${theme.paid}, #F59E0B)` : theme.paid,
-                  transformOrigin: 'left',
-                  animation: 'fee-bar-fill 0.6s ease-out both',
-                }}
-              />
-            </div>
-            <span className="text-[10.5px] font-semibold tabular-nums text-[#5B6371] shrink-0">{overallPct.toFixed(0)}% paid</span>
-          </div>
-        )}
-      </div>
+      {identity}
 
-      {/* Year blocks */}
+      {/* One section per academic year */}
       {yearData.map((yd, ydIdx) => {
         const { academicYear, records, structure, override } = yd;
         const ev = effectiveValues(yd);
@@ -735,7 +770,6 @@ function FeeTab({
         const allotted = ev ? calcAllotted(ev.smp, ev.svk, ev.additional, records) : null;
         const fine = ev ? calcEffectiveFine(ev.smp.fine, records) : 0;
         const due = allotted !== null ? allotted - totalPaid : null;
-        const noDues = due !== null && due <= 0;
         const svkBaseAllotted = ev?.svk ?? 0;
         const additionalAllotted = ev ? ev.additional.reduce((t, h) => t + h.amount, 0) : 0;
         const smpAllotted = allotted !== null ? allotted - svkBaseAllotted - additionalAllotted : 0;
@@ -746,272 +780,172 @@ function FeeTab({
           (s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0),
           0,
         );
-        const smpDue = smpAllotted - smpPaid;
-        const svkDue = svkBaseAllotted - svkBasePaid;
-        const additionalDue = additionalAllotted - additionalPaidTotal;
         // SNQ students get a tuition concession (lower allotted SMP) that must be refunded.
         // If they've paid more than the SNQ allotted SMP and no (or only a partial) refund
         // has been issued yet, flag the outstanding refund so it isn't missed.
         const pendingRefund = records[0].admCat === 'SNQ' && allotted !== null
           ? Math.max(0, smpPaidRaw - smpAllotted - refunded)
           : 0;
+        const r0 = records[0];
+        const headsOpen = expandedHeads.has(academicYear);
 
-        const stateColor = allotted === null ? AMBER : noDues ? theme.paid : theme.due;
-        const yearPct = allotted ? Math.min(100, Math.max(0, (totalPaid / allotted) * 100)) : 0;
-        // Sub-line under each stat: same inclusion rules as before (> 0 for allotted/paid, ≠ 0 for due).
-        const split = (a: number, b: number, c: number, show: (n: number) => boolean) =>
-          [show(a) && `SMP ₹${a.toLocaleString()}`, show(b) && `SVK ₹${b.toLocaleString()}`, show(c) && `Addl ₹${c.toLocaleString()}`]
-            .filter(Boolean).join(' · ') || undefined;
-        const positive = (n: number) => n > 0;
-        const nonZero = (n: number) => n !== 0;
+        // Allotted / paid / due per bucket, shown inside the "Fee heads" fold-out.
+        const buckets = [
+          { key: 'SMP', allotted: smpAllotted, paid: smpPaid, color: SKY },
+          { key: 'SVK', allotted: svkBaseAllotted, paid: svkBasePaid, color: VIOLET },
+          { key: 'Addl', allotted: additionalAllotted, paid: additionalPaidTotal, color: MINT },
+        ].filter((b) => b.allotted > 0 || b.paid > 0);
 
         return (
-          <div
+          <section
             key={academicYear}
-            style={{ animation: `content-enter 0.3s ease-out ${ydIdx * 65}ms both`, borderColor: `${stateColor}40` }}
-            className="rounded-2xl overflow-hidden border bg-white"
+            className="rounded-2xl border bg-white overflow-hidden"
+            style={{ borderColor: LEDGER_LINE, animation: `content-enter 0.28s ease-out ${(ydIdx + 1) * 55}ms both` }}
           >
-            {/* Year card header */}
-            <div
-              className="px-3.5 py-2.5 flex flex-wrap items-center gap-3 border-b"
-              style={{ background: `linear-gradient(90deg, ${stateColor}14, ${stateColor}03 75%)`, borderColor: `${stateColor}26` }}
-            >
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <span
-                  className="rounded-full text-white text-[11px] font-semibold px-2.5 py-[4px] leading-none tabular-nums shrink-0"
-                  style={{ background: stateColor, boxShadow: `0 2px 6px ${stateColor}40` }}
-                >
-                  {academicYear}
-                </span>
-                <LinePill value={records[0].course} color={DEPT_DOT[records[0].course]} />
-                <LinePill value={records[0].year} color={YEAR_COLOR[records[0].year]} />
-                <LinePill value={records[0].admType} color={ADM_TYPE_COLOR[records[0].admType]} />
-                <LinePill value={records[0].admCat} color={ADM_CAT_COLOR[records[0].admCat]} />
-                {override && <LinePill value="Custom Allotted" color={AMBER} />}
-                {refunded > 0 && <LinePill value={`Refunded ₹${refunded.toLocaleString()}`} color={VIOLET} />}
-              </div>
-
-              <div className="ml-auto flex items-stretch gap-4 shrink-0">
-                {allotted !== null ? (
-                  <>
-                    <FeeStat label="Allotted" value={`₹${allotted.toLocaleString()}`} sub={split(smpAllotted, svkBaseAllotted, additionalAllotted, positive)} color="#5B6371" />
-                    <span className="w-px bg-[#E3EAF1]" />
-                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} sub={split(smpPaid, svkBasePaid, additionalPaidTotal, positive)} color={theme.paid} />
-                    <span className="w-px bg-[#E3EAF1]" />
-                    <FeeStat label="Due" value={`₹${due!.toLocaleString()}`} sub={split(smpDue, svkDue, additionalDue, nonZero)} color={noDues ? theme.paid : theme.due} />
-                  </>
-                ) : (
-                  <>
-                    <FeeStat label="Paid" value={`₹${totalPaid.toLocaleString()}`} color={theme.paid} />
-                    <span className="self-center"><LinePill value="No structure configured" color={AMBER} /></span>
-                  </>
-                )}
+            {/* Year header — one line */}
+            <div className="px-4 py-2.5 flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+              <span className="text-[14px] font-semibold tabular-nums text-[#262B35]">{academicYear}</span>
+              <span className="text-[11.5px] font-medium text-[#5B6371] whitespace-nowrap">
+                {[r0.course, r0.year, r0.admType, r0.admCat].filter(Boolean).join(' · ')}
+              </span>
+              {override && <LinePill value="Custom allotted" color={AMBER} />}
+              {refunded > 0 && <LinePill value={`Refunded ${rupees(refunded)}`} color={VIOLET} />}
+              <div className="ml-auto flex items-center gap-3">
+                {allotted !== null && <Figure label="Allotted" value={rupees(allotted)} />}
+                <Figure label="Paid" value={rupees(totalPaid)} color={inkOf(theme.paid)} />
+                <DueStatusPill due={due === null ? null : Math.max(0, due)} />
               </div>
             </div>
-
-            {allotted !== null && (
-              <div className="h-1 bg-[#EEF2F6]">
-                <div
-                  className="h-full"
-                  style={{ width: `${yearPct}%`, background: stateColor, transformOrigin: 'left', animation: `fee-bar-fill 0.5s ease-out ${ydIdx * 65 + 120}ms both` }}
-                />
-              </div>
-            )}
 
             {pendingRefund > 0 && (
-              <div
-                className={`px-3.5 py-2 text-[12px] flex items-center gap-2 ${theme.solidDue ? 'font-medium border-b' : 'text-white font-semibold'}`}
-                style={theme.solidDue
-                  ? { background: `${theme.refund}14`, borderColor: `${theme.refund}40`, color: inkOf(theme.refund) }
-                  : { background: `linear-gradient(90deg, ${CORAL}, #BE123C)` }}
-              >
+              <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-medium" style={{ background: `${theme.refund}0D`, borderColor: `${theme.refund}40`, color: inkOf(theme.refund) }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                <span>SNQ Refund Pending: student has to be refunded ₹{pendingRefund.toLocaleString()} (voucher not yet generated)</span>
+                SNQ refund pending — {rupees(pendingRefund)} to be refunded (voucher not yet generated)
               </div>
             )}
 
-            {/* Receipts table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-[#F5F9FC] border-b border-[#E3EDF5]">
-                    {['Date', 'SMP Rpt', 'SVK Rpt', 'Addl Rpt', 'Mode', 'Remarks'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#5B6371] whitespace-nowrap">{h}</th>
-                    ))}
-                    <th className="px-3 py-2 text-right text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap" style={{ background: `${SKY}14`, color: inkOf(SKY) }}>SMP (₹)</th>
-                    <th className="px-3 py-2 text-right text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap" style={{ background: `${VIOLET}14`, color: inkOf(VIOLET) }}>SVK (₹)</th>
-                    <th className="px-3 py-2 text-right text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap" style={{ background: `${MINT}14`, color: inkOf(MINT) }}>Addl (₹)</th>
-                    <th className="px-3 py-2 text-right text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap bg-[#EEF2F6] text-[#262B35]">Total (₹)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EEF3F7]">
-                  {records.map((r) => {
-                    const rowSmpTotal = sumSMPRecord(r.smp);
-                    const rowSvkBase = r.svk;
-                    const rowAddlTotal = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
-                    const rowTotal = rowSmpTotal + rowSvkBase + rowAddlTotal;
-                    const hasPerSection = r.smpPaymentMode !== undefined || r.svkPaymentMode !== undefined || r.additionalPaymentMode !== undefined;
-                    const smpMode = r.smpPaymentMode ?? r.paymentMode;
-                    const svkMode = r.svkPaymentMode ?? r.paymentMode;
-                    const addlMode = r.additionalPaymentMode ?? r.paymentMode;
-                    const badge = (mode: typeof r.paymentMode, prefix?: string) => (
-                      <LinePill value={prefix ? `${prefix} · ${mode}` : mode} color={MODE_COLOR[mode] ?? FALLBACK_COLOR} />
-                    );
-                    const amountCell = 'px-3 py-2 text-right whitespace-nowrap tabular-nums font-medium cursor-pointer hover:underline underline-offset-2';
-
-                    return (
-                      <tr key={r.id} className="hover:bg-[#F7FBFE] transition-colors">
-                        <td className="px-3 py-2 text-[#262B35] whitespace-nowrap font-medium tabular-nums">
-                          {r.date.split('-').reverse().join('-')}
-                        </td>
-                        <td className="px-3 py-2 text-[#5B6371] whitespace-nowrap tabular-nums">{r.receiptNumber || '—'}</td>
-                        <td className="px-3 py-2 text-[#5B6371] whitespace-nowrap tabular-nums">{r.svkReceiptNumber || '—'}</td>
-                        <td className="px-3 py-2 text-[#5B6371] whitespace-nowrap tabular-nums">{r.additionalReceiptNumber || '—'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {!hasPerSection ? badge(r.paymentMode) : (() => {
-                            const activeModes = [
-                              ...(rowSmpTotal > 0 ? [smpMode] : []),
-                              ...(rowSvkBase > 0 ? [svkMode] : []),
-                              ...(rowAddlTotal > 0 ? [addlMode] : []),
-                            ];
-                            if (activeModes.length > 0 && activeModes.every((m) => m === activeModes[0])) {
-                              return badge(activeModes[0]);
-                            }
-                            return (
-                              <div className="flex flex-col items-start gap-0.5">
-                                {rowSmpTotal > 0 && badge(smpMode, 'SMP')}
-                                {rowSvkBase > 0 && badge(svkMode, 'SVK')}
-                                {rowAddlTotal > 0 && badge(addlMode, 'Addl')}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-2 text-[#8A93A3] max-w-[8rem] truncate" title={r.remarks || undefined}>{r.remarks || '—'}</td>
-                        <td className={amountCell} style={{ background: `${SKY}0A`, color: inkOf(SKY) }} onClick={() => setReceiptDetailRecord(r)}>
-                          {rowSmpTotal > 0 ? rowSmpTotal.toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
-                        </td>
-                        <td className={amountCell} style={{ background: `${VIOLET}0A`, color: inkOf(VIOLET) }} onClick={() => setReceiptDetailRecord(r)}>
-                          {rowSvkBase > 0 ? rowSvkBase.toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
-                        </td>
-                        <td className={amountCell} style={{ background: `${MINT}0A`, color: inkOf(MINT) }} onClick={() => setReceiptDetailRecord(r)}>
-                          {rowAddlTotal > 0 ? rowAddlTotal.toLocaleString() : <span className="text-[#C4C8D0]">—</span>}
-                        </td>
-                        <td className={`${amountCell} !font-semibold text-[#262B35] bg-[#F5F8FB]`} onClick={() => setReceiptDetailRecord(r)}>
-                          ₹{rowTotal.toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-[#E3EDF5] bg-[#F5F9FC] font-semibold">
-                    <td colSpan={6} className="px-3 py-2 text-[11px] font-medium text-[#5B6371]">
-                      {records.length} receipt{records.length > 1 ? 's' : ''}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs tabular-nums" style={{ background: `${SKY}14`, color: inkOf(SKY) }}>
-                      {records.reduce((s, r) => s + sumSMPRecord(r.smp), 0).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs tabular-nums" style={{ background: `${VIOLET}14`, color: inkOf(VIOLET) }}>
-                      {records.reduce((s, r) => s + r.svk, 0).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs tabular-nums" style={{ background: `${MINT}14`, color: inkOf(MINT) }}>
-                      {records.reduce((s, r) => s + r.additionalPaid.reduce((a, h) => a + h.amount, 0), 0).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs tabular-nums text-[#262B35] bg-[#EEF2F6]">
-                      ₹{totalPaid.toLocaleString()}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+            {/* Receipt list */}
+            <div className="border-t" style={{ borderColor: LEDGER_LINE }}>
+              {records.map((r) => {
+                const rowSmp = sumSMPRecord(r.smp);
+                const rowSvk = r.svk;
+                const rowAddl = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
+                const rowTotal = rowSmp + rowSvk + rowAddl;
+                const smpMode = r.smpPaymentMode ?? r.paymentMode;
+                const svkMode = r.svkPaymentMode ?? r.paymentMode;
+                const addlMode = r.additionalPaymentMode ?? r.paymentMode;
+                const modes = [...new Set([
+                  ...(rowSmp > 0 ? [smpMode] : []),
+                  ...(rowSvk > 0 ? [svkMode] : []),
+                  ...(rowAddl > 0 ? [addlMode] : []),
+                ])];
+                const receiptNos = [
+                  r.receiptNumber && `SMP ${r.receiptNumber}`,
+                  // SVK receipt numbers already carry their prefix ("SVK DVP 12")
+                  r.svkReceiptNumber && (/^SVK/i.test(r.svkReceiptNumber) ? r.svkReceiptNumber : `SVK ${r.svkReceiptNumber}`),
+                  r.additionalReceiptNumber && `Addl ${r.additionalReceiptNumber}`,
+                ].filter(Boolean).join(' · ');
+                const split = [
+                  rowSmp > 0 && `SMP ${rupees(rowSmp)}`,
+                  rowSvk > 0 && `SVK ${rupees(rowSvk)}`,
+                  rowAddl > 0 && `Addl ${rupees(rowAddl)}`,
+                ].filter(Boolean).join(' · ');
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setReceiptDetailRecord(r)}
+                    className="group w-full grid items-center gap-3 px-4 py-2 text-left border-b last:border-b-0 hover:bg-[#F7F9FC] transition-colors cursor-pointer"
+                    style={{ gridTemplateColumns: '84px minmax(0,1.4fr) auto minmax(0,1fr) 210px', borderColor: '#F0F2F6' }}
+                    title="View receipt details"
+                  >
+                    <span className="text-[12px] font-medium tabular-nums text-[#262B35]">{r.date.split('-').reverse().join('-')}</span>
+                    <span className="text-[11.5px] tabular-nums text-[#5B6371] truncate">{receiptNos || '—'}</span>
+                    <span className="flex items-center gap-1">
+                      {(modes.length ? modes : [r.paymentMode]).map((m) => (
+                        <LinePill key={m} value={m} color={MODE_COLOR[m] ?? FALLBACK_COLOR} />
+                      ))}
+                    </span>
+                    <span className="text-[11px] text-[#8A93A3] truncate" title={r.remarks || undefined}>{r.remarks || ''}</span>
+                    <span className="flex items-center justify-end gap-2">
+                      <span className="flex flex-col items-end leading-tight">
+                        <span className="text-[13px] font-semibold tabular-nums text-[#262B35]">{rupees(rowTotal)}</span>
+                        {split && split.includes('·') && <span className="text-[9.5px] text-[#8A93A3] tabular-nums whitespace-nowrap">{split}</span>}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="text-[#C4C8D0] group-hover:text-[#5B6371] transition-colors"><polyline points="9 18 15 12 9 6"/></svg>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Pending dues breakdown — collapsible */}
-            {ev && (
-              <div className="border-t" style={{ borderColor: `${stateColor}26` }}>
+            {/* Footer: receipt count + total, and the fee-heads toggle */}
+            <div className="flex items-center gap-3 px-4 py-2 border-t bg-[#FAFBFD]" style={{ borderColor: LEDGER_LINE }}>
+              {ev ? (
                 <button
-                  onClick={() => toggleDues(academicYear)}
-                  className="w-full flex items-center justify-between px-3.5 py-2 hover:brightness-[0.98] transition-all cursor-pointer text-left"
-                  style={{ background: `${stateColor}0A` }}
+                  type="button"
+                  onClick={() => toggleHeads(academicYear)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer hover:underline underline-offset-2"
+                  style={{ color: theme.accentInk }}
+                  aria-expanded={headsOpen}
                 >
-                  <span className="text-[10px] font-medium uppercase tracking-[0.8px]" style={{ color: inkOf(stateColor) }}>
-                    Pending Dues Breakdown
-                    {override && !structure && (
-                      <span className="ml-1 normal-case tracking-normal font-normal" style={{ color: AMBER }}>· custom allotted</span>
-                    )}
-                  </span>
-                  <svg
-                    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-                    className={`transition-transform duration-200 ${expandedDues.has(academicYear) ? 'rotate-180' : ''}`}
-                    style={{ color: inkOf(stateColor) }}
-                  >
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${headsOpen ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                  Fee heads
+                  {override && !structure && <span className="font-normal" style={{ color: AMBER }}>· custom allotted</span>}
                 </button>
-                {expandedDues.has(academicYear) && (
-                  <div className="px-3.5 pb-3 pt-2 space-y-2" style={{ background: `${stateColor}05`, animation: 'content-enter 0.2s ease-out' }}>
+              ) : <span />}
+              <span className="ml-auto text-[11px] font-medium text-[#8A93A3]">
+                {records.length} receipt{records.length !== 1 ? 's' : ''}
+              </span>
+              <span className="text-[12.5px] font-semibold tabular-nums text-[#262B35] text-right pr-5">{rupees(totalPaid)}</span>
+            </div>
 
-                    {/* SMP row */}
-                    {(() => {
-                      const items = SMP_FEE_HEADS.flatMap(({ key, label }) => {
-                        const allottedAmt = key === 'fine' ? fine : ev.smp[key];
-                        if (allottedAmt === 0) return [];
-                        const paidAmt = records.reduce((s, r) => s + r.smp[key], 0);
-                        return [{ key, label, dueAmt: allottedAmt - paidAmt }];
-                      });
-                      if (items.length === 0) return null;
-                      return (
-                        <div className="flex items-start gap-2">
-                          <span className="text-[9.5px] font-semibold uppercase tracking-[0.6px] w-9 pt-1.5 shrink-0" style={{ color: inkOf(SKY) }}>SMP</span>
-                          <div className="flex-1 flex flex-wrap gap-1">
-                            {items.map(({ key, label, dueAmt }) => (
-                              <DueChip key={key} label={label} dueAmt={dueAmt} />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
+            {/* Fee heads fold-out: per-bucket figures + per-head dues */}
+            {ev && headsOpen && (
+              <div className="px-4 pb-3 pt-2.5 space-y-2.5 border-t" style={{ borderColor: LEDGER_LINE, animation: 'content-enter 0.2s ease-out' }}>
+                <div className="flex flex-wrap gap-x-5 gap-y-1">
+                  {buckets.map((b) => (
+                    <span key={b.key} className="inline-flex items-baseline gap-2 text-[11px]">
+                      <span className="font-semibold" style={{ color: inkOf(b.color) }}>{b.key}</span>
+                      <Figure label="Allotted" value={rupees(b.allotted)} />
+                      <Figure label="Paid" value={rupees(b.paid)} />
+                      <Figure label="Due" value={rupees(Math.max(0, b.allotted - b.paid))} color={b.allotted - b.paid > 0 ? inkOf(theme.due) : inkOf(theme.paid)} />
+                    </span>
+                  ))}
+                </div>
 
-                    {/* SVK row */}
-                    {ev.svk > 0 && (() => {
-                      const svkPd = records.reduce((s, r) => s + r.svk, 0);
-                      const svkDueAmt = ev.svk - svkPd;
-                      return (
-                        <div className="flex items-start gap-2">
-                          <span className="text-[9.5px] font-semibold uppercase tracking-[0.6px] w-9 pt-1.5 shrink-0" style={{ color: inkOf(VIOLET) }}>SVK</span>
-                          <div className="flex-1 flex flex-wrap gap-1">
-                            <DueChip label="SVK Fee" dueAmt={svkDueAmt} />
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Additional heads row */}
-                    {ev.additional.length > 0 && (() => {
-                      const items = ev.additional.flatMap((h) => {
-                        if (h.amount === 0) return [];
-                        const paidAmt = records.reduce(
-                          (s, r) => s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0), 0,
-                        );
-                        return [{ label: h.label, dueAmt: h.amount - paidAmt }];
-                      });
-                      if (items.length === 0) return null;
-                      return (
-                        <div className="flex items-start gap-2">
-                          <span className="text-[9.5px] font-semibold uppercase tracking-[0.6px] w-9 pt-1.5 shrink-0" style={{ color: inkOf(MINT) }}>Addl</span>
-                          <div className="flex-1 flex flex-wrap gap-1">
-                            {items.map(({ label, dueAmt }) => (
-                              <DueChip key={label} label={label} dueAmt={dueAmt} />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                  </div>
-                )}
+                {(() => {
+                  const smpItems = SMP_FEE_HEADS.flatMap(({ key, label }) => {
+                    const allottedAmt = key === 'fine' ? fine : ev.smp[key];
+                    if (allottedAmt === 0) return [];
+                    const paidAmt = records.reduce((s, r) => s + r.smp[key], 0);
+                    return [{ key: `smp-${key}`, label, dueAmt: allottedAmt - paidAmt }];
+                  });
+                  const svkItems = ev.svk > 0 ? [{ key: 'svk', label: 'SVK Fee', dueAmt: ev.svk - svkBasePaid }] : [];
+                  const addlItems = ev.additional.flatMap((h) => {
+                    if (h.amount === 0) return [];
+                    const paidAmt = records.reduce(
+                      (s, r) => s + (r.additionalPaid.find((ap) => ap.label === h.label)?.amount ?? 0), 0,
+                    );
+                    return [{ key: `addl-${h.label}`, label: h.label, dueAmt: h.amount - paidAmt }];
+                  });
+                  const rows = [
+                    { name: 'SMP', color: SKY, items: smpItems },
+                    { name: 'SVK', color: VIOLET, items: svkItems },
+                    { name: 'Addl', color: MINT, items: addlItems },
+                  ].filter((row) => row.items.length > 0);
+                  return rows.map((row) => (
+                    <div key={row.name} className="flex items-start gap-2">
+                      <span className="text-[9.5px] font-semibold uppercase tracking-[0.6px] w-9 pt-[7px] shrink-0" style={{ color: inkOf(row.color) }}>{row.name}</span>
+                      <div className="flex-1 flex flex-wrap gap-1">
+                        {row.items.map(({ key, label, dueAmt }) => <DueChip key={key} label={label} dueAmt={dueAmt} />)}
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
             )}
-          </div>
+          </section>
         );
       })}
 
@@ -1026,21 +960,19 @@ function FeeTab({
   );
 }
 
-/** One fee head in the dues breakdown: due amount when due, ✓ when cleared.
- *  Default theme: coral / mint outline. Themed: solid fill when due, soft outline when cleared. */
+/** One fee head in the breakdown: due amount when due, ✓ when cleared. Minimal outline chip. */
 function DueChip({ label, dueAmt }: { label: string; dueAmt: number }) {
   const theme = useModalTheme(STUDENT_DEFAULT_THEME);
   const isDue = dueAmt > 0;
   const c = isDue ? theme.due : theme.paid;
-  const solid = theme.solidDue && isDue;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10.5px] font-medium leading-none"
-      style={solid ? { background: c, borderColor: c } : { background: '#fff', borderColor: `${c}40` }}
+      className="inline-flex items-center gap-1.5 h-7 rounded-full border bg-white px-2.5 text-[11px] font-medium leading-none"
+      style={{ borderColor: isDue ? `${c}59` : LEDGER_LINE }}
     >
-      <span className="whitespace-nowrap" style={{ color: solid ? '#ffffffCC' : '#5B6371' }}>{label}</span>
-      <span className="font-semibold tabular-nums" style={{ color: solid ? '#fff' : inkOf(c) }}>
-        {dueAmt === 0 ? '✓' : `₹${dueAmt.toLocaleString()}`}
+      <span className="whitespace-nowrap text-[#5B6371]">{label}</span>
+      <span className="font-semibold tabular-nums" style={{ color: inkOf(c) }}>
+        {dueAmt === 0 ? '✓' : rupees(dueAmt)}
       </span>
     </span>
   );
@@ -2216,6 +2148,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
           )}
           {activeTab === 'fee' && (
             <FeeTab
+              student={student}
               yearData={yearData}
               loading={feeLoading}
               error={feeError}
