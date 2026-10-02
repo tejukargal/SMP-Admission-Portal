@@ -51,6 +51,12 @@ export async function getAllFeeStructures(): Promise<FeeStructure[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FeeStructure));
 }
 
+/** Synchronous read of the cached structures (any age) — lets pages seed state on
+ *  mount so totals don't flash empty while the fresh fetch runs. */
+export function peekFeeStructures(academicYear: AcademicYear | null): FeeStructure[] {
+  return (academicYear && feeStructureCache.get(academicYear)?.data) || [];
+}
+
 /** All fee structures for a specific academic year. Results are cached for 10 minutes. */
 export async function getFeeStructuresByAcademicYear(
   academicYear: AcademicYear

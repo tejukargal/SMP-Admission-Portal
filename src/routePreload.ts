@@ -68,7 +68,7 @@ export function preloadRoute(path: string): void {
 // After login, warm the most-used pages while the browser is idle.
 export function preloadCommonRoutes(isAdmin: boolean): void {
   const paths = ['/dashboard', '/students', '/admissions', '/fee-register', '/enroll'];
-  if (isAdmin) paths.push('/fees');
+  if (isAdmin) paths.push('/fees', '/fee-reports');
   const run = () => paths.forEach(preloadRoute);
   const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
   if (w.requestIdleCallback) w.requestIdleCallback(run);

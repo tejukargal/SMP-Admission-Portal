@@ -5,9 +5,9 @@ import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
-import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/refundService';
-import type { RefundRecord } from '../services/refundService';
+import { useRefundRecords } from '../hooks/useRefundRecords';
+import { getFeeStructuresByAcademicYear, peekFeeStructures } from '../services/feeStructureService';
+import { isFeeNettingRefund } from '../services/refundService';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
 import { CashInHandAlert } from '../components/cashBook/CashInHandAlert';
@@ -269,19 +269,15 @@ export function CollectFee() {
     useFeeRecords(academicYear);
   const { overrides: feeOverrides } = useFeeOverrides(academicYear);
 
-  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => peekFeeStructures(academicYear));
 
   useEffect(() => {
     if (!academicYear) { setFeeStructures([]); return; }
     getFeeStructuresByAcademicYear(academicYear).then(setFeeStructures).catch(() => {});
   }, [academicYear]);
 
-  const [refundRecords, setRefundRecords] = useState<RefundRecord[]>([]);
-
-  useEffect(() => {
-    if (!academicYear) { setRefundRecords([]); return; }
-    getRefundRecordsByAcademicYear(academicYear).then(setRefundRecords).catch(() => {});
-  }, [academicYear]);
+  // Live + cache-first, so a revisit never waits on the network.
+  const { refunds: refundRecords } = useRefundRecords(academicYear);
 
   // Map: studentId → total refunded (e.g. SNQ tuition concession refunds) — refunds are
   // recorded separately from feeRecords, so paid totals must be netted by this before

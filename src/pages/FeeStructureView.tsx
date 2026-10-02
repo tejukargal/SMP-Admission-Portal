@@ -3,7 +3,8 @@ import type { AcademicYear, FeeStructure, Course, Year } from '../types';
 import { SMP_FEE_HEADS, ACADEMIC_YEARS } from '../types';
 import { getSettings } from '../services/settingsService';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { exportFeeStructureFormatted, exportFeeStructureFormattedPDF } from '../utils/feeStructureExport';
+// Excel/PDF export libraries load on the first export click.
+const structureExport = () => import('../utils/feeStructureExport');
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -313,7 +314,7 @@ export function FeeStructureView() {
           {/* Export PDF */}
           {hasData && (
             <button
-              onClick={() => exportFeeStructureFormattedPDF(structures, selectedYear ?? '')}
+              onClick={() => void structureExport().then((m) => m.exportFeeStructureFormattedPDF(structures, selectedYear ?? ''))}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-[#CDE7E7] bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -326,7 +327,7 @@ export function FeeStructureView() {
           {/* Fee Structure Format */}
           {hasData && (
             <button
-              onClick={() => exportFeeStructureFormatted(structures, selectedYear ?? '')}
+              onClick={() => void structureExport().then((m) => m.exportFeeStructureFormatted(structures, selectedYear ?? ''))}
               className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border border-[#0F8B8D]/25 bg-[#DDF0F0]/40 text-[#0B6567] hover:bg-[#DDF0F0]/70 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

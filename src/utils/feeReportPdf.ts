@@ -2,30 +2,13 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import type { FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import type { Student } from '../types';
+import type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportData';
 
-export interface StudentFeeRow {
-  student: Student;
-  smpAllotted: number | null;
-  svkAllotted: number | null;
-  allotted: number | null;
-  smpPaid: number;
-  svkPaid: number;
-  paid: number;
-  smpBalance: number | null;
-  svkBalance: number | null;
-  balance: number | null;
-  // SVK management fee and Additional heads (Red Cross, Insurance, etc.), tracked
-  // separately from the combined `svkAllotted` above — used by the Fee Reports
-  // dashboard cards for a true 3-way SMP/SVK/Additional allotment breakdown.
-  svkBaseAllotted: number | null;
-  additionalAllotted: number | null;
-  // Paid-side / balance-side split, mirrors the allotted-side split above.
-  svkBasePaid: number;
-  additionalPaid: number;
-  svkBaseBalance: number | null;
-  additionalBalance: number | null;
-}
+// Pure row/aggregation helpers live in feeReportData so pages can use them
+// without pulling jsPDF into their chunk.
+export { buildDatewiseHeadwise } from './feeReportData';
+export type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportData';
+
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 // A4 landscape: 297 × 210 mm  →  usable = 297 − 2×10 = 277 mm
@@ -578,35 +561,6 @@ export function exportConsolidatedPdf(feeRecords: FeeRecord[], academicYear: str
 }
 
 // ── 6. Datewise Consolidated Headwise ─────────────────────────────────────────
-
-function formatDayLabelLocal(dateKey: string): string {
-  const [y, m, d] = dateKey.split('-');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${d} ${months[parseInt(m, 10) - 1]} ${y}`;
-}
-
-export interface DatewiseHeadwiseEntry {
-  dateKey: string;
-  dateLabel: string;
-  heads: Record<SMPFeeHead, number>;
-  total: number;
-}
-
-export function buildDatewiseHeadwise(records: FeeRecord[]): DatewiseHeadwiseEntry[] {
-  const map = new Map<string, DatewiseHeadwiseEntry>();
-  for (const r of records) {
-    const dateKey = r.date.slice(0, 10);
-    if (!map.has(dateKey)) {
-      const heads = {} as Record<SMPFeeHead, number>;
-      for (const { key } of SMP_FEE_HEADS) heads[key] = 0;
-      map.set(dateKey, { dateKey, dateLabel: formatDayLabelLocal(dateKey), heads, total: 0 });
-    }
-    const e = map.get(dateKey)!;
-    for (const { key } of SMP_FEE_HEADS) e.heads[key] += r.smp[key];
-    e.total = SMP_FEE_HEADS.reduce((s, { key }) => s + e.heads[key], 0);
-  }
-  return Array.from(map.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-}
 
 export function exportDatewiseHeadwisePdf(entries: DatewiseHeadwiseEntry[], academicYear: string): void {
   const TEAL: [number, number, number] = [13, 148, 136];

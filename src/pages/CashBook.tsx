@@ -12,7 +12,7 @@ import {
   ACCOUNT_ORDER, CASH_ACCOUNTS, buildCashBook, buildRemittanceSummary, daysBetween, depositMismatch,
   type AccountFilter, type DayAccountRow,
 } from '../utils/cashLedger';
-import { CASH_REPORTS, exportCashReport, type CashReportKind } from '../utils/cashBookExport';
+import { CASH_REPORTS, type CashReportKind } from '../utils/cashReports';
 import { formatIsoDate, formatIsoDateTime } from '../utils/formatDates';
 import type { CashAccount, CashDeposit } from '../types';
 
@@ -457,8 +457,11 @@ function ReportsTab({ ledger, deposits, startDate, today }: { ledger: DayAccount
     const key = `${kind}-${format}`;
     setBusy(key);
     // Let the button paint its busy state before the (synchronous) export runs.
+    // The exporter (with jsPDF/xlsx) is fetched on the first export click.
     setTimeout(() => {
-      try { exportCashReport(kind, format, input); } finally { setBusy(''); }
+      import('../utils/cashBookExport')
+        .then(({ exportCashReport }) => exportCashReport(kind, format, input))
+        .finally(() => setBusy(''));
     }, 30);
   }
 

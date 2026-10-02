@@ -3,28 +3,19 @@ import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
 import { useFeeOverrides } from '../hooks/useFeeOverrides';
-import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
-import { getRefundRecordsByAcademicYear, isFeeNettingRefund, type RefundRecord } from '../services/refundService';
+import { useRefundRecords } from '../hooks/useRefundRecords';
+import { getFeeStructuresByAcademicYear, peekFeeStructures } from '../services/feeStructureService';
+import { isFeeNettingRefund } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
 import { fs, THEAD, THEAD_DARK, TFOOT, BTN_GRAY, BTN_PRIMARY, ReportCard, TEAL_INK, HAIRLINE, Chip, ExportBar, ClearButton, StatChipRow, SegmentedToggle, SearchBox, FilterPanel } from '../components/feeReports/feeReportUi';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { PageSpinner } from '../components/common/PageSpinner';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
-import {
-  exportStatsPdf, exportFeeListPdf, exportDuesPdf,
-  exportCourseYearPdf, exportConsolidatedPdf,
-  buildDatewiseHeadwise, exportDatewiseHeadwisePdf,
-} from '../utils/feeReportPdf';
-import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportPdf';
+import type { jsPDF as JsPDFDoc } from 'jspdf';
+import { loadXlsx, loadPdf } from '../utils/lazyLibs';
+import { buildDatewiseHeadwise } from '../utils/feeReportData';
+import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportData';
 import { isConfirmedActive } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
-import {
-  exportStatsExcel, exportFeeListExcel, exportDuesExcel,
-  exportCourseYearExcel, exportConsolidatedExcel,
-  exportDatewiseHeadwiseExcel,
-} from '../utils/feeReportExcel';
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, GovHeadAmounts, GovHeadRefs, FeeRemittance, BudgetHeadEntry, BudgetHeadKey, BudgetExpenseItem, WPStudentCounts, WPCourseYearCounts, StudentFeeOverride, FeeAdditionalHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
@@ -40,6 +31,16 @@ import { formatDate } from '../utils/feeReceipts';
 
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'additional-fee-receipts' | 'bank-remittance' | 'fee-distribution' | 'wp-fee-distribution' | 'budget' | 'fee-reg-1' | 'fee-structure';
 type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
+
+// Export libraries (~850 KB) are fetched on the first export click, not with the
+// page — the report hub renders without waiting on them.
+let XLSX: typeof import('xlsx');
+let jsPDF: typeof import('jspdf').jsPDF;
+let autoTable: typeof import('jspdf-autotable').autoTable;
+async function needXlsx(): Promise<void> { XLSX ??= await loadXlsx(); }
+async function needPdf(): Promise<void> { if (!jsPDF) ({ jsPDF, autoTable } = await loadPdf()); }
+const reportPdf   = () => import('../utils/feeReportPdf');
+const reportExcel = () => import('../utils/feeReportExcel');
 
 const COURSES: Course[]         = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const AIDED_COURSES: Course[]   = ['CE', 'ME', 'EC', 'CS'];
@@ -509,7 +510,7 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
   return (
     <div className="space-y-2">
       <CommonFilters collapsible={false} fp={fp} extra={
-        <ExportBar onPdf={() => exportStatsPdf(rows, academicYear)} onExcel={() => exportStatsExcel(rows, academicYear)} />
+        <ExportBar onPdf={() => void reportPdf().then((m) => m.exportStatsPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportStatsExcel(rows, academicYear))} />
       } />
 
       {/* Count summary strip */}
@@ -600,7 +601,7 @@ function FeeListTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]
           extra={
             <>
               <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} student{rows.length !== 1 ? 's' : ''}</span>
-              <ExportBar onPdf={() => exportFeeListPdf(rows, academicYear)} onExcel={() => exportFeeListExcel(rows, academicYear)} />
+              <ExportBar onPdf={() => void reportPdf().then((m) => m.exportFeeListPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportFeeListExcel(rows, academicYear))} />
             </>
           }
         />
@@ -677,7 +678,7 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
           extra={
             <>
               <span className="text-xs text-gray-500 whitespace-nowrap">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with dues</span>
-              <ExportBar onPdf={() => exportDuesPdf(rows, academicYear)} onExcel={() => exportDuesExcel(rows, academicYear)} />
+              <ExportBar onPdf={() => void reportPdf().then((m) => m.exportDuesPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportDuesExcel(rows, academicYear))} />
             </>
           }
         />
@@ -736,7 +737,7 @@ function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
   return (
     <div className="space-y-3">
       <CommonFilters collapsible={false} fp={fp} extra={
-        <ExportBar onPdf={() => exportCourseYearPdf(rows, academicYear)} onExcel={() => exportCourseYearExcel(rows, academicYear)} />
+        <ExportBar onPdf={() => void reportPdf().then((m) => m.exportCourseYearPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportCourseYearExcel(rows, academicYear))} />
       } />
       <GroupTable breakdown={breakdown} totals={totals} />
     </div>
@@ -766,7 +767,7 @@ function ConsolidatedTab({ feeRecords, academicYear, fp }: { feeRecords: FeeReco
       <CommonFilters collapsible={false} fp={fp} extra={
         <>
           <span className="text-xs text-gray-500">{feeRecords.length} payment record{feeRecords.length !== 1 ? 's' : ''}</span>
-          <ExportBar onPdf={() => exportConsolidatedPdf(feeRecords, academicYear)} onExcel={() => exportConsolidatedExcel(feeRecords, academicYear)} />
+          <ExportBar onPdf={() => void reportPdf().then((m) => m.exportConsolidatedPdf(feeRecords, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportConsolidatedExcel(feeRecords, academicYear))} />
         </>
       } />
 
@@ -912,7 +913,8 @@ function buildDailyCollections(records: FeeRecord[]): DayEntry[] {
   return Array.from(map.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 }
 
-function exportDailyCollectionsExcel(entries: DayEntry[], academicYear: string): void {
+async function exportDailyCollectionsExcel(entries: DayEntry[], academicYear: string): Promise<void> {
+  await needXlsx();
   const header = [
     'Date', 'Receipts', 'Students',
     'SMP (Cash)', 'SVK (Cash)', 'Additional (Cash)', 'Total Cash',
@@ -949,7 +951,8 @@ function exportDailyCollectionsExcel(entries: DayEntry[], academicYear: string):
 }
 
 // ── Day Breakdown Excel export ────────────────────────────────────────────────
-function exportDayBreakdownExcel(day: DayEntry, cashRecs: FeeRecord[], upiRecs: FeeRecord[]): void {
+async function exportDayBreakdownExcel(day: DayEntry, cashRecs: FeeRecord[], upiRecs: FeeRecord[]): Promise<void> {
+  await needXlsx();
   const header = ['Sl', 'Student Name', 'Reg No', 'Course', 'Year', 'SMP Rpt', 'SVK Rpt', 'Add Rpt', 'SMP', 'SVK', 'Additional', 'Total'];
 
   const makeRows = (recs: FeeRecord[], isCash: boolean) =>
@@ -1347,7 +1350,8 @@ function DailyCollectionsTab({ feeRecords, academicYear, showAllYears }: { feeRe
 }
 
 // ── Tab: Day Summary ──────────────────────────────────────────────────────────
-function exportDaySummaryExcel(entries: DayEntry[], academicYear: string): void {
+async function exportDaySummaryExcel(entries: DayEntry[], academicYear: string): Promise<void> {
+  await needXlsx();
   const header = [
     'Date', 'Students',
     'SMP Cash', 'SMP UPI',
@@ -1544,8 +1548,8 @@ function DatewiseHeadwiseTab({ feeRecords, academicYear, fp, showAllYears }: { f
               </span>
             )}
             <ExportBar
-              onPdf={() => exportDatewiseHeadwisePdf(entries, academicYear)}
-              onExcel={() => exportDatewiseHeadwiseExcel(entries, academicYear)}
+              onPdf={() => void reportPdf().then((m) => m.exportDatewiseHeadwisePdf(entries, academicYear))}
+              onExcel={() => void reportExcel().then((m) => m.exportDatewiseHeadwiseExcel(entries, academicYear))}
             />
           </>
         } />
@@ -1739,10 +1743,11 @@ function totalAbstractUpi(aided: RemittanceSummary, unaided: RemittanceSummary):
     + unaided.smpPay + unaided.svkPay + unaided.rcPay + unaided.insPay;
 }
 
-function exportRemittanceAbstractPdf(
+async function exportRemittanceAbstractPdf(
   aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string,
   counts?: Record<number, string>,
-): void {
+): Promise<void> {
+  await needPdf();
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -2389,7 +2394,8 @@ function BankAccountSummaryTable({ aided, unaided }: { aided: RemittanceSummary;
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 
-function exportRemittanceExcel(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+async function exportRemittanceExcel(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): Promise<void> {
+  await needXlsx();
   const wb = XLSX.utils.book_new();
 
   // Sheet 1 — Fee Head Breakup
@@ -2444,7 +2450,8 @@ function exportRemittanceExcel(aided: RemittanceSummary, unaided: RemittanceSumm
   XLSX.writeFile(wb, `Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g, '_')}_${academicYear}.xlsx`);
 }
 
-function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): void {
+async function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummary, label: string, academicYear: string): Promise<void> {
+  await needPdf();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const MARGIN = 14;
@@ -2612,12 +2619,13 @@ function exportRemittancePdf(aided: RemittanceSummary, unaided: RemittanceSummar
   doc.save(`Bank_Remittance_${label.replace(/[^a-zA-Z0-9]/g,'_')}_${academicYear}.pdf`);
 }
 
-function exportRemittanceTrackerPdf(
+async function exportRemittanceTrackerPdf(
   label: string,
   academicYear: string,
   summaryTable: { head: string[]; body: (string | number)[][]; foot?: (string | number)[] },
   logTable: { head: string[]; body: (string | number)[][] },
-): void {
+): Promise<void> {
+  await needPdf();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const MARGIN = 14;
@@ -3204,7 +3212,7 @@ function computeAutoWidths(
   return widths;
 }
 
-function pdfHeader(doc: jsPDF, title: string, chips: string, pageW: number, margin: number): number {
+function pdfHeader(doc: JsPDFDoc, title: string, chips: string, pageW: number, margin: number): number {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...PDF_NEAR_BLACK);
   doc.text(title, pageW / 2, 13, { align: 'center' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
@@ -3217,7 +3225,7 @@ function pdfHeader(doc: jsPDF, title: string, chips: string, pageW: number, marg
   return 31;
 }
 
-function pdfFooter(doc: jsPDF, footerLabel: string, margin: number): void {
+function pdfFooter(doc: JsPDFDoc, footerLabel: string, margin: number): void {
   const pages = (doc as unknown as { internal: { getNumberOfPages(): number } }).internal.getNumberOfPages();
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
@@ -3231,14 +3239,15 @@ function pdfFooter(doc: jsPDF, footerLabel: string, margin: number): void {
 
 // ── PDF: SMP Students Statistics Summary ─────────────────────────────────────
 
-function exportStudentStatsAndDistSummaryPdf(
+async function exportStudentStatsAndDistSummaryPdf(
   studentStats: Record<Course, { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number }>,
   grandStatTotals: { yr1: { reg: number; snq: number; total: number }; yr2: { reg: number; lat: number; snq: number; total: number }; yr3: { reg: number; snq: number; total: number }; grand: number },
   aidedCount: number, aidedTotals: { tot: number; gov: number; svk: number; smp: number },
   unaidedCount: number, unaidedTotals: { tot: number; gov: number; svk: number; smp: number },
   totalStudents: number, grandTotals: { tot: number; gov: number; svk: number; smp: number },
   academicYear: string,
-): void {
+): Promise<void> {
+  await needPdf();
   const margin = 12;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -3324,7 +3333,8 @@ function exportStudentStatsAndDistSummaryPdf(
 
 // ── PDF: Fee Remittance Abstract (Aided / Unaided) ───────────────────────────
 
-function exportRemittanceDistPdf(dist: FeeDistRow[], label: string, academicYear: string): void {
+async function exportRemittanceDistPdf(dist: FeeDistRow[], label: string, academicYear: string): Promise<void> {
+  await needPdf();
   const margin = 14;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -3865,7 +3875,8 @@ function FeeDistributionTab({
   }
 
   // ── Excel export ──
-  function exportDistExcel() {
+  async function exportDistExcel() {
+    await needXlsx();
     const wb = XLSX.utils.book_new();
 
     // Student Statistics sheet
@@ -4713,7 +4724,8 @@ interface Reg1Row {
   total:   number;
 }
 
-function exportFeeReg1Excel(rows: Reg1Row[], academicYear: string): void {
+async function exportFeeReg1Excel(rows: Reg1Row[], academicYear: string): Promise<void> {
+  await needXlsx();
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const header = ['Sl','Date','Rpt No','Name','Course','Year','SMP Cash','SMP Pay','SVK Cash','SVK Pay','RC Cash','RC Pay','Ins Cash','Ins Pay','Total','Remarks'];
   const dataRows = rows.map((r, i) => {
@@ -4765,7 +4777,8 @@ interface Reg1ColDef {
   get: (r: Reg1Row, i: number) => string | number;
 }
 
-function exportFeeReg1Pdf(rows: Reg1Row[], academicYear: string, dateLabel: string): void {
+async function exportFeeReg1Pdf(rows: Reg1Row[], academicYear: string, dateLabel: string): Promise<void> {
+  await needPdf();
   const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const FONT_SIZE   = 8;
   const CELL_PAD     = { top: 2, right: 2, bottom: 2, left: 2 };   // text columns
@@ -5312,7 +5325,8 @@ function BudgetTab({
 
 // ── Budget: Excel export ──────────────────────────────────────────────────
 
-function exportBudgetExcel(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): void {
+async function exportBudgetExcel(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): Promise<void> {
+  await needXlsx();
   const wb = XLSX.utils.book_new();
 
   const summaryRows: (string | number)[][] = [['Fee Head', 'Aided', 'Unaided', 'Allotted', 'Spent', 'Balance']];
@@ -5339,7 +5353,8 @@ function exportBudgetExcel(heads: BudgetHeadEntry[], breakupByHead: Map<string, 
 
 // ── Budget: PDF export ────────────────────────────────────────────────────
 
-function exportBudgetPdf(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): void {
+async function exportBudgetPdf(heads: BudgetHeadEntry[], breakupByHead: Map<string, { aided: number; unaided: number }>, academicYear: string): Promise<void> {
+  await needPdf();
   const margin = 14;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -5751,9 +5766,10 @@ function addlRegDate(date: string): string {
   return `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
 }
 
-function exportAdditionalFeeRegisterExcel(
+async function exportAdditionalFeeRegisterExcel(
   rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string,
-): void {
+): Promise<void> {
+  await needXlsx();
   const header = ['Sl', 'Date', 'Year', 'Course', 'Name', 'Adm Type', ...cols.map((c) => c.label), 'Total'];
   const dataRows = rows.map((r, i) => {
     const amts = addlHeadAmounts(r);
@@ -5779,9 +5795,10 @@ function exportAdditionalFeeRegisterExcel(
   XLSX.writeFile(wb, `Additional_Fee_Register_${academicYear}.xlsx`);
 }
 
-function exportAdditionalFeeRegisterPdf(
+async function exportAdditionalFeeRegisterPdf(
   rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string, dateLabel: string,
-): void {
+): Promise<void> {
+  await needPdf();
   const FONT_SIZE   = 8;
   const PAD_H       = 4;
   const margin      = 10;
@@ -6721,9 +6738,10 @@ interface BlueRegColDef {
   get: (r: BlueRegRow, i: number) => string | number;
 }
 
-function exportBlueRegisterExcel(
+async function exportBlueRegisterExcel(
   rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string,
-): void {
+): Promise<void> {
+  await needXlsx();
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const header = [
     'Sl','Date','Rpt No','Course','Year','Name',
@@ -6765,9 +6783,10 @@ function exportBlueRegisterExcel(
   XLSX.writeFile(wb, `Blue_Register_${academicYear}.xlsx`);
 }
 
-function exportBlueRegisterPdf(
+async function exportBlueRegisterPdf(
   rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string, dateLabel: string,
-): void {
+): Promise<void> {
+  await needPdf();
   const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const FONT_SIZE    = 8;
   const CELL_PAD     = { top: 2, right: 2, bottom: 2, left: 2 };
@@ -7453,7 +7472,8 @@ function WPFeeDistributionTab({
     return gt;
   }, [studentStatsForExport]);
 
-  function exportWPDistExcel() {
+  async function exportWPDistExcel() {
+    await needXlsx();
     const wb = XLSX.utils.book_new();
 
     const statsRows: (string | number)[][] = [
@@ -7789,7 +7809,7 @@ export function FeeReportsPage() {
     { mode: 'by-date' },
   );
   const { overrides: feeOverrides, loading: overridesLoading } = useFeeOverrides(academicYear);
-  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
+  const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => peekFeeStructures(academicYear));
 
   useEffect(() => {
     if (!academicYear) { setFeeStructures([]); return; }
@@ -7798,11 +7818,8 @@ export function FeeReportsPage() {
 
   // SNQ refunds for the year — netted against SMP paid so a refunded student shows 0 due,
   // and Paid totals in Fee List / Dues Report aren't inflated by refunded amounts.
-  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
-  useEffect(() => {
-    if (!academicYear) { setRefunds([]); return; }
-    getRefundRecordsByAcademicYear(academicYear).then(setRefunds).catch(() => {});
-  }, [academicYear]);
+  // Live + cache-first, so a revisit never waits on the network.
+  const { refunds: refunds } = useRefundRecords(academicYear);
 
   const refundedByStudent = useMemo(() => {
     const map = new Map<string, number>();

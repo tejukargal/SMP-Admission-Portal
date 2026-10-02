@@ -21,11 +21,6 @@ import { CourseCompletionCertificateModal } from '../components/common/CourseCom
 import { generateTCApplication } from '../utils/tcApplicationPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
-import {
-  exportSummaryReport, exportCategoryReport,
-  exportGenderCourseYearReport, exportGenderCategoryReport,
-  exportDatewiseAdmissionsReport, exportFirstYearSeatsReport,
-} from '../utils/dashboardReportPdf';
 import type { ThemeName } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride } from '../types';
 import { SMP_FEE_HEADS } from '../types';
@@ -39,6 +34,17 @@ import {
   FAINT, AMBER, PAID, DUE, pastel, inkOf, TILE, tileStyle, wellStyle,
   COURSE_HEX, YEAR_HEX, ADM_HEX, BOY_HEX, GIRL_HEX,
 } from '../components/dashboard/dashTokens';
+
+// PDF reports fetch jsPDF on demand (first export click) — keeps ~420 KB out of
+// the landing page's chunk.
+type DashPdf = typeof import('../utils/dashboardReportPdf');
+const dashPdf = () => import('../utils/dashboardReportPdf');
+const exportSummaryReport = (...a: Parameters<DashPdf['exportSummaryReport']>) => void dashPdf().then((m) => m.exportSummaryReport(...a));
+const exportCategoryReport = (...a: Parameters<DashPdf['exportCategoryReport']>) => void dashPdf().then((m) => m.exportCategoryReport(...a));
+const exportGenderCourseYearReport = (...a: Parameters<DashPdf['exportGenderCourseYearReport']>) => void dashPdf().then((m) => m.exportGenderCourseYearReport(...a));
+const exportGenderCategoryReport = (...a: Parameters<DashPdf['exportGenderCategoryReport']>) => void dashPdf().then((m) => m.exportGenderCategoryReport(...a));
+const exportDatewiseAdmissionsReport = (...a: Parameters<DashPdf['exportDatewiseAdmissionsReport']>) => void dashPdf().then((m) => m.exportDatewiseAdmissionsReport(...a));
+const exportFirstYearSeatsReport = (...a: Parameters<DashPdf['exportFirstYearSeatsReport']>) => void dashPdf().then((m) => m.exportFirstYearSeatsReport(...a));
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];

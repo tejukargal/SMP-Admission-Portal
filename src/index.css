@@ -206,6 +206,33 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Admissions page entrance: sections rise and settle in sequence (the soft
+   blur clears as they land), then the first table rows cascade in. ── */
+@keyframes adm-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.995); filter: blur(3px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+@keyframes adm-rise-soft {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes adm-row {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.adm-stage > * { animation: adm-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.adm-stage > :nth-child(2) { animation-delay: 60ms; }
+.adm-stage > :nth-child(3) { animation-delay: 120ms; }
+/* The content card is large — skip the blur there to keep it cheap. */
+.adm-stage > :nth-child(n+4) { animation-name: adm-rise-soft; animation-delay: 180ms; }
+.adm-row {
+  animation: adm-row 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 22ms + 220ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-stage > *, .adm-row { animation: none; }
+}
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
