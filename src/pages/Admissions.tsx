@@ -32,8 +32,8 @@ const UNAIDED_COURSES: Course[] = ['EE'];
 
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
 
-// Entrance cascade index for table rows (.adm-row) — rows past the 12th land together.
-const rowRise = (idx: number) => ({ '--i': Math.min(idx, 12) } as CSSProperties);
+// Entrance wave index for table rows (.adm-row) — rows past the 10th fade in together.
+const rowRise = (idx: number) => ({ '--i': Math.min(idx, 10) } as CSSProperties);
 
 const TEAL = '#0F8B8D';
 const TEAL_INK = '#0B6567';

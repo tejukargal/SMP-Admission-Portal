@@ -73,3 +73,6 @@ export const YEAR_HEX = { '1ST YEAR': '#E17FA0', '2ND YEAR': '#9B7FD6', '3RD YEA
 export const ADM_HEX = { SNQ: '#6B7CF6', LATERAL: '#A66BB8', REPEATER: '#7B7F8C' } as const;
 export const BOY_HEX = '#0EA5E9';
 export const GIRL_HEX = '#EC4899';
+
+/** Student groups shown per page in Dashboard search results ("Show more" adds this many). */
+export const SEARCH_PAGE_SIZE = 10;

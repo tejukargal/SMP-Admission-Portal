@@ -22,16 +22,17 @@ import { generateTCApplication } from '../utils/tcApplicationPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
 import type { ThemeName } from '../utils/dashboardReportPdf';
-import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride } from '../types';
+import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
 import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardToggle';
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
+import { SearchResults, type StudentGroup, type FeeStatus } from '../components/dashboard/SearchResults';
 import type { DtekCircular } from '../services/dtekNewsService';
 import {
   PAGE_BG, CARD, OUTLINE_PILL_BTN, ICON_PILL_BTN, EYEBROW, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER,
-  FAINT, AMBER, PAID, DUE, pastel, inkOf, TILE, tileStyle, wellStyle,
+  FAINT, AMBER, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
   COURSE_HEX, YEAR_HEX, ADM_HEX, BOY_HEX, GIRL_HEX,
 } from '../components/dashboard/dashTokens';
 
@@ -45,6 +46,33 @@ const exportGenderCourseYearReport = (...a: Parameters<DashPdf['exportGenderCour
 const exportGenderCategoryReport = (...a: Parameters<DashPdf['exportGenderCategoryReport']>) => void dashPdf().then((m) => m.exportGenderCategoryReport(...a));
 const exportDatewiseAdmissionsReport = (...a: Parameters<DashPdf['exportDatewiseAdmissionsReport']>) => void dashPdf().then((m) => m.exportDatewiseAdmissionsReport(...a));
 const exportFirstYearSeatsReport = (...a: Parameters<DashPdf['exportFirstYearSeatsReport']>) => void dashPdf().then((m) => m.exportFirstYearSeatsReport(...a));
+
+// Per-year fee data behind the search result fee pills. Fetched once and reused
+// across keystrokes (each year is three full-collection reads), refreshed after
+// 2 minutes or when a fee is collected from the results.
+type YearFeeData = [FeeRecord[], FeeStructure[], StudentFeeOverride[]];
+const FEE_DATA_TTL = 2 * 60 * 1000;
+const yearFeeCache = new Map<string, { at: number; data: Promise<YearFeeData>; ready: boolean }>();
+function loadYearFeeData(year: AcademicYear): Promise<YearFeeData> {
+  const hit = yearFeeCache.get(year);
+  if (hit && Date.now() - hit.at < FEE_DATA_TTL) return hit.data;
+  const entry = {
+    at: Date.now(),
+    ready: false,
+    data: Promise.all([
+      getFeeRecordsByAcademicYear(year),
+      getFeeStructuresByAcademicYear(year),
+      getFeeOverridesByYear(year),
+    ]),
+  };
+  entry.data.then(() => { entry.ready = true; }, () => { yearFeeCache.delete(year); });
+  yearFeeCache.set(year, entry);
+  return entry.data;
+}
+const isYearFeeDataReady = (year: string) => {
+  const hit = yearFeeCache.get(year);
+  return !!hit && hit.ready && Date.now() - hit.at < FEE_DATA_TTL;
+};
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -61,12 +89,6 @@ const YEAR_PDF_THEME: Record<Year, ThemeName> = { '1ST YEAR': 'lime', '2ND YEAR'
 const COURSE_RING_HEX: Record<Course, string> = {
   CE: '#fbbf24', ME: '#4ade80', EC: '#38bdf8', CS: '#2dd4bf', EE: '#a78bfa',
 };
-
-function statusBadgeStyle(status: string): React.CSSProperties {
-  if (status === 'CONFIRMED') return pastel('#0FA968');
-  if (status === 'CANCELLED') return pastel('#E11D48');
-  return pastel('#D97706');
-}
 
 // ─── Animated number ────────────────────────────────────────────────────────
 function AnimNum({ value }: { value: number }) {
@@ -268,9 +290,10 @@ export function Dashboard() {
   const [chartBarsReady, setChartBarsReady] = useState(false);
 
   // ── Fee status for search result rows ────────────────────────────────────
-  type FeeStatus = 'collect' | 'dues' | 'no-dues';
   const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
+  // Bumped after a fee is collected from the results so the pills re-read fresh data.
+  const [feeDataVersion, setFeeDataVersion] = useState(0);
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
 
@@ -362,6 +385,16 @@ export function Dashboard() {
 
   const isSearchMode = searchTerm.trim().length > 0;
 
+  // Search results paging + keyboard cursor — both reset whenever the query changes.
+  const [visibleCount, setVisibleCount] = useState(SEARCH_PAGE_SIZE);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [lastSearchTerm, setLastSearchTerm] = useState(searchTerm);
+  if (lastSearchTerm !== searchTerm) {
+    setLastSearchTerm(searchTerm);
+    setVisibleCount(SEARCH_PAGE_SIZE);
+    setActiveIdx(-1);
+  }
+
   const sortedAcademicYears = useMemo(() => {
     const years = new Set(allStudents.map((s) => s.academicYear));
     return Array.from(years).sort().reverse();
@@ -413,16 +446,6 @@ export function Dashboard() {
     return result;
   }, [isSearchMode, searchTerm, searchIndex, courseFilter, yearFilter, genderFilter, categoryFilter, admTypeFilter, admCatFilter, admStatusFilter]);
 
-  interface StudentGroup {
-    key: string;
-    nameSSLC: string;
-    nameAadhar: string;
-    fatherName: string;
-    dob: string;
-    gender: Gender;
-    records: Student[];
-  }
-
   const studentGroups = useMemo((): StudentGroup[] => {
     const map = new Map<string, StudentGroup>();
     for (const s of searchResults) {
@@ -446,6 +469,29 @@ export function Dashboard() {
     return Array.from(map.values()).sort((a, b) => a.nameSSLC.localeCompare(b.nameSSLC));
   }, [searchResults]);
 
+  // ↑/↓ move between result cards (paging in more when stepping past the last one),
+  // Enter opens the active student's latest enrollment, Esc clears the search.
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      if (inputValue) { e.preventDefault(); setInputValue(''); }
+      return;
+    }
+    if (!isSearchMode || studentGroups.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.min(activeIdx + 1, studentGroups.length - 1);
+      if (next >= visibleCount) setVisibleCount((c) => c + SEARCH_PAGE_SIZE);
+      setActiveIdx(next);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      const group = studentGroups[activeIdx < 0 ? 0 : activeIdx];
+      const latest = group?.records[group.records.length - 1];
+      if (latest) { e.preventDefault(); setFeeHistoryStudent(latest); }
+    }
+  }
+
   useEffect(() => {
     if (!isSearchMode || searchResults.length === 0) {
       setSearchFeeStatus(new Map());
@@ -453,16 +499,16 @@ export function Dashboard() {
       return;
     }
     let cancelled = false;
-    setSearchFeeLoading(true);
+    const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
+    // Only show the loading shimmer when a year actually has to be fetched — cached
+    // years resolve immediately, so the pills update in place while typing.
+    if (!uniqueYears.every(isYearFeeDataReady)) setSearchFeeLoading(true);
 
     async function loadFeeStatus() {
-      const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
-
-      const [allRecords, allStructures, allOverrides] = await Promise.all([
-        Promise.all(uniqueYears.map((y) => getFeeRecordsByAcademicYear(y))).then((arrs) => arrs.flat()),
-        Promise.all(uniqueYears.map((y) => getFeeStructuresByAcademicYear(y))).then((arrs) => arrs.flat()),
-        Promise.all(uniqueYears.map((y) => getFeeOverridesByYear(y))).then((arrs) => arrs.flat()),
-      ]);
+      const perYear = await Promise.all(uniqueYears.map(loadYearFeeData));
+      const allRecords    = perYear.flatMap(([r]) => r);
+      const allStructures = perYear.flatMap(([, st]) => st);
+      const allOverrides  = perYear.flatMap(([, , o]) => o);
 
       if (cancelled) return;
 
@@ -569,7 +615,7 @@ export function Dashboard() {
 
     loadFeeStatus().catch(() => { if (!cancelled) setSearchFeeLoading(false); });
     return () => { cancelled = true; };
-  }, [isSearchMode, searchResults]);
+  }, [isSearchMode, searchResults, feeDataVersion]);
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -1194,6 +1240,8 @@ const [barsReady, setBarsReady] = useState(false);
               placeholder="Search name, reg no, mobile"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value.toUpperCase())}
+              onKeyDown={handleSearchKeyDown}
+              onFocus={() => { const y = settings?.currentAcademicYear; if (y) void loadYearFeeData(y).catch(() => {}); }}
               className={`w-full rounded-full border border-[#6B7CF6]/40 bg-[#F5F6FF] py-2 text-[14px] font-medium text-[#3F4BB8] placeholder:text-[#3F4BB8]/55 placeholder:font-normal placeholder:text-[12.5px] focus:outline-none focus:bg-white focus:border-[#6B7CF6] focus:ring-2 focus:ring-[#6B7CF6]/20 transition-all duration-150 pl-9 ${inputValue ? 'pr-8' : 'pr-3'}`}
             />
             {inputValue && (
@@ -1591,138 +1639,23 @@ const [barsReady, setBarsReady] = useState(false);
       ) : isSearchMode ? (
 
         /* ── Search results ─────────────────────────────────────────── */
-        <div className="space-y-3 pb-4">
-          {studentGroups.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-[13px] font-medium" style={{ color: FAINT }}>
-              No students found.
-            </div>
-          ) : (
-            <>
-            {studentGroups.length > 10 && (
-              <p className="text-[11px] font-medium px-1" style={{ color: FAINT }}>
-                Showing first 10 of {studentGroups.length} matches — refine your search to narrow results.
-              </p>
-            )}
-            {studentGroups.slice(0, 10).map((group, idx) => (
-              <div key={group.key} className={`${CARD} overflow-hidden`} style={{ animation: `content-enter 0.2s ease-out ${Math.min(idx * 0.03, 0.3)}s both` }}>
-                <div className="px-4 py-3 border-b flex items-baseline gap-3 flex-wrap" style={{ background: '#ECEFFD', borderColor: '#CDD4F7' }}>
-                  <span className="font-medium text-[15px]" style={{ color: PERI_INK }}>
-                    {group.nameSSLC}
-                    {group.fatherName && (
-                      <span className="font-normal text-[12.5px]" style={{ color: FAINT }}> {group.gender === 'BOY' ? 'S/o' : 'D/o'} {group.fatherName}</span>
-                    )}
-                  </span>
-                  {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
-                    <span className="text-[12.5px]" style={{ color: FAINT }}>({group.nameAadhar})</span>
-                  )}
-                  <span className="text-[12.5px] tabular-nums" style={{ color: FAINT }}>DOB: {group.dob || '—'}</span>
-                  <div className="ml-auto flex items-center gap-3 shrink-0">
-                    {!searchFeeLoading && (() => {
-                      const due = searchGroupDue.get(group.key);
-                      if (due === undefined) return null;
-                      if (due === 'unavailable') return (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white border border-[#DADFFA] px-2.5 py-[3px] text-[10.5px] font-medium text-[#8A93A3]">
-                          Fee records unavailable
-                        </span>
-                      );
-                      if (due === null) return (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white border border-[#DADFFA] px-2.5 py-[3px] text-[10.5px] font-medium text-[#8A93A3]">
-                          Fee structure not set
-                        </span>
-                      );
-                      return due > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[10.5px] font-medium tabular-nums text-white" style={{ background: DUE, borderColor: DUE, boxShadow: `0 2px 6px ${DUE}40` }}>
-                          Due ₹{due.toLocaleString()}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[10.5px] font-medium" style={pastel(PAID)}>
-                          ✓ No Dues
-                        </span>
-                      );
-                    })()}
-                    <span className="text-[11.5px] font-medium tabular-nums" style={{ color: PERI_INK }}>
-                      {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-[12px]">
-                    <thead style={{ background: "#F5F6FF" }}>
-                      <tr>
-                        {['Acad Year', 'Study Year', 'Course', 'Reg No', 'Cat', 'Adm Type', 'Adm Cat', 'Status', 'Mobile', 'Actions'].map((h) => (
-                          <th key={h} className={`px-3 h-9 text-[9.5px] font-medium uppercase tracking-[0.6px] whitespace-nowrap text-[#3F4BB8] border-b border-[#DADFFA] ${h === 'Actions' ? 'text-right' : 'text-left'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="[&>tr:not(:first-child)>td]:border-t [&>tr:not(:first-child)>td]:border-t-[#EBEEFB]">
-                      {group.records.map((s) => (
-                        <tr
-                          key={s.id}
-                          className={`transition-colors cursor-context-menu select-none ${ctxMenu?.student.id === s.id ? 'row-ctx-active-peri' : 'hover:bg-[#F5F6FF]'}`}
-                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, student: s }); }}
-                          onDoubleClick={() => setFeeHistoryStudent(s)}
-                        >
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#262B35] tabular-nums whitespace-nowrap">{s.academicYear}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#262B35] tabular-nums whitespace-nowrap">{s.year}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#3F4BB8] whitespace-nowrap">{s.course}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#5B6371] tabular-nums whitespace-nowrap">{s.regNumber || '—'}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#262B35] tabular-nums whitespace-nowrap">{s.category || '—'}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#262B35] tabular-nums whitespace-nowrap">{s.admType || '—'}</td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#262B35] tabular-nums whitespace-nowrap">{s.admCat || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <span className="inline-block rounded-full border px-[7px] py-[4px] text-[10.5px] font-medium leading-none" style={statusBadgeStyle(s.admissionStatus)}>
-                              {s.admissionStatus || '—'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-[11.5px] font-medium text-[#5B6371] tabular-nums whitespace-nowrap">{s.studentMobile || s.fatherMobile || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap text-right">
-                            <div className="flex gap-1.5 justify-end">
-                              <button
-                                onClick={() => setFeeHistoryStudent(s)}
-                                className="rounded-[7px] border border-[#6B7CF6]/45 bg-white px-2.5 py-[6px] text-[11px] font-medium text-[#3F4BB8] hover:bg-[#6B7CF6]/[0.08] transition-colors cursor-pointer"
-                              >
-                                View Details
-                              </button>
-                              {isAdmin && (
-                                <button
-                                  onClick={() => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
-                                  className="rounded-[7px] border border-[#6B7CF6]/45 bg-white px-2.5 py-[6px] text-[11px] font-medium text-[#3F4BB8] hover:bg-[#6B7CF6]/[0.08] transition-colors cursor-pointer"
-                                >
-                                  Edit
-                                </button>
-                              )}
-                              {isAdmin && (() => {
-                                const feeStatus = searchFeeLoading ? null : (searchFeeStatus.get(s.id) ?? 'collect');
-                                const baseClass = 'inline-flex items-center justify-center w-[98px] py-[6px] rounded-[7px] text-[11px] font-medium border transition-all';
-                                if (feeStatus === 'no-dues') {
-                                  return (
-                                    <span className={`${baseClass} cursor-default`} style={pastel(PAID)}>
-                                      No Dues
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <button
-                                    onClick={() => setCollectFeeStudent(s)}
-                                    className={`${baseClass} text-white border-transparent hover:brightness-95 cursor-pointer`}
-                                    style={{ background: feeStatus === 'dues' ? '#D97706' : '#6B7CF6' }}
-                                  >
-                                    {feeStatus === 'dues' ? 'Collect Dues' : 'Collect Fee'}
-                                  </button>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-            </>
-          )}
-        </div>
+        <SearchResults
+          groups={studentGroups}
+          query={searchTerm}
+          feeStatus={searchFeeStatus}
+          groupDue={searchGroupDue}
+          feeLoading={searchFeeLoading}
+          isAdmin={isAdmin}
+          activeIdx={activeIdx}
+          visibleCount={visibleCount}
+          ctxStudentId={ctxMenu?.student.id ?? null}
+          onShowMore={() => setVisibleCount((c) => c + SEARCH_PAGE_SIZE)}
+          onClear={() => setInputValue('')}
+          onView={setFeeHistoryStudent}
+          onEdit={(s) => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
+          onCollect={setCollectFeeStudent}
+          onRowContextMenu={(e, s) => setCtxMenu({ x: e.clientX, y: e.clientY, student: s })}
+        />
 
       ) : (
 
@@ -2402,7 +2335,11 @@ const [barsReady, setBarsReady] = useState(false);
         academicYear={collectFeeStudent.academicYear}
         receiptCounterYear={settings?.currentAcademicYear ?? collectFeeStudent.academicYear}
         onClose={() => setCollectFeeStudent(null)}
-        onSaved={() => setCollectFeeStudent(null)}
+        onSaved={() => {
+          yearFeeCache.delete(collectFeeStudent.academicYear);
+          setFeeDataVersion((v) => v + 1);
+          setCollectFeeStudent(null);
+        }}
       />
     )}
 

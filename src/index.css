@@ -206,28 +206,29 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Admissions page entrance: sections rise and settle in sequence (the soft
-   blur clears as they land), then the first table rows cascade in. ── */
-@keyframes adm-rise {
-  from { opacity: 0; transform: translateY(10px) scale(0.995); filter: blur(3px); }
-  to   { opacity: 1; transform: none; filter: none; }
-}
-@keyframes adm-rise-soft {
-  from { opacity: 0; transform: translateY(12px); }
+/* ── Admissions page entrance: "spring settle". Sections lift in with a soft
+   spring (transform + opacity only — GPU-composited, no blur repaints), then the
+   first rows fade in as a quick wave. Everything settles in ~0.45s. ── */
+@keyframes adm-settle {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
   to   { opacity: 1; transform: none; }
 }
-@keyframes adm-row {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: none; }
+@keyframes adm-row-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
-.adm-stage > * { animation: adm-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-.adm-stage > :nth-child(2) { animation-delay: 60ms; }
-.adm-stage > :nth-child(3) { animation-delay: 120ms; }
-/* The content card is large — skip the blur there to keep it cheap. */
-.adm-stage > :nth-child(n+4) { animation-name: adm-rise-soft; animation-delay: 180ms; }
+.adm-stage > * {
+  transform-origin: 50% 0;
+  animation: adm-settle 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  /* Critically-damped-ish spring (ζ≈0.8, ~1.5% overshoot) where supported. */
+  animation-timing-function: linear(0, 0.0516, 0.1705, 0.3163, 0.4637, 0.598, 0.7123, 0.8044, 0.8752, 0.9272, 0.9636, 0.9877, 1.0026, 1.0108, 1.0144, 1.0151, 1.0141, 1.0122, 1.01, 1.0077, 1.0058, 1.0041, 1.0027, 1.0017, 1);
+}
+.adm-stage > :nth-child(2) { animation-delay: 40ms; }
+.adm-stage > :nth-child(3) { animation-delay: 80ms; }
+.adm-stage > :nth-child(n+4) { animation-delay: 120ms; }
 .adm-row {
-  animation: adm-row 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i, 0) * 22ms + 220ms);
+  animation: adm-row-fade 240ms ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 14ms + 120ms);
 }
 @media (prefers-reduced-motion: reduce) {
   .adm-stage > *, .adm-row { animation: none; }
@@ -406,6 +407,42 @@
   0%, 100% { background-color: rgba(107, 124, 246, 0.07); }
   50%      { background-color: rgba(107, 124, 246, 0.18); }
 }
+/* ── Dashboard search results (profile cards + timeline) ─────────────────── */
+@keyframes sr-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sr-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.sr-card {
+  animation: sr-in 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+.sr-fade { animation: sr-fade-in 220ms ease-out backwards; }
+/* Fee / due pills ease in (fade + tiny scale) the moment their data lands. */
+@keyframes sr-pop-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+.sr-pop { animation: sr-pop-in 240ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.sr-shimmer {
+  background: linear-gradient(90deg, #EEF0FC 25%, #E0E4FA 50%, #EEF0FC 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.sr-kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 17px; padding: 0 5px;
+  border: 1px solid #DADFFA; border-bottom-width: 2px; border-radius: 5px;
+  background: #fff; color: #3F4BB8; font: inherit; font-size: 9.5px; line-height: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sr-card, .sr-fade, .sr-pop { animation: none; }
+  .sr-shimmer { animation: none; }
+}
+
 .row-ctx-active-peri {
   animation: row-ctx-pulse-peri 1.8s ease-in-out infinite;
   background-color: rgba(107, 124, 246, 0.07);
