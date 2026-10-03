@@ -19,7 +19,7 @@ const SECTION_GROUPS: { title: string; items: { id: ImportSection; label: string
     title: 'Enrollment Data',
     items: [
       { id: 'students', label: 'Students', hint: 'Enrollment master list (.xlsx)' },
-      { id: 'address', label: 'Address', hint: 'Address, mother name, DOB update' },
+      { id: 'address', label: 'Personal Details', hint: 'Address, DOB, parents, phone, Aadhar, caste — all years' },
     ],
   },
   {

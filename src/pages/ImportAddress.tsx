@@ -1,12 +1,15 @@
 import { useState, useRef, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from '../components/common/Button';
-import { importAddresses, type AddressRow, type AddressImportResult } from '../services/importAddressService';
+import {
+  importAddresses, hasUpdateFields, ADDRESS_UPDATE_FIELDS,
+  type AddressRow, type AddressImportResult,
+} from '../services/importAddressService';
 
 type PageState = 'idle' | 'preview' | 'importing' | 'done';
 
-// Columns required for matching rows to students
-const REQUIRED_COLUMNS = ['Name', 'Reg No', 'Academic Year'];
+// Columns required for matching rows to students (Reg No + name check)
+const REQUIRED_COLUMNS = ['Name', 'Reg No'];
 
 // Convert Excel date serial number to DD/MM/YYYY string
 function excelSerialToDDMMYYYY(serial: number): string {
@@ -53,8 +56,9 @@ function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[
         const firstRow = raw[0] ?? {};
         const keys = Object.keys(firstRow);
 
-        function findCol(target: string): string | undefined {
-          return keys.find((k) => k.trim().toLowerCase() === target.trim().toLowerCase());
+        function findCol(...aliases: string[]): string | undefined {
+          const wanted = aliases.map((a) => a.trim().toLowerCase());
+          return keys.find((k) => wanted.includes(k.trim().toLowerCase()));
         }
 
         // Only warn about columns needed for matching
@@ -67,24 +71,43 @@ function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[
         const colReg        = findCol('Reg No') ?? '';
         const colAddress    = findCol('Address') ?? '';
         const colMotherName = findCol('Mother Name') ?? '';
-        const colDOB        = findCol('DOB') ?? '';
-        const colYear       = findCol('Academic Year') ?? '';
+        const colDOB        = findCol('DOB', 'Date of Birth') ?? '';
+        const colFatherName = findCol('Father Name') ?? '';
+        const colFatherMob  = findCol('Father Mobile', 'Father Mobile No', 'Phone No', 'Mobile') ?? '';
+        const colStudentMob = findCol('Student Mobile', 'Student Mobile No') ?? '';
+        const colAadhar     = findCol('Aadhar', 'Aadhaar', 'Aadhar No', 'Aadhaar No', 'Aadhar Number', 'Aadhaar Number') ?? '';
+        const colGender     = findCol('Gender') ?? '';
+        const colReligion   = findCol('Religion') ?? '';
+        const colCaste      = findCol('Caste', 'Caste Name') ?? '';
+        const colCategory   = findCol('Category') ?? '';
+
+        // Text cell (optionally uppercased); numeric cells (Reg No, mobile, Aadhar)
+        // may come through as numbers — drop the trailing ".0".
+        const text = (r: Record<string, string | number | null>, col: string, upper = true) => {
+          if (!col) return '';
+          const v = String(r[col] ?? '').trim().replace(/\.0+$/, '');
+          return upper ? v.toUpperCase() : v;
+        };
 
         for (let i = 0; i < raw.length; i++) {
           const r = raw[i];
           const name = String(r[colName] ?? '').trim();
           if (!name) continue;
 
-          // Reg No may be stored as a number in Excel — normalize to string
-          const regRaw = String(r[colReg] ?? '').trim().replace(/\.0+$/, '');
-
           rows.push({
-            name,
-            regNumber: regRaw.toUpperCase(),
-            address: colAddress ? String(r[colAddress] ?? '').trim() : '',
-            motherName: colMotherName ? String(r[colMotherName] ?? '').trim().toUpperCase() : '',
+            name: name.toUpperCase(),
+            regNumber: text(r, colReg),
+            address: text(r, colAddress, false),
+            motherName: text(r, colMotherName),
             dateOfBirth: colDOB ? parseDOB(r[colDOB]) : '',
-            academicYear: String(r[colYear] ?? '').trim(),
+            fatherName: text(r, colFatherName),
+            fatherMobile: text(r, colFatherMob),
+            studentMobile: text(r, colStudentMob),
+            aadharNumber: text(r, colAadhar),
+            gender: text(r, colGender),
+            religion: text(r, colReligion),
+            caste: text(r, colCaste),
+            category: text(r, colCategory),
           });
         }
 
@@ -139,9 +162,12 @@ export function ImportAddress() {
     } catch (err) {
       setResult({
         updated: 0,
+        recordsUpdated: 0,
         notFound: 0,
+        nameMismatch: 0,
         skipped: 0,
         errors: [{ row: 0, regNumber: '', message: err instanceof Error ? err.message : 'Import failed' }],
+        warnings: [],
       });
     } finally {
       setPageState('done');
@@ -161,6 +187,12 @@ export function ImportAddress() {
 
   const progressPct =
     progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+
+  // Update columns that actually carry data in this sheet, with how many rows fill each.
+  const presentFields = ADDRESS_UPDATE_FIELDS
+    .map((f) => ({ ...f, count: rows.filter((r) => r[f.key]).length }))
+    .filter((f) => f.count > 0);
+  const updatableRows = rows.filter(hasUpdateFields).length;
 
   return (
     <div className="max-w-3xl">
@@ -204,10 +236,15 @@ export function ImportAddress() {
               </p>
               <p className="text-xs">
                 <span className="font-semibold text-gray-700">Optional (update fields):</span>{' '}
-                <span className="font-mono">Address · Mother Name · DOB</span>
+                <span className="font-mono">{ADDRESS_UPDATE_FIELDS.map((f) => f.label).join(' · ')}</span>
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                DOB accepted as Excel date, DD/MM/YYYY, or YYYY-MM-DD.
+                Rows match on Reg No, and the Name must equal the student's SSLC or Aadhar name.
+                Updates are applied to every academic year of the matched student — an Academic Year column, if present, is ignored.
+              </p>
+              <p className="text-xs text-gray-400">
+                DOB accepted as Excel date, DD/MM/YYYY, or YYYY-MM-DD. Gender: BOY/GIRL (or MALE/FEMALE).
+                Category: {['SC', 'ST', 'C1', '2A', '2B', '3A', '3B', 'GM'].join('/')}. Blank cells are left unchanged.
               </p>
             </div>
           </div>
@@ -237,23 +274,26 @@ export function ImportAddress() {
                 <p className="text-xs text-gray-500 mt-0.5">Total Rows</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-gray-700">
-                  {rows.filter((r) => r.address).length}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">With Address</p>
+                <p className="text-3xl font-bold text-gray-700">{updatableRows}</p>
+                <p className="text-xs text-gray-500 mt-0.5">With Updates</p>
               </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-gray-700">
-                  {rows.filter((r) => r.motherName).length}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">With Mother Name</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-gray-700">
-                  {rows.filter((r) => r.dateOfBirth).length}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">With DOB</p>
-              </div>
+            </div>
+
+            {/* Update columns found in the sheet */}
+            <div className="mb-5">
+              <p className="text-xs font-medium text-gray-500 mb-1.5">Fields to update</p>
+              {presentFields.length === 0 ? (
+                <p className="text-xs text-gray-400">No update columns found.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {presentFields.map((f) => (
+                    <span key={f.key} className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                      {f.label}
+                      <span className="tabular-nums text-blue-400">{f.count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {warnings.length > 0 && (
@@ -273,21 +313,19 @@ export function ImportAddress() {
                     <tr className="text-left text-gray-500 border-b border-gray-100">
                       <th className="pb-2 pr-4 font-medium">Name</th>
                       <th className="pb-2 pr-4 font-medium">Reg No</th>
-                      <th className="pb-2 pr-4 font-medium">Academic Year</th>
-                      <th className="pb-2 pr-4 font-medium">Address</th>
-                      <th className="pb-2 pr-4 font-medium">Mother Name</th>
-                      <th className="pb-2 font-medium">DOB</th>
+                      {presentFields.map((f) => (
+                        <th key={f.key} className="pb-2 pr-4 font-medium whitespace-nowrap">{f.label}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.slice(0, 5).map((r, i) => (
                       <tr key={i} className="border-b border-gray-50">
-                        <td className="py-1.5 pr-4 text-gray-700">{r.name}</td>
+                        <td className="py-1.5 pr-4 text-gray-700 whitespace-nowrap">{r.name}</td>
                         <td className="py-1.5 pr-4 font-mono text-gray-600">{r.regNumber}</td>
-                        <td className="py-1.5 pr-4 text-gray-500">{r.academicYear}</td>
-                        <td className="py-1.5 pr-4 text-gray-500 max-w-[10rem] truncate">{r.address || '—'}</td>
-                        <td className="py-1.5 pr-4 text-gray-500">{r.motherName || '—'}</td>
-                        <td className="py-1.5 text-gray-500">{r.dateOfBirth || '—'}</td>
+                        {presentFields.map((f) => (
+                          <td key={f.key} className="py-1.5 pr-4 text-gray-500 max-w-[10rem] truncate">{r[f.key] || '—'}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -298,7 +336,7 @@ export function ImportAddress() {
 
           <div className="flex gap-3">
             <Button size="lg" onClick={() => { void handleImport(); }}>
-              Update {rows.filter((r) => r.address || r.motherName || r.dateOfBirth).length} Records
+              Update {updatableRows} Students
             </Button>
             <Button size="lg" variant="secondary" onClick={handleReset}>
               Cancel
@@ -313,7 +351,7 @@ export function ImportAddress() {
           <h3 className="text-base font-semibold text-gray-800 mb-4">Updating records...</h3>
 
           <p className="text-sm text-gray-600 mb-3">
-            Processing {progress.current} of {progress.total}
+            Processing {progress.current} of {progress.total} records
           </p>
 
           <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
@@ -331,15 +369,25 @@ export function ImportAddress() {
         <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-base font-semibold text-gray-800 mb-4">Import Complete</h3>
 
-          <div className="flex gap-6 mb-5">
+          <div className="flex gap-6 mb-5 flex-wrap">
             <div className="text-center">
               <p className="text-3xl font-bold text-green-600">{result.updated}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Updated</p>
+              <p className="text-xs text-gray-500 mt-0.5">Students Updated</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-600">{result.recordsUpdated}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Records Updated (all years)</p>
             </div>
             {result.notFound > 0 && (
               <div className="text-center">
                 <p className="text-3xl font-bold text-red-500">{result.notFound}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Not Found</p>
+              </div>
+            )}
+            {result.nameMismatch > 0 && (
+              <div className="text-center">
+                <p className="text-3xl font-bold text-red-500">{result.nameMismatch}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Name Mismatch</p>
               </div>
             )}
             {result.skipped > 0 && (
@@ -350,21 +398,36 @@ export function ImportAddress() {
             )}
           </div>
 
-          {result.notFound === 0 && result.updated > 0 && (
+          {result.errors.length === 0 && result.updated > 0 && (
             <p className="text-sm text-green-700 bg-green-50 rounded-md px-4 py-3 mb-4">
-              All {result.updated} records updated successfully.
+              All {result.updated} students updated across {result.recordsUpdated} academic-year records.
             </p>
           )}
 
           {result.errors.length > 0 && (
             <div className="mb-4">
               <p className="text-sm font-medium text-red-600 mb-2">
-                Not found ({result.errors.length}):
+                Not updated ({result.errors.length}):
               </p>
               <div className="bg-red-50 rounded-md px-4 py-3 max-h-48 overflow-y-auto space-y-1">
                 {result.errors.map((e, i) => (
                   <p key={i} className="text-xs text-red-700 font-mono">
                     Row {e.row}: {e.message}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.warnings.length > 0 && (
+            <div className="mb-4">
+              <p className="text-sm font-medium text-amber-700 mb-2">
+                Field warnings ({result.warnings.length}) — these cells were skipped, other fields in the row were updated:
+              </p>
+              <div className="bg-amber-50 rounded-md px-4 py-3 max-h-48 overflow-y-auto space-y-1">
+                {result.warnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-800 font-mono">
+                    Row {w.row} ({w.regNumber}): {w.message}
                   </p>
                 ))}
               </div>
