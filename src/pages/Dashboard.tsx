@@ -18,6 +18,7 @@ import { StudyCertificateModal } from '../components/common/StudyCertificateModa
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
 import { CourseCompletionCertificateModal } from '../components/common/CourseCompletionCertificateModal';
+import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { generateTCApplication } from '../utils/tcApplicationPdf';
 import { isConfirmedActive } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
@@ -259,7 +260,8 @@ export function Dashboard() {
   const isAdmin = role === 'admin';
   const { students: rawStudents, loading, error } = useAllStudents();
   // WP (Working Professional / EXTERNAL) admissions are managed on /wp-students
-  // and are kept out of every dashboard count, search and drill-down.
+  // and are kept out of every dashboard count and drill-down. Search alone uses
+  // rawStudents so WP students can still be found and issued certificates.
   const allStudents = useMemo(() => rawStudents.filter((s) => !isWPStudent(s)), [rawStudents]);
   const { settings } = useSettings();
   const { dashboardFilters, setDashboardFilters } = useFilters();
@@ -312,6 +314,7 @@ export function Dashboard() {
   const [tcStudent, setTcStudent] = useState<Student | null>(null);
   const [pcStudent, setPcStudent] = useState<Student | null>(null);
   const [cccStudent, setCccStudent] = useState<Student | null>(null);
+  const [admOrderStudent, setAdmOrderStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -401,12 +404,12 @@ export function Dashboard() {
   }, [allStudents]);
 
   const searchIndex = useMemo(() =>
-    allStudents.map((s) => ({
+    rawStudents.map((s) => ({
       s,
       searchStr: [s.studentNameSSLC, s.studentNameAadhar, s.regNumber, s.fatherMobile, s.studentMobile]
         .filter(Boolean).join('|').toUpperCase(),
     })),
-    [allStudents]
+    [rawStudents]
   );
 
   const filteredStudents = useMemo(() => {
@@ -476,7 +479,7 @@ export function Dashboard() {
     // keys must yield: the first Esc closes the overlay (its own handler), and only
     // the next Esc — with nothing open — clears the search.
     const overlayOpen = !!(feeHistoryStudent || collectFeeStudent || ctxMenu
-      || studyCertStudent || tcStudent || pcStudent || cccStudent);
+      || studyCertStudent || tcStudent || pcStudent || cccStudent || admOrderStudent);
     if (overlayOpen) return;
     if (e.key === 'Escape') {
       if (inputValue) { e.preventDefault(); setInputValue(''); }
@@ -499,13 +502,17 @@ export function Dashboard() {
   }
 
   useEffect(() => {
-    if (!isSearchMode || searchResults.length === 0) {
+    // WP fee lives in manual counts (Fee Reports → WP Fee Distribution), not feeRecords,
+    // so WP enrollments get no fee status or group due — the results show a WP badge.
+    const feeTargets = searchResults.filter((s) => !isWPStudent(s));
+    if (!isSearchMode || feeTargets.length === 0) {
       setSearchFeeStatus(new Map());
       setSearchGroupDue(new Map());
+      setSearchFeeLoading(false);
       return;
     }
     let cancelled = false;
-    const uniqueYears = [...new Set(searchResults.map((s) => s.academicYear))] as AcademicYear[];
+    const uniqueYears = [...new Set(feeTargets.map((s) => s.academicYear))] as AcademicYear[];
     // Only show the loading shimmer when a year actually has to be fetched — cached
     // years resolve immediately, so the pills update in place while typing.
     if (!uniqueYears.every(isYearFeeDataReady)) setSearchFeeLoading(true);
@@ -560,7 +567,7 @@ export function Dashboard() {
       }
 
       const statusMap = new Map<string, FeeStatus>();
-      for (const s of searchResults) {
+      for (const s of feeTargets) {
         const paid = paidByStudent.get(s.id) ?? 0;
         const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
         let allotted: number | null;
@@ -585,11 +592,11 @@ export function Dashboard() {
       // Compute total due per student group (only 2021-22 and later — prior data unavailable)
       const groupDueMap = new Map<string, number | null | 'unavailable'>();
       // Pre-seed every group as unavailable; upgraded below for 2021-22+ enrollments
-      for (const s of searchResults) {
+      for (const s of feeTargets) {
         const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
         if (!groupDueMap.has(groupKey)) groupDueMap.set(groupKey, 'unavailable');
       }
-      for (const s of searchResults) {
+      for (const s of feeTargets) {
         if (s.academicYear < '2021-22') continue;
         const groupKey = s.regNumber ? s.regNumber.toUpperCase() : `${s.studentNameSSLC}|${s.dateOfBirth}`;
         const paid = paidByStudent.get(s.id) ?? 0;
@@ -2366,7 +2373,10 @@ const [barsReady, setBarsReady] = useState(false);
           {/* Header */}
           <div className="px-3 py-2 border-b border-[#DADFFA] bg-[#F5F6FF]">
             <p className="text-[11.5px] font-medium text-[#3F4BB8] truncate">{ctxMenu.student.studentNameSSLC}</p>
-            <p className="text-[9.5px] text-[#8A93A3] mt-0.5">{ctxMenu.student.course} · {ctxMenu.student.year} · {ctxMenu.student.academicYear}</p>
+            <p className="text-[9.5px] text-[#8A93A3] mt-0.5">
+              {ctxMenu.student.course} · {ctxMenu.student.year} · {ctxMenu.student.academicYear}
+              {isWPStudent(ctxMenu.student) && <span className="font-semibold text-[#0F8B8D]"> · WP</span>}
+            </p>
           </div>
           {/* Items */}
           <div className="py-1">
@@ -2434,7 +2444,8 @@ const [barsReady, setBarsReady] = useState(false);
                 </button>
               );
             })()}
-            {isAdmin && (() => {
+            {/* WP fee is kept as manual counts — collecting here would double-count it. */}
+            {isAdmin && !isWPStudent(ctxMenu.student) && (() => {
               const feeStatus = searchFeeLoading ? null : (searchFeeStatus.get(ctxMenu.student.id) ?? 'collect');
               if (feeStatus === 'no-dues') {
                 return (
@@ -2461,6 +2472,17 @@ const [barsReady, setBarsReady] = useState(false);
             {/* ── Divider ── */}
             <div className="my-1 mx-2 h-px bg-[#EBEEFB]" />
             {/* ── Certificate actions ── */}
+            {isWPStudent(ctxMenu.student) && (
+              <button
+                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                onClick={() => { setAdmOrderStudent(ctxMenu.student); setCtxMenu(null); }}
+              >
+                <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                </span>
+                Admission Order
+              </button>
+            )}
             <button
               className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setStudyCertStudent(ctxMenu.student); setCtxMenu(null); }}
@@ -2537,6 +2559,12 @@ const [barsReady, setBarsReady] = useState(false);
       <CourseCompletionCertificateModal
         student={cccStudent}
         onClose={() => setCccStudent(null)}
+      />
+    )}
+    {admOrderStudent && (
+      <AdmissionOrderModal
+        student={admOrderStudent}
+        onClose={() => setAdmOrderStudent(null)}
       />
     )}
 

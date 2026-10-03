@@ -20,7 +20,7 @@ const YEAR_SIZE = 20;
 const TITLE = 'SMP ADMISSIONS';
 // Non-breaking space keeps the word gap the same width in the letters and the shimmer copy
 const TITLE_CHARS = [...TITLE].map((ch) => (ch === ' ' ? ' ' : ch));
-const TITLE_STYLE: CSSProperties = { fontSize: '28px', letterSpacing: '0.2em' };
+const TITLE_STYLE: CSSProperties = { letterSpacing: '0.2em' };
 
 function LogoutIcon({ size = 14 }: { size?: number }) {
   return (
@@ -51,7 +51,11 @@ function CashBadge({ compact = false }: { compact?: boolean }) {
       title={`Cash in hand not yet deposited to bank — SBI ₹${summary.byAccount.SBI.pending.toLocaleString('en-IN')}, SVK ₹${summary.byAccount.SVK.pending.toLocaleString('en-IN')}. Oldest: ${summary.oldestDate ?? '—'}. Click to record a deposit.`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${overdue ? 'animate-pulse' : ''}`} style={{ background: tone.dot }} />
-      {compact ? amount : <>{amount} cash in hand <span className="opacity-70">· {overdue ? `overdue ${held}` : held}</span></>}
+      {amount}
+      {/* Wording only when the bar is wide enough; the tooltip always has the full detail */}
+      {!compact && (
+        <span className="hidden @min-[1360px]:inline">cash in hand <span className="opacity-70">· {overdue ? `overdue ${held}` : held}</span></span>
+      )}
     </button>
   );
 }
@@ -114,10 +118,10 @@ function WelcomeTicker() {
     now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
   ];
   return (
-    <div className="hidden lg:flex items-center gap-2.5 ml-2.5 min-w-0">
+    <div className="hidden @min-[1000px]:flex items-center gap-2.5 ml-2.5 min-w-0">
       <Divider />
       <BlurTicker
-        width={150}
+        width={120}
         title={`${words[0]} · ${words[2]}, ${words[3]}`}
         // keeps the greeting/day/date fresh across midnight and time-of-day changes
         onTick={() => setNow(new Date())}
@@ -130,7 +134,7 @@ function WelcomeTicker() {
 /** Academic Year in the same plain-text style — label ⇄ year. */
 function YearTicker({ year }: { year: string }) {
   return (
-    <div className="flex items-center gap-2.5 shrink-0">
+    <div className="hidden @min-[780px]:flex items-center gap-2.5 shrink-0">
       <BlurTicker
         width={104}
         align="end"
@@ -178,7 +182,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <header
-      className={`header-accent ${cycling ? 'header-accent-cycle' : ''} font-wp relative h-13 flex items-center px-3 md:px-5 shrink-0 z-20 backdrop-blur-md overflow-hidden`}
+      className={`header-accent ${cycling ? 'header-accent-cycle' : ''} font-wp @container relative h-13 flex items-center px-3 md:px-5 shrink-0 z-20 backdrop-blur-md overflow-hidden`}
       style={{
         ...accentVars,
         background: 'linear-gradient(100deg, var(--hb-from) 0%, rgba(255,255,255,0.85) 50%, var(--hb-to) 100%)',
@@ -234,7 +238,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         </button>
       </div>
 
-      {/* Desktop row — current page / centered app name / Academic Year + Logout */}
+      {/* Desktop row — current page / centered app name / Academic Year + Logout.
+          Container breakpoints (header content width, so they follow the sidebar), sized
+          from measured Outfit widths so neither side ever reaches the centred title:
+            < 560   title hidden          · 560–779  20px title, no year
+            780–879 + year                · 880–999  28px title
+            1000+   + welcome, Logout label · 1360+  full cash-in-hand wording */}
       <div className="relative hidden md:flex items-center w-full">
         {/* Left — current page chip */}
         <div className="flex-1 flex items-center min-w-0">
@@ -254,7 +263,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Centre — app name + a glossy sweep on every tick. Dashboard keeps the pastel
             multi-colour aurora; every other page tints it in its own accent. */}
         <span
-          className="relative font-bold uppercase select-none pointer-events-none whitespace-nowrap leading-none"
+          className="relative hidden @min-[560px]:block text-[20px] @min-[880px]:text-[28px] font-bold uppercase select-none pointer-events-none whitespace-nowrap leading-none"
           style={TITLE_STYLE}
           aria-label="SMP Admissions"
           role="img"
@@ -278,9 +287,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           <CashBadge />
           <button
             onClick={() => { void logout(); }}
-            className="group inline-flex items-center gap-2 rounded-full border bg-white pl-[4px] pr-3.5 py-[4px] text-[12.5px] font-medium text-[#3F4654] transition-all cursor-pointer shrink-0 hover:border-[#E11D48]/40 hover:bg-[#FFF5F7] hover:text-[#A5173A] hover:shadow-[0_3px_10px_rgba(225,29,72,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E11D48]/30"
+            className="group inline-flex items-center gap-2 rounded-full border bg-white pl-[4px] pr-[4px] @min-[1000px]:pr-3.5 py-[4px] text-[12.5px] font-medium text-[#3F4654] transition-all cursor-pointer shrink-0 hover:border-[#E11D48]/40 hover:bg-[#FFF5F7] hover:text-[#A5173A] hover:shadow-[0_3px_10px_rgba(225,29,72,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E11D48]/30"
             style={{ borderColor: PILL_BORDER }}
             title="Logout"
+            aria-label="Logout"
           >
             <span
               className="w-6 h-6 rounded-full flex items-center justify-center text-white transition-transform group-hover:translate-x-0.5"
@@ -288,7 +298,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             >
               <LogoutIcon size={12} />
             </span>
-            Logout
+            <span className="hidden @min-[1000px]:inline">Logout</span>
           </button>
         </div>
       </div>

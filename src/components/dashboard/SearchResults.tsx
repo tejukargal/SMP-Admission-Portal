@@ -7,6 +7,7 @@ import {
   CARD, pastel, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER, INK, MUTED, FAINT, PAID, DUE,
   MINT, AMBER, CORAL, COURSE_HEX, YEAR_HEX, BOY_HEX, GIRL_HEX, SEARCH_PAGE_SIZE,
 } from './dashTokens';
+import { isWPStudent } from '../../utils/wpStudent';
 
 // Dashboard search results — one profile card per student, with that student's
 // enrollments laid out as a year-by-year timeline. Presentation only: grouping,
@@ -30,6 +31,12 @@ const STATUS_HEX = (status: string) =>
   status === 'CONFIRMED' ? MINT : status === 'CANCELLED' ? CORAL : AMBER;
 
 const pill = (c: string): CSSProperties => ({ ...pastel(c), borderWidth: 1 });
+
+// Working Professional (EXTERNAL) teal — same hue as the EXTERNAL pill in StudentDetailModal.
+// WP fee is tracked as manual counts, not feeRecords, so WP enrollments show this
+// badge in place of fee pills / dues.
+const WP_HEX = '#0F8B8D';
+const WP_FEE_TITLE = 'Working Professional — fee tracked separately in WP Fee Distribution';
 
 /** First letters of the first two name words, skipping single-letter initials ("RAVI K M" → "RK"). */
 function initials(name: string): string {
@@ -185,7 +192,11 @@ function EnrollmentRow({
           </button>
         )}
         {isAdmin && (
-          feeStatus === null ? (
+          isWPStudent(s) ? (
+            <span title={WP_FEE_TITLE} className="inline-flex items-center justify-center w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(WP_HEX)}>
+              WP
+            </span>
+          ) : feeStatus === null ? (
             <span className="w-[98px] flex justify-center"><Shimmer w={98} h={28} /></span>
           ) : feeStatus === 'no-dues' ? (
             <span className="sr-pop inline-flex items-center justify-center gap-1 w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(PAID)}>
@@ -258,8 +269,9 @@ export function SearchResults({
   }
 
   const enrollments = groups.reduce((t, g) => t + g.records.length, 0);
-  let withDues = 0, noDues = 0, other = 0;
+  let withDues = 0, noDues = 0, other = 0, wp = 0;
   for (const g of groups) {
+    if (g.records.every(isWPStudent)) { wp++; continue; }
     const d = groupDue.get(g.key);
     if (typeof d === 'number') { if (d > 0) withDues++; else noDues++; } else other++;
   }
@@ -298,6 +310,11 @@ export function SearchResults({
                   {other} fee data n/a
                 </span>
               )}
+              {wp > 0 && (
+                <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={pill(WP_HEX)}>
+                  {wp} WP
+                </span>
+              )}
             </>
           )}
         </div>
@@ -315,6 +332,8 @@ export function SearchResults({
         const avatarHex = group.gender === 'GIRL' ? GIRL_HEX : BOY_HEX;
         const courseHex = COURSE_HEX[latest?.course as keyof typeof COURSE_HEX] ?? PERI;
         const active = idx === activeIdx;
+        const groupIsWP = group.records.every(isWPStudent);
+        const hasWP = group.records.some(isWPStudent);
         return (
           <div
             key={group.key}
@@ -392,6 +411,15 @@ export function SearchResults({
                       <IdentificationCard size={13} weight="bold" /> No Reg No
                     </span>
                   )}
+                  {hasWP && (
+                    <span
+                      title="Working Professional (Evening College)"
+                      className="inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-medium leading-none whitespace-nowrap"
+                      style={pill(WP_HEX)}
+                    >
+                      Working Professional
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -399,7 +427,13 @@ export function SearchResults({
 
               {/* Same 98px column as the row fee pills, so header and row statuses line up */}
               <div className="shrink-0 min-w-[98px] flex justify-center">
-                <FeeSummary due={groupDue.get(group.key)} loading={feeLoading} />
+                {groupIsWP ? (
+                  <span title={WP_FEE_TITLE} className="inline-flex items-center justify-center w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(WP_HEX)}>
+                    WP Fee
+                  </span>
+                ) : (
+                  <FeeSummary due={groupDue.get(group.key)} loading={feeLoading} />
+                )}
               </div>
             </div>
 
