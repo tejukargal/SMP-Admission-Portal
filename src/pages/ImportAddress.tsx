@@ -36,6 +36,41 @@ function parseDOB(raw: string | number | null): string {
   return s; // return as-is if unrecognised — let the user notice in preview
 }
 
+// Sample workbook: the headers parseSheet() recognises, two example rows (text
+// cells so mobile/Aadhar/DOB don't turn into numbers or dates) and a notes sheet.
+function downloadTemplate() {
+  const headers = ['Name', 'Reg No', ...ADDRESS_UPDATE_FIELDS.map((f) => f.label)];
+  const samples = [
+    ['RAVI KUMAR K', '123CE24001', 'NO 12, 2ND CROSS, KUVEMPU NAGAR, DAVANAGERE - 577002', 'LAKSHMI K',
+      '15/06/2008', 'KUMAR K', '9876543210', '8765432109', '123412341234', 'BOY', 'HINDU', 'KURUBA', '2A'],
+    ['ANITHA S', '123CS24015', '', '', '02/11/2007', '', '9123456780', '', '', 'GIRL', '', '', ''],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...samples]);
+  ws['!cols'] = headers.map((h) => ({ wch: h === 'Address' ? 48 : Math.max(14, h.length + 4) }));
+
+  const notes = XLSX.utils.aoa_to_sheet([
+    ['Personal Details Import — notes'],
+    [],
+    ['Required', 'Name, Reg No — Name must match the student\'s SSLC or Aadhar name'],
+    ['All years', 'Each row updates every academic-year record of the student'],
+    ['Blank cells', 'Left unchanged — keep only the columns you want to update'],
+    ['DOB', 'DD/MM/YYYY (Excel dates and YYYY-MM-DD are also accepted)'],
+    ['Mobile', '10 digits starting with 6–9'],
+    ['Aadhar', '12 digits'],
+    ['Gender', 'BOY / GIRL (MALE / FEMALE also accepted)'],
+    ['Religion', 'HINDU / MUSLIM / CHRISTIAN / JAIN / BUDDHIST / SIKH'],
+    ['Category', 'SC / ST / C1 / 2A / 2B / 3A / 3B / GM'],
+    [],
+    ['Delete the two sample rows before importing.'],
+  ]);
+  notes['!cols'] = [{ wch: 14 }, { wch: 70 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Students');
+  XLSX.utils.book_append_sheet(wb, notes, 'Notes');
+  XLSX.writeFile(wb, 'Personal_Details_Import_Template.xlsx');
+}
+
 function parseSheet(file: File): Promise<{ rows: AddressRow[]; warnings: string[] }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -228,7 +263,17 @@ export function ImportAddress() {
           )}
 
           <div className="mt-5 text-sm text-gray-500">
-            <p className="font-medium text-gray-700 mb-1">Column reference:</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-medium text-gray-700">Column reference:</p>
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download Template
+              </button>
+            </div>
             <div className="bg-gray-50 rounded p-3 space-y-1">
               <p className="text-xs">
                 <span className="font-semibold text-gray-700">Required (for matching):</span>{' '}
