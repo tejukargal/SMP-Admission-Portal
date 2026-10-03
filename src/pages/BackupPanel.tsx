@@ -23,7 +23,7 @@ const SECTION_GROUPS: { title: string; items: { id: BackupSection; label: string
   {
     title: 'Maintenance',
     items: [
-      { id: 'data-repair', label: 'Data Repair', hint: 'Backfill missing DOB / Father Name' },
+      { id: 'data-repair', label: 'Data Health', hint: 'Scan & fix data issues' },
     ],
   },
 ];

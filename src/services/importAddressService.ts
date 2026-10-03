@@ -1,6 +1,7 @@
 import { doc, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getAllStudents } from './studentService';
+import { normName } from './dataHealthService';
 import type { Student, Religion, Category } from '../types';
 
 const STUDENTS_COLLECTION = 'students';
@@ -60,11 +61,6 @@ export interface AddressImportResult {
 const RELIGIONS: readonly Religion[] = ['HINDU', 'MUSLIM', 'CHRISTIAN', 'JAIN', 'BUDDHIST', 'SIKH'];
 const CATEGORIES: readonly Category[] = ['SC', 'ST', 'C1', '2A', '2B', '3A', '3B', 'GM'];
 const MOBILE_RE = /^[6-9]\d{9}$/;
-
-/** Uppercase, drop dots, collapse whitespace — "Ravi K. M" ≡ "RAVI K M". */
-function normName(s: string | undefined): string {
-  return (s ?? '').toUpperCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
-}
 
 function normGender(v: string): string | null {
   const g = v.toUpperCase();
