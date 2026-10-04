@@ -42,7 +42,7 @@ import { useAccentOverride } from '../components/layout/AccentOverrideContext';
 import { SEARCH_ACCENT } from '../components/layout/pageAccents';
 import {
   PAGE_BG, CARD, OUTLINE_PILL_BTN, ICON_PILL_BTN, EYEBROW, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER,
-  FAINT, AMBER, accentVars, V, mix, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
+  FAINT, AMBER, MINT, accentVars, V, mix, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
   COURSE_HEX, YEAR_HEX, ADM_HEX, BOY_HEX, GIRL_HEX,
 } from '../components/dashboard/dashTokens';
 
@@ -83,6 +83,9 @@ const isYearFeeDataReady = (year: string) => {
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
+// Sanctioned intake: 63 seats per course per year (60 regular + 3 SNQ).
+const COURSE_INTAKE = 63;
+const TOTAL_INTAKE = COURSE_INTAKE * COURSES.length * YEARS.length; // 945
 const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 const YEAR_INTAKE = 63 * COURSES.length; // 315 — total intake capacity per year across all courses
@@ -97,11 +100,6 @@ function shiftIsoDate(iso: string, days: number): string {
 // exported report visually matches the modal/card it was triggered from.
 const COURSE_PDF_THEME: Record<Course, ThemeName> = { CE: 'amber', ME: 'green', EC: 'sky', CS: 'teal', EE: 'violet' };
 const YEAR_PDF_THEME: Record<Year, ThemeName> = { '1ST YEAR': 'lime', '2ND YEAR': 'emerald', '3RD YEAR': 'teal' };
-
-// Hex equivalents of each course's accent color (courseConfig.barFill), needed for SVG ring strokes
-const COURSE_RING_HEX: Record<Course, string> = {
-  CE: '#fbbf24', ME: '#4ade80', EC: '#38bdf8', CS: '#2dd4bf', EE: '#a78bfa',
-};
 
 // ─── Animated number ────────────────────────────────────────────────────────
 function AnimNum({ value }: { value: number }) {
@@ -1809,9 +1807,7 @@ const [barsReady, setBarsReady] = useState(false);
 
               {/* Course bar chart — intake-based */}
               {(() => {
-                const INTAKE = 63;
-                const YEAR_INTAKE = INTAKE * COURSES.length;           // 315 per year
-                const TOTAL_INTAKE = YEAR_INTAKE * YEARS.length;       // 945 overall
+                const YEAR_INTAKE = COURSE_INTAKE * COURSES.length;    // 315 per year
                 const overallPct = Math.round((stats.total / TOTAL_INTAKE) * 100);
                 const BAR_H = 92; // px — usable bar area
                 const BAR_AREA = 108;
@@ -2118,79 +2114,158 @@ const [barsReady, setBarsReady] = useState(false);
               </div>
             </div>
 
-            {/* Pending Seats */}
-            <div>
-              <SectionLabel onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}>{lateralAllotments !== null ? 'Pending Seats — 1st Yr & Lateral 2nd Yr' : '1st Year — Pending Seats'}</SectionLabel>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {COURSES.map((course) => {
-                  const c = COURSE_HEX[course];
-                  const { nonSnqConfirmed, snqConfirmed } = stats.firstYearSeats[course];
-                  const snqAllotted = snqConfirmed > 0;
+            {/* Pending Seats — per course "seat map": one dot per seat (filled / empty) */}
+            {(() => {
+              const showLateral = lateralAllotments !== null;
+              const cards = COURSES.map((course) => {
+                const { nonSnqConfirmed, snqConfirmed } = stats.firstYearSeats[course];
+                const snqAllotted = snqConfirmed > 0;
 
-                  // Regular seats: first 60 slots go to non-SNQ students
-                  const regularFilled  = Math.min(nonSnqConfirmed, 60);
-                  const regularPending = Math.max(0, 60 - regularFilled);
-                  const overflowToSnq  = Math.max(0, nonSnqConfirmed - 60);
+                // Regular seats: first 60 slots go to non-SNQ students
+                const regularFilled  = Math.min(nonSnqConfirmed, 60);
+                const regularPending = Math.max(0, 60 - regularFilled);
+                const overflowToSnq  = Math.max(0, nonSnqConfirmed - 60);
 
-                  // SNQ seats: if allotted use admCat count; otherwise use overflow as estimate
-                  const snqFilled  = snqAllotted ? snqConfirmed : overflowToSnq;
-                  const snqPending = Math.max(0, 3 - snqFilled);
+                // SNQ seats: if allotted use admCat count; otherwise use overflow as estimate
+                const snqFilled  = snqAllotted ? snqConfirmed : overflowToSnq;
+                const snqPending = Math.max(0, 3 - snqFilled);
 
-                  // Lateral seats (2nd Year only) — dynamic: 10% of intake + prev year carryover
-                  const showLateral     = lateralAllotments !== null;
-                  const lateralFilled   = stats.lateralSecondYearSeats[course];
-                  const lateralAllotted = lateralAllotments?.[course] ?? 0;
-                  const lateralPending  = showLateral ? Math.max(0, lateralAllotted - lateralFilled) : 0;
+                // Lateral seats (2nd Year only) — dynamic: 10% of intake + prev year carryover
+                const lateralFilled   = stats.lateralSecondYearSeats[course];
+                const lateralAllotted = lateralAllotments?.[course] ?? 0;
+                const lateralPending  = showLateral ? Math.max(0, lateralAllotted - lateralFilled) : 0;
 
-                  const rows: { label: string; badge?: string; pending: number; filled: number; total: number; ring: string }[] = [
-                    { label: 'Regular', pending: regularPending, filled: regularFilled, total: REGULAR_INTAKE, ring: COURSE_RING_HEX[course] },
-                    { label: 'SNQ', badge: snqAllotted ? undefined : 'To be allotted', pending: snqPending, filled: snqFilled, total: 3, ring: '#f59e0b' },
-                    ...(showLateral ? [{ label: 'Lateral', pending: lateralPending, filled: lateralFilled, total: lateralAllotted, ring: '#0ea5e9' }] : []),
-                  ];
+                const left  = regularPending + snqPending + lateralPending;
+                const seats = REGULAR_INTAKE + 3 + (showLateral ? lateralAllotted : 0);
+                return {
+                  course, left, seats, snqAllotted,
+                  regular: { filled: regularFilled, pending: regularPending, total: REGULAR_INTAKE },
+                  snq:     { filled: snqFilled, pending: snqPending, total: 3 },
+                  lateral: { filled: lateralFilled, pending: lateralPending, total: lateralAllotted },
+                };
+              });
+              const totalLeft  = cards.reduce((t, c) => t + c.left, 0);
+              const totalSeats = cards.reduce((t, c) => t + c.seats, 0);
+              const filledPct  = totalSeats > 0 ? Math.round(((totalSeats - totalLeft) / totalSeats) * 100) : 0;
 
-                  return (
-                    <div key={course} className="rounded-2xl border flex flex-col relative overflow-hidden" style={tileStyle(c)}>
-                      <div className="flex items-center px-3.5 pt-3">
-                        <div className="rounded-full border px-2.5 py-[5px] text-[11px] font-medium uppercase tracking-wide leading-none" style={pastel(c)}>{course}</div>
-                      </div>
+              // A run of seat dots: filled = solid colour, empty = hairline ring. Filled seats
+              // pop in left-to-right once the dashboard's bars animation starts.
+              // "left/total" in the same style as the card's headline count, scaled down.
+              const seatCount = (pending: number, total: number, ink: string) => (
+                <span className="flex items-baseline leading-none tabular-nums">
+                  <span className="text-[13px] font-semibold" style={{ color: ink }}>{pending}</span>
+                  <span className="text-[9.5px] font-medium" style={{ color: FAINT }}>/{total}</span>
+                </span>
+              );
 
-                      {/* Body — one row per seat type, each with its own fill ring */}
-                      <div className="px-3.5 pt-2.5 pb-3 flex flex-col">
-                        {rows.map((row, i) => {
-                          const pct = row.total > 0 ? Math.min(100, Math.round((row.filled / row.total) * 100)) : 0;
-                          return (
-                            <div key={row.label} className={`flex items-center gap-2 ${i > 0 ? 'pt-1.5 mt-1.5 border-t' : ''}`} style={{ borderColor: `${c}25` }}>
-                              <div className="w-9 flex items-center justify-center shrink-0">
-                                {row.badge ? (
-                                  <div className="w-8 h-8 rounded-full border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'rgba(0,0,0,0.15)' }}>
-                                    <span className="text-[7px] font-medium leading-none" style={{ color: AMBER }}>N/A</span>
-                                  </div>
-                                ) : (
-                                  <SeatRing pct={pct} color={row.ring} ready={barsReady} size={32} stroke={3.5} />
-                                )}
+              const seatDots = (filled: number, total: number, color: string, dashed = false) => (
+                <>
+                  {Array.from({ length: total }, (_, i) => {
+                    const on = !dashed && i < filled;
+                    return (
+                      <span
+                        key={i}
+                        className={`aspect-square rounded-[3px] ${on ? '' : 'border'} ${dashed ? 'border-dashed' : ''}`}
+                        style={on ? {
+                          background: `color-mix(in srgb, ${color} 62%, white)`,
+                          opacity: barsReady ? 1 : 0,
+                          transform: barsReady ? 'scale(1)' : 'scale(0.4)',
+                          transition: barsReady ? `opacity 260ms ease-out ${i * 9}ms, transform 320ms cubic-bezier(0.34,1.56,0.64,1) ${i * 9}ms` : 'none',
+                        } : { borderColor: `${color}6B`, background: '#fff' }}
+                      />
+                    );
+                  })}
+                </>
+              );
+
+              return (
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <p
+                      className={`${EYEBROW} cursor-pointer select-none`}
+                      onDoubleClick={() => exportFirstYearSeatsReport(stats.firstYearSeats, displayYear)}
+                      title="Double-click to export PDF"
+                    >
+                      {showLateral ? 'Pending Seats — 1st Yr & Lateral 2nd Yr' : '1st Year — Pending Seats'}
+                    </p>
+                    <span className="h-px flex-1" style={{ background: PERI_DIVIDER }} />
+                    <p className="text-[10.5px] font-medium tabular-nums whitespace-nowrap" style={{ color: FAINT }}>
+                      <span style={{ color: PERI_INK }}>{totalLeft}</span> seats left · <span style={{ color: PERI_INK }}>{filledPct}%</span> filled
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {cards.map(({ course, left, seats, snqAllotted, regular, snq, lateral }) => {
+                      const c = COURSE_HEX[course];
+                      const LAT_HEX = '#0EA5E9';
+                      return (
+                        // Pastel card: soft course tint over white with a thin course-hue hairline.
+                        <div
+                          key={course}
+                          className="rounded-2xl border px-3 pt-2.5 pb-3 flex flex-col gap-2"
+                          style={{ background: `linear-gradient(${c}0F,${c}0F),#fff`, borderColor: `${c}5C` }}
+                        >
+                          {/* Course · seats left */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold tracking-wide" style={{ color: inkOf(c) }}>
+                              <span className="w-2 h-2 rounded-full" style={{ background: c }} />
+                              {course}
+                            </span>
+                            {left === 0 ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[3px] text-[10px] font-medium leading-none" style={pastel(MINT)}>
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                Full
+                              </span>
+                            ) : (
+                              <span className="flex items-baseline gap-1 leading-none" title={`${left} of ${seats} seats left`}>
+                                <span className="text-[20px] font-semibold tabular-nums" style={{ color: inkOf(c) }}><AnimNum value={left} /></span>
+                                <span className="text-[9.5px] font-medium" style={{ color: FAINT }}>/ {seats} left</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Regular — 60-seat map */}
+                          <div title={`Regular: ${regular.filled} of ${regular.total} filled, ${regular.pending} left`}>
+                            <div className="flex items-baseline justify-between mb-1">
+                              <span className="text-[9px] font-medium uppercase tracking-[0.5px]" style={{ color: FAINT }}>Regular</span>
+                              {seatCount(regular.pending, regular.total, inkOf(c))}
+                            </div>
+                            <div className="grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(15, minmax(0, 1fr))' }}>
+                              {seatDots(regular.filled, regular.total, c)}
+                            </div>
+                          </div>
+
+                          {/* SNQ + Lateral — small seat runs side by side */}
+                          <div className="flex items-start gap-3 pt-2 border-t" style={{ borderColor: `${c}22` }}>
+                            <div className="min-w-[52px]" title={snqAllotted ? `SNQ: ${snq.filled} of 3 filled, ${snq.pending} left` : 'SNQ seats to be allotted'}>
+                              <div className="flex items-baseline justify-between gap-2 mb-1">
+                                <span className="text-[9px] font-medium uppercase tracking-[0.5px]" style={{ color: FAINT }}>SNQ</span>
+                                {snqAllotted
+                                  ? seatCount(snq.pending, 3, inkOf(AMBER))
+                                  : <span className="text-[10px] font-semibold leading-none" style={{ color: AMBER }}>TBA</span>}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="text-[9.5px] font-medium uppercase tracking-wide" style={{ color: FAINT }}>{row.label}</span>
-                                  <span className="text-[16px] font-medium leading-none tabular-nums" style={{ color: inkOf(c) }}>
-                                    <AnimNum value={row.pending} />
-                                  </span>
-                                </div>
-                                {row.badge ? (
-                                  <span className="mt-1 inline-block px-1.5 py-px rounded-full border text-[8px] font-medium leading-tight" style={pastel(AMBER)}>{row.badge}</span>
-                                ) : (
-                                  <p className="text-[9.5px] font-medium tabular-nums mt-0.5" style={{ color: FAINT }}>{row.filled}/{row.total} filled</p>
-                                )}
+                              <div className="grid gap-[3px] w-[33px]" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                                {seatDots(snq.filled, 3, AMBER, !snqAllotted)}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                            {showLateral && lateral.total > 0 && (
+                              <div className="min-w-0 flex-1" title={`Lateral: ${lateral.filled} of ${lateral.total} filled, ${lateral.pending} left`}>
+                                <div className="flex items-baseline justify-between gap-2 mb-1">
+                                  <span className="text-[9px] font-medium uppercase tracking-[0.5px]" style={{ color: FAINT }}>Lateral</span>
+                                  {seatCount(lateral.pending, lateral.total, inkOf(LAT_HEX))}
+                                </div>
+                                <div className="grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(10, minmax(0, 1fr))' }}>
+                                  {seatDots(lateral.filled, lateral.total, LAT_HEX)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Course Strength + Adm Type */}
             <div>
