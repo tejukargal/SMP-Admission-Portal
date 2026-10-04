@@ -1756,21 +1756,18 @@ const TAB_ICON: Record<Tab, React.ReactNode> = {
   ans:       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>,
 };
 
-/** Slim single-line "label · value" chip for the info line under the name. */
-function InfoChip({ label, value, color, mono }: { label: string; value?: string; color?: string; mono?: boolean }) {
-  const c = color ?? FALLBACK_COLOR;
+/** Plain-text facts line under the name, joined by soft dots — no pill boxes. */
+function InfoLine({ items }: { items: { value?: string; title: string; mono?: boolean }[] }) {
+  const shown = items.filter((i) => i.value);
   return (
-    <span
-      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border bg-white/80 px-2.5 py-[6px] leading-none max-w-[240px]"
-      style={{ borderColor: `${c}40` }}
-      title={value}
-    >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c }} />
-      <span className="text-[8.5px] font-medium uppercase tracking-[0.6px] text-[#8A93A3] whitespace-nowrap">{label}</span>
-      <span className={`text-[11px] font-semibold truncate ${mono ? 'tabular-nums' : ''}`} style={{ color: inkOf(c) }}>
-        {value || '—'}
-      </span>
-    </span>
+    <p className="min-w-0 truncate text-[11.5px] font-medium leading-none text-[#5B6371]">
+      {shown.map((i, idx) => (
+        <span key={i.title} title={i.title} className={i.mono ? 'tabular-nums' : ''}>
+          {idx > 0 && <span className="mx-1.5 text-[#C4C9D4]">·</span>}
+          {i.value}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -2061,8 +2058,6 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
                     {student.regNumber}
                   </span>
                 )}
-                <LinePill tall value={student.course} color={DEPT_DOT[student.course]} />
-                <LinePill tall value={student.year} color={YEAR_COLOR[student.year]} />
                 <LinePill tall value={student.admissionStatus} color={STATUS_COLOR[student.admissionStatus] ?? AMBER} dot />
                 {student.transferOut && (
                   <LinePill
@@ -2102,14 +2097,18 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
             </button>
           </div>
 
-          {/* Row 2: inline info chips */}
-          <div className="relative mt-2 pl-[48px] flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <InfoChip label="Father" value={student.fatherName} color={VIOLET} />
-            <InfoChip label="Mobile" value={student.fatherMobile || student.studentMobile || '—'} color={theme.accent} mono />
-            <InfoChip label="Adm Type" value={student.admType} color={ADM_TYPE_COLOR[student.admType]} />
-            <InfoChip label="Cat" value={student.admCat} color={ADM_CAT_COLOR[student.admCat]} />
-            <InfoChip label="Religion" value={student.religion} color="#64748B" />
-            <InfoChip label="Gender" value={student.gender} color={GENDER_COLOR[student.gender]} />
+          {/* Row 2: one plain facts line (religion, gender etc. live in the Profile tab) */}
+          <div className="relative mt-2 pl-[48px]">
+            <InfoLine
+              items={[
+                { title: 'Course', value: student.course },
+                { title: 'Year', value: student.year },
+                { title: 'Admission type', value: student.admType },
+                { title: 'Admission category', value: student.admCat },
+                { title: "Father's name", value: student.fatherName ? `${student.gender === 'GIRL' ? 'D/o' : 'S/o'} ${student.fatherName}` : undefined },
+                { title: 'Mobile', value: student.fatherMobile || student.studentMobile, mono: true },
+              ]}
+            />
           </div>
         </div>
 

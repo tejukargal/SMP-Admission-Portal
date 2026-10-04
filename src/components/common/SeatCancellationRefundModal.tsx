@@ -199,9 +199,10 @@ export function SeatCancellationRefundModal({ student, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" style={{ animation: 'backdrop-enter 0.18s ease-out' }} />
       <div
         className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col"
+        style={{ animation: 'modal-enter 0.22s ease-out' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
