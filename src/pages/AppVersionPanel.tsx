@@ -304,7 +304,7 @@ function UpdateReminderCard({ published, onChange }: {
           <button type="button" onClick={count} className="ml-2 text-xs text-blue-600 hover:underline cursor-pointer">Refresh</button>
         )}
       </p>
-      <p className="text-xs text-gray-400">Phones on app versions before 1.0.38 don't report their version, so they're always counted as outdated.</p>
+      <p className="text-xs text-gray-400">Phones on app versions before 1.0.39 don't report their version, so they're always counted as outdated.</p>
 
       {published.lastUpdateReminderAt && (
         <p className={`text-xs ${recent ? 'text-amber-700' : 'text-gray-500'}`}>

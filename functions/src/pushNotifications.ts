@@ -311,10 +311,10 @@ export const sendCircularReminder = onCall({ region: REGION }, async (request) =
 
 // ── App update reminder (Settings › App Version › "Remind Students to Update") ─
 // Pushes kind 'update' to every device still on an older app version than the
-// published appConfig/version.latestVersion. The app (1.0.38+) records its
+// published appConfig/version.latestVersion. The app (1.0.39+) records its
 // installed version per token in studentPushTokens.tokenVersions; a token with
 // no recorded version is from an older build, so it's always counted as
-// outdated. Tapping the push opens the in-app update card (1.0.38+; older
+// outdated. Tapping the push opens the in-app update card (1.0.39+; older
 // builds open the Play Store directly). dryRun returns the counts only.
 
 /** Compares dot-separated numeric versions — same rule as the app's utils/version.ts. */
