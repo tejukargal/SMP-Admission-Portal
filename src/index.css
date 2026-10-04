@@ -231,34 +231,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Admissions page entrance: "spring settle". Sections lift in with a soft
-   spring (transform + opacity only — GPU-composited, no blur repaints), then the
-   first rows fade in as a quick wave. Everything settles in ~0.45s. ── */
-@keyframes adm-settle {
-  from { opacity: 0; transform: translateY(8px) scale(0.99); }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes adm-row-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.adm-stage > * {
-  transform-origin: 50% 0;
-  animation: adm-settle 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  /* Critically-damped-ish spring (ζ≈0.8, ~1.5% overshoot) where supported. */
-  animation-timing-function: linear(0, 0.0516, 0.1705, 0.3163, 0.4637, 0.598, 0.7123, 0.8044, 0.8752, 0.9272, 0.9636, 0.9877, 1.0026, 1.0108, 1.0144, 1.0151, 1.0141, 1.0122, 1.01, 1.0077, 1.0058, 1.0041, 1.0027, 1.0017, 1);
-}
-.adm-stage > :nth-child(2) { animation-delay: 40ms; }
-.adm-stage > :nth-child(3) { animation-delay: 80ms; }
-.adm-stage > :nth-child(n+4) { animation-delay: 120ms; }
-.adm-row {
-  animation: adm-row-fade 240ms ease-out backwards;
-  animation-delay: calc(var(--i, 0) * 14ms + 120ms);
-}
-@media (prefers-reduced-motion: reduce) {
-  .adm-stage > *, .adm-row { animation: none; }
-}
-
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }

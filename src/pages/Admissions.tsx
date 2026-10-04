@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
@@ -31,9 +31,6 @@ const AIDED_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS'];
 const UNAIDED_COURSES: Course[] = ['EE'];
 
 const YEAR_ORDER: Record<string, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
-
-// Entrance wave index for table rows (.adm-row) — rows past the 10th fade in together.
-const rowRise = (idx: number) => ({ '--i': Math.min(idx, 10) } as CSSProperties);
 
 const TEAL = '#0F8B8D';
 const TEAL_INK = '#0B6567';
@@ -605,8 +602,8 @@ export function Admissions() {
   return (
     <>
     <div
-      className="adm-stage font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
-      style={{ background: 'linear-gradient(160deg, #F4FBFB 0%, #FCFEFE 45%, #EFF8F8 100%)' }}
+      className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{ background: 'linear-gradient(160deg, #F4FBFB 0%, #FCFEFE 45%, #EFF8F8 100%)', animation: 'page-enter 0.32s ease-out' }}
     >
 
       {/* Page header */}
@@ -1211,8 +1208,8 @@ export function Admissions() {
                 {pendingLateralStudents.map((student, idx) => (
                   <tr
                     key={student.id}
-                    style={rowRise(idx)}
-                    className="adm-row hover:bg-[#F6FBFB] transition-colors cursor-context-menu"
+                   
+                    className="hover:bg-[#F6FBFB] transition-colors cursor-context-menu"
                     onContextMenu={(e) => handleContextMenu(e, student)}
                   >
                     <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{idx + 1}</td>
@@ -1284,7 +1281,7 @@ export function Admissions() {
                   const lObt = student.priorQualification === 'ITI' ? student.itiObtainedTotal : student.pucObtainedTotal;
                   const lPct = student.priorQualification === 'ITI' ? student.itiPercentage : student.pucPercentage;
                   return (
-                    <tr key={student.id} style={rowRise(idx)} className="adm-row hover:bg-[#F6FBFB] transition-colors">
+                    <tr key={student.id} className="hover:bg-[#F6FBFB] transition-colors">
                       <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                       <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -1356,7 +1353,7 @@ export function Admissions() {
             </thead>
             <tbody className="divide-y divide-[#EEF6F6]">
               {meritStudents.map((student, idx) => (
-                <tr key={student.id} style={rowRise(idx)} className="adm-row hover:bg-[#F6FBFB] transition-colors">
+                <tr key={student.id} className="hover:bg-[#F6FBFB] transition-colors">
                   <td className="px-2 py-2 text-center text-gray-400 whitespace-nowrap">{idx + 1}</td>
                   <td className="px-2 py-2 text-center text-gray-900 whitespace-nowrap font-bold text-sm">{idx + 1}</td>
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{student.studentNameSSLC}</td>
@@ -1416,8 +1413,8 @@ export function Admissions() {
                 return (
                 <tr
                   key={student.id}
-                  style={rowRise(idx)}
-                  className={`adm-row transition-colors cursor-context-menu ${hasFeePaid ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-[#F6FBFB]'}`}
+                 
+                  className={`transition-colors cursor-context-menu ${hasFeePaid ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-[#F6FBFB]'}`}
                   onContextMenu={(e) => handleContextMenu(e, student)}
                   title={hasFeePaid ? 'Fee was paid before this seat was cancelled — refund available via right-click menu' : undefined}
                 >
