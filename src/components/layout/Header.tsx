@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { useCashInHand } from '../../contexts/CashInHandContext';
-import { ACCENT_CYCLE, getPageAccent } from './pageAccents';
+import { getPageAccent } from './pageAccents';
 
 // ── Title-bar tokens ─────────────────────────────────────────────────────────
 // Colours that follow the page live in the --hb-* custom properties (set on the
@@ -170,19 +170,18 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const year = settings?.currentAcademicYear ?? '—';
 
-  // On the Dashboard the bar drifts through every page's accent, one step per shimmer tick
-  const cycling = matchPath({ path: '/dashboard', end: false }, pathname) !== null;
-  const tone = cycling ? ACCENT_CYCLE[tick % ACCENT_CYCLE.length] : page;
+  // The Dashboard keeps its pastel multi-colour title aurora; the bar itself uses its own accent
+  const isDashboard = matchPath({ path: '/dashboard', end: false }, pathname) !== null;
   const accentVars = {
-    '--hb-acc': tone.accent,
-    '--hb-ink': tone.ink,
-    '--hb-from': tone.washFrom,
-    '--hb-to': tone.washTo,
+    '--hb-acc': page.accent,
+    '--hb-ink': page.ink,
+    '--hb-from': page.washFrom,
+    '--hb-to': page.washTo,
   } as CSSProperties;
 
   return (
     <header
-      className={`header-accent ${cycling ? 'header-accent-cycle' : ''} font-wp @container relative h-13 flex items-center px-3 md:px-5 shrink-0 z-20 backdrop-blur-md overflow-hidden`}
+      className={`header-accent font-wp @container relative h-13 flex items-center px-3 md:px-5 shrink-0 z-20 backdrop-blur-md overflow-hidden`}
       style={{
         ...accentVars,
         background: 'linear-gradient(100deg, var(--hb-from) 0%, rgba(255,255,255,0.85) 50%, var(--hb-to) 100%)',
@@ -268,7 +267,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           aria-label="SMP Admissions"
           role="img"
         >
-          <span aria-hidden="true" className={cycling ? 'header-aurora' : 'header-aurora-accent'}>
+          <span aria-hidden="true" className={isDashboard ? 'header-aurora' : 'header-aurora-accent'}>
             {TITLE_CHARS.map((ch, i) => (
               <span key={i} className="inline-block">{ch}</span>
             ))}

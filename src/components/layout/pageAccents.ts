@@ -46,9 +46,6 @@ const ROUTES: { path: string; accent: PageAccent }[] = [
   { path: '/settings',         accent: { label: 'Settings', ...SLATE } },
 ];
 
-/** Accent families the Dashboard title bar cycles through (Dashboard's own first). */
-export const ACCENT_CYCLE = [PERI, OCEAN, TEAL, PLUM, LIME, AMBER, INDIGO, CYAN, OLIVE, SLATE];
-
 export function getPageAccent(pathname: string): PageAccent {
   return ROUTES.find((r) => matchPath({ path: r.path, end: false }, pathname))?.accent ?? NEUTRAL_ACCENT;
 }
