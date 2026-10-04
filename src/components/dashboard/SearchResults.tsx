@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
   IdentificationCard, IdentificationBadge, Phone, Eye, PencilSimple, MagnifyingGlass, CheckCircle, ArrowDown,
-  ArrowUp, Check, DotsThree,
+  ArrowUp, Check, DotsThree, CaretDown, CaretUp,
 } from '@phosphor-icons/react';
 import type { Student, Gender, Year, AcademicYear } from '../../types';
 import {
-  CARD, pastel, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER, INK, MUTED, FAINT, PAID, DUE,
+  CARD, pastel, PERI, PERI_INK, PERI_BORDER, PERI_BAND, PERI_BAND_BORDER, INK, MUTED, FAINT, PAID, DUE,
   MINT, AMBER, CORAL, COURSE_HEX, YEAR_HEX, BOY_HEX, GIRL_HEX, SEARCH_PAGE_SIZE,
 } from './dashTokens';
 import { isWPStudent } from '../../utils/wpStudent';
@@ -58,29 +58,6 @@ function initials(name: string): string {
   return ((pick[0]?.[0] ?? '') + (pick[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
-/** Wraps every case-insensitive occurrence of `query` in a soft periwinkle mark. */
-function Highlight({ text, query }: { text: string; query: string }) {
-  const q = query.trim();
-  if (!q || !text) return <>{text}</>;
-  const out: ReactNode[] = [];
-  const hay = text.toUpperCase();
-  const needle = q.toUpperCase();
-  let i = 0;
-  let hit = hay.indexOf(needle);
-  while (hit !== -1) {
-    if (hit > i) out.push(text.slice(i, hit));
-    out.push(
-      <mark key={hit} className="rounded-[5px] px-[2px] -mx-[1px] text-inherit" style={{ background: `${PERI}1F`, color: 'inherit', boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}>
-        {text.slice(hit, hit + needle.length)}
-      </mark>,
-    );
-    i = hit + needle.length;
-    hit = hay.indexOf(needle, i);
-  }
-  if (i < text.length) out.push(text.slice(i));
-  return <>{out}</>;
-}
-
 function Shimmer({ w, h = 14 }: { w: number; h?: number }) {
   return <span className="inline-block rounded-full sr-shimmer" style={{ width: w, height: h }} />;
 }
@@ -107,7 +84,7 @@ function matchHint(group: StudentGroup, query: string): MatchHint | null {
 
 const HINT_LABEL: Record<MatchHint['kind'], string> = { mobile: 'Mobile', father: "Father's mobile", aadhaar: 'Aadhaar name' };
 
-function MatchHintChip({ hint, query }: { hint: MatchHint; query: string }) {
+function MatchHintChip({ hint }: { hint: MatchHint }) {
   return (
     <span
       title={`Matched on ${HINT_LABEL[hint.kind]}`}
@@ -118,13 +95,13 @@ function MatchHintChip({ hint, query }: { hint: MatchHint; query: string }) {
         {hint.kind === 'aadhaar' ? <IdentificationBadge size={11} weight="bold" /> : <Phone size={11} weight="bold" />}
       </span>
       <span className="shrink-0" style={{ color: FAINT }}>{HINT_LABEL[hint.kind]}</span>
-      <span className="truncate"><Highlight text={hint.text} query={query} /></span>
+      <span className="truncate">{hint.text}</span>
     </span>
   );
 }
 
 /** Register No — the card's primary identity. Click copies it (icon flips to a tick briefly). */
-function RegNoPill({ regNo, query }: { regNo: string; query: string }) {
+function RegNoPill({ regNo }: { regNo: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -148,7 +125,7 @@ function RegNoPill({ regNo, query }: { regNo: string; query: string }) {
       {copied
         ? <Check size={13} weight="bold" className="sr-pop" style={{ color: PAID }} />
         : <IdentificationCard size={14} weight="bold" style={{ color: PERI }} />}
-      <Highlight text={regNo} query={query} />
+      {regNo}
     </button>
   );
 }
@@ -172,12 +149,14 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
   }
   if (due > 0) {
     return (
-      <p className="sr-pop flex items-baseline gap-1 leading-none whitespace-nowrap" title="Total due across all enrollments">
-        <span className="text-[16px] font-semibold tabular-nums tracking-[-0.2px]" style={{ color: DUE }}>
-          ₹{due.toLocaleString('en-IN')}
-        </span>
-        <span className="text-[9.5px] font-medium uppercase tracking-[0.8px]" style={{ color: FAINT }}>due</span>
-      </p>
+      // Outline pastel pill, same family as the CONFIRMED status pill.
+      <span
+        title="Total due across all enrollments"
+        className="sr-pop inline-flex items-center justify-center min-w-[98px] h-7 rounded-full border px-2 text-[11px] font-semibold leading-none tabular-nums whitespace-nowrap cursor-default"
+        style={pill(DUE)}
+      >
+        ₹{due.toLocaleString('en-IN')} due
+      </span>
     );
   }
   return (
@@ -187,13 +166,17 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
   );
 }
 
+// Row status pill (CONFIRMED / PROVISIONAL …) — the fee pills on the same row share it exactly.
+const ROW_PILL =
+  'inline-flex items-center justify-center w-[96px] h-7 rounded-full border text-[10.5px] font-medium leading-none tracking-[0.2px]';
+
 const ACTION_BTN =
   'inline-flex items-center justify-center gap-1 rounded-full border bg-white h-7 text-[11px] font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/35';
 
 function EnrollmentRow({
-  s, isFirst, isLast, isCurrent, groupRegNo, query, isAdmin, feeStatus, due, ctxActive, onView, onEdit, onCollect, onContextMenu,
+  s, isFirst, isLast, isCurrent, groupRegNo, isAdmin, feeStatus, due, ctxActive, onView, onEdit, onCollect, onContextMenu,
 }: {
-  s: Student; isFirst: boolean; isLast: boolean; isCurrent: boolean; groupRegNo: string; query: string; isAdmin: boolean;
+  s: Student; isFirst: boolean; isLast: boolean; isCurrent: boolean; groupRegNo: string; isAdmin: boolean;
   feeStatus: FeeStatus | null; due: number | undefined; ctxActive: boolean;
   onView: () => void; onEdit: () => void; onCollect: () => void; onContextMenu: (pos: MenuPos) => void;
 }) {
@@ -231,26 +214,27 @@ function EnrollmentRow({
       <span className="justify-self-start inline-flex items-center justify-center w-[46px] h-7 rounded-full border text-[11px] font-semibold leading-none" style={pill(courseHex)}>
         {s.course || '—'}
       </span>
-      <span className="min-w-0 truncate text-[11.5px] font-medium" style={{ color: MUTED }} title={meta}>
+      <span className="min-w-0 truncate text-[11.5px] font-medium" style={{ color: MUTED }} title={isCurrent ? `${meta} · CURRENT` : meta}>
+        {meta || '—'}
+        {/* Current academic year — outline pastel pill like the status pill, set apart from the meta text. */}
         {isCurrent && (
           <span
             title="Current academic year"
-            className="mr-2 inline-flex items-center gap-1 rounded-full px-1.5 py-[2px] align-[1px] text-[9px] font-semibold uppercase tracking-[0.6px] leading-none"
-            style={{ background: `${PERI}1A`, color: PERI_INK }}
+            className="ml-4 inline-flex items-center gap-1 h-[22px] rounded-full border px-2 align-middle text-[10px] font-medium leading-none tracking-[0.2px]"
+            style={pill(PERI)}
           >
             <span className="w-[5px] h-[5px] rounded-full" style={{ background: PERI }} />
-            Current
+            CURRENT
           </span>
         )}
-        {meta || '—'}
         {/* Reg no shown per row only when it differs from the profile chip (e.g. re-registered). */}
         {s.regNumber && s.regNumber !== groupRegNo && (
           <span className="ml-2 tabular-nums" style={{ color: FAINT }}>
-            · <Highlight text={s.regNumber} query={query} />
+            · {s.regNumber}
           </span>
         )}
       </span>
-      <span className="justify-self-start inline-flex items-center justify-center w-[96px] h-7 rounded-full border text-[10.5px] font-medium leading-none tracking-[0.2px]" style={pill(dot)}>
+      <span className={`${ROW_PILL} justify-self-start`} style={pill(dot)}>
         {s.admissionStatus || 'PENDING'}
       </span>
 
@@ -285,28 +269,25 @@ function EnrollmentRow({
         </button>
         {isAdmin && (
           isWPStudent(s) ? (
-            <span title={WP_FEE_TITLE} className="inline-flex items-center justify-center w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(WP_HEX)}>
+            <span title={WP_FEE_TITLE} className={`${ROW_PILL} cursor-default`} style={pill(WP_HEX)}>
               WP
             </span>
           ) : feeStatus === null ? (
-            <span className="w-[98px] flex justify-center"><Shimmer w={98} h={28} /></span>
+            <span className="w-[96px] flex justify-center"><Shimmer w={96} h={28} /></span>
           ) : feeStatus === 'no-dues' ? (
-            <span className="sr-pop inline-flex items-center justify-center gap-1 w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(PAID)}>
-              <CheckCircle size={12} weight="fill" /> No Dues
+            <span className={`${ROW_PILL} sr-pop gap-1 cursor-default`} style={pill(PAID)}>
+              <CheckCircle size={12} weight="fill" /> NO DUES
             </span>
           ) : (
             <button
               onClick={onCollect}
               title={feeStatus === 'dues' ? (due ? `Collect dues — ₹${due.toLocaleString('en-IN')} outstanding` : 'Collect dues') : 'Collect fee'}
-              className="sr-pop inline-flex items-center justify-center w-[98px] h-7 rounded-full text-[11px] font-medium text-white tabular-nums whitespace-nowrap hover:brightness-95 transition-[filter] cursor-pointer"
-              style={{
-                background: feeStatus === 'dues' ? AMBER : PERI,
-                boxShadow: `0 2px 8px ${feeStatus === 'dues' ? AMBER : PERI}40`,
-              }}
+              className={`${ROW_PILL} sr-pop tabular-nums whitespace-nowrap hover:brightness-95 transition-[filter] cursor-pointer`}
+              style={pill(feeStatus === 'dues' ? AMBER : PERI)}
             >
               {feeStatus === 'dues'
-                ? (due ? `₹${due.toLocaleString('en-IN')} due` : 'Collect Dues')
-                : 'Collect Fee'}
+                ? (due ? `₹${due.toLocaleString('en-IN')}` : 'COLLECT DUES')
+                : 'COLLECT FEE'}
             </button>
           )
         )}
@@ -349,6 +330,23 @@ export function SearchResults({
     activeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [activeIdx]);
 
+  // Collapse mode: a session-wide default plus per-card flips. The flips are tied to the
+  // query they were made under, so a new search starts clean without a reset effect.
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const [flips, setFlips] = useState<{ query: string; keys: Set<string> }>({ query: '', keys: new Set() });
+  const flipped = flips.query === query ? flips.keys : null;
+  function toggleCard(key: string) {
+    setFlips((f) => {
+      const keys = new Set(f.query === query ? f.keys : []);
+      if (keys.has(key)) keys.delete(key); else keys.add(key);
+      return { query, keys };
+    });
+  }
+  function toggleAll() {
+    setAllCollapsed((c) => !c);
+    setFlips({ query, keys: new Set() });
+  }
+
   if (groups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center sr-card">
@@ -381,7 +379,7 @@ export function SearchResults({
   const remaining = groups.length - shown.length;
 
   return (
-    <div className="space-y-3 pb-4">
+    <div className="space-y-4 pb-4">
       {/* Summary bar */}
       <div className="flex items-center gap-2 flex-wrap px-1">
         <p className="text-[12.5px] font-medium" style={{ color: MUTED }}>
@@ -420,7 +418,17 @@ export function SearchResults({
             </>
           )}
         </div>
-        <div className="ml-auto hidden md:flex items-center gap-1.5 text-[10px] font-medium" style={{ color: FAINT }}>
+        {groups.length > 1 && (
+          <button
+            onClick={toggleAll}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-[5px] text-[11px] font-medium leading-none hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/50 transition-colors cursor-pointer"
+            style={{ borderColor: PERI_BORDER, color: PERI_INK }}
+          >
+            {allCollapsed ? <CaretDown size={11} weight="bold" /> : <CaretUp size={11} weight="bold" />}
+            {allCollapsed ? 'Expand all' : 'Collapse all'}
+          </button>
+        )}
+        <div className={`${groups.length > 1 ? 'ml-2' : 'ml-auto'} hidden md:flex items-center gap-1.5 text-[10px] font-medium`} style={{ color: FAINT }}>
           <kbd className="sr-kbd">↑</kbd><kbd className="sr-kbd">↓</kbd> navigate
           <kbd className="sr-kbd ml-1.5">Enter</kbd> details
           <kbd className="sr-kbd ml-1.5">Esc</kbd> clear
@@ -445,26 +453,42 @@ export function SearchResults({
         const active = idx === activeIdx;
         const groupIsWP = group.records.every(isWPStudent);
         const hasWP = group.records.some(isWPStudent);
+        // The keyboard-active card always stays open so ↑/↓ still shows its rows.
+        const collapsed = !active && allCollapsed !== (flipped?.has(group.key) ?? false);
+        const extra = group.records.length - 1;
         return (
           <div
             key={group.key}
             ref={active ? activeRef : undefined}
-            className={`${CARD} sr-card overflow-hidden !border-[#C9D0F8]`}
+            className={`${CARD} sr-card overflow-hidden !border-[1.5px]`}
             style={{
               '--i': Math.min(idx % SEARCH_PAGE_SIZE, 8),
-              // Hairline border + a thin periwinkle accent line just outside it (white gap
-              // between) so adjacent cards read as clearly separate; stronger when active.
+              // Course-coloured border (latest enrollment's course) + a faint ring of the same
+              // hue just outside it (white gap between) so adjacent cards read as clearly
+              // separate; ring is stronger when the card is keyboard-active.
+              borderColor: `${courseHex}B3`,
               boxShadow: active
-                ? `0 0 0 2px #fff, 0 0 0 4px ${PERI}73, 0 8px 22px rgba(63,75,184,0.12)`
-                : `0 0 0 2px #fff, 0 0 0 3px ${PERI}26`,
+                ? `0 0 0 2px #fff, 0 0 0 4px ${courseHex}80, 0 8px 22px rgba(63,75,184,0.12)`
+                : `0 0 0 2px #fff, 0 0 0 3px ${courseHex}26, 0 2px 6px rgba(63,75,184,0.07)`,
             } as CSSProperties}
           >
-            {/* Profile header */}
-            {/* pr-5 puts the fee block on the same right edge as the row fee buttons */}
+
+            {/* Profile header — solid tinted band so every card clearly starts here.
+                Clicking empty space toggles the card; buttons inside keep their own action.
+                pr-5 puts the fee block on the same right edge as the row fee buttons. */}
             <div
-              className="flex items-center gap-3 pl-4 pr-5 py-2"
-              style={{ background: 'linear-gradient(135deg,#F3F4FF 0%,#FFFFFF 70%)' }}
+              className="flex items-center gap-3 pl-4 pr-5 py-2 cursor-pointer select-none"
+              style={{ background: PERI_BAND }}
+              onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) toggleCard(group.key); }}
+              title={collapsed ? 'Click to show enrollments' : 'Click to collapse'}
             >
+             <span
+               aria-hidden
+               className="shrink-0 flex transition-transform duration-200"
+               style={{ color: PERI, transform: collapsed ? 'rotate(-90deg)' : 'none' }}
+             >
+               <CaretDown size={13} weight="bold" />
+             </span>
              <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="relative shrink-0">
                 <span
@@ -487,7 +511,7 @@ export function SearchResults({
                   DOB / mobile / Aadhaar name live in the name's tooltip. */}
               <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap gap-y-1">
                 <p className="min-w-0 max-w-full text-[15px] font-semibold leading-tight truncate cursor-default" style={{ color: PERI_INK }} title={nameTitle}>
-                  <Highlight text={group.nameSSLC} query={query} />
+                  {group.nameSSLC}
                   {group.fatherName && (
                     <span className="font-normal text-[12px]" style={{ color: FAINT }}>
                       {'  '}{group.gender === 'BOY' ? 'S/o' : 'D/o'} {group.fatherName}
@@ -495,7 +519,7 @@ export function SearchResults({
                   )}
                 </p>
                 {regNo ? (
-                  <RegNoPill regNo={regNo} query={query} />
+                  <RegNoPill regNo={regNo} />
                 ) : (
                   <span
                     className="shrink-0 inline-flex items-center gap-1 h-7 rounded-full border border-dashed bg-white px-2.5 text-[11px] font-medium leading-none whitespace-nowrap"
@@ -504,7 +528,7 @@ export function SearchResults({
                     <IdentificationCard size={13} weight="bold" /> No Reg No
                   </span>
                 )}
-                {hint && <MatchHintChip hint={hint} query={query} />}
+                {hint && <MatchHintChip hint={hint} />}
                 {hasWP && (
                   <span
                     title="Working Professional (Evening College)"
@@ -512,6 +536,21 @@ export function SearchResults({
                     style={pill(WP_HEX)}
                   >
                     WP
+                  </span>
+                )}
+                {/* Collapsed: a one-line peek at the latest enrollment instead of the timeline. */}
+                {collapsed && latest && (
+                  <span className="sr-fade shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap tabular-nums" style={{ color: MUTED }}>
+                    {[latest.course, latest.year?.replace(' YEAR', ' YR'), latest.academicYear].filter(Boolean).join(' · ')}
+                    {extra > 0 && (
+                      <span
+                        title={`${extra} more enrollment${extra !== 1 ? 's' : ''}`}
+                        className="rounded-full border bg-white px-1.5 py-[2px] text-[10px] leading-none"
+                        style={{ borderColor: PERI_BAND_BORDER, color: PERI_INK }}
+                      >
+                        +{extra}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -543,7 +582,8 @@ export function SearchResults({
             </div>
 
             {/* Enrollment timeline */}
-            <div className="px-2 pb-2 pt-1 border-t" style={{ borderColor: PERI_DIVIDER }}>
+            {!collapsed && (
+            <div className="px-2 pb-2 pt-1 border-t" style={{ borderColor: PERI_BAND_BORDER }}>
               {group.records.map((s, i) => (
                 <EnrollmentRow
                   key={s.id}
@@ -552,7 +592,6 @@ export function SearchResults({
                   isLast={i === group.records.length - 1}
                   isCurrent={!!currentAcademicYear && s.academicYear === currentAcademicYear}
                   groupRegNo={regNo}
-                  query={query}
                   isAdmin={isAdmin}
                   feeStatus={feeLoading ? null : (feeStatus.get(s.id) ?? 'collect')}
                   due={studentDue.get(s.id)}
@@ -564,6 +603,7 @@ export function SearchResults({
                 />
               ))}
             </div>
+            )}
           </div>
         );
       })}
