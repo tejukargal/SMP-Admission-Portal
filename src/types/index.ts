@@ -566,9 +566,15 @@ export interface Circular {
   createdAt: string;
   createdBy: string;     // admin uid
   updatedAt?: string;
-  archivedAt?: string;   // unpublished — hidden from students, kept for admin
-  expiredAt?: string;    // marked Expired by admin — students see it only under the Expired tab, never on Home/unread; cleared on Restore to Active
+  archivedAt?: string;   // Draft (or Scheduled, with publishAt) — hidden from students, kept for admin
+  expiredAt?: string;    // Expired — students see it only under the Expired tab, never on Home/unread; cleared when made Live again
   pinned?: boolean;      // shown first in the student portal's Circulars tab, ahead of date sorting
+  pinnedAt?: string;     // ISO — set on pin and on "Move to first"; pinned circulars sort by it, newest first (byPinOrder)
+  publishAt?: string;    // ISO — a Draft with this set is Scheduled; circularLifecycleTick publishes it when due
+  expiresOn?: string;    // YYYY-MM-DD "valid until" (IST, inclusive) — circularLifecycleTick expires it the day after
+  notify?: boolean;      // push choice written with each publish/pin transition — read by the push triggers
+  lastReminderAt?: string; // ISO — last "Send Reminder" push (sendCircularReminder); never bumps updatedAt
+  reminderCount?: number;
   backgroundImageUrl?: string; // AI-generated flat-vector illustration shown as the card's full-bleed background
 }
 

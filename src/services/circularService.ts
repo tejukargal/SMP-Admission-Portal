@@ -4,7 +4,7 @@
 // stored on the doc so students can download without a Storage SDK/auth.
 // Student-facing reads live in studentPortalService.ts.
 import {
-  collection, doc, deleteDoc, deleteField, onSnapshot, orderBy, query, setDoc, updateDoc,
+  collection, doc, deleteDoc, deleteField, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch,
 } from 'firebase/firestore';
 import {
   ref as storageRef, uploadBytes, uploadString, getDownloadURL, deleteObject,
@@ -12,7 +12,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage, app } from '../config/firebase';
 import { imageExtensionFor, imageUploadMetadata } from './imageUpload';
-import type { Circular, StoredAttachment } from '../types';
+import type { Circular, StoredAttachment, StudentCircularState } from '../types';
 
 const COL = 'circulars';
 const functions = getFunctions(app, 'asia-south1');
@@ -56,6 +56,22 @@ export async function setCircularBackground(id: string, background: PendingBackg
   const url = await uploadCircularBackground(id, background);
   await updateDoc(doc(db, COL, id), { backgroundImageUrl: url, updatedAt: new Date().toISOString() });
   return url;
+}
+
+export interface CircularReminderInput {
+  circularId: string;
+  title: string;
+  body: string;
+  audience: 'all' | 'unseen';
+  /** true = only count recipients, send nothing. */
+  dryRun?: boolean;
+}
+
+/** Calls sendCircularReminder — re-notifies students about a Live circular (or, with dryRun, just counts them). */
+export async function sendCircularReminder(input: CircularReminderInput): Promise<{ students: number; devices: number; sent: boolean }> {
+  const fn = httpsCallable<CircularReminderInput, { students: number; devices: number; sent: boolean }>(functions, 'sendCircularReminder');
+  const result = await fn(input);
+  return result.data;
 }
 
 export type CircularAiProvider = 'claude' | 'gemini';
@@ -112,21 +128,40 @@ export function subscribeToCirculars(onChange: (circulars: Circular[]) => void):
   });
 }
 
+/** Lifecycle fields chosen in the form. `archivedAt` set = Draft (or Scheduled with publishAt). */
+export interface CircularPublishing {
+  draft: boolean;
+  publishAt?: string;
+  expiresOn?: string;
+  notify: boolean;
+}
+
 export async function createCircular(
-  data: Omit<Circular, 'id' | 'createdAt' | 'attachments' | 'backgroundImageUrl'>,
+  data: Pick<Circular, 'title' | 'date' | 'subject' | 'department' | 'body' | 'createdBy'>,
   files: File[],
+  publishing: CircularPublishing,
   pendingBackground?: PendingBackground,
+  /** Reuse an existing background URL (Duplicate) when no new one was generated. */
+  existingBackgroundUrl?: string,
 ): Promise<string> {
   const ref = doc(collection(db, COL));
   const attachments: StoredAttachment[] = [];
   for (const file of files) {
     attachments.push(await uploadAttachment(`circulars/${ref.id}`, file));
   }
-  const backgroundImageUrl = pendingBackground ? await uploadCircularBackground(ref.id, pendingBackground) : undefined;
+  const backgroundImageUrl = pendingBackground
+    ? await uploadCircularBackground(ref.id, pendingBackground)
+    : existingBackgroundUrl;
+  const now = new Date().toISOString();
+  // Firestore rejects `undefined` values, so optional fields are spread in only when set.
   await setDoc(ref, {
     ...data,
     attachments,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    notify: publishing.notify,
+    ...(publishing.draft ? { archivedAt: now } : {}),
+    ...(publishing.draft && publishing.publishAt ? { publishAt: publishing.publishAt } : {}),
+    ...(publishing.expiresOn ? { expiresOn: publishing.expiresOn } : {}),
     ...(backgroundImageUrl ? { backgroundImageUrl } : {}),
   });
   return ref.id;
@@ -138,6 +173,8 @@ export async function updateCircular(
   keptAttachments: StoredAttachment[],
   newFiles: File[],
   removedPaths: string[],
+  /** null clears the field; publishAt is only honoured while the circular is a Draft/Scheduled. */
+  schedule: { expiresOn: string | null; publishAt?: string | null; notify?: boolean },
   pendingBackground?: PendingBackground,
 ): Promise<void> {
   const attachments = [...keptAttachments];
@@ -149,6 +186,9 @@ export async function updateCircular(
     ...data,
     attachments,
     updatedAt: new Date().toISOString(),
+    expiresOn: schedule.expiresOn ?? deleteField(),
+    ...(schedule.publishAt !== undefined ? { publishAt: schedule.publishAt ?? deleteField() } : {}),
+    ...(schedule.notify !== undefined ? { notify: schedule.notify } : {}),
     ...(backgroundImageUrl ? { backgroundImageUrl } : {}),
   });
   for (const path of removedPaths) await deleteAttachmentFile(path);
@@ -159,35 +199,75 @@ export async function deleteCircular(circular: Circular): Promise<void> {
   for (const att of circular.attachments ?? []) await deleteAttachmentFile(att.storagePath);
 }
 
-/** Unpublish — hides the circular from all students but keeps the doc for admin review. Reversible via publishCircular. */
-export async function unpublishCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { archivedAt: new Date().toISOString() });
+export async function bulkDeleteCirculars(list: Circular[]): Promise<void> {
+  const batch = writeBatch(db);
+  for (const c of list) batch.delete(doc(db, COL, c.id));
+  await batch.commit();
+  for (const c of list) for (const att of c.attachments ?? []) await deleteAttachmentFile(att.storagePath);
 }
 
-/** Publish — makes a previously-unpublished circular visible to students again. */
-export async function publishCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { archivedAt: deleteField() });
+export type CircularTarget = 'draft' | 'live' | 'expired';
+
+/** The field writes for moving a circular to Draft / Live / Expired. These never
+ *  bump updatedAt: the student app's seen-key is `id:updatedAt`, so bumping it
+ *  would re-flag the circular as unread for everyone.
+ *  - live: clears archivedAt/expiredAt/publishAt; `notify` decides the publish push
+ *    (the push trigger fires only on the Draft → Live transition)
+ *  - draft: hides it from students and unpins
+ *  - expired: moves it to the students' Expired tab and unpins */
+function statusPatch(to: CircularTarget, opts: { notify?: boolean; pin?: boolean }) {
+  const now = new Date().toISOString();
+  switch (to) {
+    case 'live':
+      return {
+        archivedAt: deleteField(), expiredAt: deleteField(), publishAt: deleteField(),
+        notify: opts.notify ?? false,
+        ...(opts.pin ? { pinned: true, pinnedAt: now } : {}),
+      };
+    case 'draft':
+      return { archivedAt: now, pinned: deleteField(), pinnedAt: deleteField(), publishAt: deleteField() };
+    case 'expired':
+      return { expiredAt: now, archivedAt: deleteField(), pinned: deleteField(), pinnedAt: deleteField(), publishAt: deleteField() };
+  }
 }
 
-/** Pin — shows this circular first in the student portal's Circulars tab, ahead of date sorting. */
-export async function pinCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { pinned: true });
+export async function setCircularStatus(id: string, to: CircularTarget, opts: { notify?: boolean; pin?: boolean } = {}): Promise<void> {
+  await updateDoc(doc(db, COL, id), statusPatch(to, opts));
 }
 
-/** Unpin — returns the circular to normal date-based sorting. */
-export async function unpinCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { pinned: deleteField() });
+export async function bulkSetCircularStatus(ids: string[], to: CircularTarget, opts: { notify?: boolean; pin?: boolean } = {}): Promise<void> {
+  const batch = writeBatch(db);
+  for (const id of ids) batch.update(doc(db, COL, id), statusPatch(to, opts));
+  await batch.commit();
 }
 
-/** Expire — moves the circular to the students' Expired tab and unpins it in the
- *  same write. Deliberately leaves updatedAt alone: the student app's seen-key
- *  includes updatedAt, so bumping it would re-flag the circular as unread.
- *  Reversible via restoreCircular. */
-export async function expireCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { expiredAt: new Date().toISOString(), pinned: deleteField() });
+/** Pin / unpin a Live circular. A new pin goes first (pinnedAt = now). Silent
+ *  by default — pass notify to push "📌 Pinned" to every student. */
+export async function setCircularPinned(id: string, pinned: boolean, notify = false): Promise<void> {
+  await updateDoc(
+    doc(db, COL, id),
+    pinned ? { pinned: true, pinnedAt: new Date().toISOString(), notify } : { pinned: deleteField(), pinnedAt: deleteField() },
+  );
 }
 
-/** Restore — returns an expired circular to Active (does not re-pin). */
-export async function restoreCircular(id: string): Promise<void> {
-  await updateDoc(doc(db, COL, id), { expiredAt: deleteField() });
+/** "Move to first" — puts an already-pinned circular ahead of the other pins.
+ *  Only pinnedAt changes, so no push fires and updatedAt stays put. */
+export async function moveCircularToFirst(id: string): Promise<void> {
+  await updateDoc(doc(db, COL, id), { pinnedAt: new Date().toISOString() });
+}
+
+/** Number of students who have opened each circular (any version). The web
+ *  portal stores bare ids, the mobile app stores `id:updatedAt` keys. */
+export async function fetchCircularSeenCounts(): Promise<Map<string, number>> {
+  const snap = await getDocs(collection(db, 'studentCircularState'));
+  const counts = new Map<string, number>();
+  for (const d of snap.docs) {
+    const ids = new Set<string>();
+    for (const key of (d.data() as StudentCircularState).seenCircularIds ?? []) {
+      const i = key.indexOf(':');
+      ids.add(i === -1 ? key : key.slice(0, i));
+    }
+    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }

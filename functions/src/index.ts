@@ -8,8 +8,9 @@ import sharp from 'sharp';
 admin.initializeApp();
 const db = admin.firestore();
 
-export { notifyOnNewNotice, notifyOnNoticeUpdated, notifyOnNewCircular, notifyOnCircularUpdated, notifyOnStudentNotification } from './pushNotifications';
+export { notifyOnNewNotice, notifyOnNoticeUpdated, notifyOnNewCircular, notifyOnCircularUpdated, notifyOnStudentNotification, sendCircularReminder, sendAppUpdateReminder } from './pushNotifications';
 export { checkPlayStoreRelease } from './playStoreVersionCheck';
+export { circularLifecycleTick } from './circularLifecycle';
 
 // ── Sync Firestore role/active onto the Auth custom claim `admin` ──────────
 // Storage Security Rules can't read Firestore documents, so admin-only Storage

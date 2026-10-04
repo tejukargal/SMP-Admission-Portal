@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Circular, Department, StoredAttachment } from '../../types';
 import { DEPARTMENTS, DEPARTMENT_ORDER } from '../../utils/departments';
 import { stripHtml } from '../../utils/htmlContent';
+import { circularStatus, addDaysIST, todayIST, isoToLocalInput } from '../../utils/circularStatus';
 import {
   CYAN, CYAN_INK, HAIRLINE, BAND, MsgIcon, BTN_GRAY, BTN_CYAN, TEXT_INPUT, FIELD_OVERRIDE, SELECT_PILL,
   PillButton, FieldLabel,
@@ -27,18 +28,32 @@ export interface CircularFormValues {
   body: string;
 }
 
+export interface CircularFormResult {
+  values: CircularFormValues;
+  newFiles: File[];
+  keptAttachments: StoredAttachment[];
+  removedPaths: string[];
+  pendingBackground?: PendingBackground;
+  /** Duplicate: the source circular's background, reused when none was generated. */
+  existingBackgroundUrl?: string;
+  /** New circulars only — true = Save as Draft (or Schedule, with publishAt). */
+  draft: boolean;
+  /** ISO. New: set when scheduled. Edit (Draft/Scheduled only): null clears the schedule. */
+  publishAt?: string | null;
+  expiresOn: string | null;
+  notify: boolean;
+}
+
 interface CircularFormProps {
   /** When set, the form is in edit mode and pre-filled from this circular. */
   initial?: Circular;
-  onSubmit: (
-    values: CircularFormValues,
-    newFiles: File[],
-    keptAttachments: StoredAttachment[],
-    removedPaths: string[],
-    pendingBackground?: PendingBackground,
-  ) => Promise<void>;
+  /** When set (and no `initial`), a new circular pre-filled from this one — no attachments. */
+  duplicateFrom?: Circular;
+  onSubmit: (result: CircularFormResult) => Promise<void>;
   onClose: () => void;
 }
+
+const VALID_FOR = [7, 15, 30] as const;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -46,12 +61,20 @@ function today(): string {
 
 /** Add/Edit circular overlay — Title, Date, Department, Subject, rich-text
  *  Body and Firebase Storage attachments. SMP Connect's "Add New Circular". */
-export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) {
-  const [title, setTitle] = useState(initial?.title ?? '');
+export function CircularForm({ initial, duplicateFrom, onSubmit, onClose }: CircularFormProps) {
+  const source = initial ?? duplicateFrom;
+  const [title, setTitle] = useState(initial?.title ?? (duplicateFrom ? `Copy of ${duplicateFrom.title}` : ''));
   const [date, setDate] = useState(initial?.date ?? today());
-  const [subject, setSubject] = useState(initial?.subject ?? '');
-  const [department, setDepartment] = useState<Department>(initial?.department ?? 'All');
-  const [body, setBody] = useState(initial?.body ?? '');
+  const [subject, setSubject] = useState(source?.subject ?? '');
+  const [department, setDepartment] = useState<Department>(source?.department ?? 'All');
+  const [body, setBody] = useState(source?.body ?? '');
+  // Publishing — when (new, or an edited Draft/Scheduled), valid-until, push choice.
+  const initialStatus = initial ? circularStatus(initial) : null;
+  const canSchedule = !initial || initialStatus === 'draft' || initialStatus === 'scheduled';
+  const [when, setWhen] = useState<'now' | 'schedule'>(initial?.publishAt ? 'schedule' : 'now');
+  const [publishAtLocal, setPublishAtLocal] = useState(initial?.publishAt ? isoToLocalInput(initial.publishAt) : '');
+  const [expiresOn, setExpiresOn] = useState(initial?.expiresOn ?? '');
+  const [notify, setNotify] = useState(initial?.notify ?? true);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [kept, setKept] = useState<StoredAttachment[]>(initial?.attachments ?? []);
   const [removedPaths, setRemovedPaths] = useState<string[]>([]);
@@ -141,19 +164,39 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
     }
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(asDraft: boolean) {
     if (!valid) {
       setError('Title, Date, Subject and Body are required.');
+      return;
+    }
+    const scheduling = canSchedule && when === 'schedule';
+    let publishAtIso: string | null = null;
+    if (scheduling) {
+      const t = publishAtLocal ? new Date(publishAtLocal) : null;
+      if (!t || Number.isNaN(t.getTime()) || t.getTime() <= Date.now()) {
+        setError('Pick a publish date & time in the future, or choose "Publish now".');
+        return;
+      }
+      publishAtIso = t.toISOString();
+    }
+    if (expiresOn && expiresOn < todayIST()) {
+      setError('"Valid until" cannot be in the past.');
       return;
     }
     setError(null);
     setSaving(true);
     try {
-      await onSubmit(
-        { title: title.trim(), date, subject: subject.trim(), department, body },
-        newFiles, kept, removedPaths,
-        pendingBackground ?? undefined,
-      );
+      await onSubmit({
+        values: { title: title.trim(), date, subject: subject.trim(), department, body },
+        newFiles, keptAttachments: kept, removedPaths,
+        pendingBackground: pendingBackground ?? undefined,
+        existingBackgroundUrl: !initial ? duplicateFrom?.backgroundImageUrl : undefined,
+        draft: asDraft || scheduling,
+        // New: only when scheduled. Edit: only for Drafts/Scheduled (null clears).
+        publishAt: initial ? (canSchedule ? publishAtIso : undefined) : (publishAtIso ?? undefined),
+        expiresOn: expiresOn || null,
+        notify,
+      });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save circular. Please try again.');
@@ -297,10 +340,10 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
                   </button>
                 </div>
               </div>
-            ) : initial?.backgroundImageUrl ? (
+            ) : source?.backgroundImageUrl ? (
               <div className="flex items-center gap-3">
                 <img
-                  src={initial.backgroundImageUrl}
+                  src={source.backgroundImageUrl}
                   alt="Current background"
                   className="w-32 h-20 object-cover rounded-xl border border-[#CBE8F0]"
                 />
@@ -333,7 +376,7 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
             <FieldLabel>Body</FieldLabel>
             <RichTextEditor
               key={bodySeedVersion}
-              value={aiSeedBody ?? initial?.body ?? ''}
+              value={aiSeedBody ?? source?.body ?? ''}
               onChange={setBody}
               placeholder="Write the circular content…"
             />
@@ -351,13 +394,82 @@ export function CircularForm({ initial, onSubmit, onClose }: CircularFormProps) 
               }}
             />
           </div>
+          {duplicateFrom && (duplicateFrom.attachments?.length ?? 0) > 0 && (
+            <p className="-mt-2 text-[11px] text-[#8A93A3]">Attachments are not copied when duplicating — add them again above if needed.</p>
+          )}
+
+          <div className="flex flex-col gap-3 rounded-2xl border p-3" style={{ borderColor: HAIRLINE, background: '#FAFDFE' }}>
+            <span className="text-[11.5px] font-medium" style={{ color: CYAN_INK }}>Publishing</span>
+
+            {canSchedule && (
+              <div className="flex flex-col gap-1.5">
+                <FieldLabel hint={initial ? '(stays hidden from students until then)' : undefined}>When should students see it?</FieldLabel>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center rounded-full border p-0.5 bg-[#F2FAFC]" style={{ borderColor: HAIRLINE }}>
+                    {(['now', 'schedule'] as const).map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => setWhen(w)}
+                        className={`px-3 py-1 rounded-full text-[11.5px] font-medium transition-colors cursor-pointer ${when === w ? 'bg-[#0891B2] text-white shadow-[0_2px_6px_rgba(8,145,178,0.25)]' : 'text-[#5B6371] hover:text-[#0E6A85]'}`}
+                      >
+                        {w === 'now' ? (initial ? 'Keep as draft' : 'Publish now') : 'Schedule for later'}
+                      </button>
+                    ))}
+                  </div>
+                  {when === 'schedule' && (
+                    <input
+                      type="datetime-local"
+                      value={publishAtLocal}
+                      min={isoToLocalInput(new Date().toISOString())}
+                      onChange={(e) => setPublishAtLocal(e.target.value)}
+                      className={`${TEXT_INPUT} !w-auto`}
+                    />
+                  )}
+                </div>
+                {when === 'schedule' && (
+                  <p className="text-[11px] text-[#8A93A3]">Goes live automatically within 15 minutes of this time.</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel hint="(optional — moves to Expired automatically the day after)">Valid until</FieldLabel>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="date"
+                  value={expiresOn}
+                  min={todayIST()}
+                  onChange={(e) => setExpiresOn(e.target.value)}
+                  className={`${TEXT_INPUT} !w-auto`}
+                />
+                {VALID_FOR.map((n) => (
+                  <button key={n} type="button" onClick={() => setExpiresOn(addDaysIST(n))} className={BTN_GRAY}>+{n} days</button>
+                ))}
+                {expiresOn && (
+                  <button type="button" onClick={() => setExpiresOn('')} className="text-[11.5px] text-[#5B6371] underline cursor-pointer">No expiry</button>
+                )}
+              </div>
+            </div>
+
+            {canSchedule && (
+              <label className="inline-flex items-center gap-2 text-[12px] text-[#3F4654] cursor-pointer select-none">
+                <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="w-4 h-4 accent-[#0891B2] cursor-pointer" />
+                Send a push notification to all students when it goes live
+              </label>
+            )}
+          </div>
+
           {error && <p className="text-[12px] text-[#A5173A] font-medium">{error}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t shrink-0 bg-[#FAFDFE]" style={{ borderColor: BAND }}>
           <button onClick={onClose} disabled={saving} className={BTN_GRAY}>Cancel</button>
-          <PillButton loading={saving} disabled={!valid} onClick={() => void handleSubmit()}>
-            {initial ? 'Save Changes' : 'Publish Circular'}
+          {!initial && (
+            <button onClick={() => void handleSubmit(true)} disabled={saving || !valid} className={BTN_GRAY}>Save as Draft</button>
+          )}
+          <PillButton loading={saving} disabled={!valid} onClick={() => void handleSubmit(false)}>
+            {initial ? 'Save Changes' : when === 'schedule' ? 'Schedule' : 'Publish Now'}
           </PillButton>
         </div>
       </div>

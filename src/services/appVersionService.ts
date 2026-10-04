@@ -1,9 +1,17 @@
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, app } from '../config/firebase';
+
+const functions = getFunctions(app, 'asia-south1');
 
 export interface PublishedVersion {
   latestVersion: string;
   updateUrl: string;
+  /** "What's new" for latestVersion — one item per line; shown on the app's update card. */
+  releaseNotes?: string;
+  /** Set by the sendAppUpdateReminder Cloud Function. */
+  lastUpdateReminderAt?: string;
+  updateReminderCount?: number;
 }
 
 export interface PendingRelease {
@@ -35,7 +43,28 @@ export async function savePendingRelease(release: Omit<PendingRelease, 'createdA
 /** Writes appConfig/version directly, bypassing the Play Store production-track
  *  check — for emergencies/testing. Also clears any pending release so the
  *  scheduled checker doesn't later overwrite it with stale data. */
-export async function publishVersionNow(version: PublishedVersion): Promise<void> {
-  await setDoc(VERSION_DOC, version);
+export async function publishVersionNow(version: Pick<PublishedVersion, 'latestVersion' | 'updateUrl'>): Promise<void> {
+  // merge — keeps the release notes and reminder history on the same doc.
+  await setDoc(VERSION_DOC, version, { merge: true });
   await deleteDoc(PENDING_DOC).catch(() => {});
+}
+
+/** Saves the "What's new" list shown on the student app's update card. */
+export async function saveReleaseNotes(releaseNotes: string): Promise<void> {
+  await setDoc(VERSION_DOC, { releaseNotes }, { merge: true });
+}
+
+export interface UpdateReminderResult {
+  students: number;
+  devices: number;
+  upToDate: number;
+  latestVersion: string;
+  sent: boolean;
+}
+
+/** Calls sendAppUpdateReminder — pushes an update reminder to every device on
+ *  an older app version (dryRun: only counts them). */
+export async function sendAppUpdateReminder(input: { title: string; body: string; dryRun?: boolean }): Promise<UpdateReminderResult> {
+  const fn = httpsCallable<typeof input, UpdateReminderResult>(functions, 'sendAppUpdateReminder');
+  return (await fn(input)).data;
 }
