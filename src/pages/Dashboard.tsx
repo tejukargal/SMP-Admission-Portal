@@ -28,6 +28,8 @@ import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 import { InsightsButton, type DashboardInsights } from '../components/dashboard/InsightsPanel';
 import { useInquiries } from '../hooks/useInquiries';
+import { SummaryModal } from '../components/dashboard/SummaryModal';
+import { previousAcademicYear } from '../utils/summaryReport';
 import { useCashInHand } from '../contexts/CashInHandContext';
 import { todayIST } from '../utils/formatDates';
 import { dayKey, receiptAccountSplit } from '../utils/cashLedger';
@@ -85,14 +87,6 @@ const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 const YEAR_INTAKE = 63 * COURSES.length; // 315 — total intake capacity per year across all courses
-
-/** '2026-27' → '2025-26' */
-function previousAcademicYear(year: AcademicYear): AcademicYear | null {
-  const m = year.match(/^(\d{4})-\d{2}$/);
-  if (!m) return null;
-  const start = Number(m[1]) - 1;
-  return `${start}-${String((start + 1) % 100).padStart(2, '0')}` as AcademicYear;
-}
 
 /** Shift a YYYY-MM-DD date by whole days (UTC, so it never drifts). */
 function shiftIsoDate(iso: string, days: number): string {
@@ -2710,80 +2704,9 @@ const [barsReady, setBarsReady] = useState(false);
     })()}
 
     {/* Summary modal — Year, Course & Admission Type-wise breakdown (mirrors Admission Type-wise Count modal) */}
-    {summaryModal && (() => {
-      const summaryStudents = allStudents.filter((s) => s.academicYear === academicYearFilter && isConfirmedActive(s));
-
-      const sumRows = YEARS.flatMap((yr) => {
-        const yrLabel = yr === '1ST YEAR' ? '1st Yr' : yr === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
-        const yrSt = summaryStudents.filter((s) => s.year === yr);
-        const sub = { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 };
-        const courseRows = COURSES.map((course) => {
-          const ss = yrSt.filter((s) => s.course === course);
-          let regular = 0, ltrl = 0, snq = 0, rptr = 0;
-          for (const s of ss) {
-            if (s.admCat === 'SNQ')            snq++;
-            else if (s.admType === 'LATERAL')  ltrl++;
-            else if (s.admType === 'REPEATER') rptr++;
-            else                               regular++;
-          }
-          const total = ss.length;
-          sub.regular += regular; sub.ltrl += ltrl; sub.snq += snq; sub.rptr += rptr; sub.total += total;
-          return { yrLabel, course, regular, ltrl, snq, rptr, total, isSubtotal: false };
-        });
-        return [...courseRows, { yrLabel: `${yrLabel} SUBTOTAL`, course: 'All Courses', ...sub, isSubtotal: true }];
-      });
-      const grand = sumRows.filter((r) => r.isSubtotal).reduce(
-        (acc, r) => ({ regular: acc.regular + r.regular, ltrl: acc.ltrl + r.ltrl, snq: acc.snq + r.snq, rptr: acc.rptr + r.rptr, total: acc.total + r.total }),
-        { regular: 0, ltrl: 0, snq: 0, rptr: 0, total: 0 }
-      );
-      const tc = 'px-2.5 py-0.5 text-right tabular-nums text-sm';
-      const tl = 'px-2.5 py-0.5 text-left text-xs';
-      return (
-        <div className="font-wp fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'backdrop-enter 0.2s ease-out' }}>
-          <div className="absolute inset-0 bg-[#1E2340]/30" onClick={() => setSummaryModal(false)} aria-hidden="true" />
-          <div className="relative rounded-2xl border border-[#93E0C6] bg-[#EEFAF6] shadow-[0_24px_60px_rgba(63,75,184,0.18)] w-full max-w-3xl mx-4 overflow-hidden" style={{ animation: 'modal-enter 0.25s ease-out' }}>
-            <div className="px-5 py-3 flex items-center justify-between border-b border-[#9FE3CD]">
-              <div className="flex items-center gap-2.5">
-                <span className="w-1 h-4 rounded-full shrink-0 bg-[#34C494]" />
-                <p className="text-xs font-medium uppercase tracking-widest text-[#0B825A]">Summary — Year, Course &amp; Adm Type-wise Count</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => exportSummaryReport(summaryStudents, academicYearFilter, undefined, 'emerald')} className="text-[10px] font-medium text-[#0E9D6E] hover:text-[#096B4B] transition-colors cursor-pointer uppercase tracking-wide">Export PDF</button>
-                <button onClick={() => setSummaryModal(false)} className="rounded-full w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors text-sm leading-none cursor-pointer" aria-label="Close">×</button>
-              </div>
-            </div>
-            <div className="p-3 bg-white">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-[#9FE3CD]">
-                    {['Year','Course','Regular','LTRL','SNQ','RPTR','Total'].map((h, hi) => (
-                      <th key={h} className={`px-2.5 py-1.5 text-[#096B4B] font-medium whitespace-nowrap text-right uppercase tracking-wide [&:nth-child(1)]:text-left [&:nth-child(2)]:text-left ${hi >= 2 ? 'text-xs' : 'text-[11px]'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sumRows.map((r, i) => r.isSubtotal ? (
-                    <tr key={i} className="font-medium text-[#096B4B] bg-[#EEFAF6]/80 border-y border-[#B7EAD9]">
-                      <td className={tl}>{r.yrLabel}</td><td className={tl}>{r.course}</td>
-                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                    </tr>
-                  ) : (
-                    <tr key={i} className="border-b border-gray-100 hover:bg-[#EEFAF6]/40 transition-colors">
-                      <td className={tl + ' text-gray-400'}>{r.yrLabel}</td><td className={tl + ' font-medium text-gray-700'}>{r.course}</td>
-                      {[r.regular, r.ltrl, r.snq, r.rptr, r.total].map((v, j) => <td key={j} className={tc + ' text-gray-700'}>{v}</td>)}
-                    </tr>
-                  ))}
-                  <tr className="font-medium border-t border-[#CDD4F7]" style={{ background: '#ECEFFD', color: '#3F4BB8' }}>
-                    <td className={tl}>GRAND TOTAL</td><td className={tl} />
-                    {[grand.regular, grand.ltrl, grand.snq, grand.rptr, grand.total].map((v, j) => <td key={j} className={tc}>{v}</td>)}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      );
-    })()}
+    {summaryModal && academicYearFilter && (
+      <SummaryModal students={allStudents} year={academicYearFilter} onClose={() => setSummaryModal(false)} />
+    )}
 
     {/* Intake % modal — year × course breakdown */}
     {intakeModal && (() => {

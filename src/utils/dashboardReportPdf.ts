@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 import type { CellHookData } from 'jspdf-autotable';
 import type { Student } from '../types';
+import type { SummaryTab, SummaryTable } from './summaryReport';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -534,4 +535,145 @@ export function exportFirstYearSeatsReport(
 
   addFooters(doc, academicYear, '1st Year Seats');
   doc.save(`SMP_1stYear_Seats_${dateStr().replace(/-/g, '_')}.pdf`);
+}
+
+// ── Summary report tab — any SummaryTab (see summaryReport.ts) ───────────────
+// Compact layout aimed at one page: a single-line header, the largest font
+// (9.5 → 7.5pt, never smaller) whose estimated height fits the page, and a
+// two-column landscape grid when a tab has several tables (Profile).
+
+type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
+const PT_TO_MM = 0.3528;
+const FIT_FONTS = [9.5, 9, 8.5, 8, 7.5];
+const COL_GAP = 8;
+const TITLE_H = 4.5;   // table title line
+const NOTE_H = 3.5;    // italic note line
+const TABLE_GAP = 4;   // space after each table
+const FOOTER_SPACE = 9;
+
+const fitPad = (font: number) => {
+  const v = +(font * 0.21).toFixed(2);
+  return { top: v, right: 2.6, bottom: v, left: 2.6 };
+};
+/** Approximate autoTable row height for a font size (single-line cells). */
+const rowHeight = (font: number) => font * PT_TO_MM * 1.15 + fitPad(font).top * 2;
+const tableHeight = (t: SummaryTable, font: number) =>
+  TITLE_H + (t.rows.length + 1) * rowHeight(font) + (t.note ? NOTE_H : 0) + TABLE_GAP;
+
+/** Balance tables across columns (tallest first into the shorter column), then
+ *  keep each column's tables in their original order. */
+function packColumns(tables: SummaryTable[], font: number, cols: number): { items: SummaryTable[]; height: number }[] {
+  const out = Array.from({ length: cols }, () => ({ idx: [] as number[], height: 0 }));
+  const byHeight = tables.map((t, i) => ({ i, h: tableHeight(t, font) })).sort((a, b) => b.h - a.h);
+  for (const { i, h } of byHeight) {
+    const target = out.reduce((a, b) => (b.height < a.height ? b : a));
+    target.idx.push(i);
+    target.height += h;
+  }
+  return out.map((c) => ({ items: c.idx.sort((a, b) => a - b).map((i) => tables[i]), height: c.height }));
+}
+
+const NUMERIC_CELL = /^([+-]?\d+(\.\d+)?%?|—|)$/;
+type ColStyle = { halign: 'left' | 'center'; cellWidth?: 'wrap'; fontStyle?: 'bold' };
+/** Text columns left-aligned (the first one kept on one line), numeric ones centred,
+ *  and "… Total" columns bold so in-row totals stand out. */
+function columnStylesFor(t: SummaryTable): Record<number, ColStyle> {
+  const styles: Record<number, ColStyle> = {};
+  t.columns.forEach((h, ci) => {
+    const text = t.rows.some((r) => typeof r.cells[ci] === 'string' && !NUMERIC_CELL.test(String(r.cells[ci])));
+    styles[ci] = text ? { halign: 'left', ...(ci === 0 ? { cellWidth: 'wrap' as const } : {}) } : { halign: 'center' };
+    if (ci > 1 && /total$/i.test(h)) styles[ci].fontStyle = 'bold';
+  });
+  return styles;
+}
+
+/** Compact header: title left, generated date right, hairline rule. Returns the content start Y. */
+function compactHeader(doc: jsPDF, title: string, theme: Theme): number {
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...NEAR_BLACK);
+  doc.text(title, MARGIN, 12);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(110, 110, 110);
+  doc.text(`Generated ${dateStr()}`, W - MARGIN, 12, { align: 'right' });
+  doc.setDrawColor(...theme.line);
+  doc.setLineWidth(0.35);
+  doc.line(MARGIN, 14.5, W - MARGIN, 14.5);
+  return 20;
+}
+
+export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, themeName: ThemeName = 'emerald'): void {
+  const theme: Theme = THEMES[themeName];
+  const multi = tab.tables.length > 1;
+  const widest = Math.max(...tab.tables.map((t) => t.columns.length));
+  const landscape = multi || widest > 10;
+  const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const top = compactHeader(doc, `SMP Admission Summary ${academicYear} · ${tab.label}`, theme);
+  const avail = H - top - FOOTER_SPACE;
+  const cols = multi ? 2 : 1;
+
+  // Largest font whose layout fits one page; otherwise the smallest and let autoTable paginate.
+  const font = FIT_FONTS.find((f) => Math.max(...packColumns(tab.tables, f, cols).map((c) => c.height)) <= avail)
+    ?? FIT_FONTS[FIT_FONTS.length - 1];
+  const pad = fitPad(font);
+  const colW = (W - MARGIN * 2 - COL_GAP * (cols - 1)) / cols;
+
+  const drawTable = (t: SummaryTable, x: number, y: number): number => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(Math.min(9.5, font + 0.5));
+    doc.setTextColor(...theme.solid);
+    doc.text(t.title, x, y + 3);
+
+    const grandIdx = t.rows.findIndex((r) => r.kind === 'grand');
+    const subtotalRows = t.rows.flatMap((r, i) => (r.kind === 'subtotal' ? [i] : []));
+    autoTable(doc, {
+      startY: y + TITLE_H,
+      margin: { left: x, right: W - x - colW, top: 12, bottom: FOOTER_SPACE },
+      tableWidth: colW,
+      head: [t.columns],
+      body: t.rows.map((r) => r.cells),
+      headStyles: { ...headStyles(theme), fontSize: font, cellPadding: pad, halign: 'center' },
+      bodyStyles: { ...bodyStyles(theme), fontSize: font, cellPadding: pad, halign: 'center' },
+      alternateRowStyles: { fillColor: WHITE },
+      columnStyles: columnStylesFor(t),
+      didParseCell: themedRowStyler(theme, grandIdx, subtotalRows),
+    });
+    let end = (doc as JsPDFWithAutoTable).lastAutoTable.finalY;
+    if (t.note) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 100, 100);
+      doc.text(t.note, x, end + 3, { maxWidth: colW });
+      end += NOTE_H;
+    }
+    return end + TABLE_GAP;
+  };
+
+  if (multi) {
+    const columns = packColumns(tab.tables, font, cols);
+    columns.forEach((c, ci) => {
+      const x = MARGIN + ci * (colW + COL_GAP);
+      let y = top;
+      for (const t of c.items) {
+        if (y + tableHeight(t, font) > H - FOOTER_SPACE && y > top) {
+          // Rare overflow (very long tables): continue this column on a new page
+          doc.addPage();
+          y = 14;
+        }
+        y = drawTable(t, x, y);
+      }
+      if (ci < columns.length - 1) doc.setPage(1);
+    });
+  } else {
+    let y = top;
+    for (const t of tab.tables) y = drawTable(t, MARGIN, y);
+  }
+
+  addFooters(doc, academicYear, `Summary — ${tab.label}`);
+  doc.save(`SMP_Summary_${tab.label.replace(/[^A-Za-z0-9]+/g, '_')}_${dateStr().replace(/-/g, '_')}.pdf`);
 }
