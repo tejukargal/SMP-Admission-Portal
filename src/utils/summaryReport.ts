@@ -1,17 +1,42 @@
-// Dashboard Summary report — the tabbed views behind the Summary button.
-// Pure builders produce a generic table model that the modal, the PDF export
-// (dashboardReportPdf.exportSummaryTabPdf) and the Excel export below all share,
-// so a new view is just another builder.
+// Dashboard Summary report — the tabbed views behind the Summary button (and the
+// stats-pill shortcuts). Pure builders produce a generic table model that the
+// modal, the PDF export (dashboardReportPdf.exportSummaryTabPdf) and the Excel
+// export below all share, so a new view is just another builder.
 
 import type { AcademicYear, Category, Course, Religion, Student, Year } from '../types';
-import { isConfirmedActive } from './studentStatus';
 import { loadXlsx } from './lazyLibs';
 
 export type Cell = string | number;
-export type RowKind = 'row' | 'subtotal' | 'grand';
+/** 'share' = a percentage row shown after the grand total (styled like a subtotal). */
+export type RowKind = 'row' | 'subtotal' | 'grand' | 'share';
 export interface SummaryRow { cells: Cell[]; kind: RowKind }
-export interface SummaryTable { title: string; columns: string[]; rows: SummaryRow[]; note?: string }
+export interface HeaderGroup { label: string; span: number }
+export interface SummaryTable {
+  title: string;
+  columns: string[];
+  rows: SummaryRow[];
+  note?: string;
+  /** Optional header row above `columns` (e.g. a category spanning its B / G columns). */
+  groups?: HeaderGroup[];
+}
 export interface SummaryTab { id: string; label: string; tables: SummaryTable[] }
+
+/** Date-wise admissions row (first fee payment date per student). */
+export interface DateCountRow { date: string; byCourse: Record<Course, number>; total: number }
+
+/** Everything the Summary needs, already scoped to the Dashboard filters. */
+export interface SummaryInput {
+  /** Selected academic year, or null for All Years. */
+  year: AcademicYear | null;
+  /** Confirmed students (or the status-filtered set) — what the old stats tables used. */
+  confirmed: Student[];
+  /** Students matching every filter except admission status (Status tab). */
+  pipeline: Student[];
+  /** Previous year's confirmed students matching the same filters (Year-on-year). */
+  prevConfirmed: Student[];
+  /** Date-wise first-payment admissions (Date-wise tab), newest first. */
+  dateRows: DateCountRow[];
+}
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
@@ -30,6 +55,21 @@ export function previousAcademicYear(year: AcademicYear): AcademicYear | null {
 
 const pct = (n: number, d: number) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+/** "Share %" row: each numeric cell of the grand total as a % of `whole`. */
+function shareRow(grand: SummaryRow, labelCols: number, whole: number): SummaryRow {
+  return {
+    kind: 'share',
+    cells: grand.cells.map((c, i) => (i === 0 ? 'Share %' : i < labelCols ? '' : typeof c === 'number' ? pct(c, whole) : '')),
+  };
+}
+
+/** 'YYYY-MM-DD' → '04 Oct 2026' (UTC, so the day never shifts). */
+function formatDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
 
 type AdmBucket = 'regular' | 'ltrl' | 'snq' | 'rptr';
 /** Same classification as the original Summary table / stats.summaryTable. */
@@ -130,14 +170,15 @@ function incomeBand(s: Student): IncomeBand {
   return v < 100000 ? 'lt1' : v < 250000 ? 'lt25' : v < 500000 ? 'lt5' : 'ge5';
 }
 
-export function buildSummaryTabs(all: Student[], year: AcademicYear): SummaryTab[] {
-  const yearStudents = all.filter((s) => s.academicYear === year);
-  const confirmed = yearStudents.filter(isConfirmedActive);
+const isBoyOrGirl = (s: Student) => s.gender === 'BOY' || s.gender === 'GIRL';
+
+export function buildSummaryTabs(input: SummaryInput): SummaryTab[] {
+  const { year, confirmed, pipeline, prevConfirmed, dateRows } = input;
 
   // ── Overview ──
   const overview: SummaryTable = {
     title: 'Year, Course & Admission Type — confirmed students',
-    columns: ['Year', 'Course', 'Regular', 'LTRL', 'SNQ', 'RPTR', 'Type Total', 'Boys', 'Girls', 'Gender Total', 'Seats', 'Vacant', 'Fill%'],
+    columns: ['Year', 'Course', 'Regular', 'LTRL', 'SNQ', 'RPTR', 'Type Total', 'Boys', 'Girls', 'Gender Total'],
     rows: yearCourseGrid(confirmed, (g) => {
       const b = { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
       for (const s of g) b[admBucket(s)]++;
@@ -146,19 +187,94 @@ export function buildSummaryTabs(all: Student[], year: AcademicYear): SummaryTab
       return [b.regular, b.ltrl, b.snq, b.rptr, g.length, boys, girls, boys + girls];
     }),
   };
-  // Seats / Vacant / Fill % scale with how many course-years a row spans (1, 5 or 15).
-  for (const r of overview.rows) {
-    const span = r.kind === 'row' ? 1 : r.kind === 'subtotal' ? COURSES.length : COURSES.length * YEARS.length;
-    const seats = SEATS_PER_COURSE * span;
-    const total = r.cells[6] as number; // Type Total = every confirmed student in the row
-    r.cells.push(seats, Math.max(0, seats - total), pct(total, seats));
+  // Seats / Vacant / Fill % — intake is per academic year, so only when one year is
+  // selected. They scale with how many course-years a row spans (1, 5 or 15).
+  if (year) {
+    overview.columns.push('Seats', 'Vacant', 'Fill%');
+    for (const r of overview.rows) {
+      const span = r.kind === 'row' ? 1 : r.kind === 'subtotal' ? COURSES.length : COURSES.length * YEARS.length;
+      const seats = SEATS_PER_COURSE * span;
+      const total = r.cells[6] as number; // Type Total = every confirmed student in the row
+      r.cells.push(seats, Math.max(0, seats - total), pct(total, seats));
+    }
+  }
+
+  // ── Adm Type (the original Adm Type-wise table) + share of each type ──
+  const admType: SummaryTable = {
+    title: 'Admission Type-wise Count',
+    columns: ['Year', 'Course', 'Regular', 'LTRL', 'SNQ', 'RPTR', 'Total'],
+    rows: yearCourseGrid(confirmed, (g) => {
+      const b = { regular: 0, ltrl: 0, snq: 0, rptr: 0 };
+      for (const s of g) b[admBucket(s)]++;
+      return [b.regular, b.ltrl, b.snq, b.rptr, g.length];
+    }),
+  };
+  admType.rows.push(shareRow(admType.rows[admType.rows.length - 1], 2, confirmed.length));
+
+  // ── Category (the original Category-wise table) + share of each category ──
+  // As before, only the eight known categories are counted.
+  const catStudents = confirmed.filter((s) => CATEGORIES.includes(s.category));
+  const category: SummaryTable = {
+    title: 'Category-wise Count',
+    columns: ['Year', 'Course', ...CATEGORIES, 'Total'],
+    rows: yearCourseGrid(catStudents, (g) => [...CATEGORIES.map((c) => g.filter((s) => s.category === c).length), g.length]),
+  };
+  category.rows.push(shareRow(category.rows[category.rows.length - 1], 2, catStudents.length));
+
+  // ── Cat & Gender (the original Category & Gender-wise table) + Total B+G ──
+  const catGender: SummaryTable = {
+    title: 'Category & Gender-wise Count',
+    groups: [{ label: '', span: 2 }, ...CATEGORIES.map((c) => ({ label: c, span: 2 })), { label: 'Total', span: 3 }],
+    columns: ['Year', 'Course', ...CATEGORIES.flatMap(() => ['B', 'G']), 'B', 'G', 'B+G'],
+    rows: yearCourseGrid(catStudents.filter(isBoyOrGirl), (g) => {
+      const cells: number[] = [];
+      for (const c of CATEGORIES) {
+        cells.push(g.filter((s) => s.category === c && s.gender === 'BOY').length);
+        cells.push(g.filter((s) => s.category === c && s.gender === 'GIRL').length);
+      }
+      const boys = g.filter((s) => s.gender === 'BOY').length;
+      return [...cells, boys, g.length - boys, g.length];
+    }),
+  };
+
+  // ── Year & Gender (the original Year & Course-wise Gender table) + Girls % ──
+  const yearGender: SummaryTable = {
+    title: 'Year & Course-wise Gender',
+    columns: ['Year', 'Course', 'Boys', 'Girls', 'Total', 'Girls %'],
+    rows: yearCourseGrid(confirmed.filter(isBoyOrGirl), (g) => {
+      const boys = g.filter((s) => s.gender === 'BOY').length;
+      return [boys, g.length - boys, g.length];
+    }),
+  };
+  for (const r of yearGender.rows) r.cells.push(pct(r.cells[3] as number, r.cells[4] as number));
+
+  // ── Date-wise (the original Date-wise Admissions table) + running total ──
+  const dateTotal = dateRows.reduce((t, r) => t + r.total, 0);
+  const dateWise: SummaryTable = {
+    title: 'Date-wise Admissions — Course Count',
+    columns: ['Date', ...COURSES, 'Total', 'Cumulative'],
+    rows: [],
+    note: dateRows.length > 0
+      ? 'Each student is counted on the date of their first fee payment. Cumulative counts up from the earliest date.'
+      : 'No admission fee payments recorded for this selection.',
+  };
+  if (dateRows.length > 0) {
+    let running = dateTotal; // rows are newest first, so the running total counts down
+    for (const r of dateRows) {
+      dateWise.rows.push({ kind: 'row', cells: [formatDay(r.date), ...COURSES.map((c) => r.byCourse[c]), r.total, running] });
+      running -= r.total;
+    }
+    dateWise.rows.push({
+      kind: 'grand',
+      cells: ['GRAND TOTAL', ...COURSES.map((c) => dateRows.reduce((t, r) => t + r.byCourse[c], 0)), dateTotal, ''],
+    });
   }
 
   // ── Status ──
   const status: SummaryTable = {
-    title: 'Admission status — all students of the year',
+    title: 'Admission status — all students',
     columns: ['Year', 'Course', 'Confirmed', 'Provisional', 'Pending', 'Cancelled', 'Transferred out', 'Total'],
-    rows: yearCourseGrid(yearStudents, (g) => {
+    rows: yearCourseGrid(pipeline, (g) => {
       let conf = 0, prov = 0, pend = 0, canc = 0, out = 0;
       for (const s of g) {
         const st = s.admissionStatus?.trim() ?? '';
@@ -173,10 +289,9 @@ export function buildSummaryTabs(all: Student[], year: AcademicYear): SummaryTab
     note: 'Transferred-out students are counted only under "Transferred out". Blank or unknown status counts as Pending.',
   };
 
-  // ── Year-on-year ──
-  const prevYear = previousAcademicYear(year);
-  const prevConfirmed = prevYear ? all.filter((s) => s.academicYear === prevYear && isConfirmedActive(s)) : [];
-  const yoy: SummaryTable = {
+  // ── Year-on-year (single year only) ──
+  const prevYear = year ? previousAcademicYear(year) : null;
+  const yoy: SummaryTable | null = year ? {
     title: `Confirmed students — ${prevYear ?? 'previous year'} vs ${year}`,
     columns: ['Year', 'Course', prevYear ?? 'Previous', year, 'Change', 'Change %'],
     rows: (() => {
@@ -198,7 +313,7 @@ export function buildSummaryTabs(all: Student[], year: AcademicYear): SummaryTab
       return rows;
     })(),
     note: prevConfirmed.length === 0 ? `No confirmed students recorded for ${prevYear ?? 'the previous year'}.` : undefined,
-  };
+  } : null;
 
   // ── Profile ──
   const withSslc = confirmed.filter((s) => sslcPercent(s) !== null);
@@ -231,27 +346,45 @@ export function buildSummaryTabs(all: Student[], year: AcademicYear): SummaryTab
 
   return [
     { id: 'overview', label: 'Overview', tables: [overview] },
+    { id: 'admtype', label: 'Adm Type', tables: [admType] },
+    { id: 'category', label: 'Category', tables: [category] },
+    { id: 'catgender', label: 'Cat & Gender', tables: [catGender] },
+    { id: 'yeargender', label: 'Year & Gender', tables: [yearGender] },
+    { id: 'datewise', label: 'Date-wise', tables: [dateWise] },
     { id: 'status', label: 'Status', tables: [status] },
-    { id: 'yoy', label: 'Year-on-year', tables: [yoy] },
+    ...(yoy ? [{ id: 'yoy', label: 'Year-on-year', tables: [yoy] }] : []),
     profile,
   ];
 }
 
 /** One workbook: a sheet per tab, its tables stacked with a title row and a gap. */
-export async function exportSummaryWorkbook(tabs: SummaryTab[], year: string): Promise<void> {
+export async function exportSummaryWorkbook(tabs: SummaryTab[], scope: string, filterLabel = ''): Promise<void> {
   const XLSX = await loadXlsx();
   const wb = XLSX.utils.book_new();
+  const heading = `SMP Admission Summary ${scope}${filterLabel ? ` (${filterLabel})` : ''}`;
   for (const tab of tabs) {
-    const aoa: Cell[][] = [[`SMP Admission Summary ${year} — ${tab.label}`], []];
+    const aoa: Cell[][] = [[`${heading} — ${tab.label}`], []];
+    const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
     for (const t of tab.tables) {
-      aoa.push([t.title], t.columns, ...t.rows.map((r) => r.cells));
+      aoa.push([t.title]);
+      if (t.groups) {
+        const row: Cell[] = [];
+        for (const g of t.groups) {
+          if (g.span > 1) merges.push({ s: { r: aoa.length, c: row.length }, e: { r: aoa.length, c: row.length + g.span - 1 } });
+          row.push(g.label, ...Array<Cell>(g.span - 1).fill(''));
+        }
+        aoa.push(row);
+      }
+      aoa.push(t.columns, ...t.rows.map((r) => r.cells));
       if (t.note) aoa.push([t.note]);
       aoa.push([]);
     }
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    if (merges.length) ws['!merges'] = merges;
     const widest = Math.max(...tab.tables.map((t) => t.columns.length));
-    ws['!cols'] = Array.from({ length: widest }, (_, i) => ({ wch: i < 2 ? 16 : 12 }));
-    XLSX.utils.book_append_sheet(wb, ws, tab.label.slice(0, 31));
+    ws['!cols'] = Array.from({ length: widest }, (_, i) => ({ wch: i < 2 ? 16 : 10 }));
+    // Sheet names can't contain : \ / ? * [ ]
+    XLSX.utils.book_append_sheet(wb, ws, tab.label.replace(/[:\\/?*[\]]/g, '-').slice(0, 31));
   }
-  XLSX.writeFile(wb, `SMP_Summary_${year}.xlsx`);
+  XLSX.writeFile(wb, `SMP_Summary_${scope.replace(/\s+/g, '_')}.xlsx`);
 }

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { buildSummaryTabs, exportSummaryWorkbook, type SummaryTable } from '../../utils/summaryReport';
-import type { AcademicYear, Student } from '../../types';
+import { buildSummaryTabs, exportSummaryWorkbook, type SummaryInput, type SummaryTable } from '../../utils/summaryReport';
 
-// ─── Dashboard Summary — tabbed report (Overview / Status / Year-on-year / Profile) ──
-// Tables come from buildSummaryTabs(); the same model feeds the PDF (current tab)
-// and Excel (every tab) exports.
+// ─── Dashboard Summary — tabbed report ───────────────────────────────────────
+// Overview · Adm Type · Category · Cat & Gender · Year & Gender · Date-wise ·
+// Status · Year-on-year · Profile. Scoped to the Dashboard filters (passed in
+// pre-filtered). Tables come from buildSummaryTabs(); the same model feeds the
+// PDF (current tab) and Excel (every tab) exports.
 
 const TAB_KEY = 'smp_summary_tab';
 
@@ -22,17 +23,33 @@ function readTab(): string {
 function SummaryTableView({ table }: { table: SummaryTable }) {
   // "Type Total" / "Gender Total" style columns read as totals within a row
   const totalCols = new Set(table.columns.flatMap((h, i) => (i > 1 && /total$/i.test(h) ? [i] : [])));
+  const dense = table.columns.length > 14; // e.g. Cat & Gender's 21 columns
+  const px = dense ? 'px-1.5' : 'px-2';
   return (
     <div className="min-w-0">
       <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-[0.8px]" style={{ color: INK }}>{table.title}</p>
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: SOFT }}>
         <table className="w-full border-collapse text-[12px]">
           <thead>
+            {table.groups && (
+              <tr style={{ background: TINT }}>
+                {table.groups.map((g, gi) => (
+                  <th
+                    key={gi}
+                    colSpan={g.span}
+                    className={`${px} pt-1 pb-0 text-center font-medium whitespace-nowrap uppercase tracking-wide text-[10px] ${gi > 0 ? 'border-l' : ''}`}
+                    style={{ color: INK, borderColor: SOFT }}
+                  >
+                    {g.label}
+                  </th>
+                ))}
+              </tr>
+            )}
             <tr className="border-b" style={{ borderColor: LINE, background: TINT }}>
               {table.columns.map((h, i) => (
                 <th
                   key={h + i}
-                  className={`${totalCols.has(i) ? 'bg-[#E1F6EE]' : ''} px-2 py-1 font-medium whitespace-nowrap uppercase tracking-wide text-[10px] ${i < 2 ? 'text-left' : 'text-right'}`}
+                  className={`${totalCols.has(i) ? 'bg-[#E1F6EE]' : ''} ${px} py-1 font-medium whitespace-nowrap uppercase tracking-wide text-[10px] ${i < 2 ? 'text-left' : 'text-right'}`}
                   style={{ color: INK }}
                 >
                   {h}
@@ -44,18 +61,18 @@ function SummaryTableView({ table }: { table: SummaryTable }) {
             {table.rows.map((r, ri) => {
               const style =
                 r.kind === 'grand' ? { background: '#ECEFFD', color: '#3F4BB8' }
-                : r.kind === 'subtotal' ? { background: `${TINT}cc`, color: INK }
+                : r.kind === 'subtotal' || r.kind === 'share' ? { background: `${TINT}cc`, color: INK }
                 : undefined;
               return (
                 <tr
                   key={ri}
-                  className={r.kind === 'row' ? 'border-b border-gray-100 hover:bg-[#EEFAF6]/40 transition-colors' : 'font-medium border-y'}
-                  style={{ ...style, borderColor: r.kind === 'grand' ? '#CDD4F7' : r.kind === 'subtotal' ? SOFT : undefined }}
+                  className={r.kind === 'row' ? 'border-b border-gray-100 hover:bg-[#EEFAF6]/40 transition-colors' : `font-medium border-y ${r.kind === 'share' ? 'italic' : ''}`}
+                  style={{ ...style, borderColor: r.kind === 'grand' ? '#CDD4F7' : r.kind !== 'row' ? SOFT : undefined }}
                 >
                   {r.cells.map((c, ci) => (
                     <td
                       key={ci}
-                      className={`px-2 py-[3px] whitespace-nowrap ${ci < 2 ? 'text-left' : 'text-right tabular-nums'} ${
+                      className={`${px} py-[3px] whitespace-nowrap ${ci < 2 ? 'text-left' : 'text-right tabular-nums'} ${
                         r.kind === 'row' ? (ci === 0 ? 'text-gray-400 text-[11.5px]' : 'text-gray-700') : ''
                       } ${r.kind === 'row' && (ci === 1 || totalCols.has(ci)) ? 'font-medium' : ''}`}
                     >
@@ -73,9 +90,17 @@ function SummaryTableView({ table }: { table: SummaryTable }) {
   );
 }
 
-export function SummaryModal({ students, year, onClose }: { students: Student[]; year: AcademicYear; onClose: () => void }) {
-  const tabs = useMemo(() => buildSummaryTabs(students, year), [students, year]);
-  const [tabId, setTabId] = useState(readTab);
+export function SummaryModal({ input, filterLabel, initialTab, onClose }: {
+  input: SummaryInput;
+  /** Active Dashboard filters, e.g. "CE · 1ST YEAR" ('' when none). */
+  filterLabel: string;
+  /** Open on this tab (stats-pill shortcut); otherwise the last-used tab. */
+  initialTab?: string;
+  onClose: () => void;
+}) {
+  const tabs = useMemo(() => buildSummaryTabs(input), [input]);
+  const scope = input.year ?? 'All Years';
+  const [tabId, setTabId] = useState(() => initialTab ?? readTab());
   const tab = tabs.find((t) => t.id === tabId) ?? tabs[0];
   const [busy, setBusy] = useState<'pdf' | 'xlsx' | null>(null);
 
@@ -88,12 +113,12 @@ export function SummaryModal({ students, year, onClose }: { students: Student[];
     setBusy('pdf');
     try {
       const m = await import('../../utils/dashboardReportPdf');
-      m.exportSummaryTabPdf(tab, year, 'emerald');
+      m.exportSummaryTabPdf(tab, scope, 'emerald', filterLabel);
     } finally { setBusy(null); }
   }
   async function exportXlsx() {
     setBusy('xlsx');
-    try { await exportSummaryWorkbook(tabs, year); } finally { setBusy(null); }
+    try { await exportSummaryWorkbook(tabs, scope, filterLabel); } finally { setBusy(null); }
   }
 
   const multi = tab.tables.length > 1;
@@ -111,7 +136,16 @@ export function SummaryModal({ students, year, onClose }: { students: Student[];
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="w-1 h-4 rounded-full shrink-0 bg-[#34C494]" />
             <p className="text-xs font-medium uppercase tracking-widest truncate" style={{ color: '#0B825A' }}>Summary</p>
-            <span className="rounded-full border bg-white/70 px-2 py-[2px] text-[10.5px] font-medium tabular-nums" style={{ borderColor: LINE, color: INK }}>{year}</span>
+            <span className="shrink-0 rounded-full border bg-white/70 px-2 py-[2px] text-[10.5px] font-medium tabular-nums" style={{ borderColor: LINE, color: INK }}>{scope}</span>
+            {filterLabel && (
+              <span
+                className="min-w-0 truncate rounded-full border px-2 py-[2px] text-[10.5px] font-medium"
+                style={{ borderColor: '#F5C77E', background: '#FFF8EB', color: '#9A5B00' }}
+                title={`Filtered by the Dashboard filters: ${filterLabel}`}
+              >
+                Filtered · {filterLabel}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={() => void exportPdf()} disabled={busy !== null} className={actionCls} style={{ color: ACCENT }} title={`PDF of the ${tab.label} tab`}>

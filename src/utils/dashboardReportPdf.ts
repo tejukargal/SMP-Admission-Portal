@@ -545,27 +545,34 @@ export function exportFirstYearSeatsReport(
 type JsPDFWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
 const PT_TO_MM = 0.3528;
-const FIT_FONTS = [9.5, 9, 8.5, 8, 7.5];
+// Fit attempts in order: normal row padding first (9.5 → 7.5pt), then tighter
+// padding for long tables (e.g. Date-wise) — the font never drops below 7.5pt.
+const FIT_STEPS: { font: number; k: number }[] = [
+  ...[9.5, 9, 8.5, 8, 7.5].map((font) => ({ font, k: 0.21 })),
+  ...[8, 7.5].map((font) => ({ font, k: 0.11 })),
+];
 const COL_GAP = 8;
 const TITLE_H = 4.5;   // table title line
 const NOTE_H = 3.5;    // italic note line
 const TABLE_GAP = 4;   // space after each table
 const FOOTER_SPACE = 9;
 
-const fitPad = (font: number) => {
-  const v = +(font * 0.21).toFixed(2);
+/** Vertical cell padding = font × k (mm). */
+const fitPad = (font: number, k: number) => {
+  const v = +(font * k).toFixed(2);
   return { top: v, right: 2.6, bottom: v, left: 2.6 };
 };
 /** Approximate autoTable row height for a font size (single-line cells). */
-const rowHeight = (font: number) => font * PT_TO_MM * 1.15 + fitPad(font).top * 2;
-const tableHeight = (t: SummaryTable, font: number) =>
-  TITLE_H + (t.rows.length + 1) * rowHeight(font) + (t.note ? NOTE_H : 0) + TABLE_GAP;
+const rowHeight = (font: number, k: number) => font * PT_TO_MM * 1.15 + fitPad(font, k).top * 2;
+const headRows = (t: SummaryTable) => (t.groups ? 2 : 1);
+const tableHeight = (t: SummaryTable, font: number, k: number) =>
+  TITLE_H + (t.rows.length + headRows(t)) * rowHeight(font, k) + (t.note ? NOTE_H : 0) + TABLE_GAP;
 
 /** Balance tables across columns (tallest first into the shorter column), then
  *  keep each column's tables in their original order. */
-function packColumns(tables: SummaryTable[], font: number, cols: number): { items: SummaryTable[]; height: number }[] {
+function packColumns(tables: SummaryTable[], font: number, k: number, cols: number): { items: SummaryTable[]; height: number }[] {
   const out = Array.from({ length: cols }, () => ({ idx: [] as number[], height: 0 }));
-  const byHeight = tables.map((t, i) => ({ i, h: tableHeight(t, font) })).sort((a, b) => b.h - a.h);
+  const byHeight = tables.map((t, i) => ({ i, h: tableHeight(t, font, k) })).sort((a, b) => b.h - a.h);
   for (const { i, h } of byHeight) {
     const target = out.reduce((a, b) => (b.height < a.height ? b : a));
     target.idx.push(i);
@@ -605,7 +612,8 @@ function compactHeader(doc: jsPDF, title: string, theme: Theme): number {
   return 20;
 }
 
-export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, themeName: ThemeName = 'emerald'): void {
+/** @param scope academic year or "All Years"; @param filterLabel active Dashboard filters, if any */
+export function exportSummaryTabPdf(tab: SummaryTab, scope: string, themeName: ThemeName = 'emerald', filterLabel = ''): void {
   const theme: Theme = THEMES[themeName];
   const multi = tab.tables.length > 1;
   const widest = Math.max(...tab.tables.map((t) => t.columns.length));
@@ -613,14 +621,15 @@ export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, theme
   const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const top = compactHeader(doc, `SMP Admission Summary ${academicYear} · ${tab.label}`, theme);
+  const top = compactHeader(doc, `SMP Admission Summary ${scope}${filterLabel ? ` (${filterLabel})` : ''} · ${tab.label}`, theme);
   const avail = H - top - FOOTER_SPACE;
   const cols = multi ? 2 : 1;
 
-  // Largest font whose layout fits one page; otherwise the smallest and let autoTable paginate.
-  const font = FIT_FONTS.find((f) => Math.max(...packColumns(tab.tables, f, cols).map((c) => c.height)) <= avail)
-    ?? FIT_FONTS[FIT_FONTS.length - 1];
-  const pad = fitPad(font);
+  // First (largest / roomiest) step whose layout fits one page; otherwise the last
+  // step and let autoTable paginate (header repeats on each page).
+  const { font, k } = FIT_STEPS.find((st) => Math.max(...packColumns(tab.tables, st.font, st.k, cols).map((c) => c.height)) <= avail)
+    ?? FIT_STEPS[FIT_STEPS.length - 1];
+  const pad = fitPad(font, k);
   const colW = (W - MARGIN * 2 - COL_GAP * (cols - 1)) / cols;
 
   const drawTable = (t: SummaryTable, x: number, y: number): number => {
@@ -630,12 +639,14 @@ export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, theme
     doc.text(t.title, x, y + 3);
 
     const grandIdx = t.rows.findIndex((r) => r.kind === 'grand');
-    const subtotalRows = t.rows.flatMap((r, i) => (r.kind === 'subtotal' ? [i] : []));
+    // Share % rows get the same tinted styling as subtotals
+    const subtotalRows = t.rows.flatMap((r, i) => (r.kind === 'subtotal' || r.kind === 'share' ? [i] : []));
+    const groupRow = t.groups?.map((g) => ({ content: g.label, colSpan: g.span, styles: { halign: 'center' as const } }));
     autoTable(doc, {
       startY: y + TITLE_H,
       margin: { left: x, right: W - x - colW, top: 12, bottom: FOOTER_SPACE },
       tableWidth: colW,
-      head: [t.columns],
+      head: groupRow ? [groupRow, t.columns] : [t.columns],
       body: t.rows.map((r) => r.cells),
       headStyles: { ...headStyles(theme), fontSize: font, cellPadding: pad, halign: 'center' },
       bodyStyles: { ...bodyStyles(theme), fontSize: font, cellPadding: pad, halign: 'center' },
@@ -655,12 +666,12 @@ export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, theme
   };
 
   if (multi) {
-    const columns = packColumns(tab.tables, font, cols);
+    const columns = packColumns(tab.tables, font, k, cols);
     columns.forEach((c, ci) => {
       const x = MARGIN + ci * (colW + COL_GAP);
       let y = top;
       for (const t of c.items) {
-        if (y + tableHeight(t, font) > H - FOOTER_SPACE && y > top) {
+        if (y + tableHeight(t, font, k) > H - FOOTER_SPACE && y > top) {
           // Rare overflow (very long tables): continue this column on a new page
           doc.addPage();
           y = 14;
@@ -674,6 +685,6 @@ export function exportSummaryTabPdf(tab: SummaryTab, academicYear: string, theme
     for (const t of tab.tables) y = drawTable(t, MARGIN, y);
   }
 
-  addFooters(doc, academicYear, `Summary — ${tab.label}`);
+  addFooters(doc, scope, `Summary — ${tab.label}`);
   doc.save(`SMP_Summary_${tab.label.replace(/[^A-Za-z0-9]+/g, '_')}_${dateStr().replace(/-/g, '_')}.pdf`);
 }
