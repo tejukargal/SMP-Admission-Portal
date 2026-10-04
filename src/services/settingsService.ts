@@ -1,6 +1,7 @@
 import {
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -31,14 +32,38 @@ export async function getSettings(): Promise<AppSettings | null> {
     return null;
   }
 
-  const data = snap.data();
-  cachedSettings = {
-    id: 'app_settings',
-    currentAcademicYear: data['currentAcademicYear'] as AcademicYear,
-    updatedAt: data['updatedAt'] ?? new Date().toISOString(),
-  };
+  cachedSettings = toSettings(snap.data());
   cacheTimestamp = now;
   return cachedSettings;
+}
+
+function toSettings(data: Record<string, unknown>): AppSettings {
+  return {
+    id: 'app_settings',
+    currentAcademicYear: data['currentAcademicYear'] as AcademicYear,
+    updatedAt: (data['updatedAt'] as string | undefined) ?? new Date().toISOString(),
+  };
+}
+
+/**
+ * Live listener on the settings doc. Keeps the module cache in sync so a year
+ * change made in Settings (this tab, another tab or another device) reaches
+ * every consumer immediately instead of waiting out the cache TTL.
+ */
+export function subscribeSettings(
+  onChange: (settings: AppSettings | null) => void,
+  onError: (err: Error) => void,
+): () => void {
+  const ref = doc(db, 'settings', SETTINGS_DOC_ID);
+  return onSnapshot(
+    ref,
+    (snap) => {
+      cachedSettings = snap.exists() ? toSettings(snap.data()) : null;
+      cacheTimestamp = Date.now();
+      onChange(cachedSettings);
+    },
+    onError,
+  );
 }
 
 export async function saveSettings(currentAcademicYear: AcademicYear): Promise<void> {

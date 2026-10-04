@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { getCachedSettings } from '../services/settingsService';
 import { useSettings } from './SettingsContext';
 import type { Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
@@ -103,16 +103,21 @@ export function FiltersProvider({ children }: { children: ReactNode }) {
   const [studentsFilters, setStudents] = useState<StudentsFilters>(defaultStudents);
   const [wpFilters, setWp] = useState<WPFilters>(defaultWp);
 
-  // When settings load (or change), apply the current academic year as the
-  // default if no year filter has been selected yet.
+  // When settings load, apply the current academic year if no year filter has
+  // been selected yet. When the current academic year itself changes (e.g.
+  // 2026-27 → 2024-25 in Settings), switch the Dashboard to the new year —
+  // otherwise it keeps showing the previous year's statistics.
   const currentAcademicYear = settings?.currentAcademicYear;
-  useEffect(() => {
-    if (currentAcademicYear) {
-      setDashboard((prev) =>
-        prev.academicYearFilter ? prev : { ...prev, academicYearFilter: currentAcademicYear }
-      );
-    }
-  }, [currentAcademicYear]);
+  const [appliedYear, setAppliedYear] = useState<AcademicYear | undefined>(currentAcademicYear);
+  if (currentAcademicYear && currentAcademicYear !== appliedYear) {
+    const yearChanged = appliedYear !== undefined;
+    setAppliedYear(currentAcademicYear);
+    setDashboard((prev) =>
+      prev.academicYearFilter && !yearChanged
+        ? prev
+        : { ...prev, academicYearFilter: currentAcademicYear }
+    );
+  }
 
   function setDashboardFilters(patch: Partial<DashboardFilters>) {
     setDashboard((prev) => ({ ...prev, ...patch }));

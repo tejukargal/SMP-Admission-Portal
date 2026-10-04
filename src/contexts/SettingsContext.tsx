@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getSettings, getCachedSettings } from '../services/settingsService';
+import { subscribeSettings, getCachedSettings } from '../services/settingsService';
 import { useAuth } from './AuthContext';
 import type { AppSettings } from '../types';
 
@@ -35,22 +35,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (!getCachedSettings()) setLoading(true);
     setError(null);
 
-    getSettings()
-      .then((s) => {
+    // Live listener so a change to the academic year (from this tab, another
+    // tab or another device) propagates to every page without a reload.
+    const unsubscribe = subscribeSettings(
+      (s) => {
         if (!cancelled) {
           setSettings(s);
           setLoading(false);
         }
-      })
-      .catch((err: unknown) => {
+      },
+      (err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load settings');
+          setError(err.message || 'Failed to load settings');
           setLoading(false);
         }
-      });
+      },
+    );
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [tick]);
 

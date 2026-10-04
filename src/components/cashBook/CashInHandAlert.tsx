@@ -14,7 +14,8 @@ function tones(overdue: boolean, clear: boolean) {
 
 /** Cash-in-hand reminder.
  *  - `banner`: single line for the top of Collect Fee (hidden when nothing is pending).
- *  - `card`:   Dashboard card with per-account breakdown (also shows the set-up prompt). */
+ *  - `card`:   Dashboard card with per-account breakdown (also shows the set-up prompt);
+ *              hidden when no cash is pending and there are no deposit mismatches. */
 export function CashInHandAlert({ variant }: { variant: 'banner' | 'card' }) {
   const { enabled, configured, summary, loading } = useCashInHand();
   const navigate = useNavigate();
@@ -63,7 +64,9 @@ export function CashInHandAlert({ variant }: { variant: 'banner' | 'card' }) {
     );
   }
 
-  // ── Dashboard card ──
+  // ── Dashboard card ── hidden when there is no cash pending (Nil / ₹0), unless
+  // a deposit mismatch still needs attention.
+  if (configured && clear) return null;
   return (
     <div className="rounded-[18px] border bg-white overflow-hidden" style={{ borderColor: t.border }}>
       <div className="flex flex-wrap items-center gap-2 px-4 py-3" style={{ background: t.bg }}>
@@ -77,7 +80,6 @@ export function CashInHandAlert({ variant }: { variant: 'banner' | 'card' }) {
             {overdue ? `· Overdue — held ${summary.daysHeld} days` : summary.daysHeld > 0 ? `· held ${summary.daysHeld} day${summary.daysHeld === 1 ? '' : 's'}` : '· collected today'}
           </span>
         )}
-        {configured && clear && <span className="text-[11.5px] font-medium" style={{ color: t.ink }}>· All cash deposited to bank</span>}
         <button
           type="button"
           onClick={go}
