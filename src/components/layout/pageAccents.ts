@@ -23,6 +23,9 @@ const AMBER = { accent: '#E08A00', ink: '#9A5B00', washFrom: '#FFF7EA', washTo: 
 const CYAN = { accent: '#0891B2', ink: '#0E6A85', washFrom: '#EFF8FB', washTo: '#E6F4F8' };
 const SLATE = { accent: '#3B5BA9', ink: '#2B437F', washFrom: '#F2F5FB', washTo: '#EAEFF8' };
 
+/** Dashboard search mode borrows the Student Messages cyan (set via AccentOverrideContext). */
+export const SEARCH_ACCENT: PageAccent = { label: 'Student Search', ...CYAN };
+
 export const NEUTRAL_ACCENT: PageAccent = {
   label: 'SMP Admissions', accent: '#64748B', ink: '#334155', washFrom: '#F6F8FB', washTo: '#F1F4F8',
 };

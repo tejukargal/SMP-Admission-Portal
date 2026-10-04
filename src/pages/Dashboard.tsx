@@ -38,9 +38,11 @@ import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardT
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
 import { SearchResults, type StudentGroup, type FeeStatus, type NextEnroll } from '../components/dashboard/SearchResults';
 import type { DtekCircular } from '../services/dtekNewsService';
+import { useAccentOverride } from '../components/layout/AccentOverrideContext';
+import { SEARCH_ACCENT } from '../components/layout/pageAccents';
 import {
   PAGE_BG, CARD, OUTLINE_PILL_BTN, ICON_PILL_BTN, EYEBROW, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER,
-  FAINT, AMBER, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
+  FAINT, AMBER, accentVars, V, mix, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
   COURSE_HEX, YEAR_HEX, ADM_HEX, BOY_HEX, GIRL_HEX,
 } from '../components/dashboard/dashTokens';
 
@@ -348,6 +350,30 @@ export function Dashboard() {
   }
 
   const isSearchMode = searchTerm.trim().length > 0;
+
+  // Search mode repaints the title bar in the Student Messages cyan (this page's own
+  // chrome follows via the --dk-* vars on the root). Cleared on exit / unmount.
+  const { setOverride } = useAccentOverride();
+  useEffect(() => {
+    setOverride(isSearchMode ? SEARCH_ACCENT : null);
+  }, [isSearchMode, setOverride]);
+  useEffect(() => () => setOverride(null), [setOverride]);
+
+  // Sticky toolbar: true once it has pinned to the top of the scroller (top: -1rem).
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarStuck, setToolbarStuck] = useState(false);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    const scroller = el?.closest('main');
+    if (!el || !scroller) return;
+    const check = () => {
+      const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      setToolbarStuck(offset <= -15);
+    };
+    check();
+    scroller.addEventListener('scroll', check, { passive: true });
+    return () => scroller.removeEventListener('scroll', check);
+  }, [loading]);
 
   // Search results paging + keyboard cursor — both reset whenever the query changes.
   const [visibleCount, setVisibleCount] = useState(SEARCH_PAGE_SIZE);
@@ -1290,7 +1316,20 @@ const [barsReady, setBarsReady] = useState(false);
 
   return (
     <>
-    <div className="font-wp -m-4 p-4 min-h-[calc(100%+2rem)] flex flex-col gap-3" style={{ background: PAGE_BG, animation: 'page-enter 0.22s ease-out' }}>
+    <div
+      className="dash-accent font-wp relative isolate -m-4 p-4 min-h-[calc(100%+2rem)] flex flex-col gap-3"
+      style={{
+        ...accentVars(isSearchMode ? 'search' : 'peri'),
+        background: 'linear-gradient(160deg,var(--dk-bg-from) 0%,#FCFCFF 45%,var(--dk-bg-to) 100%)',
+        animation: 'page-enter 0.22s ease-out',
+      }}
+    >
+      {/* "Bulb" glow — blooms from the search box when search starts, fades on clear. */}
+      <span
+        aria-hidden
+        className={`dash-bloom pointer-events-none absolute inset-0 -z-10 ${isSearchMode ? 'on' : ''}`}
+        style={{ background: `radial-gradient(900px 420px at 140px 90px, ${mix(V.acc, 22)} 0%, ${mix(V.acc, 8)} 45%, transparent 75%)` }}
+      />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between gap-4 flex-wrap">
@@ -1298,11 +1337,11 @@ const [barsReady, setBarsReady] = useState(false);
           <div className="min-w-0">
             <p className={EYEBROW}>SMP Admissions · {greeting}</p>
             <div className="mt-1.5 flex items-center gap-2.5">
-              <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: PERI_INK }}>Dashboard</h2>
+              <h2 className="text-[22px] font-bold leading-none tracking-[-0.3px]" style={{ color: V.ink }}>Dashboard</h2>
               {settings?.currentAcademicYear && (
                 <span
                   className="rounded-full border bg-white px-2.5 py-[4px] text-[10.5px] font-medium leading-none tabular-nums"
-                  style={{ borderColor: `${PERI}66`, color: PERI_INK }}
+                  style={{ borderColor: mix(V.acc, 40), color: V.ink }}
                 >
                   {settings.currentAcademicYear}
                 </span>
@@ -1312,14 +1351,14 @@ const [barsReady, setBarsReady] = useState(false);
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <div className="rounded-[10px] border px-3.5 py-1 flex flex-col items-center min-w-[92px]" style={{ borderColor: `${PERI}33`, background: '#F0F2FE' }}>
-            <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] text-[#7A85C9] leading-tight">{clockDate}</span>
-            <span className="text-[16px] font-medium leading-tight tabular-nums" style={{ color: PERI_INK }}>{clockTime}</span>
+          <div className="rounded-[10px] border px-3.5 py-1 flex flex-col items-center min-w-[92px]" style={{ borderColor: mix(V.acc, 20), background: V.tile }}>
+            <span className="text-[8.5px] font-medium uppercase tracking-[0.4px] leading-tight" style={{ color: `color-mix(in srgb, ${V.ink} 65%, white)` }}>{clockDate}</span>
+            <span className="text-[16px] font-medium leading-tight tabular-nums" style={{ color: V.ink }}>{clockTime}</span>
           </div>
           <button
             onClick={() => void navigate('/enroll')}
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-medium text-white transition-[filter] hover:brightness-95 cursor-pointer"
-            style={{ background: `linear-gradient(135deg,${PERI},${PERI_INK})`, boxShadow: `0 3px 10px ${PERI}40` }}
+            style={{ background: `linear-gradient(135deg,${V.acc},${V.ink})`, boxShadow: `0 3px 10px ${mix(V.acc, 25)}` }}
             title="Enroll Student"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
@@ -1331,13 +1370,20 @@ const [barsReady, setBarsReady] = useState(false);
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div className="sticky -top-4 z-20 -mx-4 -mt-3 px-4 pt-6 pb-1" style={{ background: 'linear-gradient(180deg,#F8F9FF 0%,#F8F9FF 80%,rgba(248,249,255,0) 100%)' }}>
+      <div ref={toolbarRef} className="sticky -top-4 z-20 -mx-4 -mt-3 px-4 pt-6 pb-1">
+       {/* Backdrop that hides content scrolling under the toolbar — only once it's stuck.
+           At rest it stays clear so the page gradient and search glow run on unbroken. */}
+       <span
+         aria-hidden
+         className="pointer-events-none absolute inset-0 -z-10 transition-opacity duration-200"
+         style={{ opacity: toolbarStuck ? 1 : 0, background: `linear-gradient(180deg,${V.tint} 0%,${V.tint} 80%,${mix(V.tint, 0)} 100%)` }}
+       />
        <div className={`${CARD} px-2.5 py-2`}>
         {/* Single row: search + inline filters + actions */}
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-60">
             {/* Search icon */}
-            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: PERI_INK }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: V.ink }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
             <input
@@ -1347,7 +1393,7 @@ const [barsReady, setBarsReady] = useState(false);
               onChange={(e) => setInputValue(e.target.value.toUpperCase())}
               onKeyDown={handleSearchKeyDown}
               onFocus={() => { const y = settings?.currentAcademicYear; if (y) void loadYearFeeData(y).catch(() => {}); }}
-              className={`w-full rounded-full border border-[#6B7CF6]/40 bg-[#F5F6FF] py-2 text-[14px] font-medium text-[#3F4BB8] placeholder:text-[#3F4BB8]/55 placeholder:font-normal placeholder:text-[12.5px] focus:outline-none focus:bg-white focus:border-[#6B7CF6] focus:ring-2 focus:ring-[#6B7CF6]/20 transition-all duration-150 pl-9 ${inputValue ? 'pr-8' : 'pr-3'}`}
+              className={`w-full rounded-full border border-(--dk-acc)/40 bg-(--dk-tint) py-2 text-[14px] font-medium text-(--dk-ink) placeholder:text-(--dk-ink)/55 placeholder:font-normal placeholder:text-[12.5px] focus:outline-none focus:bg-white focus:border-(--dk-acc) focus:ring-2 focus:ring-(--dk-acc)/20 transition-all duration-150 pl-9 ${inputValue ? 'pr-8' : 'pr-3'}`}
             />
             {inputValue && (
               <button
@@ -1365,7 +1411,7 @@ const [barsReady, setBarsReady] = useState(false);
 
           {hasActiveFilters && (
             <>
-              <span className="w-px h-5 shrink-0" style={{ background: PERI_BORDER }} />
+              <span className="w-px h-5 shrink-0" style={{ background: V.border }} />
               <button
                 onClick={clearFilters}
                 className="shrink-0 rounded-full border px-3 py-1.5 text-[11.5px] font-medium focus:outline-none focus:ring-2 focus:ring-[#D97706]/30 cursor-pointer transition-colors whitespace-nowrap hover:brightness-95"
@@ -1391,21 +1437,21 @@ const [barsReady, setBarsReady] = useState(false);
               <div className="overflow-hidden">
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar px-px py-0.5">
                   <FilterDropdown<Course | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={courseFilter}
                     onChange={(v) => setCourseFilter(v as Course | '')}
                     placeholder="Course"
                     options={COURSES.map((c) => ({ value: c, label: c }))}
                   />
                   <FilterDropdown<Year | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={yearFilter}
                     onChange={(v) => setYearFilter(v as Year | '')}
                     placeholder="Study Yr"
                     options={YEARS.map((yr) => ({ value: yr, label: yr }))}
                   />
                   <FilterDropdown<Gender | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={genderFilter}
                     onChange={(v) => setGenderFilter(v as Gender | '')}
                     placeholder="Gender"
@@ -1415,7 +1461,7 @@ const [barsReady, setBarsReady] = useState(false);
                     ]}
                   />
                   <FilterDropdown<Category | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={categoryFilter}
                     onChange={(v) => setCategoryFilter(v as Category | '')}
                     placeholder="Cat"
@@ -1431,7 +1477,7 @@ const [barsReady, setBarsReady] = useState(false);
                     ]}
                   />
                   <FilterDropdown<AdmType | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={admTypeFilter}
                     onChange={(v) => setAdmTypeFilter(v as AdmType | '')}
                     placeholder="Adm Type"
@@ -1443,7 +1489,7 @@ const [barsReady, setBarsReady] = useState(false);
                     ]}
                   />
                   <FilterDropdown<AdmCat | ''>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={admCatFilter}
                     onChange={(v) => setAdmCatFilter(v as AdmCat | '')}
                     placeholder="Adm Cat"
@@ -1454,7 +1500,7 @@ const [barsReady, setBarsReady] = useState(false);
                     ]}
                   />
                   <FilterDropdown<'' | 'CONFIRMED' | 'CANCELLED' | 'PENDING'>
-                    color="periwinkle"
+                    color={isSearchMode ? 'cyan' : 'periwinkle'}
                     value={admStatusFilter as '' | 'CONFIRMED' | 'CANCELLED' | 'PENDING'}
                     onChange={(v) => setAdmStatusFilter(v)}
                     placeholder="Status"
@@ -1521,8 +1567,8 @@ const [barsReady, setBarsReady] = useState(false);
               onClick={() => setShowChips((v) => { const next = !v; localStorage.setItem('smp_chips_visible', String(next)); return next; })}
               className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
                 showChips
-                  ? 'bg-[#6B7CF6]/10 border-[#6B7CF6]/50 text-[#3F4BB8]'
-                  : 'border-[#DADFFA] bg-white text-[#3F4BB8]/70 hover:bg-[#6B7CF6]/[0.06] hover:text-[#3F4BB8]'
+                  ? 'bg-(--dk-acc)/10 border-(--dk-acc)/50 text-(--dk-ink)'
+                  : 'border-(--dk-border) bg-white text-(--dk-ink)/70 hover:bg-(--dk-acc)/[0.06] hover:text-(--dk-ink)'
               }`}
               title="Toggle year chips"
             >
@@ -1539,8 +1585,8 @@ const [barsReady, setBarsReady] = useState(false);
               onClick={() => setShowStatsPills((v) => { const next = !v; localStorage.setItem('smp_statspills_visible', String(next)); return next; })}
               className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
                 showStatsPills
-                  ? 'bg-[#6B7CF6]/10 border-[#6B7CF6]/50 text-[#3F4BB8]'
-                  : 'border-[#DADFFA] bg-white text-[#3F4BB8]/70 hover:bg-[#6B7CF6]/[0.06] hover:text-[#3F4BB8]'
+                  ? 'bg-(--dk-acc)/10 border-(--dk-acc)/50 text-(--dk-ink)'
+                  : 'border-(--dk-border) bg-white text-(--dk-ink)/70 hover:bg-(--dk-acc)/[0.06] hover:text-(--dk-ink)'
               }`}
               title="Toggle stats tables"
             >
@@ -1557,8 +1603,8 @@ const [barsReady, setBarsReady] = useState(false);
             onClick={() => setShowFilters((v) => !v)}
             className={`shrink-0 w-[30px] h-[30px] flex items-center justify-center rounded-full border transition-colors cursor-pointer ${
               showFilters || hasNonSearchFilters
-                ? 'bg-[#6B7CF6]/10 border-[#6B7CF6]/50 text-[#3F4BB8]'
-                : 'border-[#DADFFA] bg-white text-[#3F4BB8]/70 hover:bg-[#6B7CF6]/[0.06] hover:text-[#3F4BB8]'
+                ? 'bg-(--dk-acc)/10 border-(--dk-acc)/50 text-(--dk-ink)'
+                : 'border-(--dk-border) bg-white text-(--dk-ink)/70 hover:bg-(--dk-acc)/[0.06] hover:text-(--dk-ink)'
             }`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1584,7 +1630,7 @@ const [barsReady, setBarsReady] = useState(false);
                 {/* Total */}
                 <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span className={EYEBROW}>Total</span>
-                  <span className="text-[14px] font-medium tabular-nums" style={{ color: PERI_INK }}>
+                  <span className="text-[14px] font-medium tabular-nums" style={{ color: V.ink }}>
                     <AnimNum value={confirmedActiveCount} />
                   </span>
                   {confirmedActiveCount < confirmedTotalCount && (
@@ -1597,18 +1643,18 @@ const [barsReady, setBarsReady] = useState(false);
                   <button
                     type="button"
                     onClick={() => scrollChips('left')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full border border-[#6B7CF6]/40 bg-white text-[#3F4BB8] hover:bg-[#F5F6FF] transition-colors cursor-pointer text-base leading-none select-none mx-0.5 disabled:opacity-35"
+                    className="w-6 h-6 flex items-center justify-center rounded-full border border-(--dk-acc)/40 bg-white text-(--dk-ink) hover:bg-(--dk-tint) transition-colors cursor-pointer text-base leading-none select-none mx-0.5 disabled:opacity-35"
                     aria-label="Scroll left"
                   >‹</button>
                   <button
                     type="button"
                     onClick={() => scrollChips('right')}
-                    className="w-6 h-6 flex items-center justify-center rounded-full border border-[#6B7CF6]/40 bg-white text-[#3F4BB8] hover:bg-[#F5F6FF] transition-colors cursor-pointer text-base leading-none select-none mx-0.5 disabled:opacity-35"
+                    className="w-6 h-6 flex items-center justify-center rounded-full border border-(--dk-acc)/40 bg-white text-(--dk-ink) hover:bg-(--dk-tint) transition-colors cursor-pointer text-base leading-none select-none mx-0.5 disabled:opacity-35"
                     aria-label="Scroll right"
                   >›</button>
                 </div>
 
-                <span className="w-px h-4 shrink-0" style={{ background: PERI_BORDER }} />
+                <span className="w-px h-4 shrink-0" style={{ background: V.border }} />
 
                 {/* Per-year chips — scrollable */}
                 <div ref={chipsScrollRef} className="chips-scroll flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
@@ -2405,45 +2451,45 @@ const [barsReady, setBarsReady] = useState(false);
         />
         <div
           ref={ctxMenuRef}
-          className="font-wp fixed z-50 bg-white border border-[#DADFFA] rounded-2xl overflow-hidden min-w-[220px]"
-          style={{ left: ctxMenu.x, top: ctxMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(63,75,184,0.14), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
+          className="font-wp fixed z-50 bg-white border border-(--dk-border) rounded-2xl overflow-hidden min-w-[220px]"
+          style={{ ...accentVars(isSearchMode ? 'search' : 'peri'), left: ctxMenu.x, top: ctxMenu.y, visibility: 'hidden', boxShadow: '0 12px 36px rgba(63,75,184,0.14), 0 2px 8px rgba(18,20,26,0.05)', animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)' }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Header */}
-          <div className="px-3 py-2 border-b border-[#DADFFA] bg-[#F5F6FF]">
-            <p className="text-[11.5px] font-medium text-[#3F4BB8] truncate">{ctxMenu.student.studentNameSSLC}</p>
+          <div className="px-3 py-2 border-b border-(--dk-border) bg-(--dk-tint)">
+            <p className="text-[11.5px] font-medium text-(--dk-ink) truncate">{ctxMenu.student.studentNameSSLC}</p>
             <p className="text-[9.5px] text-[#8A93A3] mt-0.5">
               {ctxMenu.student.course} · {ctxMenu.student.year} · {ctxMenu.student.academicYear}
-              {isWPStudent(ctxMenu.student) && <span className="font-semibold text-[#0F8B8D]"> · WP</span>}
+              {isWPStudent(ctxMenu.student) && <span className="font-semibold text-[#5B9A2F]"> · WP</span>}
             </p>
           </div>
           {/* Items */}
           <div className="py-1">
             {/* ── Navigation actions ── */}
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setFeeHistoryStudent(ctxMenu.student); setCtxMenu(null); }}
             >
-              <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
               </span>
               View Details
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setResultsStudent(ctxMenu.student); setCtxMenu(null); }}
             >
-              <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><path d="M6 5h12v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 13l2 2 4-4"/></svg>
               </span>
               View Results
             </button>
             {isAdmin && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { void navigate(`/enroll?edit=${ctxMenu.student.id}&from=dashboard`); setCtxMenu(null); }}
               >
-                <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </span>
                 Edit
@@ -2456,10 +2502,10 @@ const [barsReady, setBarsReady] = useState(false);
               if (!next) return null;
               return (
                 <button
-                  className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#3F4BB8] hover:bg-[#F5F6FF] flex items-center gap-2 transition-colors duration-100"
+                  className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-(--dk-ink) hover:bg-(--dk-tint) flex items-center gap-2 transition-colors duration-100"
                   onClick={() => { startReEnroll(next); setCtxMenu(null); }}
                 >
-                  <span className="w-[20px] h-[20px] rounded-[6px] bg-[#6B7CF6]/15 text-[#3F4BB8] flex items-center justify-center flex-shrink-0 group-hover:bg-[#6B7CF6]/25 transition-colors">
+                  <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-acc)/15 text-(--dk-ink) flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-acc)/25 transition-colors">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
                   </span>
                   {`Enroll for ${YEAR_LABEL[next.targetYear]} in ${next.targetAcademicYear}`}
@@ -2472,7 +2518,7 @@ const [barsReady, setBarsReady] = useState(false);
               if (feeStatus === 'no-dues') {
                 return (
                   <div className="flex items-center gap-2 px-3 py-[5px] text-[12px] font-medium text-[#8A93A3] cursor-default">
-                    <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#8A93A3] flex items-center justify-center flex-shrink-0">
+                    <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#8A93A3] flex items-center justify-center flex-shrink-0">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </span>
                     No Dues
@@ -2481,10 +2527,10 @@ const [barsReady, setBarsReady] = useState(false);
               }
               return (
                 <button
-                  className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                  className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
                   onClick={() => { setCollectFeeStudent(ctxMenu.student); setCtxMenu(null); }}
                 >
-                  <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                  <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                   </span>
                   {feeStatus === 'dues' ? 'Collect Dues' : 'Collect Fee'}
@@ -2492,52 +2538,52 @@ const [barsReady, setBarsReady] = useState(false);
               );
             })()}
             {/* ── Divider ── */}
-            <div className="my-1 mx-2 h-px bg-[#EBEEFB]" />
+            <div className="my-1 mx-2 h-px bg-(--dk-divider)" />
             {/* ── Certificate actions ── */}
             {isWPStudent(ctxMenu.student) && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { setAdmOrderStudent(ctxMenu.student); setCtxMenu(null); }}
               >
-                <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                 </span>
                 Admission Order
               </button>
             )}
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setStudyCertStudent(ctxMenu.student); setCtxMenu(null); }}
             >
-              <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               </span>
               Study Certificate
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
               onClick={() => { setTcStudent(ctxMenu.student); setCtxMenu(null); }}
             >
-              <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </span>
               Transfer Certificate
             </button>
             <button
-              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
               onClick={() => { generateTCApplication(ctxMenu.student); setCtxMenu(null); }}
             >
-              <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
               </span>
               TC Application
             </button>
             {ctxMenu.student.year === '3RD YEAR' && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { setPcStudent(ctxMenu.student); setCtxMenu(null); }}
               >
-                <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                 </span>
                 Provisional Certificate
@@ -2545,10 +2591,10 @@ const [barsReady, setBarsReady] = useState(false);
             )}
             {ctxMenu.student.year === '3RD YEAR' && (
               <button
-                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-[#F5F6FF] hover:text-[#3F4BB8] flex items-center gap-2 transition-colors duration-100"
+                className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
                 onClick={() => { setCccStudent(ctxMenu.student); setCtxMenu(null); }}
               >
-                <span className="w-[20px] h-[20px] rounded-[6px] bg-[#F0F2FE] text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-[#E4E8FD] group-hover:text-[#3F4BB8] transition-colors">
+                <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
                 </span>
                 Course Completion Certificate

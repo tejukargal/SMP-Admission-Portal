@@ -20,6 +20,15 @@ const COLOR_CLASSES = {
     selRow: 'text-[#0B6567] bg-[#EFF8F8]',
     font: 'font-wp',
   },
+  // Cyan — Student Messages accent (Dashboard search mode borrows it).
+  cyan: {
+    active: 'border-[#0891B2] bg-[#ECF7FA] text-[#0E6A85]',
+    idle: 'border-[#0891B2]/35 text-[#0E6A85] hover:border-[#0891B2]/60 hover:bg-[#F7FCFD]',
+    ring: 'focus:ring-[#0891B2]/40',
+    allRow: 'text-[#0E6A85] bg-[#ECF7FA]/60',
+    selRow: 'text-[#0E6A85] bg-[#ECF7FA]',
+    font: 'font-wp',
+  },
   // Plum — Results revamp (student-portal look, Outfit font).
   plum: {
     active: 'border-[#9333EA] bg-[#F6EEFD] text-[#6B21A8]',

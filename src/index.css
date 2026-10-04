@@ -159,6 +159,54 @@
   .header-shimmer { display: none; }
 }
 
+/* Title-bar glow flares once when a page overrides the accent (Dashboard search). */
+/* Opacity only — no transform/filter, so nothing gets re-rasterised mid-animation. */
+@keyframes header-bulb {
+  0%   { opacity: 0; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.header-bulb { animation: header-bulb 900ms ease-out both; will-change: opacity; }
+
+/* ── Dashboard accent (periwinkle ⇄ Student Messages cyan in search mode) ────
+   Registered so every colour that reads them crossfades when the mode flips.
+   Initial values are the periwinkle set, so anything outside .dash-accent is unchanged. */
+@property --dk-acc         { syntax: '<color>'; inherits: true; initial-value: #6B7CF6; }
+@property --dk-ink         { syntax: '<color>'; inherits: true; initial-value: #3F4BB8; }
+@property --dk-border      { syntax: '<color>'; inherits: true; initial-value: #DADFFA; }
+@property --dk-band        { syntax: '<color>'; inherits: true; initial-value: #ECEFFD; }
+@property --dk-band-border { syntax: '<color>'; inherits: true; initial-value: #CDD4F7; }
+@property --dk-tint        { syntax: '<color>'; inherits: true; initial-value: #F5F6FF; }
+@property --dk-tile        { syntax: '<color>'; inherits: true; initial-value: #F0F2FE; }
+@property --dk-divider     { syntax: '<color>'; inherits: true; initial-value: #EBEEFB; }
+@property --dk-bg-from     { syntax: '<color>'; inherits: true; initial-value: #F7F8FF; }
+@property --dk-bg-to       { syntax: '<color>'; inherits: true; initial-value: #F2F4FE; }
+.dash-accent {
+  --dk-ease: 450ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: --dk-acc var(--dk-ease), --dk-ink var(--dk-ease), --dk-border var(--dk-ease),
+    --dk-band var(--dk-ease), --dk-band-border var(--dk-ease), --dk-tint var(--dk-ease),
+    --dk-tile var(--dk-ease), --dk-divider var(--dk-ease), --dk-bg-from var(--dk-ease), --dk-bg-to var(--dk-ease);
+}
+/* "Bulb" glow behind the page: flares from the search box, then stays faintly lit
+   while searching; dropping .on fades it out. */
+@keyframes bulb-on {
+  0%   { opacity: 0; transform: scale(0.6); }
+  35%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.45; transform: scale(1); }
+}
+.dash-bloom {
+  opacity: 0;
+  transform-origin: 140px 90px;
+  transition: opacity 420ms ease-out;
+}
+.dash-bloom.on { animation: bulb-on 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-accent { transition: none; }
+  .header-bulb { display: none; }
+  .dash-bloom { transition: none; }
+  .dash-bloom.on { animation: none; opacity: 0.45; }
+}
+
 /* ── Sidebar (frosted shell) ───────────────────────────────────────────────
    Logo badge pops once on each leaf ⇄ college-logo swap while the faces blur-morph. */
 @keyframes sb-logo-pop {
@@ -401,8 +449,8 @@
 
 /* Periwinkle variant — Dashboard revamp */
 @keyframes row-ctx-pulse-peri {
-  0%, 100% { background-color: rgba(107, 124, 246, 0.07); }
-  50%      { background-color: rgba(107, 124, 246, 0.18); }
+  0%, 100% { background-color: color-mix(in srgb, var(--dk-acc) 7%, transparent); }
+  50%      { background-color: color-mix(in srgb, var(--dk-acc) 18%, transparent); }
 }
 /* ── Dashboard search results (profile cards + timeline) ─────────────────── */
 @keyframes sr-in {
@@ -432,8 +480,8 @@
 .sr-kbd {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 17px; padding: 0 5px;
-  border: 1px solid #DADFFA; border-bottom-width: 2px; border-radius: 5px;
-  background: #fff; color: #3F4BB8; font: inherit; font-size: 9.5px; line-height: 1;
+  border: 1px solid var(--dk-border); border-bottom-width: 2px; border-radius: 5px;
+  background: #fff; color: var(--dk-ink); font: inherit; font-size: 9.5px; line-height: 1;
 }
 @media (prefers-reduced-motion: reduce) {
   .sr-card, .sr-fade, .sr-pop { animation: none; }
@@ -442,7 +490,7 @@
 
 .row-ctx-active-peri {
   animation: row-ctx-pulse-peri 1.8s ease-in-out infinite;
-  background-color: rgba(107, 124, 246, 0.07);
+  background-color: color-mix(in srgb, var(--dk-acc) 7%, transparent);
 }
 
 

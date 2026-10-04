@@ -4,6 +4,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { useCashInHand } from '../../contexts/CashInHandContext';
 import { getPageAccent } from './pageAccents';
+import { useAccentOverride } from './AccentOverrideContext';
 
 // ── Title-bar tokens ─────────────────────────────────────────────────────────
 // Colours that follow the page live in the --hb-* custom properties (set on the
@@ -159,7 +160,9 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { logout } = useAuth();
   const { settings } = useSettings();
   const { pathname } = useLocation();
-  const page = getPageAccent(pathname);
+  // A page may temporarily repaint the bar (Dashboard search → teal); --hb-* crossfade it.
+  const { override } = useAccentOverride();
+  const page = override ?? getPageAccent(pathname);
   const [tick, setTick] = useState(0);
 
   // Re-keys the shimmer copy so a glossy sweep crosses the title every few seconds
@@ -172,6 +175,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   // The Dashboard keeps its pastel multi-colour title aurora; the bar itself uses its own accent
   const isDashboard = matchPath({ path: '/dashboard', end: false }, pathname) !== null;
+  const multiAurora = isDashboard && !override;
   const accentVars = {
     '--hb-acc': page.accent,
     '--hb-ink': page.ink,
@@ -195,6 +199,16 @@ export function Header({ onMenuClick }: HeaderProps) {
           className="absolute -top-12 -left-6 w-72 h-28 rounded-full blur-2xl"
           style={{ background: 'color-mix(in srgb, var(--hb-acc) 10%, transparent)' }}
         />
+        {/* "Bulb on" flare when an override switches on. A radial gradient animated on
+            opacity only — animating the blurred glow above (scale/filter) made the
+            browser re-rasterise it and showed as a pixelated band. */}
+        {override && (
+          <span
+            key={`bulb-${override.label}`}
+            className="header-bulb absolute -top-16 -left-10 w-[26rem] h-36"
+            style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--hb-acc) 22%, transparent), transparent)' }}
+          />
+        )}
         <span
           className="absolute -top-12 right-[6%] w-64 h-28 rounded-full blur-2xl"
           style={{ background: 'color-mix(in srgb, var(--hb-acc) 6%, transparent)' }}
@@ -267,7 +281,14 @@ export function Header({ onMenuClick }: HeaderProps) {
           aria-label="SMP Admissions"
           role="img"
         >
-          <span aria-hidden="true" className={isDashboard ? 'header-aurora' : 'header-aurora-accent'}>
+          {/* Both tints stay mounted and crossfade, so switching (e.g. Dashboard search)
+              fades the title between the multi-colour aurora and the accent tint. */}
+          <span aria-hidden="true" className="header-aurora transition-opacity duration-[450ms]" style={{ opacity: multiAurora ? 1 : 0 }}>
+            {TITLE_CHARS.map((ch, i) => (
+              <span key={i} className="inline-block">{ch}</span>
+            ))}
+          </span>
+          <span aria-hidden="true" className="header-aurora-accent absolute inset-0 transition-opacity duration-[450ms]" style={{ opacity: multiAurora ? 0 : 1 }}>
             {TITLE_CHARS.map((ch, i) => (
               <span key={i} className="inline-block">{ch}</span>
             ))}

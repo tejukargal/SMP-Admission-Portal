@@ -5,7 +5,7 @@ import {
 } from '@phosphor-icons/react';
 import type { Student, Gender, Year, AcademicYear } from '../../types';
 import {
-  CARD, pastel, PERI, PERI_INK, PERI_BORDER, PERI_BAND, PERI_BAND_BORDER, INK, MUTED, FAINT, PAID, DUE,
+  CARD, pastel, PERI, V, mix, pastelVar, INK, MUTED, FAINT,
   MINT, AMBER, CORAL, COURSE_HEX, YEAR_HEX, BOY_HEX, GIRL_HEX, SEARCH_PAGE_SIZE,
 } from './dashTokens';
 import { isWPStudent } from '../../utils/wpStudent';
@@ -44,10 +44,11 @@ const STATUS_HEX = (status: string) =>
 
 const pill = (c: string): CSSProperties => ({ ...pastel(c), borderWidth: 1 });
 
-// Working Professional (EXTERNAL) teal — same hue as the EXTERNAL pill in StudentDetailModal.
+// Working Professional (EXTERNAL) olive — the WP Students page accent, kept clear of the
+// cyan search-mode accent.
 // WP fee is tracked as manual counts, not feeRecords, so WP enrollments show this
 // badge in place of fee pills / dues.
-const WP_HEX = '#0F8B8D';
+const WP_HEX = '#5B9A2F';
 const WP_FEE_TITLE = 'Working Professional — fee tracked separately in WP Fee Distribution';
 
 /** First letters of the first two name words, skipping single-letter initials ("RAVI K M" → "RK"). */
@@ -89,9 +90,9 @@ function MatchHintChip({ hint }: { hint: MatchHint }) {
     <span
       title={`Matched on ${HINT_LABEL[hint.kind]}`}
       className="sr-pop inline-flex items-center gap-1 h-6 min-w-0 max-w-[260px] rounded-full border bg-white px-2 text-[10.5px] font-medium leading-none tabular-nums whitespace-nowrap"
-      style={{ borderColor: PERI_BORDER, color: MUTED }}
+      style={{ borderColor: V.border, color: MUTED }}
     >
-      <span className="flex shrink-0" style={{ color: PERI }}>
+      <span className="flex shrink-0" style={{ color: V.acc }}>
         {hint.kind === 'aadhaar' ? <IdentificationBadge size={11} weight="bold" /> : <Phone size={11} weight="bold" />}
       </span>
       <span className="shrink-0" style={{ color: FAINT }}>{HINT_LABEL[hint.kind]}</span>
@@ -119,12 +120,12 @@ function RegNoPill({ regNo }: { regNo: string }) {
       onClick={copy}
       onDoubleClick={(e) => e.stopPropagation()}
       title={copied ? 'Copied' : 'Register No — click to copy'}
-      className="shrink-0 inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[14px] font-semibold leading-none tabular-nums whitespace-nowrap cursor-copy hover:brightness-[0.97] transition-[filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/35"
-      style={{ ...pill(PERI), color: PERI_INK }}
+      className="shrink-0 inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[14px] font-semibold leading-none tabular-nums whitespace-nowrap cursor-copy hover:brightness-[0.97] transition-[filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-(--dk-acc)/35"
+      style={pastelVar()}
     >
       {copied
-        ? <Check size={13} weight="bold" className="sr-pop" style={{ color: PAID }} />
-        : <IdentificationCard size={14} weight="bold" style={{ color: PERI }} />}
+        ? <Check size={13} weight="bold" className="sr-pop" style={{ color: V.acc }} />
+        : <IdentificationCard size={14} weight="bold" style={{ color: V.acc }} />}
       {regNo}
     </button>
   );
@@ -142,7 +143,7 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
   if (due === undefined) return null;
   if (due === 'unavailable' || due === null) {
     return (
-      <span className="sr-pop inline-flex items-center h-7 rounded-full border bg-white px-3 text-[11px] font-medium" style={{ borderColor: PERI_BORDER, color: FAINT }}>
+      <span className="sr-pop inline-flex items-center h-7 rounded-full border bg-white px-3 text-[11px] font-medium" style={{ borderColor: V.border, color: FAINT }}>
         {due === null ? 'Fee structure not set' : 'Fee records unavailable'}
       </span>
     );
@@ -153,14 +154,14 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
       <span
         title="Total due across all enrollments"
         className="sr-pop inline-flex items-center justify-center min-w-[98px] h-7 rounded-full border px-2 text-[11px] font-semibold leading-none tabular-nums whitespace-nowrap cursor-default"
-        style={pill(DUE)}
+        style={pastelVar(V.ink, V.ink)}
       >
         ₹{due.toLocaleString('en-IN')} due
       </span>
     );
   }
   return (
-    <span className="sr-pop inline-flex items-center justify-center gap-1 w-[98px] h-7 rounded-full border text-[11px] font-medium" style={pill(PAID)}>
+    <span className="sr-pop inline-flex items-center justify-center gap-1 w-[98px] h-7 rounded-full border text-[11px] font-medium" style={pastelVar()}>
       <CheckCircle size={12} weight="fill" /> No Dues
     </span>
   );
@@ -171,7 +172,7 @@ const ROW_PILL =
   'inline-flex items-center justify-center w-[96px] h-7 rounded-full border text-[10.5px] font-medium leading-none tracking-[0.2px]';
 
 const ACTION_BTN =
-  'inline-flex items-center justify-center gap-1 rounded-full border bg-white h-7 text-[11px] font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/35';
+  'inline-flex items-center justify-center gap-1 rounded-full border bg-white h-7 text-[11px] font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-(--dk-acc)/35';
 
 function EnrollmentRow({
   s, isFirst, isLast, isCurrent, groupRegNo, isAdmin, feeStatus, due, ctxActive, onView, onEdit, onCollect, onContextMenu,
@@ -187,7 +188,7 @@ function EnrollmentRow({
   return (
     <div
       className={`group/row relative grid items-center gap-x-3 pl-9 pr-3 py-2 rounded-xl cursor-context-menu select-none transition-colors ${
-        ctxActive ? 'row-ctx-active-peri' : isCurrent ? 'bg-[#6B7CF6]/[0.045] hover:bg-[#F0F2FE]' : 'hover:bg-[#F5F6FF]'
+        ctxActive ? 'row-ctx-active-peri' : isCurrent ? 'bg-(--dk-acc)/[0.045] hover:bg-(--dk-tile)' : 'hover:bg-(--dk-tint)'
       }`}
       style={{ gridTemplateColumns: '64px 80px 50px minmax(0,1fr) 104px auto' }}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu({ x: e.clientX, y: e.clientY }); }}
@@ -198,7 +199,7 @@ function EnrollmentRow({
         <span
           aria-hidden
           className="absolute left-[17px] w-[2px] rounded-full"
-          style={{ background: `${PERI}33`, top: isFirst ? '50%' : 0, bottom: isLast ? '50%' : 0 }}
+          style={{ background: mix(V.acc, 20), top: isFirst ? '50%' : 0, bottom: isLast ? '50%' : 0 }}
         />
       )}
       <span
@@ -221,9 +222,9 @@ function EnrollmentRow({
           <span
             title="Current academic year"
             className="ml-4 inline-flex items-center gap-1 h-[22px] rounded-full border px-2 align-middle text-[10px] font-medium leading-none tracking-[0.2px]"
-            style={pill(PERI)}
+            style={pastelVar()}
           >
-            <span className="w-[5px] h-[5px] rounded-full" style={{ background: PERI }} />
+            <span className="w-[5px] h-[5px] rounded-full" style={{ background: V.acc }} />
             CURRENT
           </span>
         )}
@@ -239,7 +240,7 @@ function EnrollmentRow({
       </span>
 
       <div className="flex items-center gap-1.5 justify-end">
-        <button onClick={onView} className={`${ACTION_BTN} px-2.5 hover:bg-[#6B7CF6]/[0.08]`} style={{ borderColor: `${PERI}59`, color: PERI_INK }}>
+        <button onClick={onView} className={`${ACTION_BTN} px-2.5 hover:bg-(--dk-acc)/[0.08]`} style={{ borderColor: mix(V.acc, 35), color: V.ink }}>
           <Eye size={13} weight="bold" /> View
         </button>
         {isAdmin && (
@@ -247,8 +248,8 @@ function EnrollmentRow({
             onClick={onEdit}
             title="Edit student"
             aria-label="Edit student"
-            className={`${ACTION_BTN} w-7 hover:bg-[#6B7CF6]/[0.08]`}
-            style={{ borderColor: `${PERI}59`, color: PERI_INK }}
+            className={`${ACTION_BTN} w-7 hover:bg-(--dk-acc)/[0.08]`}
+            style={{ borderColor: mix(V.acc, 35), color: V.ink }}
           >
             <PencilSimple size={13} weight="bold" />
           </button>
@@ -262,8 +263,8 @@ function EnrollmentRow({
           onDoubleClick={(e) => e.stopPropagation()}
           title="More actions — certificates, results…"
           aria-label="More actions"
-          className={`${ACTION_BTN} w-7 hover:bg-[#6B7CF6]/[0.08]`}
-          style={{ borderColor: `${PERI}59`, color: PERI_INK }}
+          className={`${ACTION_BTN} w-7 hover:bg-(--dk-acc)/[0.08]`}
+          style={{ borderColor: mix(V.acc, 35), color: V.ink }}
         >
           <DotsThree size={15} weight="bold" />
         </button>
@@ -275,7 +276,7 @@ function EnrollmentRow({
           ) : feeStatus === null ? (
             <span className="w-[96px] flex justify-center"><Shimmer w={96} h={28} /></span>
           ) : feeStatus === 'no-dues' ? (
-            <span className={`${ROW_PILL} sr-pop gap-1 cursor-default`} style={pill(PAID)}>
+            <span className={`${ROW_PILL} sr-pop gap-1 cursor-default`} style={pastelVar()}>
               <CheckCircle size={12} weight="fill" /> NO DUES
             </span>
           ) : (
@@ -283,7 +284,7 @@ function EnrollmentRow({
               onClick={onCollect}
               title={feeStatus === 'dues' ? (due ? `Collect dues — ₹${due.toLocaleString('en-IN')} outstanding` : 'Collect dues') : 'Collect fee'}
               className={`${ROW_PILL} sr-pop tabular-nums whitespace-nowrap hover:brightness-95 transition-[filter] cursor-pointer`}
-              style={pill(feeStatus === 'dues' ? AMBER : PERI)}
+              style={feeStatus === 'dues' ? pill(AMBER) : pastelVar()}
             >
               {feeStatus === 'dues'
                 ? (due ? `₹${due.toLocaleString('en-IN')}` : 'COLLECT DUES')
@@ -350,17 +351,17 @@ export function SearchResults({
   if (groups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center sr-card">
-        <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: `${PERI}14`, color: PERI }}>
+        <span className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: mix(V.acc, 8), color: V.acc }}>
           <MagnifyingGlass size={26} weight="bold" />
         </span>
-        <p className="mt-4 text-[15px] font-semibold" style={{ color: PERI_INK }}>
+        <p className="mt-4 text-[15px] font-semibold" style={{ color: V.ink }}>
           No students match “{query.trim()}”
         </p>
         <p className="mt-1 text-[12px]" style={{ color: FAINT }}>Try a reg no, a mobile number or part of the name.</p>
         <button
           onClick={onClear}
-          className="mt-4 rounded-full border bg-white px-3.5 py-1.5 text-[11.5px] font-medium hover:bg-[#6B7CF6]/[0.06] transition-colors cursor-pointer"
-          style={{ borderColor: PERI_BORDER, color: PERI_INK }}
+          className="mt-4 rounded-full border bg-white px-3.5 py-1.5 text-[11.5px] font-medium hover:bg-(--dk-acc)/[0.06] transition-colors cursor-pointer"
+          style={{ borderColor: V.border, color: V.ink }}
         >
           Clear search
         </button>
@@ -387,7 +388,7 @@ export function SearchResults({
           <span className="mx-1.5" style={{ color: FAINT }}>·</span>
           <span className="font-semibold tabular-nums" style={{ color: INK }}>{enrollments}</span> enrollment{enrollments !== 1 ? 's' : ''}
         </p>
-        <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none" style={pill(PERI)}>
+        <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none" style={pastelVar()}>
           for “{query.trim()}”
         </span>
         <div className="flex items-center gap-1.5 ml-1">
@@ -396,17 +397,17 @@ export function SearchResults({
           ) : (
             <>
               {withDues > 0 && (
-                <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={pill(DUE)}>
+                <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={pastelVar(V.ink, V.ink)}>
                   {withDues} with dues
                 </span>
               )}
               {noDues > 0 && (
-                <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={pill(PAID)}>
+                <span className="rounded-full border px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={pastelVar()}>
                   {noDues} no dues
                 </span>
               )}
               {other > 0 && (
-                <span className="rounded-full border bg-white px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={{ borderColor: PERI_BORDER, color: FAINT }}>
+                <span className="rounded-full border bg-white px-2 py-[3px] text-[10.5px] font-medium leading-none tabular-nums sr-pop" style={{ borderColor: V.border, color: FAINT }}>
                   {other} fee data n/a
                 </span>
               )}
@@ -421,8 +422,8 @@ export function SearchResults({
         {groups.length > 1 && (
           <button
             onClick={toggleAll}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-[5px] text-[11px] font-medium leading-none hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/50 transition-colors cursor-pointer"
-            style={{ borderColor: PERI_BORDER, color: PERI_INK }}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border bg-white px-2.5 py-[5px] text-[11px] font-medium leading-none hover:bg-(--dk-acc)/[0.06] hover:border-(--dk-acc)/50 transition-colors cursor-pointer"
+            style={{ borderColor: V.border, color: V.ink }}
           >
             {allCollapsed ? <CaretDown size={11} weight="bold" /> : <CaretUp size={11} weight="bold" />}
             {allCollapsed ? 'Expand all' : 'Collapse all'}
@@ -460,16 +461,15 @@ export function SearchResults({
           <div
             key={group.key}
             ref={active ? activeRef : undefined}
-            className={`${CARD} sr-card overflow-hidden !border-[1.5px]`}
+            className={`${CARD} sr-card overflow-hidden`}
             style={{
               '--i': Math.min(idx % SEARCH_PAGE_SIZE, 8),
-              // Course-coloured border (latest enrollment's course) + a faint ring of the same
-              // hue just outside it (white gap between) so adjacent cards read as clearly
-              // separate; ring is stronger when the card is keyboard-active.
-              borderColor: `${courseHex}B3`,
+              // Neutral hairline on the card itself; a thin accent line (follows search mode)
+              // sits just outside it with a 3px white gap between, so adjacent cards read as
+              // clearly separate. Thicker and full-strength when keyboard-active.
               boxShadow: active
-                ? `0 0 0 2px #fff, 0 0 0 4px ${courseHex}80, 0 8px 22px rgba(63,75,184,0.12)`
-                : `0 0 0 2px #fff, 0 0 0 3px ${courseHex}26, 0 2px 6px rgba(63,75,184,0.07)`,
+                ? `0 0 0 3px #fff, 0 0 0 5px ${V.acc}, 0 8px 22px rgba(63,75,184,0.12)`
+                : `0 0 0 3px #fff, 0 0 0 4px ${mix(V.acc, 55)}, 0 2px 6px rgba(63,75,184,0.07)`,
             } as CSSProperties}
           >
 
@@ -478,14 +478,14 @@ export function SearchResults({
                 pr-5 puts the fee block on the same right edge as the row fee buttons. */}
             <div
               className="flex items-center gap-3 pl-4 pr-5 py-2 cursor-pointer select-none"
-              style={{ background: PERI_BAND }}
+              style={{ background: V.band }}
               onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) toggleCard(group.key); }}
               title={collapsed ? 'Click to show enrollments' : 'Click to collapse'}
             >
              <span
                aria-hidden
                className="shrink-0 flex transition-transform duration-200"
-               style={{ color: PERI, transform: collapsed ? 'rotate(-90deg)' : 'none' }}
+               style={{ color: V.acc, transform: collapsed ? 'rotate(-90deg)' : 'none' }}
              >
                <CaretDown size={13} weight="bold" />
              </span>
@@ -510,7 +510,7 @@ export function SearchResults({
               {/* One line: name (S/o father) · Reg No · why-it-matched hint · WP.
                   DOB / mobile / Aadhaar name live in the name's tooltip. */}
               <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap gap-y-1">
-                <p className="min-w-0 max-w-full text-[15px] font-semibold leading-tight truncate cursor-default" style={{ color: PERI_INK }} title={nameTitle}>
+                <p className="min-w-0 max-w-full text-[15px] font-semibold leading-tight truncate cursor-default" style={{ color: V.ink }} title={nameTitle}>
                   {group.nameSSLC}
                   {group.fatherName && (
                     <span className="font-normal text-[12px]" style={{ color: FAINT }}>
@@ -523,7 +523,7 @@ export function SearchResults({
                 ) : (
                   <span
                     className="shrink-0 inline-flex items-center gap-1 h-7 rounded-full border border-dashed bg-white px-2.5 text-[11px] font-medium leading-none whitespace-nowrap"
-                    style={{ borderColor: `${PERI}66`, color: FAINT }}
+                    style={{ borderColor: mix(V.acc, 40), color: FAINT }}
                   >
                     <IdentificationCard size={13} weight="bold" /> No Reg No
                   </span>
@@ -546,7 +546,7 @@ export function SearchResults({
                       <span
                         title={`${extra} more enrollment${extra !== 1 ? 's' : ''}`}
                         className="rounded-full border bg-white px-1.5 py-[2px] text-[10px] leading-none"
-                        style={{ borderColor: PERI_BAND_BORDER, color: PERI_INK }}
+                        style={{ borderColor: V.bandBorder, color: V.ink }}
                       >
                         +{extra}
                       </span>
@@ -561,8 +561,8 @@ export function SearchResults({
                 <button
                   onClick={() => onReEnroll(next)}
                   title={`Enroll for ${next.targetYear.toLowerCase()} in ${next.targetAcademicYear}`}
-                  className={`${ACTION_BTN} shrink-0 px-2.5 hover:bg-[#6B7CF6]/[0.08]`}
-                  style={{ borderColor: `${PERI}59`, color: PERI_INK }}
+                  className={`${ACTION_BTN} shrink-0 px-2.5 hover:bg-(--dk-acc)/[0.08]`}
+                  style={{ borderColor: mix(V.acc, 35), color: V.ink }}
                 >
                   <ArrowUp size={12} weight="bold" />
                   Enroll {NEXT_LABEL[next.targetYear]}
@@ -583,7 +583,7 @@ export function SearchResults({
 
             {/* Enrollment timeline */}
             {!collapsed && (
-            <div className="px-2 pb-2 pt-1 border-t" style={{ borderColor: PERI_BAND_BORDER }}>
+            <div className="px-2 pb-2 pt-1 border-t" style={{ borderColor: V.bandBorder }}>
               {group.records.map((s, i) => (
                 <EnrollmentRow
                   key={s.id}
@@ -612,8 +612,8 @@ export function SearchResults({
         <div className="flex justify-center pt-1">
           <button
             onClick={onShowMore}
-            className="inline-flex items-center gap-1.5 rounded-full border bg-white px-4 py-2 text-[12px] font-medium hover:bg-[#6B7CF6]/[0.06] hover:border-[#6B7CF6]/50 transition-colors cursor-pointer"
-            style={{ borderColor: PERI_BORDER, color: PERI_INK }}
+            className="inline-flex items-center gap-1.5 rounded-full border bg-white px-4 py-2 text-[12px] font-medium hover:bg-(--dk-acc)/[0.06] hover:border-(--dk-acc)/50 transition-colors cursor-pointer"
+            style={{ borderColor: V.border, color: V.ink }}
           >
             <ArrowDown size={13} weight="bold" />
             Show {Math.min(SEARCH_PAGE_SIZE, remaining)} more
