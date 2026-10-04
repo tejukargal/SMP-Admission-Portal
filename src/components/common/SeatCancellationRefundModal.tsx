@@ -12,6 +12,7 @@ import {
 } from '../../services/refundService';
 import { generateSeatCancellationRefundVoucher } from '../../utils/seatCancellationRefundVoucher';
 import { useAuth } from '../../contexts/AuthContext';
+import { todayIST } from '../../utils/formatDates';
 
 interface Props {
   student: Student;
@@ -26,7 +27,7 @@ const PAYMENT_TYPES: { value: RefundPaymentType; label: string }[] = [
 ];
 
 function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayIST(); // IST, so early-morning entries aren't dated yesterday
 }
 
 function isoToDDMMYYYY(iso: string): string {

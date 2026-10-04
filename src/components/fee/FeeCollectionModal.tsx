@@ -5,10 +5,10 @@ import {
 } from '../common/modalTheme';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  saveFeeRecord,
-  updateReceiptCounters,
+  collectFeeRecord,
   isPlausibleReceiptJump,
 } from '../../services/feeRecordService';
+import { todayIST } from '../../utils/formatDates';
 import { saveFeeOverride } from '../../services/feeOverrideService';
 import { createStudentNotification } from '../../services/studentNotificationService';
 import type {
@@ -26,7 +26,7 @@ import type {
 } from '../../types';
 import { SMP_FEE_HEADS } from '../../types';
 import { lookupFine } from '../../utils/feeCalc';
-import { takeCollectFee } from './feeModalPrefetch';
+import { takeCollectFee, invalidateCollectPrefetch, invalidateFeePrefetch } from './feeModalPrefetch';
 import type { CollectFeeData } from './feeModalPrefetch';
 
 function emptySMP(): SMPHeads {
@@ -44,10 +44,6 @@ function sumArr(arr: FeeAdditionalHead[]): number {
   return arr.reduce((s, h) => s + h.amount, 0);
 }
 
-function today(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
 interface Props {
   student: Student;
   academicYear: AcademicYear;
@@ -55,7 +51,8 @@ interface Props {
    *  Use when collecting dues for a prior-year student from the current-year context. */
   receiptCounterYear?: AcademicYear;
   onClose: () => void;
-  onSaved: () => void;
+  /** Called with the saved record once the server has confirmed the save. */
+  onSaved: (record: FeeRecord) => void;
   /** Visual theme. 'default' = teal with green/red payment status (Collect Fee page);
    *  'periwinkle' = Dashboard look (periwinkle accent, indigo paid/due). */
   theme?: ModalThemeName;
@@ -254,6 +251,8 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Set when a save has been waiting on the network for a while (slow college Wi-Fi).
+  const [slowSave, setSlowSave] = useState(false);
 
   // ── Per-student allotted fee override ────────────────────────────────────
   const [loadedOverride, setLoadedOverride] = useState<StudentFeeOverride | null>(null);
@@ -268,7 +267,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
   const [smpNow, setSmpNow] = useState<SMPHeads>(emptySMP());
   const [svkNow, setSvkNow] = useState(0);
   const [additionalNow, setAdditionalNow] = useState<FeeAdditionalHead[]>([]);
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(todayIST);
   const [receiptNo, setReceiptNo] = useState('');
   const [suggestedSmpReceipt, setSuggestedSmpReceipt] = useState('');
   const [svkReceiptNo, setSvkReceiptNo] = useState('');
@@ -539,6 +538,8 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
     if (!date) return;
     setSaving(true);
     setSaveError(null);
+    setSlowSave(false);
+    const slowTimer = setTimeout(() => setSlowSave(true), 8000);
     try {
       // Validate split amounts
       if (smpPaymentMode === 'SPLIT' && smpNowTotal > 0 && smpSplit.cash + smpSplit.upi !== smpNowTotal) {
@@ -574,7 +575,9 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         }
       }
 
-      await saveFeeRecord({
+      // Record + receipt-counter bump in one server transaction; refused (never
+      // renumbered) when a receipt number is already used in its series.
+      const saved = await collectFeeRecord({
         studentId: student.id,
         studentName: student.studentNameSSLC,
         fatherName: student.fatherName,
@@ -598,15 +601,11 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         smp: smpNow,
         svk: svkNow,
         additionalPaid: additionalNow,
-      });
+      }, counterYear);
 
-      // Update counters to reflect the highest receipt numbers now in use.
-      // This runs after save so cancelling the modal never wastes a number.
-      await updateReceiptCounters(counterYear, student.course, {
-        smp:        usedSmpReceipt,
-        svk:        usedSvkReceipt,
-        additional: usedAddReceipt,
-      });
+      // Receipt numbers are a shared series — every prefetched "next number" is now stale.
+      invalidateCollectPrefetch();
+      invalidateFeePrefetch(student.id);
 
       if (user && grandNow > 0) {
         void createStudentNotification({
@@ -619,11 +618,13 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
         });
       }
 
-      onSaved();
+      onSaved(saved);
       onClose();
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save fee record');
     } finally {
+      clearTimeout(slowTimer);
+      setSlowSave(false);
       setSaving(false);
     }
   }
@@ -635,7 +636,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
     <div className="font-wp fixed inset-0 z-50 flex items-center justify-center p-6">
       <div
         className={pw ? "absolute inset-0 bg-[#1E2340]/45" : "absolute inset-0 bg-[#0B2A2B]/45"}
-        onClick={onClose}
+        onClick={() => { if (!saving) onClose(); }}
         aria-hidden="true"
         style={{ animation: 'backdrop-enter 0.2s ease-out' }}
       />
@@ -683,6 +684,7 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
           </div>
           <button
             onClick={onClose}
+            disabled={saving}
             className={pw ? "relative flex items-center justify-center w-8 h-8 rounded-full border border-[#6B7CF6]/35 bg-white text-[#3F4BB8] hover:bg-[#F0F2FE] hover:border-[#6B7CF6]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]" : "relative flex items-center justify-center w-8 h-8 rounded-full border border-[#0F8B8D]/35 bg-white text-[#0B6567] hover:bg-[#EFF8F8] hover:border-[#0F8B8D]/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F8B8D]/30 transition-colors cursor-pointer shrink-0 ml-3 shadow-[0_1px_4px_rgba(18,20,26,0.06)]"}
             aria-label="Close"
           >
@@ -1359,15 +1361,19 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                 </div>
               </div>
 
-              {saveError && (
-                <ErrorStrip>{saveError}</ErrorStrip>
-              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className={pw ? "px-5 py-3 border-t border-[#DADFFA] bg-white flex justify-end gap-2.5 shrink-0" : "px-5 py-3 border-t border-[#CDE6E6] bg-white flex justify-end gap-2.5 shrink-0"}>
+        <div className={pw ? "px-5 py-3 border-t border-[#DADFFA] bg-white flex items-center justify-end gap-2.5 shrink-0" : "px-5 py-3 border-t border-[#CDE6E6] bg-white flex items-center justify-end gap-2.5 shrink-0"}>
+          {/* In the always-visible footer so a refused save (duplicate receipt,
+              offline) can't be missed below the fold. */}
+          {saveError && (
+            <div className="flex-1 min-w-0" role="alert">
+              <ErrorStrip>{saveError}</ErrorStrip>
+            </div>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -1389,7 +1395,9 @@ export function FeeCollectionModal({ student, academicYear, receiptCounterYear, 
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             )}
-            {isUpdate ? 'Save Installment' : 'Save Fee Record'}
+            {saving && slowSave
+              ? 'Still saving — network is slow…'
+              : isUpdate ? 'Save Installment' : 'Save Fee Record'}
           </button>
         </div>
       </div>

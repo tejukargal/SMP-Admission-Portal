@@ -4,7 +4,9 @@ import {
   updateReceiptCounters,
   peekNextReceiptNumbers,
   isPlausibleReceiptJump,
+  counterYearForDate,
 } from '../../services/feeRecordService';
+import { invalidateCollectPrefetch } from './feeModalPrefetch';
 import type {
   FeeRecord,
   SMPFeeHead,
@@ -214,13 +216,15 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    peekNextReceiptNumbers(record.academicYear, record.course).then((receipts) => {
+    // Receipts follow the financial-year series of the payment date (a previous-year
+    // due collected this year used this year's counter), not the record's academicYear.
+    peekNextReceiptNumbers(counterYearForDate(record.date), record.course).then((receipts) => {
       if (!cancelled) setSuggestedSmpReceipt(receipts.smp);
     });
     return () => {
       cancelled = true;
     };
-  }, [record.academicYear, record.course]);
+  }, [record.date, record.course]);
 
   function handleSMPChange(key: SMPFeeHead, val: string) {
     setSmp((prev) => ({ ...prev, [key]: Math.max(0, parseInt(val) || 0) }));
@@ -321,20 +325,24 @@ export function FeeEditModal({ record, onClose, onSaved }: Props) {
           ...(svkPaymentMode === 'SPLIT' ? { svkSplit } : {}),
           ...(additionalPaymentMode === 'SPLIT' ? { additionalSplit } : {}),
           remarks: combinedRemarks,
+          // The whole doc is rewritten — carry the due-fee flag over so edits don't drop it.
+          ...(record.isDueFee !== undefined ? { isDueFee: record.isDueFee } : {}),
           smp,
           svk,
           additionalPaid,
         },
-        record.createdAt
+        record.createdAt,
+        record,
       );
 
       // Keep counters in sync with any manually changed receipt numbers.
-      await updateReceiptCounters(record.academicYear, record.course, {
+      await updateReceiptCounters(counterYearForDate(date), record.course, {
         smp:        receiptNo,
         svk:        svkReceiptNo,
         additional: additionalReceiptNo,
       });
 
+      invalidateCollectPrefetch();
       onSaved();
       onClose();
     } catch (err: unknown) {

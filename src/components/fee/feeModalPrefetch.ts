@@ -219,6 +219,14 @@ export function takeFeeHistory(student: FeeHistoryStudentInfo): PendingLoad<FeeH
   return take(historyKey(student), student.id, () => loadFeeHistoryData(student));
 }
 
+/** Drops every prefetched Collect Fee load. Receipt numbers are a shared series, so
+ *  after any save the "next number" peeked for other students is stale. */
+export function invalidateCollectPrefetch(): void {
+  for (const key of entries.keys()) {
+    if (key.startsWith('collect|')) entries.delete(key);
+  }
+}
+
 /** Drops any prefetched loads for a student — call after their fees may have changed. */
 export function invalidateFeePrefetch(studentId: string): void {
   for (const [key, entry] of entries) {

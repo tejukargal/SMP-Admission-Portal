@@ -11,6 +11,8 @@ import { generateSMPReceipt, generateSVKReceipt, generateAdditionalReceipt } fro
 import { PageSpinner } from '../components/common/PageSpinner';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeReceiptDetailModal } from '../components/fee/FeeReceiptDetailModal';
+import { invalidateCollectPrefetch } from '../components/fee/feeModalPrefetch';
+import { receiptAccountSplit } from '../utils/cashLedger';
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
 const AIDED_COURSES: Course[] = ['CE', 'ME', 'EC', 'CS'];
@@ -197,6 +199,99 @@ async function exportRegisterExcel(records: FeeRecord[], additionalHeadLabels: s
   XLSX.writeFile(wb, `Fee_Register_${academicYear}.xlsx`);
 }
 
+// ── Day-close summary ──────────────────────────────────────────────────────────
+// For the selected day: cash / UPI / total (split-aware, same maths as Cash Book)
+// and, per receipt series, the range of receipt numbers used — flagging numbers
+// skipped inside that range (a spoiled or missed book leaf) and numbers used twice.
+
+const SVK_PREFIX = 'SVK DVP ';
+const MAX_LISTED = 6;
+
+interface SeriesSummary { label: string; first: number; last: number; count: number; gaps: number[]; dupes: number[] }
+
+function summariseSeries(label: string, raw: string[]): SeriesSummary | null {
+  const nums = raw.map((r) => parseInt(r, 10)).filter((n) => !isNaN(n)).sort((a, b) => a - b);
+  if (nums.length === 0) return null;
+  const seen = new Set<number>();
+  const dupes = new Set<number>();
+  for (const n of nums) { if (seen.has(n)) dupes.add(n); seen.add(n); }
+  const first = nums[0];
+  const last = nums[nums.length - 1];
+  const gaps: number[] = [];
+  // Bounded so a mistyped huge number can't spin through millions of values.
+  if (last - first <= 2000) {
+    for (let n = first + 1; n < last; n++) if (!seen.has(n)) gaps.push(n);
+  }
+  return { label, first, last, count: nums.length, gaps, dupes: [...dupes] };
+}
+
+function listNums(nums: number[]): string {
+  const shown = nums.slice(0, MAX_LISTED).join(', ');
+  return nums.length > MAX_LISTED ? `${shown} +${nums.length - MAX_LISTED} more` : shown;
+}
+
+function DayCloseStrip({ records, date }: { records: FeeRecord[]; date: string }) {
+  const summary = useMemo(() => {
+    let cash = 0, upi = 0;
+    for (const r of records) {
+      const split = receiptAccountSplit(r);
+      cash += split.SBI.cash + split.SVK.cash;
+      upi  += split.SBI.upi  + split.SVK.upi;
+    }
+    const series = [
+      summariseSeries('SMP Aided',   records.filter((r) => AIDED_COURSES.includes(r.course)).map((r) => r.receiptNumber).filter(Boolean)),
+      summariseSeries('SMP Unaided', records.filter((r) => UNAIDED_COURSES.includes(r.course)).map((r) => r.receiptNumber).filter(Boolean)),
+      summariseSeries('SVK',  records.map((r) => r.svkReceiptNumber).filter(Boolean).map((r) => r.startsWith(SVK_PREFIX) ? r.slice(SVK_PREFIX.length) : r)),
+      summariseSeries('Addl', records.map((r) => r.additionalReceiptNumber).filter(Boolean)),
+    ].filter((x): x is SeriesSummary => x !== null);
+    return { cash, upi, series };
+  }, [records]);
+
+  if (records.length === 0) return null;
+  const issues = summary.series.filter((x) => x.gaps.length > 0 || x.dupes.length > 0);
+
+  return (
+    <div
+      className="flex-shrink-0 rounded-2xl border border-[#CDE6E6] bg-white px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5"
+      style={{ animation: 'content-enter 0.22s ease-out' }}
+    >
+      <span className="text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#8A93A3] whitespace-nowrap">
+        Day close · {formatDate(date)}
+      </span>
+      <span className="text-[12px] text-[#5B6371] whitespace-nowrap">
+        Cash <span className="font-semibold text-[#0B7A4D] tabular-nums">₹{summary.cash.toLocaleString('en-IN')}</span>
+      </span>
+      <span className="text-[12px] text-[#5B6371] whitespace-nowrap">
+        UPI <span className="font-semibold text-[#1D6FD8] tabular-nums">₹{summary.upi.toLocaleString('en-IN')}</span>
+      </span>
+      <span className="text-[12px] text-[#5B6371] whitespace-nowrap">
+        Total <span className="font-semibold text-[#0B6567] tabular-nums">₹{(summary.cash + summary.upi).toLocaleString('en-IN')}</span>
+      </span>
+      <span className="w-px h-4 bg-[#CDE6E6] shrink-0" />
+      {summary.series.map((x) => (
+        <span key={x.label} className="text-[11.5px] text-[#5B6371] whitespace-nowrap" title={`${x.count} receipt${x.count === 1 ? '' : 's'}`}>
+          {x.label} <span className="font-medium text-[#262B35] tabular-nums">{x.first === x.last ? x.first : `${x.first}–${x.last}`}</span>
+          <span className="text-[#8A93A3]"> ({x.count})</span>
+        </span>
+      ))}
+      {issues.length > 0 ? (
+        <div className="basis-full flex flex-wrap gap-1.5">
+          {issues.map((x) => (
+            <span key={x.label} className="rounded-full border border-[#D97706]/40 bg-[#D97706]/[0.07] px-2.5 py-[3px] text-[11px] font-medium text-[#9A5405]">
+              {x.label}:
+              {x.gaps.length > 0 && ` skipped ${listNums(x.gaps)}`}
+              {x.gaps.length > 0 && x.dupes.length > 0 && ' ·'}
+              {x.dupes.length > 0 && ` used twice ${listNums(x.dupes)}`}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <span className="text-[11px] font-medium text-[#0B7A4D] whitespace-nowrap">✓ No gaps or duplicates</span>
+      )}
+    </div>
+  );
+}
+
 function LoadingGate() {
   return <PageSpinner />;
 }
@@ -212,7 +307,9 @@ export function FeeRegister() {
   const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
   const [admCatFilter, setAdmCatFilter] = useState<AdmCat | ''>('');
   const [paymentModeFilter, setPaymentModeFilter] = useState<PaymentMode | ''>('');
-  const [dateFilter, setDateFilter] = useState<string>('');
+  // null = follow the latest date that has records (moves to today as soon as a
+  // collection lands); '' = All dates; 'YYYY-MM-DD' = a date the user picked.
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -285,13 +382,11 @@ export function FeeRegister() {
     setSelectedYear(settings.currentAcademicYear);
   }
 
-  // Reset date filter when academic year changes; re-arm auto-select of the latest date.
-  const [autoDateArmed, setAutoDateArmed] = useState(true);
+  // Changing the academic year goes back to following the latest date.
   const [dateFilterYear, setDateFilterYear] = useState(selectedYear);
   if (dateFilterYear !== selectedYear) {
     setDateFilterYear(selectedYear);
-    setDateFilter('');
-    setAutoDateArmed(true);
+    setPickedDate(null);
   }
 
   useEffect(() => {
@@ -300,7 +395,9 @@ export function FeeRegister() {
   }, [searchTerm]);
 
   const academicYear = selectedYear || null;
-  const { records: rawRecords, loading: recordsLoading, refetch } = useFeeRecords(academicYear as AcademicYear | null, { mode: 'by-date' });
+  // Shared live listener — collections made anywhere (Dashboard search, Collect Fee)
+  // are already in it when this page opens.
+  const { records: rawRecords, loading: recordsLoading } = useFeeRecords(academicYear as AcademicYear | null, { mode: 'by-date' });
 
   // Sort: oldest date first, then by receipt number
   const sortedRecords = useMemo(() => sortRecords(rawRecords), [rawRecords]);
@@ -312,18 +409,19 @@ export function FeeRegister() {
     return [...dates].sort((a, b) => b.localeCompare(a));
   }, [sortedRecords]);
 
+  const dateFilter = pickedDate ?? uniqueDates[0] ?? '';
+  const setDateFilter = setPickedDate;
+
   // uniqueDates is sorted newest-first, so "prev" (chronologically earlier)
   // is the next array index and "next" (later) is the previous index.
   const dateIdx  = dateFilter ? uniqueDates.indexOf(dateFilter) : -1;
   const prevDate = dateIdx !== -1 && dateIdx < uniqueDates.length - 1 ? uniqueDates[dateIdx + 1] : null;
   const nextDate = dateIdx > 0 ? uniqueDates[dateIdx - 1] : null;
 
-  // Default to the most recent date once records for the academic year have loaded.
-  // Only fires once per academic-year selection so the user can freely pick "All Dates" afterward.
-  if (autoDateArmed && uniqueDates.length > 0) {
-    setDateFilter(uniqueDates[0]);
-    setAutoDateArmed(false);
-  }
+  const dayRecords = useMemo(
+    () => (dateFilter ? sortedRecords.filter((r) => r.date.slice(0, 10) === dateFilter) : []),
+    [sortedRecords, dateFilter],
+  );
 
   // Collect all unique additional head labels across all records (for dynamic columns)
   const additionalHeadLabels = useMemo(() => {
@@ -391,7 +489,7 @@ export function FeeRegister() {
 
   const hasMore = visibleCount < filteredRecords.length;
 
-  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter || !!dateFilter;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!paymentModeFilter || pickedDate !== null;
 
   function clearFilters() {
     setSearchTerm('');
@@ -401,7 +499,7 @@ export function FeeRegister() {
     setAdmTypeFilter('');
     setAdmCatFilter('');
     setPaymentModeFilter('');
-    setDateFilter('');
+    setPickedDate(null);
   }
 
   async function handleDelete() {
@@ -409,9 +507,10 @@ export function FeeRegister() {
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteFeeRecord(deleteTarget.id);
+      await deleteFeeRecord(deleteTarget);
+      // The freed receipt number may be suggested again — drop any prefetched "next number".
+      invalidateCollectPrefetch();
       setDeleteTarget(null);
-      refetch();
     } catch (err: unknown) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete record');
     } finally {
@@ -611,7 +710,7 @@ export function FeeRegister() {
             </button>
             <button
               type="button"
-              onClick={() => setDateFilter(dateFilter ? '' : (uniqueDates[0] ?? ''))}
+              onClick={() => setPickedDate(dateFilter ? '' : null)}
               className={`rounded-full border px-3 py-1.5 text-[11.5px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                 dateFilter
                   ? 'border-[#CDE6E6] bg-white text-[#5B6371] hover:bg-[#EFF8F8] hover:text-[#262B35]'
@@ -754,6 +853,8 @@ export function FeeRegister() {
           </div>
         </div>
       </div>
+
+      {dateFilter && !debouncedSearch && <DayCloseStrip records={dayRecords} date={dateFilter} />}
 
       {/* ── Table / empty states ─────────────────────────────────────────── */}
       {!selectedYear ? (
@@ -1024,7 +1125,7 @@ export function FeeRegister() {
         <FeeEditModal
           record={editRecord}
           onClose={() => setEditRecord(null)}
-          onSaved={() => { refetch(); setEditRecord(null); }}
+          onSaved={() => setEditRecord(null)}
         />
       )}
 

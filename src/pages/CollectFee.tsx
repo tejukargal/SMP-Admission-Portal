@@ -10,6 +10,7 @@ import { getFeeStructuresByAcademicYear, peekFeeStructures } from '../services/f
 import { isFeeNettingRefund } from '../services/refundService';
 import { FilterDropdown } from '../components/common/FilterDropdown';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
+import { FeeSavedToast } from '../components/fee/FeeSavedToast';
 import { CashInHandAlert } from '../components/cashBook/CashInHandAlert';
 import { FeeHistoryModal } from '../components/fee/FeeHistoryModal';
 import { prefetchCollectFee, prefetchFeeHistory, invalidateFeePrefetch } from '../components/fee/feeModalPrefetch';
@@ -265,8 +266,10 @@ export function CollectFee() {
   }, [ctxMenu]);
 
   const { students: allStudents, loading: studentsLoading } = useStudents(academicYear);
-  const { records: feeRecords, loading: feeLoading, refetch: refetchFees } =
-    useFeeRecords(academicYear);
+  // Live listener — a saved collection shows up here on its own, no refetch needed.
+  const { records: feeRecords, loading: feeLoading } = useFeeRecords(academicYear);
+  const [savedRecord, setSavedRecord] = useState<FeeRecord | null>(null);
+  const closeSavedToast = useCallback(() => setSavedRecord(null), []);
   const { overrides: feeOverrides } = useFeeOverrides(academicYear);
 
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>(() => peekFeeStructures(academicYear));
@@ -956,9 +959,11 @@ export function CollectFee() {
           student={selectedStudent}
           academicYear={academicYear}
           onClose={() => { invalidateFeePrefetch(selectedStudent.id); setSelectedStudent(null); }}
-          onSaved={() => { invalidateFeePrefetch(selectedStudent.id); refetchFees(); setSelectedStudent(null); }}
+          onSaved={(record) => { setSavedRecord(record); setSelectedStudent(null); }}
         />
       )}
+
+      {savedRecord && <FeeSavedToast record={savedRecord} onClose={closeSavedToast} />}
 
       {/* Fee history modal */}
       {feeHistoryStudent && (

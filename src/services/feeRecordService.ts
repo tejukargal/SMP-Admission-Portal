@@ -1,6 +1,5 @@
 import {
   doc,
-  setDoc,
   deleteDoc,
   query,
   collection,
@@ -49,30 +48,275 @@ function recordDocId(
   return `${data.studentId}__${data.academicYear}__${key}`;
 }
 
-/** Save a single payment installment as its own document. */
-export async function saveFeeRecord(data: FeeRecordFormData): Promise<void> {
-  const id = recordDocId(data);
-  const now = new Date().toISOString();
-  await setDoc(doc(db, COL, id), { ...data, createdAt: now, updatedAt: now });
-}
-
-/** Update an existing fee record. Handles receipt-number changes by re-keying the doc. */
+/**
+ * Update an existing fee record. Handles receipt-number changes by re-keying the
+ * doc — the old doc is deleted and the new one written in one transaction, so a
+ * failure can never lose the record. Changed receipt numbers are checked against
+ * the rest of their series first (see assertReceiptsUnused).
+ */
 export async function updateFeeRecord(
   oldId: string,
   data: FeeRecordFormData,
-  originalCreatedAt: string
+  originalCreatedAt: string,
+  previous?: Pick<FeeRecord, 'receiptNumber' | 'svkReceiptNumber' | 'additionalReceiptNumber'>,
 ): Promise<void> {
+  assertOnline();
+  await assertReceiptsUnused(data.course, {
+    smp:        data.receiptNumber           !== (previous?.receiptNumber ?? '')           ? data.receiptNumber : '',
+    svk:        data.svkReceiptNumber        !== (previous?.svkReceiptNumber ?? '')        ? data.svkReceiptNumber : '',
+    additional: data.additionalReceiptNumber !== (previous?.additionalReceiptNumber ?? '') ? data.additionalReceiptNumber : '',
+  }, oldId);
+
   const newId = recordDocId(data);
   const now = new Date().toISOString();
-  if (oldId !== newId) {
-    await deleteDoc(doc(db, COL, oldId));
+  await runTransaction(db, async (tx) => {
+    const newRef = doc(db, COL, newId);
+    if (oldId !== newId) {
+      const existing = await tx.get(newRef);
+      if (existing.exists()) throw duplicateError(receiptLabel(data), existing.data() as FeeRecord);
+      tx.delete(doc(db, COL, oldId));
+    }
+    tx.set(newRef, { ...data, createdAt: originalCreatedAt, updatedAt: now });
+  });
+
+  // A receipt number moved off this record — give it back if it was the series' latest.
+  if (previous) {
+    const freed = {
+      smp:        !!previous.receiptNumber           && data.receiptNumber           !== previous.receiptNumber,
+      svk:        !!previous.svkReceiptNumber        && data.svkReceiptNumber        !== previous.svkReceiptNumber,
+      additional: !!previous.additionalReceiptNumber && data.additionalReceiptNumber !== previous.additionalReceiptNumber,
+    };
+    if (freed.smp || freed.svk || freed.additional) {
+      await releaseReceiptNumbers({ ...data, ...previous, id: oldId, createdAt: originalCreatedAt, updatedAt: now }, freed);
+    }
   }
-  await setDoc(doc(db, COL, newId), { ...data, createdAt: originalCreatedAt, updatedAt: now });
+}
+
+// ── Collect (atomic save + counter bump + duplicate guard) ─────────────────────
+
+/** A receipt number that is already on another fee record in the same series.
+ *  Receipts come from a physical book, so the app never renumbers — it refuses. */
+export class DuplicateReceiptError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateReceiptError';
+  }
+}
+
+function formatDdMmYyyy(date: string): string {
+  const [y, m, d] = (date ?? '').slice(0, 10).split('-');
+  return y && m && d ? `${d}/${m}/${y}` : date;
+}
+
+function receiptLabel(data: Pick<FeeRecordFormData, 'receiptNumber' | 'svkReceiptNumber' | 'additionalReceiptNumber'>): string {
+  if (data.receiptNumber) return `SMP Rpt ${data.receiptNumber}`;
+  if (data.svkReceiptNumber) return data.svkReceiptNumber;
+  return `Addl Rpt ${data.additionalReceiptNumber}`;
+}
+
+function duplicateError(label: string, holder: Pick<FeeRecord, 'studentName' | 'date'>): DuplicateReceiptError {
+  return new DuplicateReceiptError(
+    `${label} is already used by ${holder.studentName} on ${formatDdMmYyyy(holder.date)}. Check the receipt book — the payment was NOT saved.`,
+  );
+}
+
+function assertOnline() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    throw new Error("You're offline — the payment was NOT saved. Reconnect and try again.");
+  }
+}
+
+/** Financial-year receipt series a payment date belongs to: 01-Apr..31-Mar → 'YYYY-YY'. */
+export function counterYearForDate(date: string): AcademicYear {
+  const [y, m] = (date ?? '').slice(0, 7).split('-').map(Number);
+  const start = m >= 4 ? y : y - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}` as AcademicYear;
+}
+
+/**
+ * Throws DuplicateReceiptError when any of the given receipt numbers is already
+ * on another fee record in the same series (SMP: same Aided/Unaided group; SVK
+ * and Additional are shared by all courses). Empty numbers are skipped. Only
+ * records dated from RECEIPT_SERIES_BASE_YEAR onward count — older years used
+ * restarted books whose numbers legitimately repeat.
+ */
+async function assertReceiptsUnused(
+  course: Course,
+  used: { smp: string; svk: string; additional: string },
+  ignoreId?: string,
+): Promise<void> {
+  const aided = AIDED_COURSES.has(course);
+  const since = `${RECEIPT_SERIES_BASE_YEAR.slice(0, 4)}-04-01`;
+  type Field = 'receiptNumber' | 'svkReceiptNumber' | 'additionalReceiptNumber';
+  const checks: { field: Field; value: string; label: string; sameSeries: (r: FeeRecord) => boolean }[] = [];
+  if (used.smp)        checks.push({ field: 'receiptNumber',           value: used.smp,        label: `SMP Rpt ${used.smp}`,         sameSeries: (r) => AIDED_COURSES.has(r.course) === aided });
+  if (used.svk)        checks.push({ field: 'svkReceiptNumber',        value: used.svk,        label: used.svk,                       sameSeries: () => true });
+  if (used.additional) checks.push({ field: 'additionalReceiptNumber', value: used.additional, label: `Addl Rpt ${used.additional}`, sameSeries: () => true });
+  if (checks.length === 0) return;
+
+  const results = await Promise.all(
+    checks.map((c) => getDocs(query(collection(db, COL), where(c.field, '==', c.value)))),
+  );
+  results.forEach((snap, i) => {
+    const c = checks[i];
+    const hit = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as FeeRecord))
+      .find((r) => r.id !== ignoreId && (r.date ?? '') >= since && c.sameSeries(r));
+    if (hit) throw duplicateError(c.label, hit);
+  });
+}
+
+/**
+ * Saves one payment installment. The record write and the receipt-counter bump
+ * happen in a single transaction (instead of four sequential round trips), and
+ * the save is refused — never renumbered — when a receipt number is already used
+ * in its series or the record id already exists (setDoc used to silently
+ * overwrite the earlier payment). Returns the saved record.
+ */
+export async function collectFeeRecord(
+  data: FeeRecordFormData,
+  counterYear: AcademicYear,
+): Promise<FeeRecord> {
+  assertOnline();
+  const used = { smp: data.receiptNumber, svk: data.svkReceiptNumber, additional: data.additionalReceiptNumber };
+  await assertReceiptsUnused(data.course, used);
+
+  const id = recordDocId(data);
+  const recordRef = doc(db, COL, id);
+  const counterRef = doc(db, RECEIPT_COUNTERS_COL, counterYear);
+  const isCurrentFormat = (d: Record<string, unknown> | undefined) => d?.smpAided !== undefined && d?.svk !== undefined;
+
+  const attempt = () => runTransaction(db, async (tx) => {
+    const counterSnap = await tx.get(counterRef);
+    const existing = await tx.get(recordRef);
+    if (existing.exists()) throw duplicateError(receiptLabel(data), existing.data() as FeeRecord);
+    if (!counterSnap.exists() || !isCurrentFormat(counterSnap.data())) return null;
+
+    const now = new Date().toISOString();
+    tx.set(recordRef, { ...data, createdAt: now, updatedAt: now });
+    const updates = counterUpdates(counterSnap.data() as ReceiptCounterDoc, data.course, used);
+    if (Object.keys(updates).length > 0) tx.update(counterRef, updates);
+    return { id, ...data, createdAt: now, updatedAt: now } as FeeRecord;
+  });
+
+  const saved = await attempt();
+  if (saved) return saved;
+  // Counter doc missing / old format — initialise it, then retry once.
+  await _ensureCounterDoc(counterYear);
+  const retried = await attempt();
+  if (!retried) throw new Error('Receipt counter could not be initialised — please try again.');
+  return retried;
 }
 
 /** Delete a single fee record by its document ID. */
-export async function deleteFeeRecord(id: string): Promise<void> {
-  await deleteDoc(doc(db, COL, id));
+export async function deleteFeeRecord(record: FeeRecord): Promise<void> {
+  await deleteDoc(doc(db, COL, record.id));
+  // Hand the receipt numbers back if this was the latest payment in its series,
+  // so the next collection re-suggests the same number (it's the next leaf in the book).
+  await releaseReceiptNumbers(record);
+}
+
+type ReceiptField = 'receiptNumber' | 'svkReceiptNumber' | 'additionalReceiptNumber';
+
+/**
+ * Highest receipt number still on a fee record in the series, searching downward
+ * from `below - 1` (30 candidates per `in` query, up to 300 back). Falls back to
+ * `below - 1` when none is found.
+ */
+async function highestRemainingReceipt(
+  field: ReceiptField,
+  below: number,
+  format: (n: number) => string,
+  sameSeries: (r: FeeRecord) => boolean,
+  ignoreId: string,
+): Promise<number> {
+  const since = `${RECEIPT_SERIES_BASE_YEAR.slice(0, 4)}-04-01`;
+  for (let top = below - 1; top > 0 && top > below - 301; top -= 30) {
+    const candidates: string[] = [];
+    for (let n = top; n > Math.max(0, top - 30); n--) candidates.push(format(n));
+    const snap = await getDocs(query(collection(db, COL), where(field, 'in', candidates)));
+    const hits = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as FeeRecord))
+      .filter((r) => r.id !== ignoreId && (r.date ?? '') >= since && sameSeries(r))
+      .map((r) => {
+        const raw = String(r[field] ?? '');
+        return parseInt(raw.startsWith(SVK_RPT_PREFIX) ? raw.slice(SVK_RPT_PREFIX.length) : raw, 10);
+      })
+      .filter((n) => !isNaN(n));
+    if (hits.length > 0) return Math.max(...hits);
+  }
+  // Nothing found nearby (e.g. the series was seeded from an older year's counter) —
+  // just step back one, never reset the series towards 0.
+  return below - 1;
+}
+
+/**
+ * Called after a fee record is deleted (or its receipt numbers are changed in an
+ * edit). For each receipt number on `record` that is still the counter's latest
+ * value in its series, lowers the counter to the highest number still in use, so
+ * the next collection re-suggests the freed number. Numbers below the counter are
+ * left alone — later receipts exist, so the freed one is a genuine gap in the book.
+ * `only` restricts it to the given series (used by edits).
+ */
+export async function releaseReceiptNumbers(
+  record: FeeRecord,
+  only?: { smp?: boolean; svk?: boolean; additional?: boolean },
+): Promise<void> {
+  if (!record.date) return;
+  const counterYear = counterYearForDate(record.date);
+  const ref = doc(db, RECEIPT_COUNTERS_COL, counterYear);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const d = snap.data() as ReceiptCounterDoc;
+  const aided = AIDED_COURSES.has(record.course);
+
+  const svkRaw = record.svkReceiptNumber?.startsWith(SVK_RPT_PREFIX)
+    ? record.svkReceiptNumber.slice(SVK_RPT_PREFIX.length)
+    : record.svkReceiptNumber ?? '';
+  const series: { key: 'smpAided' | 'smpUnaided' | 'svk' | 'additional'; field: ReceiptField; raw: string; format: (n: number) => string; sameSeries: (r: FeeRecord) => boolean }[] = [];
+  if (only?.smp !== false && record.receiptNumber) {
+    const len = record.receiptNumber.length;
+    series.push({
+      key: aided ? 'smpAided' : 'smpUnaided', field: 'receiptNumber', raw: record.receiptNumber,
+      format: (n) => String(n).padStart(len, '0'),
+      sameSeries: (r) => AIDED_COURSES.has(r.course) === aided,
+    });
+  }
+  if (only?.svk !== false && svkRaw) {
+    const len = svkRaw.length;
+    series.push({
+      key: 'svk', field: 'svkReceiptNumber', raw: svkRaw,
+      format: (n) => `${SVK_RPT_PREFIX}${String(n).padStart(len, '0')}`,
+      sameSeries: () => true,
+    });
+  }
+  if (only?.additional !== false && record.additionalReceiptNumber) {
+    const len = record.additionalReceiptNumber.length;
+    series.push({
+      key: 'additional', field: 'additionalReceiptNumber', raw: record.additionalReceiptNumber,
+      format: (n) => String(n).padStart(len, '0'),
+      sameSeries: () => true,
+    });
+  }
+
+  const lowered: Partial<Record<'smpAided' | 'smpUnaided' | 'svk' | 'additional', { from: number; to: number }>> = {};
+  for (const sr of series) {
+    const n = parseInt(sr.raw, 10);
+    if (isNaN(n) || d[sr.key] !== n) continue; // not the latest in its series — leave the gap
+    lowered[sr.key] = { from: n, to: await highestRemainingReceipt(sr.field, n, sr.format, sr.sameSeries, record.id) };
+  }
+  if (Object.keys(lowered).length === 0) return;
+
+  // Only lower a counter that still holds the released number — if someone saved a
+  // new receipt in the meantime, that one is now the latest and must stay.
+  await runTransaction(db, async (tx) => {
+    const cur = (await tx.get(ref)).data() as ReceiptCounterDoc;
+    const updates: Partial<ReceiptCounterDoc> = {};
+    for (const [key, v] of Object.entries(lowered) as ['smpAided' | 'smpUnaided' | 'svk' | 'additional', { from: number; to: number }][]) {
+      if (cur[key] === v.from) updates[key] = v.to;
+    }
+    if (Object.keys(updates).length > 0) tx.update(ref, updates);
+  });
 }
 
 /** All payment records for a specific student in a given academic year. */
@@ -332,38 +576,45 @@ export async function updateReceiptCounters(
 ): Promise<void> {
   await _ensureCounterDoc(academicYear);
   const ref = doc(db, RECEIPT_COUNTERS_COL, academicYear);
-  const aided = AIDED_COURSES.has(course);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const updates = counterUpdates(snap.data() as ReceiptCounterDoc, course, used);
+    if (Object.keys(updates).length > 0) tx.update(ref, updates);
+  });
+}
 
+/** Counter fields to raise to max(current, used) — gated by isPlausibleReceiptJump
+ *  so a number from the other series can't drag a counter forward. */
+function counterUpdates(
+  d: ReceiptCounterDoc,
+  course: Course,
+  used: { smp: string; svk: string; additional: string },
+): Partial<ReceiptCounterDoc> {
+  const aided = AIDED_COURSES.has(course);
   const smpN   = parseInt(used.smp, 10);
   const svkStr = used.svk.startsWith(SVK_RPT_PREFIX) ? used.svk.slice(SVK_RPT_PREFIX.length) : used.svk;
   const svkN   = parseInt(svkStr, 10);
   const addN   = parseInt(used.additional, 10);
+  const updates: Partial<ReceiptCounterDoc> = {};
 
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    const d = snap.data() as ReceiptCounterDoc;
-    const updates: Partial<ReceiptCounterDoc> = {};
-
-    if (aided) {
-      if (!isNaN(smpN) && smpN > d.smpAided && isPlausibleReceiptJump(d.smpAided, smpN)) {
-        updates.smpAided = smpN;
-        updates.smpAidedPadLen = used.smp.length;
-      }
-    } else {
-      if (!isNaN(smpN) && smpN > d.smpUnaided && isPlausibleReceiptJump(d.smpUnaided, smpN)) {
-        updates.smpUnaided = smpN;
-        updates.smpUnaidedPadLen = used.smp.length;
-      }
+  if (aided) {
+    if (!isNaN(smpN) && smpN > d.smpAided && isPlausibleReceiptJump(d.smpAided, smpN)) {
+      updates.smpAided = smpN;
+      updates.smpAidedPadLen = used.smp.length;
     }
-
-    if (!isNaN(svkN) && svkN > d.svk && isPlausibleReceiptJump(d.svk, svkN)) {
-      updates.svk = svkN;
-      updates.svkPadLen = svkStr.length;
+  } else {
+    if (!isNaN(smpN) && smpN > d.smpUnaided && isPlausibleReceiptJump(d.smpUnaided, smpN)) {
+      updates.smpUnaided = smpN;
+      updates.smpUnaidedPadLen = used.smp.length;
     }
-    if (!isNaN(addN) && addN > d.additional && isPlausibleReceiptJump(d.additional, addN)) updates.additional = addN;
+  }
 
-    if (Object.keys(updates).length > 0) tx.update(ref, updates);
-  });
+  if (!isNaN(svkN) && svkN > d.svk && isPlausibleReceiptJump(d.svk, svkN)) {
+    updates.svk = svkN;
+    updates.svkPadLen = svkStr.length;
+  }
+  if (!isNaN(addN) && addN > d.additional && isPlausibleReceiptJump(d.additional, addN)) updates.additional = addN;
+  return updates;
 }
 
 export interface BulkAdditionalEntry {

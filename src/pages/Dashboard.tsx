@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, useTransition } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useTransition, useCallback } from 'react';
 import { CashInHandAlert } from '../components/cashBook/CashInHandAlert';
 import { useNavigate } from 'react-router-dom';
 import { useAllStudents } from '../hooks/useAllStudents';
 import { useSettings } from '../hooks/useSettings';
-import { useFeeRecords } from '../hooks/useFeeRecords';
-import { getFeeRecordsByAcademicYear } from '../services/feeRecordService';
+import { useFeeRecords, subscribeFeeRecordsKey, getFeeRecordsSnapshot } from '../hooks/useFeeRecords';
 import { getFeeStructuresByAcademicYear } from '../services/feeStructureService';
 import { getFeeOverridesByYear } from '../services/feeOverrideService';
 import { getRefundRecordsByAcademicYear, isFeeNettingRefund } from '../services/refundService';
@@ -14,6 +13,7 @@ import { useFilters } from '../contexts/FiltersContext';
 import { useAuth } from '../contexts/AuthContext';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { FeeCollectionModal } from '../components/fee/FeeCollectionModal';
+import { FeeSavedToast } from '../components/fee/FeeSavedToast';
 import { StudyCertificateModal } from '../components/common/StudyCertificateModal';
 import { TransferCertificateModal } from '../components/common/TransferCertificateModal';
 import { ProvisionalCertificateModal } from '../components/common/ProvisionalCertificateModal';
@@ -54,10 +54,11 @@ const exportSummaryReport = (...a: Parameters<DashPdf['exportSummaryReport']>) =
 const exportGenderCourseYearReport = (...a: Parameters<DashPdf['exportGenderCourseYearReport']>) => void dashPdf().then((m) => m.exportGenderCourseYearReport(...a));
 const exportFirstYearSeatsReport = (...a: Parameters<DashPdf['exportFirstYearSeatsReport']>) => void dashPdf().then((m) => m.exportFirstYearSeatsReport(...a));
 
-// Per-year fee data behind the search result fee pills. Fetched once and reused
-// across keystrokes (each year is three full-collection reads), refreshed after
-// 2 minutes or when a fee is collected from the results.
-type YearFeeData = [FeeRecord[], FeeStructure[], StudentFeeOverride[]];
+// Per-year allotment data behind the search result fee pills (structures +
+// overrides — they don't change when a fee is collected). Fetched once and reused
+// across keystrokes, refreshed after 2 minutes. Fee *records* come from the shared
+// live store (useFeeRecords), so a collection flips the pills instantly.
+type YearFeeData = [FeeStructure[], StudentFeeOverride[]];
 const FEE_DATA_TTL = 2 * 60 * 1000;
 const yearFeeCache = new Map<string, { at: number; data: Promise<YearFeeData>; ready: boolean }>();
 function loadYearFeeData(year: AcademicYear): Promise<YearFeeData> {
@@ -67,7 +68,6 @@ function loadYearFeeData(year: AcademicYear): Promise<YearFeeData> {
     at: Date.now(),
     ready: false,
     data: Promise.all([
-      getFeeRecordsByAcademicYear(year),
       getFeeStructuresByAcademicYear(year),
       getFeeOverridesByYear(year),
     ]),
@@ -76,9 +76,9 @@ function loadYearFeeData(year: AcademicYear): Promise<YearFeeData> {
   yearFeeCache.set(year, entry);
   return entry.data;
 }
-const isYearFeeDataReady = (year: string) => {
+const isYearFeeDataReady = (year: AcademicYear) => {
   const hit = yearFeeCache.get(year);
-  return !!hit && hit.ready && Date.now() - hit.at < FEE_DATA_TTL;
+  return !!hit && hit.ready && Date.now() - hit.at < FEE_DATA_TTL && getFeeRecordsSnapshot(year, 'by-year').loaded;
 };
 
 const COURSES: Course[] = ['CE', 'ME', 'EC', 'CS', 'EE'];
@@ -267,7 +267,10 @@ export function Dashboard() {
   const [searchFeeStatus, setSearchFeeStatus] = useState<Map<string, FeeStatus>>(new Map());
   const [searchFeeLoading, setSearchFeeLoading] = useState(false);
   // Bumped after a fee is collected from the results so the pills re-read fresh data.
-  const [feeDataVersion, setFeeDataVersion] = useState(0);
+  // Bumped whenever a live fee-records listener for a searched year delivers a snapshot.
+  const [feeStoreTick, setFeeStoreTick] = useState(0);
+  const [savedFeeRecord, setSavedFeeRecord] = useState<FeeRecord | null>(null);
+  const closeSavedFeeToast = useCallback(() => setSavedFeeRecord(null), []);
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
   // ── Outstanding balance per enrollment (only where a fee structure/override exists) ─
@@ -529,11 +532,13 @@ export function Dashboard() {
 
     async function loadFeeStatus() {
       const perYear = await Promise.all(uniqueYears.map(loadYearFeeData));
-      const allRecords    = perYear.flatMap(([r]) => r);
-      const allStructures = perYear.flatMap(([, st]) => st);
-      const allOverrides  = perYear.flatMap(([, , o]) => o);
-
       if (cancelled) return;
+      const snaps = uniqueYears.map((y) => getFeeRecordsSnapshot(y, 'by-year'));
+      // A listener hasn't delivered yet — its snapshot bumps feeStoreTick and re-runs this.
+      if (snaps.some((sn) => !sn.loaded)) return;
+      const allRecords    = snaps.flatMap((sn) => sn.records);
+      const allStructures = perYear.flatMap(([st]) => st);
+      const allOverrides  = perYear.flatMap(([, o]) => o);
 
       // Total paid per studentId (SMP + SVK + Additional)
       const paidByStudent = new Map<string, number>();
@@ -642,7 +647,20 @@ export function Dashboard() {
 
     loadFeeStatus().catch(() => { if (!cancelled) setSearchFeeLoading(false); });
     return () => { cancelled = true; };
-  }, [isSearchMode, searchResults, feeDataVersion]);
+  }, [isSearchMode, searchResults, feeStoreTick]);
+
+  // Live fee-record listeners for every academic year in the search results.
+  const searchFeeYearsKey = useMemo(
+    () => [...new Set(searchResults.filter((s) => !isWPStudent(s)).map((s) => s.academicYear))].sort().join(','),
+    [searchResults],
+  );
+  useEffect(() => {
+    if (!isSearchMode || !searchFeeYearsKey) return;
+    const unsubs = (searchFeeYearsKey.split(',') as AcademicYear[]).map((y) =>
+      subscribeFeeRecordsKey(y, 'by-year', () => setFeeStoreTick((t) => t + 1)),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [isSearchMode, searchFeeYearsKey]);
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -2509,12 +2527,15 @@ const [barsReady, setBarsReady] = useState(false);
         academicYear={collectFeeStudent.academicYear}
         receiptCounterYear={settings?.currentAcademicYear ?? collectFeeStudent.academicYear}
         onClose={() => setCollectFeeStudent(null)}
-        onSaved={() => {
-          yearFeeCache.delete(collectFeeStudent.academicYear);
-          setFeeDataVersion((v) => v + 1);
+        onSaved={(record) => {
+          // The live listener updates the pills and the Fee Register on its own.
+          setSavedFeeRecord(record);
           setCollectFeeStudent(null);
         }}
       />
+    )}
+    {savedFeeRecord && (
+      <FeeSavedToast record={savedFeeRecord} accent={PERI} onClose={closeSavedFeeToast} />
     )}
 
     {/* ── Certificate context menu ──────────────────────────────────────── */}
