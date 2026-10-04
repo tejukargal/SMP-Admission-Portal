@@ -1,8 +1,9 @@
-import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import {
-  IdentificationCard, Phone, Cake, Stack, Eye, PencilSimple, MagnifyingGlass, CheckCircle, ArrowDown,
+  IdentificationCard, IdentificationBadge, Phone, Eye, PencilSimple, MagnifyingGlass, CheckCircle, ArrowDown,
+  ArrowUp, Check, DotsThree,
 } from '@phosphor-icons/react';
-import type { Student, Gender } from '../../types';
+import type { Student, Gender, Year, AcademicYear } from '../../types';
 import {
   CARD, pastel, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER, INK, MUTED, FAINT, PAID, DUE,
   MINT, AMBER, CORAL, COURSE_HEX, YEAR_HEX, BOY_HEX, GIRL_HEX, SEARCH_PAGE_SIZE,
@@ -26,6 +27,17 @@ export interface StudentGroup {
 }
 
 export type GroupDue = number | null | 'unavailable';
+
+/** A group's next-year enrollment into the current academic year (computed by Dashboard.tsx). */
+export interface NextEnroll {
+  record: Student;
+  targetYear: Year;
+  targetAcademicYear: AcademicYear;
+}
+
+export type MenuPos = { x: number; y: number };
+
+const NEXT_LABEL: Record<Year, string> = { '1ST YEAR': '1st Yr', '2ND YEAR': '2nd Yr', '3RD YEAR': '3rd Yr' };
 
 const STATUS_HEX = (status: string) =>
   status === 'CONFIRMED' ? MINT : status === 'CANCELLED' ? CORAL : AMBER;
@@ -73,16 +85,71 @@ function Shimmer({ w, h = 14 }: { w: number; h?: number }) {
   return <span className="inline-block rounded-full sr-shimmer" style={{ width: w, height: h }} />;
 }
 
-function FactChip({ icon, children, title }: { icon: ReactNode; children: ReactNode; title?: string }) {
+type MatchHint = { kind: 'aadhaar' | 'mobile' | 'father'; text: string };
+
+/**
+ * The header only shows the SSLC name and Reg No, but search also matches the Aadhaar
+ * name and both mobile numbers. When the hit is on one of those hidden fields, return
+ * it so the card can say why it matched; null when the visible header already explains it.
+ */
+function matchHint(group: StudentGroup, query: string): MatchHint | null {
+  const q = query.trim().toUpperCase();
+  if (!q) return null;
+  if (group.nameSSLC.toUpperCase().includes(q)) return null;
+  if (group.records.some((r) => r.regNumber?.toUpperCase().includes(q))) return null;
+  for (const r of [...group.records].reverse()) {
+    if (r.studentMobile?.includes(q)) return { kind: 'mobile', text: r.studentMobile };
+    if (r.fatherMobile?.includes(q)) return { kind: 'father', text: r.fatherMobile };
+    if (r.studentNameAadhar?.toUpperCase().includes(q)) return { kind: 'aadhaar', text: r.studentNameAadhar };
+  }
+  return null;
+}
+
+const HINT_LABEL: Record<MatchHint['kind'], string> = { mobile: 'Mobile', father: "Father's mobile", aadhaar: 'Aadhaar name' };
+
+function MatchHintChip({ hint, query }: { hint: MatchHint; query: string }) {
   return (
     <span
-      title={title}
-      className="inline-flex items-center gap-1 h-7 rounded-full border bg-white px-2 text-[11px] font-medium leading-none tabular-nums whitespace-nowrap"
+      title={`Matched on ${HINT_LABEL[hint.kind]}`}
+      className="sr-pop inline-flex items-center gap-1 h-6 min-w-0 max-w-[260px] rounded-full border bg-white px-2 text-[10.5px] font-medium leading-none tabular-nums whitespace-nowrap"
       style={{ borderColor: PERI_BORDER, color: MUTED }}
     >
-      <span className="flex" style={{ color: PERI }}>{icon}</span>
-      {children}
+      <span className="flex shrink-0" style={{ color: PERI }}>
+        {hint.kind === 'aadhaar' ? <IdentificationBadge size={11} weight="bold" /> : <Phone size={11} weight="bold" />}
+      </span>
+      <span className="shrink-0" style={{ color: FAINT }}>{HINT_LABEL[hint.kind]}</span>
+      <span className="truncate"><Highlight text={hint.text} query={query} /></span>
     </span>
+  );
+}
+
+/** Register No — the card's primary identity. Click copies it (icon flips to a tick briefly). */
+function RegNoPill({ regNo, query }: { regNo: string; query: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  function copy(e: MouseEvent) {
+    e.stopPropagation();
+    void navigator.clipboard?.writeText(regNo).then(() => {
+      setCopied(true);
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setCopied(false), 1200);
+    }).catch(() => {});
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      onDoubleClick={(e) => e.stopPropagation()}
+      title={copied ? 'Copied' : 'Register No — click to copy'}
+      className="shrink-0 inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[14px] font-semibold leading-none tabular-nums whitespace-nowrap cursor-copy hover:brightness-[0.97] transition-[filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/35"
+      style={{ ...pill(PERI), color: PERI_INK }}
+    >
+      {copied
+        ? <Check size={13} weight="bold" className="sr-pop" style={{ color: PAID }} />
+        : <IdentificationCard size={14} weight="bold" style={{ color: PERI }} />}
+      <Highlight text={regNo} query={query} />
+    </button>
   );
 }
 
@@ -105,12 +172,12 @@ function FeeSummary({ due, loading }: { due: GroupDue | undefined; loading: bool
   }
   if (due > 0) {
     return (
-      <div className="sr-pop text-center leading-none">
-        <p className="text-[18px] font-semibold tabular-nums tracking-[-0.2px]" style={{ color: DUE }}>
+      <p className="sr-pop flex items-baseline gap-1 leading-none whitespace-nowrap" title="Total due across all enrollments">
+        <span className="text-[16px] font-semibold tabular-nums tracking-[-0.2px]" style={{ color: DUE }}>
           ₹{due.toLocaleString('en-IN')}
-        </p>
-        <p className="mt-1 text-[9.5px] font-medium uppercase tracking-[0.8px]" style={{ color: FAINT }}>Total due</p>
-      </div>
+        </span>
+        <span className="text-[9.5px] font-medium uppercase tracking-[0.8px]" style={{ color: FAINT }}>due</span>
+      </p>
     );
   }
   return (
@@ -124,10 +191,11 @@ const ACTION_BTN =
   'inline-flex items-center justify-center gap-1 rounded-full border bg-white h-7 text-[11px] font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7CF6]/35';
 
 function EnrollmentRow({
-  s, isFirst, isLast, groupRegNo, query, isAdmin, feeStatus, ctxActive, onView, onEdit, onCollect, onContextMenu,
+  s, isFirst, isLast, isCurrent, groupRegNo, query, isAdmin, feeStatus, due, ctxActive, onView, onEdit, onCollect, onContextMenu,
 }: {
-  s: Student; isFirst: boolean; isLast: boolean; groupRegNo: string; query: string; isAdmin: boolean; feeStatus: FeeStatus | null; ctxActive: boolean;
-  onView: () => void; onEdit: () => void; onCollect: () => void; onContextMenu: (e: MouseEvent) => void;
+  s: Student; isFirst: boolean; isLast: boolean; isCurrent: boolean; groupRegNo: string; query: string; isAdmin: boolean;
+  feeStatus: FeeStatus | null; due: number | undefined; ctxActive: boolean;
+  onView: () => void; onEdit: () => void; onCollect: () => void; onContextMenu: (pos: MenuPos) => void;
 }) {
   const dot = STATUS_HEX(s.admissionStatus?.trim() ?? '');
   const courseHex = COURSE_HEX[s.course as keyof typeof COURSE_HEX] ?? PERI;
@@ -136,10 +204,10 @@ function EnrollmentRow({
   return (
     <div
       className={`group/row relative grid items-center gap-x-3 pl-9 pr-3 py-2 rounded-xl cursor-context-menu select-none transition-colors ${
-        ctxActive ? 'row-ctx-active-peri' : 'hover:bg-[#F5F6FF]'
+        ctxActive ? 'row-ctx-active-peri' : isCurrent ? 'bg-[#6B7CF6]/[0.045] hover:bg-[#F0F2FE]' : 'hover:bg-[#F5F6FF]'
       }`}
       style={{ gridTemplateColumns: '64px 80px 50px minmax(0,1fr) 104px auto' }}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu({ x: e.clientX, y: e.clientY }); }}
       onDoubleClick={onView}
     >
       {/* Timeline rail + status dot */}
@@ -164,6 +232,16 @@ function EnrollmentRow({
         {s.course || '—'}
       </span>
       <span className="min-w-0 truncate text-[11.5px] font-medium" style={{ color: MUTED }} title={meta}>
+        {isCurrent && (
+          <span
+            title="Current academic year"
+            className="mr-2 inline-flex items-center gap-1 rounded-full px-1.5 py-[2px] align-[1px] text-[9px] font-semibold uppercase tracking-[0.6px] leading-none"
+            style={{ background: `${PERI}1A`, color: PERI_INK }}
+          >
+            <span className="w-[5px] h-[5px] rounded-full" style={{ background: PERI }} />
+            Current
+          </span>
+        )}
         {meta || '—'}
         {/* Reg no shown per row only when it differs from the profile chip (e.g. re-registered). */}
         {s.regNumber && s.regNumber !== groupRegNo && (
@@ -191,6 +269,20 @@ function EnrollmentRow({
             <PencilSimple size={13} weight="bold" />
           </button>
         )}
+        {/* Same menu as right-click — certificates, results, re-enroll — made discoverable. */}
+        <button
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onContextMenu({ x: r.right - 220, y: r.bottom + 6 });
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          title="More actions — certificates, results…"
+          aria-label="More actions"
+          className={`${ACTION_BTN} w-7 hover:bg-[#6B7CF6]/[0.08]`}
+          style={{ borderColor: `${PERI}59`, color: PERI_INK }}
+        >
+          <DotsThree size={15} weight="bold" />
+        </button>
         {isAdmin && (
           isWPStudent(s) ? (
             <span title={WP_FEE_TITLE} className="inline-flex items-center justify-center w-[98px] h-7 rounded-full border text-[11px] font-medium cursor-default" style={pill(WP_HEX)}>
@@ -205,13 +297,16 @@ function EnrollmentRow({
           ) : (
             <button
               onClick={onCollect}
-              className="sr-pop inline-flex items-center justify-center w-[98px] h-7 rounded-full text-[11px] font-medium text-white hover:brightness-95 transition-[filter] cursor-pointer"
+              title={feeStatus === 'dues' ? (due ? `Collect dues — ₹${due.toLocaleString('en-IN')} outstanding` : 'Collect dues') : 'Collect fee'}
+              className="sr-pop inline-flex items-center justify-center w-[98px] h-7 rounded-full text-[11px] font-medium text-white tabular-nums whitespace-nowrap hover:brightness-95 transition-[filter] cursor-pointer"
               style={{
                 background: feeStatus === 'dues' ? AMBER : PERI,
                 boxShadow: `0 2px 8px ${feeStatus === 'dues' ? AMBER : PERI}40`,
               }}
             >
-              {feeStatus === 'dues' ? 'Collect Dues' : 'Collect Fee'}
+              {feeStatus === 'dues'
+                ? (due ? `₹${due.toLocaleString('en-IN')} due` : 'Collect Dues')
+                : 'Collect Fee'}
             </button>
           )
         )}
@@ -225,8 +320,13 @@ export interface SearchResultsProps {
   query: string;
   feeStatus: Map<string, FeeStatus>;
   groupDue: Map<string, GroupDue>;
+  /** Outstanding balance per enrollment id (only where it's > 0 and computable). */
+  studentDue: Map<string, number>;
   feeLoading: boolean;
   isAdmin: boolean;
+  currentAcademicYear: string;
+  /** Groups eligible for next-year enrollment in the current academic year, by group key. */
+  nextEnroll: Map<string, NextEnroll>;
   activeIdx: number;
   visibleCount: number;
   ctxStudentId: string | null;
@@ -235,12 +335,14 @@ export interface SearchResultsProps {
   onView: (s: Student) => void;
   onEdit: (s: Student) => void;
   onCollect: (s: Student) => void;
-  onRowContextMenu: (e: MouseEvent, s: Student) => void;
+  onReEnroll: (next: NextEnroll) => void;
+  onRowContextMenu: (pos: MenuPos, s: Student) => void;
 }
 
 export function SearchResults({
-  groups, query, feeStatus, groupDue, feeLoading, isAdmin, activeIdx, visibleCount, ctxStudentId,
-  onShowMore, onClear, onView, onEdit, onCollect, onRowContextMenu,
+  groups, query, feeStatus, groupDue, studentDue, feeLoading, isAdmin, currentAcademicYear, nextEnroll,
+  activeIdx, visibleCount, ctxStudentId,
+  onShowMore, onClear, onView, onEdit, onCollect, onReEnroll, onRowContextMenu,
 }: SearchResultsProps) {
   const activeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -329,6 +431,15 @@ export function SearchResults({
         const latest = group.records[group.records.length - 1];
         const regNo = [...group.records].reverse().find((r) => r.regNumber)?.regNumber ?? '';
         const mobile = [...group.records].reverse().map((r) => r.studentMobile || r.fatherMobile).find(Boolean) ?? '';
+        // Details dropped from the header stay one hover away on the name.
+        const nameTitle = [
+          group.nameSSLC,
+          group.nameAadhar && group.nameAadhar !== group.nameSSLC ? `Aadhaar: ${group.nameAadhar}` : '',
+          group.dob ? `DOB: ${group.dob}` : '',
+          mobile ? `Mobile: ${mobile}` : '',
+        ].filter(Boolean).join('\n');
+        const hint = matchHint(group, query);
+        const next = isAdmin ? nextEnroll.get(group.key) : undefined;
         const avatarHex = group.gender === 'GIRL' ? GIRL_HEX : BOY_HEX;
         const courseHex = COURSE_HEX[latest?.course as keyof typeof COURSE_HEX] ?? PERI;
         const active = idx === activeIdx;
@@ -351,13 +462,13 @@ export function SearchResults({
             {/* Profile header */}
             {/* pr-5 puts the fee block on the same right edge as the row fee buttons */}
             <div
-              className="flex items-center gap-3 pl-4 pr-5 pt-1.5 pb-[5px]"
+              className="flex items-center gap-3 pl-4 pr-5 py-2"
               style={{ background: 'linear-gradient(135deg,#F3F4FF 0%,#FFFFFF 70%)' }}
             >
              <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="relative shrink-0">
                 <span
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-semibold text-white border-2 border-white"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-[12.5px] font-semibold text-white border-2 border-white"
                   style={{ background: `linear-gradient(135deg, ${avatarHex}B3 0%, ${avatarHex} 100%)`, boxShadow: `0 2px 8px ${avatarHex}40` }}
                 >
                   {initials(group.nameSSLC)}
@@ -372,58 +483,52 @@ export function SearchResults({
                 )}
               </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold leading-tight truncate" style={{ color: PERI_INK }}>
+              {/* One line: name (S/o father) · Reg No · why-it-matched hint · WP.
+                  DOB / mobile / Aadhaar name live in the name's tooltip. */}
+              <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap gap-y-1">
+                <p className="min-w-0 max-w-full text-[15px] font-semibold leading-tight truncate cursor-default" style={{ color: PERI_INK }} title={nameTitle}>
                   <Highlight text={group.nameSSLC} query={query} />
                   {group.fatherName && (
-                    <span className="font-normal text-[12.5px]" style={{ color: FAINT }}>
+                    <span className="font-normal text-[12px]" style={{ color: FAINT }}>
                       {'  '}{group.gender === 'BOY' ? 'S/o' : 'D/o'} {group.fatherName}
                     </span>
                   )}
                 </p>
-                {group.nameAadhar && group.nameAadhar !== group.nameSSLC && (
-                  <p className="text-[11px] leading-tight truncate mt-0.5" style={{ color: FAINT }}>
-                    Aadhaar: <Highlight text={group.nameAadhar} query={query} />
-                  </p>
+                {regNo ? (
+                  <RegNoPill regNo={regNo} query={query} />
+                ) : (
+                  <span
+                    className="shrink-0 inline-flex items-center gap-1 h-7 rounded-full border border-dashed bg-white px-2.5 text-[11px] font-medium leading-none whitespace-nowrap"
+                    style={{ borderColor: `${PERI}66`, color: FAINT }}
+                  >
+                    <IdentificationCard size={13} weight="bold" /> No Reg No
+                  </span>
                 )}
-                <div className="mt-1 flex items-end gap-1.5 flex-wrap">
-                  {mobile && <FactChip icon={<Phone size={12} weight="bold" />} title="Mobile"><Highlight text={mobile} query={query} /></FactChip>}
-                  <FactChip icon={<Cake size={12} weight="bold" />} title="Date of birth">{group.dob || '—'}</FactChip>
-                  <FactChip icon={<Stack size={12} weight="bold" />}>
-                    {group.records.length} enrollment{group.records.length !== 1 ? 's' : ''}
-                  </FactChip>
-                  {/* Register No — primary identity: name-style type in a periwinkle pill
-                      (same pastel accent as the year/course pills). */}
-                  {regNo ? (
-                    <span
-                      title="Register No"
-                      className="inline-flex items-center gap-1.5 h-7 rounded-full border px-2.5 text-[15px] font-semibold leading-none tabular-nums whitespace-nowrap"
-                      style={{ ...pill(PERI), color: PERI_INK }}
-                    >
-                      <IdentificationCard size={14} weight="bold" style={{ color: PERI }} />
-                      <Highlight text={regNo} query={query} />
-                    </span>
-                  ) : (
-                    <span
-                      className="inline-flex items-center gap-1 h-7 rounded-full border border-dashed bg-white px-2.5 text-[11.5px] font-medium leading-none whitespace-nowrap"
-                      style={{ borderColor: `${PERI}66`, color: FAINT }}
-                    >
-                      <IdentificationCard size={13} weight="bold" /> No Reg No
-                    </span>
-                  )}
-                  {hasWP && (
-                    <span
-                      title="Working Professional (Evening College)"
-                      className="inline-flex items-center h-7 rounded-full border px-2.5 text-[11px] font-medium leading-none whitespace-nowrap"
-                      style={pill(WP_HEX)}
-                    >
-                      Working Professional
-                    </span>
-                  )}
-                </div>
+                {hint && <MatchHintChip hint={hint} query={query} />}
+                {hasWP && (
+                  <span
+                    title="Working Professional (Evening College)"
+                    className="shrink-0 inline-flex items-center h-6 rounded-full border px-2 text-[10.5px] font-semibold leading-none whitespace-nowrap"
+                    style={pill(WP_HEX)}
+                  >
+                    WP
+                  </span>
+                )}
               </div>
 
              </div>
+
+              {next && (
+                <button
+                  onClick={() => onReEnroll(next)}
+                  title={`Enroll for ${next.targetYear.toLowerCase()} in ${next.targetAcademicYear}`}
+                  className={`${ACTION_BTN} shrink-0 px-2.5 hover:bg-[#6B7CF6]/[0.08]`}
+                  style={{ borderColor: `${PERI}59`, color: PERI_INK }}
+                >
+                  <ArrowUp size={12} weight="bold" />
+                  Enroll {NEXT_LABEL[next.targetYear]}
+                </button>
+              )}
 
               {/* Same 98px column as the row fee pills, so header and row statuses line up */}
               <div className="shrink-0 min-w-[98px] flex justify-center">
@@ -445,15 +550,17 @@ export function SearchResults({
                   s={s}
                   isFirst={i === 0}
                   isLast={i === group.records.length - 1}
+                  isCurrent={!!currentAcademicYear && s.academicYear === currentAcademicYear}
                   groupRegNo={regNo}
                   query={query}
                   isAdmin={isAdmin}
                   feeStatus={feeLoading ? null : (feeStatus.get(s.id) ?? 'collect')}
+                  due={studentDue.get(s.id)}
                   ctxActive={ctxStudentId === s.id}
                   onView={() => onView(s)}
                   onEdit={() => onEdit(s)}
                   onCollect={() => onCollect(s)}
-                  onContextMenu={(e) => onRowContextMenu(e, s)}
+                  onContextMenu={(pos) => onRowContextMenu(pos, s)}
                 />
               ))}
             </div>

@@ -36,7 +36,7 @@ import { dayKey, receiptAccountSplit } from '../utils/cashLedger';
 import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
 import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardToggle';
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
-import { SearchResults, type StudentGroup, type FeeStatus } from '../components/dashboard/SearchResults';
+import { SearchResults, type StudentGroup, type FeeStatus, type NextEnroll } from '../components/dashboard/SearchResults';
 import type { DtekCircular } from '../services/dtekNewsService';
 import {
   PAGE_BG, CARD, OUTLINE_PILL_BTN, ICON_PILL_BTN, EYEBROW, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER,
@@ -270,6 +270,8 @@ export function Dashboard() {
   const [feeDataVersion, setFeeDataVersion] = useState(0);
   // ── Total due per student group (keyed by group.key = regNumber or name|dob) ─
   const [searchGroupDue, setSearchGroupDue] = useState<Map<string, number | null | 'unavailable'>>(new Map());
+  // ── Outstanding balance per enrollment (only where a fee structure/override exists) ─
+  const [searchStudentDue, setSearchStudentDue] = useState<Map<string, number>>(new Map());
 
   // ── Filter / chips / stats pills panel visibility ────────────────────────
   const [showFilters,    setShowFilters]    = useState(false);
@@ -431,6 +433,30 @@ export function Dashboard() {
     return Array.from(map.values()).sort((a, b) => a.nameSSLC.localeCompare(b.nameSSLC));
   }, [searchResults]);
 
+  // Groups that can be enrolled into their next year in the current academic year:
+  // highest year reached isn't 3RD YEAR and there's no enrollment this year yet.
+  // Shared by the result card's "Enroll" pill and the row context menu.
+  const nextEnrollByGroup = useMemo(() => {
+    const out = new Map<string, NextEnroll>();
+    const current = settings?.currentAcademicYear;
+    if (!current) return out;
+    const YEAR_ORDER: Record<Year, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
+    const NEXT_YEAR: Record<Year, Year | null> = { '1ST YEAR': '2ND YEAR', '2ND YEAR': '3RD YEAR', '3RD YEAR': null };
+    for (const g of studentGroups) {
+      if (g.records.length === 0 || g.records.some((r) => r.academicYear === current)) continue;
+      const record = g.records.reduce((best, r) => (YEAR_ORDER[r.year] > YEAR_ORDER[best.year] ? r : best), g.records[0]);
+      const targetYear = NEXT_YEAR[record.year];
+      if (targetYear) out.set(g.key, { record, targetYear, targetAcademicYear: current });
+    }
+    return out;
+  }, [studentGroups, settings?.currentAcademicYear]);
+
+  function startReEnroll(next: NextEnroll) {
+    void navigate('/enroll?from=dashboard', {
+      state: { reEnrollStudent: next.record, targetYear: next.targetYear, targetAcademicYear: next.targetAcademicYear },
+    });
+  }
+
   // ↑/↓ move between result cards (paging in more when stepping past the last one),
   // Enter opens the active student's latest enrollment, Esc clears the search.
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -467,6 +493,7 @@ export function Dashboard() {
     if (!isSearchMode || feeTargets.length === 0) {
       setSearchFeeStatus(new Map());
       setSearchGroupDue(new Map());
+      setSearchStudentDue(new Map());
       setSearchFeeLoading(false);
       return;
     }
@@ -526,6 +553,7 @@ export function Dashboard() {
       }
 
       const statusMap = new Map<string, FeeStatus>();
+      const studentDueMap = new Map<string, number>();
       for (const s of feeTargets) {
         const paid = paidByStudent.get(s.id) ?? 0;
         const allottedKey = `${s.academicYear}__${s.course}__${s.year}__${s.admType}__${s.admCat}`;
@@ -546,6 +574,8 @@ export function Dashboard() {
           status = 'collect';
         }
         statusMap.set(s.id, status);
+        // Same 2021-22 cut-off as the group total below, so row amounts add up to it.
+        if (allotted !== null && allotted > paid && s.academicYear >= '2021-22') studentDueMap.set(s.id, allotted - paid);
       }
 
       // Compute total due per student group (only 2021-22 and later — prior data unavailable)
@@ -581,6 +611,7 @@ export function Dashboard() {
       if (!cancelled) {
         setSearchFeeStatus(statusMap);
         setSearchGroupDue(groupDueMap);
+        setSearchStudentDue(studentDueMap);
         setSearchFeeLoading(false);
       }
     }
@@ -1661,8 +1692,12 @@ const [barsReady, setBarsReady] = useState(false);
           query={searchTerm}
           feeStatus={searchFeeStatus}
           groupDue={searchGroupDue}
+          studentDue={searchStudentDue}
           feeLoading={searchFeeLoading}
           isAdmin={isAdmin}
+          currentAcademicYear={settings?.currentAcademicYear ?? ''}
+          nextEnroll={nextEnrollByGroup}
+          onReEnroll={startReEnroll}
           activeIdx={activeIdx}
           visibleCount={visibleCount}
           ctxStudentId={ctxMenu?.student.id ?? null}
@@ -1671,7 +1706,7 @@ const [barsReady, setBarsReady] = useState(false);
           onView={setFeeHistoryStudent}
           onEdit={(s) => void navigate(`/enroll?edit=${s.id}&from=dashboard`)}
           onCollect={setCollectFeeStudent}
-          onRowContextMenu={(e, s) => setCtxMenu({ x: e.clientX, y: e.clientY, student: s })}
+          onRowContextMenu={(pos, s) => setCtxMenu({ ...pos, student: s })}
         />
 
       ) : (
@@ -2415,36 +2450,19 @@ const [barsReady, setBarsReady] = useState(false);
               </button>
             )}
             {isAdmin && (() => {
-              const YEAR_ORDER: Record<Year, number> = { '1ST YEAR': 1, '2ND YEAR': 2, '3RD YEAR': 3 };
-              const NEXT_YEAR: Record<Year, Year | null> = { '1ST YEAR': '2ND YEAR', '2ND YEAR': '3RD YEAR', '3RD YEAR': null };
               const YEAR_LABEL: Record<Year, string> = { '1ST YEAR': '1st Year', '2ND YEAR': '2nd Year', '3RD YEAR': '3rd Year' };
               const activeGroup = studentGroups.find((g) => g.records.some((r) => r.id === ctxMenu.student.id));
-              const maxYearRecord = activeGroup?.records.reduce((best, r) =>
-                YEAR_ORDER[r.year] > YEAR_ORDER[best.year] ? r : best
-              , activeGroup.records[0]) ?? ctxMenu.student;
-              const nextEnrollYear = NEXT_YEAR[maxYearRecord.year];
-              const alreadyEnrolledCurrentYear = activeGroup?.records.some(
-                (r) => r.academicYear === settings?.currentAcademicYear
-              ) ?? false;
-              if (!nextEnrollYear || alreadyEnrolledCurrentYear) return null;
+              const next = activeGroup && nextEnrollByGroup.get(activeGroup.key);
+              if (!next) return null;
               return (
                 <button
                   className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#3F4BB8] hover:bg-[#F5F6FF] flex items-center gap-2 transition-colors duration-100"
-                  onClick={() => {
-                    void navigate('/enroll?from=dashboard', {
-                      state: {
-                        reEnrollStudent: maxYearRecord,
-                        targetYear: nextEnrollYear,
-                        targetAcademicYear: settings?.currentAcademicYear,
-                      },
-                    });
-                    setCtxMenu(null);
-                  }}
+                  onClick={() => { startReEnroll(next); setCtxMenu(null); }}
                 >
                   <span className="w-[20px] h-[20px] rounded-[6px] bg-[#6B7CF6]/15 text-[#3F4BB8] flex items-center justify-center flex-shrink-0 group-hover:bg-[#6B7CF6]/25 transition-colors">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
                   </span>
-                  {`Enroll for ${YEAR_LABEL[nextEnrollYear]} in ${settings?.currentAcademicYear ?? ''}`}
+                  {`Enroll for ${YEAR_LABEL[next.targetYear]} in ${next.targetAcademicYear}`}
                 </button>
               );
             })()}
