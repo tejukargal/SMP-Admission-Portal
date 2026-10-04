@@ -26,6 +26,11 @@ import type { ThemeName } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
+import { InsightsButton, type DashboardInsights } from '../components/dashboard/InsightsPanel';
+import { useInquiries } from '../hooks/useInquiries';
+import { useCashInHand } from '../contexts/CashInHandContext';
+import { todayIST } from '../utils/formatDates';
+import { dayKey, receiptAccountSplit } from '../utils/cashLedger';
 import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
 import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardToggle';
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
@@ -80,6 +85,20 @@ const YEARS: Year[] = ['1ST YEAR', '2ND YEAR', '3RD YEAR'];
 const REGULAR_INTAKE = 60;
 const LATERAL_BASE_PCT = 0.10;
 const YEAR_INTAKE = 63 * COURSES.length; // 315 — total intake capacity per year across all courses
+
+/** '2026-27' → '2025-26' */
+function previousAcademicYear(year: AcademicYear): AcademicYear | null {
+  const m = year.match(/^(\d{4})-\d{2}$/);
+  if (!m) return null;
+  const start = Number(m[1]) - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}` as AcademicYear;
+}
+
+/** Shift a YYYY-MM-DD date by whole days (UTC, so it never drifts). */
+function shiftIsoDate(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
 
 // PDF export accent themes — mirror each course/year card's own accent colour so an
 // exported report visually matches the modal/card it was triggered from.
@@ -142,42 +161,6 @@ function SlotTicker({ label, value, textColor }: { label: string; value: string 
       >
         <span className={`text-[10px] font-medium leading-none ${textColor}`}>{state.cur.label}</span>
         <p className={`text-[20px] font-medium leading-none tabular-nums ${textColor}`}>{state.cur.value}</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Cycling stat line (slot-machine transition, single row of arbitrary content) ─────
-// Same slot-exit/slot-enter mechanics as SlotTicker above, generalized to any JSX so the
-// search-bar admission/collection label can reuse the exact Boys/Girls card transition.
-function CyclingStatLine({ slideKey, children }: { slideKey: number; children: React.ReactNode }) {
-  const [state, setState] = useState<{ prevKey: number | null; prevContent: React.ReactNode; curKey: number; curContent: React.ReactNode }>({
-    prevKey: null, prevContent: null, curKey: slideKey, curContent: children,
-  });
-
-  useEffect(() => {
-    setState((s) => {
-      if (s.curKey === slideKey) return { ...s, curContent: children };
-      return { prevKey: s.curKey, prevContent: s.curContent, curKey: slideKey, curContent: children };
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slideKey, children]);
-
-  useEffect(() => {
-    if (state.prevKey === null) return;
-    const t = setTimeout(() => setState((s) => ({ ...s, prevKey: null, prevContent: null })), 440);
-    return () => clearTimeout(t);
-  }, [state.prevKey]);
-
-  return (
-    <div className="relative overflow-hidden">
-      {state.prevKey !== null && (
-        <div className="absolute inset-0" style={{ animation: 'slot-exit 0.2s ease-in forwards' }}>
-          {state.prevContent}
-        </div>
-      )}
-      <div style={{ animation: state.prevKey !== null ? 'slot-enter 0.2s ease-out 0.2s both' : 'none' }}>
-        {state.curContent}
       </div>
     </div>
   );
@@ -264,6 +247,7 @@ export function Dashboard() {
   // rawStudents so WP students can still be found and issued certificates.
   const allStudents = useMemo(() => rawStudents.filter((s) => !isWPStudent(s)), [rawStudents]);
   const { settings } = useSettings();
+  const cashInHand = useCashInHand();
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
   const [dtekCircular, setDtekCircular] = useState<DtekCircular | null>(null);
@@ -367,19 +351,6 @@ export function Dashboard() {
     startTransition(() => setDashboardFilters({ searchTerm: inputValue }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue]);
-
-  // Cycling admission/collection label shown next to the search bar — matches the
-  // Boys/Girls card's gender-breakup cycle exactly: 1.2s initial delay, then every 6s.
-  const [cycleDateIdx, setCycleDateIdx] = useState(0);
-  const [cyclePaused, setCyclePaused] = useState(false);
-  useEffect(() => {
-    if (cyclePaused) return;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const delayId = setTimeout(() => {
-      intervalId = setInterval(() => setCycleDateIdx((i) => i + 1), 6000);
-    }, 1200);
-    return () => { clearTimeout(delayId); if (intervalId !== null) clearInterval(intervalId); };
-  }, [cyclePaused]);
 
   const chipsScrollRef = useRef<HTMLDivElement>(null);
   function scrollChips(dir: 'left' | 'right') {
@@ -931,42 +902,43 @@ const [barsReady, setBarsReady] = useState(false);
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [feeRecords, filteredStudents, admStatusFilter]);
 
-  // Cycling search-bar label: today + the 2 most recent prior dates that had admission
-  // activity, each with admission count, total fee collected, and SMP Cash/UPI split —
-  // mirrors FeeReportsPage's buildRemittanceSummaries() date-range logic (single date bucket).
+  // Fee-status ticker day slides: today (IST) + the 2 most recent earlier days with any
+  // collection. Whole college — ignores dashboard filters so the numbers always match
+  // Cash & Bank. Admissions = confirmed students whose first receipt fell on that day;
+  // Cash/UPI cover every head (SMP + SVK + additional) via receiptAccountSplit, so
+  // Cash + UPI = total.
   const cyclingDateStats = useMemo(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const priorActiveDates = dateTable.filter((d) => d.date < todayIso).slice(0, 2).map((d) => d.date);
-    const dates = [todayIso, ...priorActiveDates];
-    const admissionByDate = new Map(dateTable.map((d) => [d.date, d.total]));
+    const todayIso = todayIST();
+    const confirmedIds = new Set(allStudents.filter(isConfirmedActive).map((s) => s.id));
+    const firstPaymentDay = new Map<string, string>();
+    const collectionDays = new Set<string>();
+    for (const r of feeRecords) {
+      if (!r.date) continue;
+      const day = dayKey(r.date);
+      collectionDays.add(day);
+      const prev = firstPaymentDay.get(r.studentId);
+      if (!prev || day < prev) firstPaymentDay.set(r.studentId, day);
+    }
+    const priorDays = [...collectionDays].filter((d) => d < todayIso).sort().reverse().slice(0, 2);
+    const dates = [todayIso, ...priorDays];
 
-    return dates.map((date) => {
+    const days = dates.map((date) => {
+      let admissionCount = 0;
+      for (const [id, day] of firstPaymentDay) if (day === date && confirmedIds.has(id)) admissionCount++;
       let totalCollection = 0;
-      let smpCash = 0;
-      let smpUpi = 0;
+      let cash = 0;
+      let upi = 0;
       for (const r of feeRecords) {
-        if (!r.date || r.date.slice(0, 10) !== date) continue;
-        const smpAmt = SMP_FEE_HEADS.reduce((s, { key }) => s + r.smp[key], 0);
-        const addAmt = r.additionalPaid.reduce((s, h) => s + h.amount, 0);
-        totalCollection += smpAmt + r.svk + addAmt;
-
-        const smpMode = r.smpPaymentMode ?? r.paymentMode;
-        if (smpMode === 'CASH') smpCash += smpAmt;
-        else if (smpMode === 'UPI') smpUpi += smpAmt;
-        else if (smpMode === 'SPLIT') {
-          smpCash += r.smpSplit?.cash ?? 0;
-          smpUpi += r.smpSplit?.upi ?? 0;
-        }
+        if (!r.date || dayKey(r.date) !== date) continue;
+        const split = receiptAccountSplit(r);
+        cash += split.SBI.cash + split.SVK.cash;
+        upi += split.SBI.upi + split.SVK.upi;
       }
-      return {
-        date,
-        admissionCount: admissionByDate.get(date) ?? 0,
-        totalCollection,
-        smpCash,
-        smpUpi,
-      };
+      totalCollection = cash + upi;
+      return { date, isToday: date === todayIso, admissionCount, totalCollection, cash, upi };
     });
-  }, [dateTable, feeRecords]);
+    return { days, todayIso, firstPaymentDay, confirmedIds };
+  }, [allStudents, feeRecords]);
 
   // Fee structures, per-student overrides, and fee-netting refunds for the current academic
   // year — needed to compute SMP/SVK Allotted/Paid totals for the cycling label using the
@@ -1029,6 +1001,7 @@ const [barsReady, setBarsReady] = useState(false);
     }
 
     let smpAllotted = 0, smpPaid = 0, svkAllotted = 0, svkPaid = 0;
+    let studentsWithDues = 0, duesOutstanding = 0;
     for (const s of cohort) {
       const key = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
       const override = overrideByStudent.get(s.id);
@@ -1051,27 +1024,99 @@ const [barsReady, setBarsReady] = useState(false);
       }
 
       const refunded = refundedByStudent.get(s.id) ?? 0;
+      const smpP = Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
+      const svkP = svkPaidByStudent.get(s.id) ?? 0;
       smpAllotted += smpA;
       svkAllotted += svkA;
-      smpPaid += Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
-      svkPaid += svkPaidByStudent.get(s.id) ?? 0;
+      smpPaid += smpP;
+      svkPaid += svkP;
+      const due = (smpA - smpP) + (svkA - svkP);
+      if (due > 0) { studentsWithDues++; duesOutstanding += due; }
     }
-    return { smpAllotted, smpPaid, smpDues: smpAllotted - smpPaid, svkAllotted, svkPaid, svkDues: svkAllotted - svkPaid };
+    return {
+      smpAllotted, smpPaid, smpDues: smpAllotted - smpPaid, svkAllotted, svkPaid, svkDues: svkAllotted - svkPaid,
+      studentsWithDues, duesOutstanding, cohortSize: cohort.length,
+    };
   }, [feeAcademicYear, allStudents, cycleFeeStructures, cycleFeeOverrides, cycleRefunds, feeRecords]);
 
-  // Unified cycling slides: per-date admission/collection summaries, then the overall
-  // SMP and SVK Allotted/Paid/Dues summaries — all shown in rotation next to the search bar.
-  const cycleSlides = useMemo(() => {
-    const slides: (
-      | { kind: 'date'; date: string; admissionCount: number; totalCollection: number; smpCash: number; smpUpi: number }
-      | { kind: 'smp' | 'svk'; allotted: number; paid: number; dues: number }
-    )[] = cyclingDateStats.map((d) => ({ kind: 'date' as const, ...d }));
-    if (smpSvkFeeTotals) {
-      slides.push({ kind: 'smp', allotted: smpSvkFeeTotals.smpAllotted, paid: smpSvkFeeTotals.smpPaid, dues: smpSvkFeeTotals.smpDues });
-      slides.push({ kind: 'svk', allotted: smpSvkFeeTotals.svkAllotted, paid: smpSvkFeeTotals.svkPaid, dues: smpSvkFeeTotals.svkDues });
+  // Insights panel (toolbar button): whole-college fee + admission insights for the
+  // selected (or current) academic year — ignores dashboard filters; WP excluded.
+  const { inquiries } = useInquiries(feeAcademicYear);
+  const insights = useMemo<DashboardInsights>(() => {
+    const { days, todayIso, firstPaymentDay, confirmedIds } = cyclingDateStats;
+    const ratio = (paid: number, allotted: number) => (allotted > 0 ? paid / allotted : 0);
+    const fee = (allotted: number, paid: number) => ({ allotted, paid, dues: allotted - paid, pct: ratio(paid, allotted) });
+    const t = smpSvkFeeTotals;
+
+    const yearStudents = feeAcademicYear ? allStudents.filter((s) => s.academicYear === feeAcademicYear) : [];
+    const confirmed = yearStudents.filter(isConfirmedActive);
+    const prevYear = feeAcademicYear ? previousAcademicYear(feeAcademicYear) : null;
+    const prevConfirmed = prevYear ? allStudents.filter((s) => s.academicYear === prevYear && isConfirmedActive(s)).length : 0;
+
+    // 1st-year seats: 63 per course (60 regular + 3 SNQ)
+    const firstYearByCourse: Record<Course, number> = { CE: 0, ME: 0, EC: 0, CS: 0, EE: 0 };
+    for (const s of confirmed) if (s.year === '1ST YEAR' && s.course in firstYearByCourse) firstYearByCourse[s.course as Course]++;
+    const seatsPerCourse = YEAR_INTAKE / COURSES.length;
+    const filled = COURSES.reduce((sum, c) => sum + Math.min(firstYearByCourse[c], seatsPerCourse), 0);
+    const vacant = COURSES
+      .map((course) => ({ course, count: Math.max(0, seatsPerCourse - firstYearByCourse[course]) }))
+      .filter((v) => v.count > 0)
+      .sort((x, y) => y.count - x.count)
+      .slice(0, 2);
+
+    // Admissions this week vs the previous 7 days (first receipt date of confirmed students)
+    const weekStart = shiftIsoDate(todayIso, -6);
+    const prevStart = shiftIsoDate(todayIso, -13);
+    let last7 = 0, prev7 = 0;
+    for (const [id, day] of firstPaymentDay) {
+      if (!confirmedIds.has(id)) continue;
+      if (day >= weekStart && day <= todayIso) last7++;
+      else if (day >= prevStart && day < weekStart) prev7++;
     }
-    return slides;
-  }, [cyclingDateStats, smpSvkFeeTotals]);
+
+    const isBlank = (v: string | undefined) => !v || !v.trim();
+    let gapTotal = 0, gapMobile = 0, gapAadhar = 0, gapDob = 0;
+    for (const s of confirmed) {
+      const noMobile = isBlank(s.fatherMobile) && isBlank(s.studentMobile);
+      const noAadhar = isBlank(s.aadharNumber);
+      const noDob = isBlank(s.dateOfBirth);
+      if (noMobile) gapMobile++;
+      if (noAadhar) gapAadhar++;
+      if (noDob) gapDob++;
+      if (noMobile || noAadhar || noDob) gapTotal++;
+    }
+
+    return {
+      days: days.map((d) => ({ date: d.date, isToday: d.isToday, admissions: d.admissionCount, total: d.totalCollection, cash: d.cash, upi: d.upi })),
+      fees: t ? {
+        smp: fee(t.smpAllotted, t.smpPaid),
+        svk: fee(t.svkAllotted, t.svkPaid),
+        overall: fee(t.smpAllotted + t.svkAllotted, t.smpPaid + t.svkPaid),
+      } : null,
+      dues: t && t.studentsWithDues > 0 ? { students: t.studentsWithDues, cohort: t.cohortSize, amount: t.duesOutstanding } : null,
+      cash: cashInHand.enabled && cashInHand.configured && !cashInHand.loading && cashInHand.summary.total > 0
+        ? { amount: cashInHand.summary.total, daysHeld: cashInHand.summary.daysHeld, overdue: cashInHand.summary.isOverdue }
+        : null,
+      confirmed: { current: confirmed.length, prevYear, prev: prevConfirmed },
+      seats: { filled, total: YEAR_INTAKE, vacant },
+      week: { last7, prev7 },
+      gender: {
+        boys: confirmed.filter((s) => s.gender === 'BOY').length,
+        girls: confirmed.filter((s) => s.gender === 'GIRL').length,
+      },
+      pending: yearStudents.filter((s) => !['CONFIRMED', 'CANCELLED'].includes(s.admissionStatus?.trim() ?? '')).length,
+      transfers: {
+        in: yearStudents.filter((s) => s.transferredIn).length,
+        out: yearStudents.filter((s) => s.transferOut).length,
+      },
+      inquiries: {
+        active: inquiries.filter((q) => q.status === 'active').length,
+        converted: inquiries.filter((q) => q.status === 'converted').length,
+        total: inquiries.length,
+      },
+      gaps: { total: gapTotal, mobile: gapMobile, aadhar: gapAadhar, dob: gapDob },
+    };
+  }, [cyclingDateStats, smpSvkFeeTotals, feeAcademicYear, allStudents, cashInHand, inquiries]);
 
   const admissionPendingStats = useMemo(() => {
     const currentYear = settings?.currentAcademicYear;
@@ -1284,64 +1329,7 @@ const [barsReady, setBarsReady] = useState(false);
             </>
           )}
 
-          {!showFilters && cycleSlides.length > 0 && (() => {
-            const slide = cycleSlides[cycleDateIdx % cycleSlides.length];
-            const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
-
-            // Periwinkle 2-colour palette: label vs. value.
-            const LABEL = 'text-[#7A85C9]';
-            const VALUE = 'text-[#3F4BB8]';
-
-            let content: React.ReactNode;
-            if (slide.kind === 'date') {
-              const isToday = slide.date === new Date().toISOString().slice(0, 10);
-              const dLabel = isToday
-                ? 'TODAY'
-                : new Date(slide.date + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase();
-              content = (
-                <p className="text-[12px] font-medium tabular-nums truncate whitespace-nowrap">
-                  <span className={LABEL}>{dLabel}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={VALUE}>{slide.admissionCount}</span>
-                  <span className={LABEL}> Admission{slide.admissionCount !== 1 ? 's' : ''}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={VALUE}>{rupee(slide.totalCollection)}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={LABEL}>Cash </span>
-                  <span className={VALUE}>{rupee(slide.smpCash)}</span>
-                  <span className="text-[#C4C8D0]"> / </span>
-                  <span className={LABEL}>UPI </span>
-                  <span className={VALUE}>{rupee(slide.smpUpi)}</span>
-                </p>
-              );
-            } else {
-              const isSmp = slide.kind === 'smp';
-              content = (
-                <p className="text-[12px] font-medium tabular-nums truncate whitespace-nowrap">
-                  <span className={LABEL}>{isSmp ? 'SMP' : 'SVK'}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={LABEL}>Allotted </span>
-                  <span className={VALUE}>{rupee(slide.allotted)}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={LABEL}>Paid </span>
-                  <span className={VALUE}>{rupee(slide.paid)}</span>
-                  <span className="text-[#C4C8D0]"> · </span>
-                  <span className={LABEL}>Dues </span>
-                  <span className={VALUE}>{rupee(slide.dues)}</span>
-                </p>
-              );
-            }
-
-            return (
-              <div
-                onMouseEnter={() => setCyclePaused(true)}
-                onMouseLeave={() => setCyclePaused(false)}
-                className="cursor-pointer min-w-0 rounded-full bg-[#F5F6FF] px-3.5 py-1.5"
-              >
-                <CyclingStatLine slideKey={cycleDateIdx}>{content}</CyclingStatLine>
-              </div>
-            );
-          })()}
+          <InsightsButton insights={insights} year={feeAcademicYear} isAdmin={isAdmin} compact={showFilters} />
 
           {/* Inline collapsible filter selects — expand between search and right actions */}
           <div className="flex-1 min-w-0">

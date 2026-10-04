@@ -477,7 +477,7 @@ export function WPStudents() {
     <>
     <div
       className="font-wp -m-4 p-4 h-[calc(100%+2rem)] flex flex-col gap-3"
-      style={{ background: 'linear-gradient(160deg, #F9FCF5 0%, #FCFDFA 45%, #F6FAF0 100%)', animation: 'page-enter 0.22s ease-out' }}
+      style={{ background: 'linear-gradient(160deg, #F9FCF5 0%, #FCFDFA 45%, #F6FAF0 100%)', animation: 'page-enter 0.45s ease-out' }}
     >
 
       {/* Page header + stat chips */}
