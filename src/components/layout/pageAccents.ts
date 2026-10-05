@@ -21,6 +21,7 @@ const INDIGO = { accent: '#4F46E5', ink: '#3730A3', washFrom: '#F3F3FE', washTo:
 const PLUM = { accent: '#9333EA', ink: '#6B21A8', washFrom: '#F8F2FE', washTo: '#F2E8FC' };
 const AMBER = { accent: '#E08A00', ink: '#9A5B00', washFrom: '#FFF7EA', washTo: '#FDF0DB' };
 const CYAN = { accent: '#0891B2', ink: '#0E6A85', washFrom: '#EFF8FB', washTo: '#E6F4F8' };
+const WINE = { accent: '#BE185D', ink: '#9D174D', washFrom: '#FDF6F9', washTo: '#FBF1F6' };
 const SLATE = { accent: '#3B5BA9', ink: '#2B437F', washFrom: '#F2F5FB', washTo: '#EAEFF8' };
 
 /** Dashboard search mode borrows the Student Messages cyan (set via AccentOverrideContext). */
@@ -40,6 +41,7 @@ const ROUTES: { path: string; accent: PageAccent }[] = [
   { path: '/student-reports',  accent: { label: 'Student Reports', ...INDIGO } },
   { path: '/results',          accent: { label: 'Results', ...PLUM } },
   { path: '/ans-letters',      accent: { label: 'ANS Letters', ...AMBER } },
+  { path: '/exam-certificates', accent: { label: 'Exam Duty Certs', ...WINE } },
   { path: '/fees',             accent: { label: 'Collect Fee', ...TEAL } },
   { path: '/fee-register',     accent: { label: 'Fee Register', ...TEAL } },
   { path: '/fee-reports',      accent: { label: 'Fee Reports', ...TEAL } },
