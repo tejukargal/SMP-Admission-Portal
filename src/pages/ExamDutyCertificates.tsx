@@ -11,10 +11,14 @@ import {
   WINE_INK,
 } from '../components/common/ExamDutyCertificateModal';
 import { Modal } from '../components/common/Modal';
-import { PageSpinner } from '../components/common/PageSpinner';
 import type { ExamDutyCertificate, ExamDutyType } from '../types';
 
 const ALL = '__all__';
+
+// Last snapshot, kept across navigation so returning to the page renders
+// instantly — an empty collection otherwise has nothing in the offline cache
+// and would wait on the server every visit.
+let certsCache: ExamDutyCertificate[] | null = null;
 
 const OUTLINE_BTN =
   'shrink-0 inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#262B35] ' +
@@ -47,8 +51,8 @@ const ICONS = {
 export function ExamDutyCertificates() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const [certs, setCerts] = useState<ExamDutyCertificate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [certs, setCerts] = useState<ExamDutyCertificate[]>(() => certsCache ?? []);
+  const [loading, setLoading] = useState(() => certsCache === null);
   const [loadError, setLoadError] = useState('');
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -61,7 +65,7 @@ export function ExamDutyCertificates() {
 
   useEffect(() => {
     return subscribeExamCerts(
-      (c) => { setCerts(c); setLoading(false); },
+      (c) => { certsCache = c; setCerts(c); setLoading(false); },
       (e) => { setLoadError(e.message); setLoading(false); },
     );
   }, []);
@@ -159,8 +163,6 @@ export function ExamDutyCertificates() {
     }
   }
 
-  if (loading) return <PageSpinner />;
-
   const newSession = activeSessionInfo ? { label: activeSessionInfo.label, year: activeSessionInfo.year } : undefined;
 
   return (
@@ -248,6 +250,11 @@ export function ExamDutyCertificates() {
         <div className="flex-1 min-h-0 rounded-2xl border bg-white overflow-auto" style={{ borderColor: WINE_HAIR }}>
           {loadError ? (
             <div className="p-10 text-center text-[13px] text-[#B4232F]">Could not load certificates: {loadError}</div>
+          ) : loading ? (
+            <div className="p-12 flex items-center justify-center gap-2 text-[12.5px] text-[#7A6F7D]">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-[#BE185D]/25 border-t-[#BE185D] animate-spin" />
+              Loading certificates…
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-[14px] font-medium" style={{ color: WINE_INK }}>
