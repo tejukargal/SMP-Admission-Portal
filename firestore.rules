@@ -247,6 +247,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Exam Duty Attendance Certificates (external examiners) ────────────────
+    // Admin + staff issue and edit; only admin deletes. Serials are claimed in
+    // counters/examCert__{session} (counters are already writable by active users).
+    match /examDutyCertificates/{docId} {
+      allow read, create, update: if isActiveUser();
+      allow delete: if isAdmin();
+    }
+
+    // Directory of external examiners, used to auto-fill returning staff.
+    match /examDutyStaff/{docId} {
+      allow read, write: if isActiveUser();
+    }
+
     // ── SMP Budget (planned vs actual spend per SMP fee head) ──────────────────
     match /smpBudgets/{yearId} {
       allow read:  if isActiveUser();

@@ -39,6 +39,9 @@ export const pageLoaders = {
   ),
   results: once(() => import('./pages/Results').then((m) => ({ default: m.Results }))),
   ansLetters: once(() => import('./pages/AnsLetters').then((m) => ({ default: m.AnsLetters }))),
+  examDutyCerts: once(() =>
+    import('./pages/ExamDutyCertificates').then((m) => ({ default: m.ExamDutyCertificates }))
+  ),
 };
 
 const routeToLoader: Record<string, Loader> = {
@@ -58,6 +61,7 @@ const routeToLoader: Record<string, Loader> = {
   '/student-reports': pageLoaders.studentReports,
   '/results': pageLoaders.results,
   '/ans-letters': pageLoaders.ansLetters,
+  '/exam-certificates': pageLoaders.examDutyCerts,
 };
 
 export function preloadRoute(path: string): void {

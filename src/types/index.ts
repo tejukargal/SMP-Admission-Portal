@@ -707,3 +707,68 @@ export interface UpiCredit {
   createdAt: string;
   updatedAt: string;
 }
+
+// ── Exam Duty Attendance Certificates ───────────────────────────────────────
+// Issued to external lecturers/staff who carry out BTE exam duty at this centre.
+
+export type ExamDutyType =
+  | 'INVIGILATOR'
+  | 'RELIEVING_SUPERINTENDENT'
+  | 'DEPUTY_CHIEF_SUPERINTENDENT'
+  | 'CHIEF_OBSERVER'
+  | 'OBSERVER'
+  | 'IA_VERIFIER'
+  | 'PRACTICAL_EXAMINER'
+  | 'SQUAD_MEMBER'
+  | 'CUSTODIAN'
+  | 'OTHER';
+
+export type ExamKind = 'THEORY' | 'PRACTICAL';
+
+/** single = one day (`from`), range = `from`..`to`, dates = scattered days (`dates`). */
+export type ExamDutyDateMode = 'single' | 'range' | 'dates';
+
+export interface ExamDuty {
+  type: ExamDutyType;
+  customLabel: string;      // used when type === 'OTHER'
+  examKind: ExamKind;       // ignored for IA_VERIFIER; always PRACTICAL for PRACTICAL_EXAMINER
+  mode: ExamDutyDateMode;
+  from: string;             // 'YYYY-MM-DD'
+  to: string;               // 'YYYY-MM-DD' (range only)
+  dates: string[];          // 'YYYY-MM-DD'[] (dates mode only)
+  subject: string;          // optional subject / lab, practical examiner only
+}
+
+export type ExamCertSalutation = 'Sri.' | 'Smt.' | 'Kum.' | 'Dr.' | 'Prof.';
+
+export interface ExamDutyPerson {
+  salutation: ExamCertSalutation;
+  name: string;             // uppercase
+  designation: string;
+  department: string;
+  polytechnic: string;      // uppercase, with place, e.g. "GOVT. POLYTECHNIC, SORABA"
+}
+
+export interface ExamDutyCertificate extends ExamDutyPerson {
+  id: string;
+  sessionKey: string;       // 'APR-MAY-2026' — serial series key
+  sessionLabel: string;     // 'APR/MAY'
+  sessionYear: number;      // 2026
+  serial: number;
+  refNo: string;            // 'SMP/EXAM/APR/MAY-2026/76'
+  issueDate: string;        // 'YYYY-MM-DD'
+  duties: ExamDuty[];
+  bodyOverride?: string;    // manual wording; absent = generated
+  createdBy: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ExamDutyCertificateInput = Omit<ExamDutyCertificate, 'id' | 'sessionKey' | 'refNo' | 'createdBy' | 'createdByEmail' | 'createdAt' | 'updatedAt'>;
+
+/** Directory of external examiners, used to auto-fill returning staff. */
+export interface ExamDutyStaff extends ExamDutyPerson {
+  id: string;
+  lastUsedAt: string;
+}

@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   SquaresFour, ChatCircleText, UserPlus, Stamp, UsersThree, Briefcase, ChartPieSlice, Exam,
   EnvelopeSimpleOpen, HandCoins, Receipt, ChartBar, Bank, PaperPlaneTilt, GearSix,
-  Info, CaretLeft, ShieldCheck, IdentificationBadge,
+  Info, CaretLeft, ShieldCheck, IdentificationBadge, Certificate,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
@@ -46,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
     { to: '/student-reports', label: 'Student Reports', Icon: ChartPieSlice,      accent: '#4F46E5', ink: '#3730A3' },
     { to: '/results',         label: 'Results',         Icon: Exam,               accent: '#9333EA', ink: '#6B21A8' },
     { to: '/ans-letters',     label: 'ANS Letters',     Icon: EnvelopeSimpleOpen, accent: '#C2410C', ink: '#9A3412' },
+    { to: '/exam-certificates', label: 'Exam Duty Certs', Icon: Certificate,      accent: '#BE185D', ink: '#9D174D' },
   ] },
   { title: 'Finance', items: [
     { to: '/fees',            label: 'Collect Fee',     Icon: HandCoins,          ...TEAL, adminOnly: true },

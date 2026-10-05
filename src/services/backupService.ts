@@ -45,8 +45,18 @@ export interface BackupData {
       tc: BackupDoc | null;
       regSeq: BackupDoc[];
       receipts: BackupDoc | null;
+      examCerts?: BackupDoc[];
     };
+    // Not academic-year scoped — every backup carries the whole (small) register.
+    // Optional so backups made before this feature still restore.
+    examDutyCertificates?: BackupDoc[];
+    examDutyStaff?: BackupDoc[];
   };
+}
+
+async function fetchAll(coll: string): Promise<BackupDoc[]> {
+  const snap = await getDocs(collection(db, coll));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BackupDoc);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,7 +120,8 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
   // Counter docs
   const regPrefix = `${academicYear}__regseq__`;
   const regPrefixEnd = regPrefix + String.fromCodePoint(0xf8ff);
-  const [regSnap, merit, tc, receipts] = await Promise.all([
+  const examCertPrefix = 'examCert__';
+  const [regSnap, merit, tc, receipts, examCertSnap, examDutyCertificates, examDutyStaff] = await Promise.all([
     getDocs(
       query(
         collection(db, 'counters'),
@@ -121,6 +132,15 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
     fetchDocIfExists('counters', academicYear),
     fetchDocIfExists('counters', `${academicYear}__tc`),
     fetchDocIfExists('receiptCounters', academicYear),
+    getDocs(
+      query(
+        collection(db, 'counters'),
+        where(documentId(), '>=', examCertPrefix),
+        where(documentId(), '<=', examCertPrefix + String.fromCodePoint(0xf8ff)),
+      )
+    ),
+    fetchAll('examDutyCertificates'),
+    fetchAll('examDutyStaff'),
   ]);
 
   return {
@@ -150,7 +170,10 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
         tc,
         regSeq: regSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BackupDoc),
         receipts,
+        examCerts: examCertSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as BackupDoc),
       },
+      examDutyCertificates,
+      examDutyStaff,
     },
   };
 }
@@ -168,6 +191,8 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
     batchSetDocs('inquiries',       data.inquiries),
     batchSetDocs('studentDocuments', data.studentDocuments),
     batchSetDocs('feeStructure',    data.feeStructures ?? []),
+    batchSetDocs('examDutyCertificates', data.examDutyCertificates ?? []),
+    batchSetDocs('examDutyStaff',   data.examDutyStaff ?? []),
   ]);
 
   if (data.fineSchedule) {
@@ -189,6 +214,9 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
   if (counters.receipts) {
     const { id, ...d } = counters.receipts;
     counterWrites.push(setDoc(doc(db, 'receiptCounters', id as string), d));
+  }
+  if (counters.examCerts?.length) {
+    counterWrites.push(batchSetDocs('counters', counters.examCerts));
   }
   if (counters.regSeq?.length) {
     counterWrites.push(batchSetDocs('counters', counters.regSeq));

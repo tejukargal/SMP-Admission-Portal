@@ -38,6 +38,7 @@ const Inquiries = lazy(pageLoaders.inquiries);
 const StudentReports = lazy(pageLoaders.studentReports);
 const Results = lazy(pageLoaders.results);
 const AnsLetters = lazy(pageLoaders.ansLetters);
+const ExamDutyCertificates = lazy(pageLoaders.examDutyCerts);
 
 function AppRoutes() {
   const { user, role, loading } = useAuth();
@@ -93,6 +94,7 @@ function AppRoutes() {
           <Route path="/student-reports" element={<StudentReports />} />
           <Route path="/results" element={<Results />} />
           <Route path="/ans-letters" element={<AnsLetters />} />
+          <Route path="/exam-certificates" element={<ExamDutyCertificates />} />
           <Route
             path="/fees"
             element={isAdmin ? <CollectFee /> : <Navigate to="/dashboard" replace />}
