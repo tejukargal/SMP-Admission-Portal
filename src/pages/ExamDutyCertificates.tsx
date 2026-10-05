@@ -275,7 +275,7 @@ export function ExamDutyCertificates() {
                   <tr key={c.id} className="border-t align-top hover:bg-[#FFF8FB]" style={{ borderColor: '#F6E6EE' }}>
                     <td className="px-3 py-2.5"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} className="accent-[#BE185D] cursor-pointer" /></td>
                     <td className="px-2 py-2.5 whitespace-nowrap">
-                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] tabular-nums" style={{ borderColor: `${WINE}55`, color: WINE_INK }}>#{c.serial}</span>
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11.5px] tabular-nums" style={{ borderColor: `${WINE}55`, color: WINE_INK }}>{c.serial > 0 ? `#${c.serial}` : 'No serial'}</span>
                       <div className="mt-1 text-[11px] text-[#8A8190]">{c.refNo}</div>
                     </td>
                     <td className="px-2 py-2.5">

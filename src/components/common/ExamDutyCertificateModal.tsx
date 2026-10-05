@@ -13,9 +13,11 @@ import {
 import {
   buildExamCertBody,
   buildExamCertHTML,
+  dmy,
   DUTY_LABELS,
   DUTY_ORDER,
   printExamCerts,
+  rangeDays,
   SESSION_LABEL_SUGGESTIONS,
   type ExamCertContent,
 } from '../../utils/examDutyCertificate';
@@ -113,7 +115,7 @@ function initialForm(mode: Props['mode'], cert?: ExamDutyCertificate, session?: 
     return {
       sessionLabel: cert.sessionLabel,
       sessionYear: String(cert.sessionYear),
-      serial: String(cert.serial),
+      serial: cert.serial > 0 ? String(cert.serial) : '',
       issueDate: cert.issueDate,
       salutation: cert.salutation,
       name: cert.name,
@@ -147,8 +149,11 @@ function validate(f: FormState): string | null {
   if (!f.sessionLabel.trim()) return 'Enter the exam session (e.g. APR/MAY).';
   const year = Number(f.sessionYear);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return 'Enter a valid exam year.';
-  const serial = Number(f.serial);
-  if (!Number.isInteger(serial) || serial < 1) return 'Serial number must be a whole number of 1 or more.';
+  // Blank serial is allowed (ref prints without a number); otherwise it must be ≥ 1.
+  if (f.serial.trim()) {
+    const serial = Number(f.serial);
+    if (!Number.isInteger(serial) || serial < 1) return 'Serial number must be a whole number of 1 or more, or left blank.';
+  }
   if (!f.issueDate) return 'Choose the date of issue.';
   if (!f.name.trim()) return 'Enter the name of the staff member.';
   if (!f.polytechnic.trim()) return 'Enter the polytechnic / institution name.';
@@ -156,9 +161,9 @@ function validate(f: FormState): string | null {
   for (const [i, d] of f.duties.entries()) {
     const n = f.duties.length > 1 ? ` (duty ${i + 1})` : '';
     if (d.type === 'OTHER' && !d.customLabel.trim()) return `Enter the duty name${n}.`;
-    if (d.mode === 'single' && !d.from) return `Choose the duty date${n}.`;
+    if (d.mode === 'single' && !d.from) return `Enter the duty date as dd/mm/yyyy${n}.`;
     if (d.mode === 'range') {
-      if (!d.from || !d.to) return `Choose both From and To dates${n}.`;
+      if (!d.from || !d.to) return `Enter both From and To dates as dd/mm/yyyy${n}.`;
       if (d.to < d.from) return `The To date is before the From date${n}.`;
     }
     if (d.mode === 'dates' && !d.dates.filter(Boolean).length) return `Add at least one date${n}.`;
@@ -185,7 +190,7 @@ function toInput(f: FormState, generated: string): ExamDutyCertificateInput {
   return {
     sessionLabel: normaliseSessionLabel(f.sessionLabel),
     sessionYear: Number(f.sessionYear),
-    serial: Number(f.serial),
+    serial: Number(f.serial) || 0,
     issueDate: f.issueDate,
     salutation: f.salutation,
     name: f.name.trim().toUpperCase(),
@@ -243,6 +248,50 @@ function SectionTitle({ n, children }: { n: number; children: React.ReactNode })
       <span className="text-[12.5px] font-medium text-[#9D174D]">{children}</span>
       <span className="flex-1 h-px" style={{ background: WINE_HAIR }} />
     </div>
+  );
+}
+
+/** 'dd/mm/yyyy' (also d/m/yyyy, dd-mm-yyyy, dd.mm.yyyy, ddmmyyyy) → 'YYYY-MM-DD', or '' if not a real date. */
+function parseDmy(text: string): string {
+  const t = text.trim();
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t) ?? /^(\d{2})(\d{2})(\d{4})$/.exec(t);
+  if (!m) return '';
+  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (y < 2000 || y > 2100 || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** Typed date field in dd/mm/yyyy. `value` / `onChange` use 'YYYY-MM-DD' ('' while incomplete or invalid). */
+function DmyDateInput({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const [text, setText] = useState(() => (value ? dmy(value) : ''));
+  const [blurred, setBlurred] = useState(false);
+  // Follow outside changes (e.g. To pushed forward by From) without fighting the user's typing.
+  useEffect(() => {
+    if (parseDmy(text) !== value) setText(value ? dmy(value) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const invalid = blurred && text.trim() !== '' && !parseDmy(text);
+  return (
+    <input
+      className={`${FIELD} tabular-nums ${invalid ? '!border-[#B4232F] !ring-[#B4232F]/15' : ''}`}
+      inputMode="numeric"
+      placeholder="dd/mm/yyyy"
+      maxLength={10}
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value.replace(/[^\d/.-]/g, '');
+        setText(v);
+        setBlurred(false);
+        onChange(parseDmy(v));
+      }}
+      onBlur={() => {
+        setBlurred(true);
+        const iso = parseDmy(text);
+        if (iso) setText(dmy(iso));
+      }}
+    />
   );
 }
 
@@ -304,18 +353,18 @@ function DutyEditor({ duty, index, count, onChange, onRemove }: {
       {duty.mode === 'single' && (
         <label className="block w-1/2 pr-1.5">
           <Label>Date</Label>
-          <input type="date" className={FIELD} value={duty.from} onChange={(e) => set({ from: e.target.value })} />
+          <DmyDateInput value={duty.from} onChange={(from) => set({ from })} />
         </label>
       )}
       {duty.mode === 'range' && (
         <div className="grid grid-cols-2 gap-2.5">
           <label className="block">
             <Label>From</Label>
-            <input type="date" className={FIELD} value={duty.from} onChange={(e) => set({ from: e.target.value, ...(duty.to && e.target.value > duty.to ? { to: e.target.value } : {}) })} />
+            <DmyDateInput value={duty.from} onChange={(from) => set({ from, ...(from && duty.to && from > duty.to ? { to: from } : {}) })} />
           </label>
           <label className="block">
-            <Label>To</Label>
-            <input type="date" className={FIELD} value={duty.to} min={duty.from || undefined} onChange={(e) => set({ to: e.target.value })} />
+            <Label hint={rangeDays(duty.from, duty.to) ? `${rangeDays(duty.from, duty.to)} day${rangeDays(duty.from, duty.to) > 1 ? 's' : ''}` : undefined}>To</Label>
+            <DmyDateInput value={duty.to} onChange={(to) => set({ to })} />
           </label>
         </div>
       )}
@@ -348,7 +397,9 @@ function ScaledPreview({ html }: { html: string }) {
   useLayoutEffect(() => {
     const el = boxRef.current;
     if (!el) return;
-    const update = () => setScale(Math.min(1, el.clientWidth / SHEET_W));
+    // Rounded so sub-pixel width jitter (fractional display scaling) can't
+    // keep re-triggering the observer.
+    const update = () => setScale(Math.min(1, Math.floor((el.clientWidth / SHEET_W) * 1000) / 1000));
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -438,7 +489,7 @@ export function ExamDutyCertificateModal({ mode, cert, session, onClose, onSaved
       sessionLabel: label,
       sessionYear: yr,
       duties: form.duties.map(cleanDuty),
-      refNo: examRefNo(label, yr, Number(form.serial) || 0).replace(/\/0$/, '/—'),
+      refNo: examRefNo(label, yr, Number(form.serial) || 0),
       issueDate: form.issueDate,
     };
   }, [form, year]);
@@ -557,7 +608,7 @@ export function ExamDutyCertificateModal({ mode, cert, session, onClose, onSaved
                   <input className={FIELD} inputMode="numeric" value={form.sessionYear} onChange={(e) => set({ sessionYear: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
                 </label>
                 <label className="block">
-                  <Label hint={serialTouched && !isEdit ? 'manual' : 'auto'}>Serial</Label>
+                  <Label hint={!form.serial.trim() ? 'blank' : serialTouched && !isEdit ? 'manual' : 'auto'}>Serial</Label>
                   <input
                     className={FIELD}
                     inputMode="numeric"
@@ -687,8 +738,10 @@ export function ExamDutyCertificateModal({ mode, cert, session, onClose, onSaved
             </section>
           </div>
 
-          {/* Preview */}
-          <div className="hidden lg:flex flex-col gap-2 border-l px-5 py-4 overflow-y-auto" style={{ borderColor: WINE_HAIR, background: '#FBF8FA' }}>
+          {/* Preview — scrollbar gutter is reserved so the scrollbar appearing
+              can't narrow the column, which would shrink the scaled preview,
+              hide the scrollbar again, and loop forever (visible shaking). */}
+          <div className="hidden lg:flex flex-col gap-2 border-l px-5 py-4 overflow-y-auto [scrollbar-gutter:stable]" style={{ borderColor: WINE_HAIR, background: '#FBF8FA' }}>
             <div className="flex items-baseline justify-between">
               <span className="text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#7A6F7D]">Preview · half A4</span>
               <span className="text-[10.5px] text-[#A9A2AC]">Prints staff + office copy on one A4 sheet</span>

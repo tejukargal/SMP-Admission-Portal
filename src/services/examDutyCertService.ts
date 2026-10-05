@@ -42,8 +42,9 @@ export function examRefPrefix(label: string, year: number): string {
   return `SMP/EXAM/${examSessionTitle(label, year)}/`;
 }
 
+/** Serial 0 means "no serial" — the ref ends at the prefix and nothing is claimed. */
 export function examRefNo(label: string, year: number, serial: number): string {
-  return `${examRefPrefix(label, year)}${serial}`;
+  return `${examRefPrefix(label, year)}${serial > 0 ? serial : ''}`;
 }
 
 // ── Serial counter ──────────────────────────────────────────────────────────
@@ -126,6 +127,21 @@ export async function createExamCert(
   const cRef = counterRef(sessionKey);
   const now = new Date().toISOString();
 
+  const stamp = {
+    createdBy: author.uid,
+    ...(author.email ? { createdByEmail: author.email } : {}),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // No serial: nothing to claim in the counter.
+  if (!(input.serial > 0)) {
+    const data = { ...certFields({ ...input, serial: 0 }), ...stamp };
+    await setDoc(certRef, data);
+    await upsertExamStaff(input).catch(() => { /* directory is a convenience only */ });
+    return { id: certRef.id, ...data } as ExamDutyCertificate;
+  }
+
   const cert = await runTransaction(db, async (tx) => {
     const { seq, used } = readCounter(await tx.get(cRef));
     let serial = input.serial;
@@ -136,13 +152,7 @@ export async function createExamCert(
     used[String(serial)] = certRef.id;
     tx.set(cRef, counterData(used));
 
-    const data = {
-      ...certFields({ ...input, serial }),
-      createdBy: author.uid,
-      ...(author.email ? { createdByEmail: author.email } : {}),
-      createdAt: now,
-      updatedAt: now,
-    };
+    const data = { ...certFields({ ...input, serial }), ...stamp };
     tx.set(certRef, data);
     return { id: certRef.id, ...data } as ExamDutyCertificate;
   });
@@ -176,11 +186,13 @@ export async function updateExamCert(
     await runTransaction(db, async (tx) => {
       const oldC = readCounter(await tx.get(oldRef));
       const newC = same ? oldC : readCounter(await tx.get(newRef));
-      if (oldC.used[String(prev.serial)] === prev.id) delete oldC.used[String(prev.serial)];
-      if (newC.used[String(fields.serial)]) {
-        throw duplicateSerialError(fields.serial, fields.sessionLabel, fields.sessionYear);
+      if (prev.serial > 0 && oldC.used[String(prev.serial)] === prev.id) delete oldC.used[String(prev.serial)];
+      if (fields.serial > 0) {
+        if (newC.used[String(fields.serial)]) {
+          throw duplicateSerialError(fields.serial, fields.sessionLabel, fields.sessionYear);
+        }
+        newC.used[String(fields.serial)] = prev.id;
       }
-      newC.used[String(fields.serial)] = prev.id;
       tx.set(oldRef, counterData(oldC.used));
       if (!same) tx.set(newRef, counterData(newC.used));
       tx.set(certRef, next);

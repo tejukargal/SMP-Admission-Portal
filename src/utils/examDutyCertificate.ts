@@ -62,18 +62,32 @@ export function dutyDates(d: ExamDuty): string[] {
   return d.from ? [d.from] : [];
 }
 
-/** "on 03/06/2026" · "from 18/05/2026 to 29/05/2026 (both days inclusive)" · "on 18/05/2026, 20/05/2026 and 22/05/2026" */
+/** Days from `from` to `to`, both inclusive ('YYYY-MM-DD'); 0 if either is missing or reversed. */
+export function rangeDays(from: string, to: string): number {
+  const t = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return y && m && d ? Date.UTC(y, m - 1, d) : NaN;
+  };
+  const n = Math.round((t(to) - t(from)) / 86_400_000) + 1;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** "on 03/06/2026" · "from 18/05/2026 to 29/05/2026 (12 days, both days inclusive)" · "on 18/05/2026, 20/05/2026 and 22/05/2026" */
 export function dutyPeriod(d: ExamDuty): string {
   if (d.mode === 'range' && d.to && d.to !== d.from) {
-    return `from ${dmy(d.from)} to ${dmy(d.to)} (both days inclusive)`;
+    const n = rangeDays(d.from, d.to);
+    return `from ${dmy(d.from)} to ${dmy(d.to)} (${n ? `${n} days, ` : ''}both days inclusive)`;
   }
   const dates = dutyDates(d);
   return dates.length ? `on ${joinAnd(dates.map(dmy))}` : '';
 }
 
-/** Short period for tables / Excel: "18/05/2026 – 29/05/2026", "03/06/2026", "18/05, 20/05/2026". */
+/** Short period for tables / Excel: "18/05/2026 – 29/05/2026 (12 days)", "03/06/2026", "18/05, 20/05/2026". */
 export function dutyPeriodShort(d: ExamDuty): string {
-  if (d.mode === 'range' && d.to && d.to !== d.from) return `${dmy(d.from)} – ${dmy(d.to)}`;
+  if (d.mode === 'range' && d.to && d.to !== d.from) {
+    const n = rangeDays(d.from, d.to);
+    return `${dmy(d.from)} – ${dmy(d.to)}${n ? ` (${n} days)` : ''}`;
+  }
   return dutyDates(d).map(dmy).join(', ');
 }
 
@@ -147,7 +161,7 @@ export function examCertBodyText(c: ExamCertContent): string {
 const CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { background: #fff; }
-  body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #000; }
+  body { font-family: 'Segoe UI', 'Segoe UI Web (West European)', Tahoma, Arial, sans-serif; color: #000; }
   .sheet { width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; break-after: page; }
   .sheet:last-child { page-break-after: auto; break-after: auto; }
   .half {
@@ -156,8 +170,13 @@ const CSS = `
   }
   .cutline { position: relative; height: 0; border-top: 0.3mm dashed #9a9a9a; }
   .cutline span { position: absolute; top: -2.3mm; left: 6mm; font-size: 9pt; color: #9a9a9a; background: #fff; padding: 0 1mm; line-height: 1; }
+  .toprow {
+    position: absolute; top: 5.5mm; left: 9mm; right: 9mm;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .inst-code { font-size: 8pt; letter-spacing: 0.3pt; color: #222; }
   .copy-tag {
-    position: absolute; top: 5.5mm; right: 9mm; font-size: 7pt; letter-spacing: 1.4pt;
+    font-size: 7pt; letter-spacing: 1.4pt;
     border: 0.25mm solid #444; border-radius: 1mm; padding: 0.6mm 1.8mm; color: #222;
   }
   .head { text-align: center; line-height: 1.38; }
@@ -202,13 +221,16 @@ function halfHTML(c: ExamCertContent, copy: 'STAFF COPY' | 'OFFICE COPY'): strin
 
   return `
   <div class="half">
-    <span class="copy-tag">${copy}</span>
+    <div class="toprow">
+      <span class="inst-code">Inst. Code: 308</span>
+      <span class="copy-tag">${copy}</span>
+    </div>
     <div class="head">
       <div class="l1">GOVERNMENT OF KARNATAKA</div>
       <div class="l2">Board of Technical Education</div>
       <div class="l3">Board of Technical Examination, Bangalore</div>
       <div class="l4">Office of the Chief Superintendent of Examinations / Principal</div>
-      <div class="l5">Sanjay Memorial Polytechnic, Sagar</div>
+      <div class="l5">SANJAY MEMORIAL POLYTECHNIC, SAGAR</div>
     </div>
     <div class="ref">
       <span>${esc(c.refNo)}</span>
