@@ -589,6 +589,14 @@ export function Admissions() {
   // Confirm is a two-step flow: a summary prompt first, then (only on success)
   // the Allotted Category modal.
   const [confirmTarget, setConfirmTarget] = useState<Student | null>(null);
+  // Undo Discontinued asks first (Cancel / Continue).
+  const [undoTarget, setUndoTarget] = useState<Student | null>(null);
+
+  async function handleUndoConfirm() {
+    if (!undoTarget) return;
+    await handleUndoDiscontinued(undoTarget);
+    setUndoTarget(null);
+  }
 
   async function handleConfirmClick(student: Student) {
     const ok = await handleAction(student, 'CONFIRMED');
@@ -1573,7 +1581,7 @@ export function Admissions() {
                             <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                           </>
                         ) : discontinued ? (
-                          <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleUndoDiscontinued(student)}>Undo Discontinued</ActionBtn>
+                          <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => setUndoTarget(student)}>Undo Discontinued</ActionBtn>
                         ) : (
                           <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'PENDING')}>Restore to Pending</ActionBtn>
                         )}
@@ -1737,6 +1745,43 @@ export function Admissions() {
         onClose={() => setRefundHistoryStudent(null)}
       />
     )}
+
+    <Modal
+      open={!!undoTarget}
+      title="Undo Discontinued?"
+      variant="primary"
+      confirmLabel="Continue"
+      cancelLabel="Cancel"
+      loading={!!undoTarget && actionLoading === undoTarget.id}
+      onConfirm={() => void handleUndoConfirm()}
+      onCancel={() => { if (actionLoading === null) setUndoTarget(null); }}
+      message={undoTarget && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[#D97706]/30 bg-[#FFF8EB] px-4 py-3">
+            <p className="text-[15px] font-semibold text-gray-900">{undoTarget.studentNameSSLC}</p>
+            <p className="mt-0.5 text-xs text-gray-600">
+              {[undoTarget.course, undoTarget.year, undoTarget.admType, undoTarget.admCat, undoTarget.regNumber].filter(Boolean).join(' · ')}
+            </p>
+            {(undoTarget.discontinuedDate || undoTarget.discontinuedReason) && (
+              <p className="mt-1 text-xs text-gray-600">
+                Left{undoTarget.discontinuedDate ? ` on ${fmtIsoDay(undoTarget.discontinuedDate)}` : ''}
+                {undoTarget.discontinuedReason ? ` — ${undoTarget.discontinuedReason}` : ''}
+              </p>
+            )}
+          </div>
+          <p>
+            The student goes back on the roll as <span className="font-semibold text-gray-900">Confirmed</span> and appears in the{' '}
+            {isWPStudent(undoTarget) ? 'WP Students' : 'Students'} list again. The recorded leaving date and reason will be cleared
+            {undoTarget.regNumber ? ', and the student receives an admission status update' : ''}.
+            {(refundByStudent.get(undoTarget.id)?.amount ?? 0) > 0 && (
+              <span className="block mt-2 text-[#9A5B00]">
+                Note: a refund of ₹{(refundByStudent.get(undoTarget.id)?.amount ?? 0).toLocaleString('en-IN')} is recorded for this student — check their dues after restoring.
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+    />
 
     <Modal
       open={!!confirmTarget}
