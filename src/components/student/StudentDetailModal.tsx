@@ -35,6 +35,7 @@ import type {
   SeatCancelLetterRecord,
 } from '../../types';
 import { REQUIRED_DOCS, SMP_FEE_HEADS } from '../../types';
+import { isDiscontinued } from '../../utils/studentStatus';
 import {
   sumSMPRecord, calcRecordTotal, calcEffectiveFine, calcAllotted, effectiveValues,
   type YearData,
@@ -2065,6 +2066,15 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
                     value={`Transferred Out${student.transferOutPolytechnic ? ` · ${student.transferOutPolytechnic}` : ''}`}
                     color={SKY}
                   />
+                )}
+                {isDiscontinued(student, feeReady ? overallPaid : 0) && (
+                  <span title={student.discontinuedReason || undefined}>
+                    <LinePill
+                      tall
+                      value={`Discontinued${student.discontinuedDate ? ` · ${student.discontinuedDate.slice(8, 10)}/${student.discontinuedDate.slice(5, 7)}/${student.discontinuedDate.slice(0, 4)}` : ''}`}
+                      color={CORAL}
+                    />
+                  </span>
                 )}
                 {feeReady && (
                   <span

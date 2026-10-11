@@ -24,6 +24,7 @@ import { AdmissionOrderModal } from '../components/common/AdmissionOrderModal';
 import { MissingDocsModal } from '../components/documents/MissingDocsModal';
 import { AllottedCategoryModal } from '../components/common/AllottedCategoryModal';
 import { SnqRefundModal } from '../components/common/SnqRefundModal';
+import { DiscontinueStudentModal } from '../components/student/DiscontinueStudentModal';
 import { Modal } from '../components/common/Modal';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
@@ -291,6 +292,7 @@ export function Students() {
   const [transferOutStudent, setTransferOutStudent] = useState<Student | null>(null);
   const [transferOutPolytechnicInput, setTransferOutPolytechnicInput] = useState('');
   const [savingTransferOut, setSavingTransferOut] = useState(false);
+  const [discontinueStudent, setDiscontinueStudent] = useState<Student | null>(null);
 
   async function handleClearTransferOut(student: Student) {
     setContextMenu(null);
@@ -1358,6 +1360,17 @@ export function Students() {
                 {contextMenu.student.transferOut ? 'Clear Transfer Out' : 'Mark Transfer Out'}
               </button>
             )}
+            {isAdmin && (
+              <button
+                className={MENU_ITEM}
+                onClick={() => { setDiscontinueStudent(contextMenu.student); setContextMenu(null); }}
+              >
+                <span className={`${MENU_ICON} group-hover:bg-[#E11D48]/10 group-hover:text-[#E11D48]`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </span>
+                Mark as Discontinued
+              </button>
+            )}
           </div>
         </div>
       </>
@@ -1475,6 +1488,15 @@ export function Students() {
       onConfirm={() => void handleConfirmTransferOut()}
       onCancel={() => setTransferOutStudent(null)}
     />
+
+    {discontinueStudent && (
+      <DiscontinueStudentModal
+        student={discontinueStudent}
+        userId={user?.uid}
+        onClose={() => setDiscontinueStudent(null)}
+        onSaved={(msg) => { setDiscontinueStudent(null); setToastMsg(msg); refetch(); }}
+      />
+    )}
 
     {refundStudent && (
       <SnqRefundModal

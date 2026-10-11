@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, Fragment, type ReactNode } from 'react';
+﻿import { useState, useMemo, useEffect, useCallback, Fragment, type ReactNode } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useFeeRecords } from '../hooks/useFeeRecords';
@@ -14,8 +14,14 @@ import type { jsPDF as JsPDFDoc } from 'jspdf';
 import { loadXlsx, loadPdf } from '../utils/lazyLibs';
 import { buildDatewiseHeadwise } from '../utils/feeReportData';
 import type { StudentFeeRow, DatewiseHeadwiseEntry } from '../utils/feeReportData';
-import { isConfirmedActive } from '../utils/studentStatus';
+import { isConfirmedActive, isDiscontinued } from '../utils/studentStatus';
 import { isWPStudent } from '../utils/wpStudent';
+import {
+  STUDENT_GROUPS, STUDENT_GROUP_LABEL, aidedSubtotals, buildPriorDues, computeFeeStats, courseYearBreakdown, emptyFeeStats,
+  missingStructureKeys, pctLabel, statsByGroup, studentGroup,
+  discontinuedByCourseYear, discontinuedTotals,
+  type BreakdownLine, type DiscontinuedEntry, type DiscontinuedTotals, type FeeStats, type PriorDueGroup, type PriorDuesSummary, type StudentGroup,
+} from '../utils/feeStatistics';
 import type { Course, Year, AdmType, AdmCat, AcademicYear, FeeStructure, FeeRecord, Student, SMPFeeHead, RemittancePayee, RemittanceMode, RemittanceScope, GovHeadAmounts, GovHeadRefs, FeeRemittance, BudgetHeadEntry, BudgetHeadKey, BudgetExpenseItem, WPStudentCounts, WPCourseYearCounts, StudentFeeOverride, FeeAdditionalHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import { addFeeRemittance, updateFeeRemittance, deleteFeeRemittance } from '../services/feeRemittanceService';
@@ -375,64 +381,46 @@ function searchStudentRows(rows: StudentFeeRow[], query: string): StudentFeeRow[
   });
 }
 
-// ── Shared: course/year breakdown data ────────────────────────────────────────
-interface BreakdownEntry {
-  course: string; year: string; total: number; paid: number;
-  smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
-  svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
-}
-
-function buildBreakdown(rows: StudentFeeRow[]): BreakdownEntry[] {
-  const map = new Map<string, BreakdownEntry>();
-  for (const r of rows) {
-    const key = `${r.student.course}__${r.student.year}`;
-    if (!map.has(key)) {
-      map.set(key, {
-        course: r.student.course, year: r.student.year, total: 0, paid: 0, smpAllt: 0, svkAllt: 0, smpColl: 0, svkColl: 0,
-        svkBaseAllt: 0, addAllt: 0, svkBaseColl: 0, addColl: 0,
-      });
-    }
-    const e = map.get(key)!;
-    e.total++;
-    if (r.paid > 0) e.paid++;
-    e.smpAllt += r.smpAllotted ?? 0;
-    e.svkAllt += r.svkAllotted ?? 0;
-    e.smpColl += r.smpPaid;
-    e.svkColl += r.svkPaid;
-    e.svkBaseAllt += r.svkBaseAllotted ?? 0;
-    e.addAllt += r.additionalAllotted ?? 0;
-    e.svkBaseColl += r.svkBasePaid;
-    e.addColl += r.additionalPaid;
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    const c = a.course.localeCompare(b.course);
-    return c !== 0 ? c : a.year.localeCompare(b.year);
-  });
-}
-
-// ── Shared: group summary table ───────────────────────────────────────────────
-function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
-  breakdown: BreakdownEntry[];
-  totals: {
-    students: number; paid: number; smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
-    svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
-  };
-  colSpanLabel?: number;
+// ── Shared: course/year summary table ─────────────────────────────────────────
+// Balance columns are the sum of each student's own dues (clamped at 0), so they match
+// the Dues report — one student's excess payment never offsets another student's due.
+function GroupTable({ lines, subtotals = [], total }: {
+  lines: BreakdownLine[];
+  subtotals?: { label: string; stats: FeeStats }[];
+  total: FeeStats;
 }) {
+  const amountCells = (t: FeeStats, edge: string) => (
+    <>
+      <td className={`px-2 py-1.5 text-right border-l ${edge}`}>{fmt(t.smpAllt)}</td>
+      <td className="px-2 py-1.5 text-right">{fmt(t.svkBaseAllt)}</td>
+      <td className="px-2 py-1.5 text-right">{fmt(t.addAllt)}</td>
+      <td className="px-2 py-1.5 text-right font-semibold">{fmt(t.allotted)}</td>
+      <td className={`px-2 py-1.5 text-right text-green-700 border-l ${edge}`}>{fmt(t.smpColl)}</td>
+      <td className="px-2 py-1.5 text-right text-green-700">{fmt(t.svkBaseColl)}</td>
+      <td className="px-2 py-1.5 text-right text-green-700">{fmt(t.addColl)}</td>
+      <td className="px-2 py-1.5 text-right text-green-700 font-semibold">{fmt(t.collected)}</td>
+      <td className={`px-2 py-1.5 text-right text-red-600 border-l ${edge}`}>{fmt(t.smpBal)}</td>
+      <td className="px-2 py-1.5 text-right text-red-600">{fmt(t.svkBaseBal)}</td>
+      <td className="px-2 py-1.5 text-right text-red-600">{fmt(t.addBal)}</td>
+      <td className="px-2 py-1.5 text-right text-red-600 font-semibold">{fmt(t.balance)}</td>
+      <td className={`px-2 py-1.5 text-right border-l ${edge}`}>{pctLabel(t)}</td>
+    </>
+  );
   return (
     <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
       <table className="w-full text-[11px]">
         <thead className={`${ACCENT}`}>
           <tr>
-            <th className="px-2 py-1.5 text-center font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}>Course / Year</th>
+            <th className="px-2 py-1.5 text-center font-semibold" colSpan={2}>Course / Year</th>
             <th className="px-2 py-1.5 text-center font-semibold">Students</th>
-            <th className="px-2 py-1.5 text-center font-semibold">Paid</th>
+            <th className="px-2 py-1.5 text-center font-semibold" title="Students who paid any amount">Paid</th>
             <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Allotted</th>
             <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Collected</th>
-            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Balance</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" colSpan={4}>Balance (dues)</th>
+            <th className="px-2 py-1.5 text-center font-semibold border-l border-[#CDE7E7]" rowSpan={2} title="Share of the allotted fee already settled">Coll. %</th>
           </tr>
           <tr>
-            <th className="px-2 py-1 font-semibold" colSpan={colSpanLabel === 1 ? 1 : 2}></th>
+            <th className="px-2 py-1 font-semibold" colSpan={2}></th>
             <th className="px-2 py-1 font-semibold"></th>
             <th className="px-2 py-1 font-semibold"></th>
             {(['SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total', 'SMP', 'SVK Base', 'Additional', 'Total'] as const).map((h, i) => (
@@ -441,48 +429,30 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
           </tr>
         </thead>
         <tbody>
-          {breakdown.map((b, i) => {
-            const bAllt = b.smpAllt + b.svkAllt;
-            const bColl = b.smpColl + b.svkColl;
-            return (
-              <tr key={`${b.course}-${b.year}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className="px-2 py-1.5 font-semibold">{b.course}</td>
-                <td className="px-2 py-1.5">{b.year}</td>
-                <td className="px-2 py-1.5 text-center">{b.total}</td>
-                <td className="px-2 py-1.5 text-center text-green-700">{b.paid}</td>
-                <td className="px-2 py-1.5 text-right border-l border-[#E3F1F1]">{fmt(b.smpAllt)}</td>
-                <td className="px-2 py-1.5 text-right">{fmt(b.svkBaseAllt)}</td>
-                <td className="px-2 py-1.5 text-right">{fmt(b.addAllt)}</td>
-                <td className="px-2 py-1.5 text-right font-semibold">{fmt(bAllt)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700 border-l border-[#E3F1F1]">{fmt(b.smpColl)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.svkBaseColl)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700">{fmt(b.addColl)}</td>
-                <td className="px-2 py-1.5 text-right text-green-700 font-semibold">{fmt(bColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600 border-l border-[#E3F1F1]">{fmt(b.smpAllt - b.smpColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.svkBaseAllt - b.svkBaseColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600">{fmt(b.addAllt - b.addColl)}</td>
-                <td className="px-2 py-1.5 text-right text-red-600 font-semibold">{fmt(bAllt - bColl)}</td>
-              </tr>
-            );
-          })}
+          {lines.map((b, i) => (
+            <tr key={`${b.course}-${b.year}`} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <td className="px-2 py-1.5 font-semibold">{b.course}</td>
+              <td className="px-2 py-1.5">{b.year}</td>
+              <td className="px-2 py-1.5 text-center">{b.stats.students}</td>
+              <td className="px-2 py-1.5 text-center text-green-700">{b.stats.students - b.stats.notPaid}</td>
+              {amountCells(b.stats, 'border-[#E3F1F1]')}
+            </tr>
+          ))}
+          {subtotals.map((s) => (
+            <tr key={s.label} className="bg-[#F2FAFA] font-medium text-[#0B6567] border-t border-[#CDE7E7]">
+              <td className="px-2 py-1.5" colSpan={2}>{s.label}</td>
+              <td className="px-2 py-1.5 text-center">{s.stats.students}</td>
+              <td className="px-2 py-1.5 text-center text-green-700">{s.stats.students - s.stats.notPaid}</td>
+              {amountCells(s.stats, 'border-[#CDE7E7]')}
+            </tr>
+          ))}
         </tbody>
         <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567] text-[11px]">
           <tr>
-            <td className="px-2 py-2" colSpan={colSpanLabel === 1 ? 1 : 2}>Total</td>
-            <td className="px-2 py-2 text-center">{totals.students}</td>
-            <td className="px-2 py-2 text-center text-green-700">{totals.paid}</td>
-            <td className="px-2 py-2 text-right border-l border-[#CDE7E7]">{fmt(totals.smpAllt)}</td>
-            <td className="px-2 py-2 text-right">{fmt(totals.svkBaseAllt)}</td>
-            <td className="px-2 py-2 text-right">{fmt(totals.addAllt)}</td>
-            <td className="px-2 py-2 text-right">{fmt(totals.smpAllt + totals.svkAllt)}</td>
-            <td className="px-2 py-2 text-right text-green-700 border-l border-[#CDE7E7]">{fmt(totals.smpColl)}</td>
-            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.svkBaseColl)}</td>
-            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.addColl)}</td>
-            <td className="px-2 py-2 text-right text-green-700">{fmt(totals.smpColl + totals.svkColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600 border-l border-[#CDE7E7]">{fmt(totals.smpAllt - totals.smpColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600">{fmt(totals.svkBaseAllt - totals.svkBaseColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600">{fmt(totals.addAllt - totals.addColl)}</td>
-            <td className="px-2 py-2 text-right text-red-600">{fmt((totals.smpAllt + totals.svkAllt) - (totals.smpColl + totals.svkColl))}</td>
+            <td className="px-2 py-2" colSpan={2}>Total</td>
+            <td className="px-2 py-2 text-center">{total.students}</td>
+            <td className="px-2 py-2 text-center text-green-700">{total.students - total.notPaid}</td>
+            {amountCells(total, 'border-[#CDE7E7]')}
           </tr>
         </tfoot>
       </table>
@@ -491,36 +461,112 @@ function GroupTable({ breakdown, totals, colSpanLabel = 2 }: {
 }
 
 // ── Tab: Statistics ──────────────────────────────────────────────────────────────
-function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
-  const total       = rows.length;
-  const paidCount   = rows.filter((r) => r.paid > 0).length;
-  const notPaid     = total - paidCount;
-  const duesCount   = rows.filter((r) => r.balance !== null && r.balance > 0).length;
-  const noDuesCount = rows.filter((r) => r.balance !== null && r.balance <= 0).length;
-  const totSmpAllt  = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const totSvkAllt  = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
-  const totSmpPaid  = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const totSvkPaid  = rows.reduce((s, r) => s + r.svkPaid, 0);
-  const totSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-  const totAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-  const totSvkBasePaid = rows.reduce((s, r) => s + r.svkBasePaid, 0);
-  const totAddPaid     = rows.reduce((s, r) => s + r.additionalPaid, 0);
-  const breakdown   = useMemo(() => buildBreakdown(rows), [rows]);
+// Segments: the three student groups of the current year, previous-year dues collected
+// this financial year (the Fee Register's "Due Fee" rows from earlier years), and all.
+type StatsSegment = StudentGroup | 'PRIOR' | 'DISCONTINUED' | 'ALL';
+const SEGMENT_SHORT: Record<StudentGroup, string> = { REGULAR: 'Regular', WP: 'WP', TRANSFERRED: 'Transferred' };
+
+function segmentHint(segment: StatsSegment, academicYear: string): string {
+  const start = Number(academicYear.slice(0, 4));
+  switch (segment) {
+    case 'REGULAR':     return 'Confirmed day-college students on roll — excludes WP and transferred-out students.';
+    case 'WP':          return 'Working Professional students (Adm Type EXTERNAL). WP fee is mainly tracked in WP Fee Distribution; figures here come from fee receipts only.';
+    case 'TRANSFERRED': return 'Confirmed students who later transferred out to another polytechnic.';
+    case 'PRIOR':       return `Dues of earlier academic years collected from 01-04-${start} to 31-03-${start + 1} — the "Due Fee" rows from earlier years in the Fee Register.`;
+    case 'DISCONTINUED': return `Students of ${academicYear} who were confirmed and later left (marked Discontinued, or cancelled after paying fees). Seats cancelled before joining are not included. They owe nothing further — Uncollected is for information only and never counted as dues.`;
+    case 'ALL':         return `Every confirmed student of ${academicYear}: Regular + WP + Transferred (Discontinued students are not included).`;
+  }
+}
+
+function StatisticsTab({ rows, academicYear, fp, priorRecords, priorLoading, discontinued }: {
+  rows: StudentFeeRow[];
+  academicYear: string;
+  fp: CommonFilterProps;
+  priorRecords: FeeRecord[];
+  priorLoading: boolean;
+  discontinued: DiscontinuedEntry[];
+}) {
+  const [segment, setSegment] = useState<StatsSegment>('REGULAR');
+  const byGroup = useMemo(() => statsByGroup(rows), [rows]);
+  const prior   = useMemo(() => buildPriorDues(priorRecords, academicYear), [priorRecords, academicYear]);
+  const segRows = useMemo(
+    () => (segment === 'ALL' || segment === 'PRIOR' || segment === 'DISCONTINUED' ? rows : rows.filter((r) => studentGroup(r.student) === segment)),
+    [rows, segment],
+  );
+  const segLabel = segment === 'ALL' ? 'All students' : segment === 'PRIOR' ? 'Previous-year dues collected'
+    : segment === 'DISCONTINUED' ? 'Discontinued students' : `${STUDENT_GROUP_LABEL[segment]} students`;
+  const groups = segment === 'ALL' ? STUDENT_GROUPS.map((g) => ({ label: STUDENT_GROUP_LABEL[g], stats: byGroup[g] })) : undefined;
+
+  const options = [
+    ...STUDENT_GROUPS.map((g) => ({ value: g, label: `${SEGMENT_SHORT[g]} (${byGroup[g].students})` })),
+    { value: 'PRIOR', label: `Previous Year (${priorLoading && !prior.receipts.length ? '…' : prior.totals.students})` },
+    { value: 'DISCONTINUED', label: `Discontinued (${discontinued.length})` },
+    { value: 'ALL', label: `Show All (${rows.length})` },
+  ];
+
+  const onPdf = () => void reportPdf().then((m) => (segment === 'PRIOR'
+    ? m.exportPriorDuesPdf(prior, academicYear)
+    : segment === 'DISCONTINUED' ? m.exportDiscontinuedPdf(discontinued, academicYear)
+    : m.exportStatsPdf({ rows: segRows, academicYear, segmentLabel: segLabel, groups })));
+  const onExcel = () => void reportExcel().then((m) => (segment === 'PRIOR'
+    ? m.exportPriorDuesExcel(prior, academicYear)
+    : segment === 'DISCONTINUED' ? m.exportDiscontinuedExcel(discontinued, academicYear)
+    : m.exportStatsExcel({ rows: segRows, academicYear, segmentLabel: segLabel, groups })));
 
   return (
     <div className="space-y-2">
-      <CommonFilters collapsible={false} fp={fp} extra={
-        <ExportBar onPdf={() => void reportPdf().then((m) => m.exportStatsPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportStatsExcel(rows, academicYear))} />
-      } />
+      <CommonFilters collapsible={false} fp={fp} extra={<ExportBar onPdf={onPdf} onExcel={onExcel} />} />
 
-      {/* Count summary strip */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="max-w-full overflow-x-auto no-scrollbar">
+          <SegmentedToggle options={options} value={segment} onChange={(v) => setSegment(v as StatsSegment)} />
+        </div>
+        <p className="text-[11.5px] text-[#5B6371] min-w-0">{segmentHint(segment, academicYear)}</p>
+      </div>
+
+      {segment === 'PRIOR'
+        ? <PriorDuesView summary={prior} loading={priorLoading} statusFilterActive={fp.feeStatusFilter !== 'ALL'} />
+        : segment === 'DISCONTINUED'
+        ? <DiscontinuedView entries={discontinued} statusFilterActive={fp.feeStatusFilter !== 'ALL'} />
+        : <StudentStatsView rows={segRows} segment={segment} byGroup={byGroup} />}
+    </div>
+  );
+}
+
+function StudentStatsView({ rows, segment, byGroup }: {
+  rows: StudentFeeRow[];
+  segment: StudentGroup | 'ALL';
+  byGroup: Record<StudentGroup, FeeStats>;
+}) {
+  const t         = useMemo(() => computeFeeStats(rows), [rows]);
+  const lines     = useMemo(() => courseYearBreakdown(rows), [rows]);
+  const subtotals = useMemo(() => aidedSubtotals(rows), [rows]);
+  const missing   = useMemo(() => missingStructureKeys(rows), [rows]);
+
+  if (rows.length === 0) {
+    return <p className="rounded-2xl border border-[#CDE7E7] bg-white px-4 py-8 text-center text-[12.5px] text-[#8A93A3]">No students in this group for the selected filters.</p>;
+  }
+
+  return (
+    <>
       <StatChipRow entries={[
-        { label: 'Total',    value: total,       color: 'text-[#0B6567]',    bg: 'bg-[#DDF0F0]/40',    border: 'border-[#0F8B8D]/25'   },
-        { label: 'Paid',     value: paidCount,   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200'  },
-        { label: 'Not Paid', value: notPaid,     color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200'    },
-        { label: 'Fee Dues', value: duesCount,   color: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200'  },
-        { label: 'No Dues',  value: noDuesCount, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+        { label: 'Students',   value: t.students,  color: 'text-[#0B6567]',    bg: 'bg-[#DDF0F0]/40', border: 'border-[#0F8B8D]/25' },
+        { label: 'Fully Paid', value: t.fullyPaid, color: 'text-green-700',    bg: 'bg-green-50',     border: 'border-green-200', title: 'Paid and owe nothing' },
+        { label: 'Part Paid',  value: t.partPaid,  color: 'text-amber-700',    bg: 'bg-amber-50',     border: 'border-amber-200', title: 'Paid something, still owe a balance' },
+        { label: 'Not Paid',   value: t.notPaid,   color: 'text-red-700',      bg: 'bg-red-50',       border: 'border-red-200' },
+        { label: 'Fee Dues',   value: t.withDues,  color: 'text-amber-700',    bg: 'bg-amber-50',     border: 'border-amber-200', title: 'Students with a balance (part paid + not paid)' },
+        { label: 'No Dues',    value: t.noDues,    color: 'text-emerald-700',  bg: 'bg-emerald-50',   border: 'border-emerald-200' },
+        ...(t.noStructure > 0 ? [{ label: 'No Fee Structure', value: t.noStructure, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-300', title: missing.join('\n') }] : []),
+        { label: 'Collected',  value: pctLabel(t), color: 'text-[#0B6567]',   bg: 'bg-white',        border: 'border-[#CDE7E7]', title: 'Share of the allotted fee already settled' },
       ]} />
+
+      {t.noStructure > 0 && (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11.5px] text-slate-700">
+          <b>{t.noStructure} student{t.noStructure === 1 ? '' : 's'}</b> have no fee structure, so their dues can't be worked out and aren't in the Balance figures — add a structure in Fee Structure for: {missing.join('; ')}.
+        </p>
+      )}
+
+      {segment === 'ALL' && <GroupSummaryTable byGroup={byGroup} />}
 
       {/* SMP / SVK Base / Additional / Total amount table */}
       <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
@@ -536,31 +582,322 @@ function StatisticsTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; acad
           </thead>
           <tbody>
             {[
-              { label: 'Allotted',  smp: totSmpAllt,              svkBase: totSvkBaseAllt,     add: totAddAllt },
-              { label: 'Collected', smp: totSmpPaid,              svkBase: totSvkBasePaid,     add: totAddPaid },
-              { label: 'Balance',   smp: totSmpAllt - totSmpPaid, svkBase: totSvkBaseAllt - totSvkBasePaid, add: totAddAllt - totAddPaid },
+              { label: 'Allotted',        smp: t.smpAllt, svkBase: t.svkBaseAllt, add: t.addAllt, total: t.allotted,  cls: '' },
+              { label: 'Collected',       smp: t.smpColl, svkBase: t.svkBaseColl, add: t.addColl, total: t.collected, cls: 'text-green-700' },
+              { label: 'Balance (dues)',  smp: t.smpBal,  svkBase: t.svkBaseBal,  add: t.addBal,  total: t.balance,   cls: 'text-red-600' },
             ].map((row, i) => (
               <tr key={row.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className="px-3 py-2 font-semibold">{row.label}</td>
-                <td className="px-3 py-2 text-right">{fmt(row.smp)}</td>
-                <td className="px-3 py-2 text-right">{fmt(row.svkBase)}</td>
-                <td className="px-3 py-2 text-right">{fmt(row.add)}</td>
-                <td className="px-3 py-2 text-right font-bold">{fmt(row.smp + row.svkBase + row.add)}</td>
+                <td className={`px-3 py-2 text-right ${row.cls}`}>{fmt(row.smp)}</td>
+                <td className={`px-3 py-2 text-right ${row.cls}`}>{fmt(row.svkBase)}</td>
+                <td className={`px-3 py-2 text-right ${row.cls}`}>{fmt(row.add)}</td>
+                <td className={`px-3 py-2 text-right font-bold ${row.cls}`}>{fmt(row.total)}</td>
               </tr>
             ))}
+            {t.excess > 0 && (
+              <tr className="bg-white border-t border-[#EEF1F5]">
+                <td className="px-3 py-2 text-[12px] text-[#5B6371]" colSpan={4}>Excess paid (students who paid more than allotted — e.g. concession not yet refunded)</td>
+                <td className="px-3 py-2 text-right text-[12px] font-semibold text-[#5B6371]">{fmt(t.excess)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Course / Year breakdown */}
-      <GroupTable
-        breakdown={breakdown}
-        totals={{
-          students: total, paid: paidCount, smpAllt: totSmpAllt, svkAllt: totSvkAllt, smpColl: totSmpPaid, svkColl: totSvkPaid,
-          svkBaseAllt: totSvkBaseAllt, addAllt: totAddAllt, svkBaseColl: totSvkBasePaid, addColl: totAddPaid,
-        }}
-      />
+      <GroupTable lines={lines} subtotals={subtotals} total={t} />
+
+      {segment === 'TRANSFERRED' && <TransferredList rows={rows} />}
+    </>
+  );
+}
+
+function GroupSummaryTable({ byGroup }: { byGroup: Record<StudentGroup, FeeStats> }) {
+  const all = emptyFeeStats();
+  for (const g of STUDENT_GROUPS) {
+    for (const k of Object.keys(all) as (keyof FeeStats)[]) all[k] += byGroup[g][k];
+  }
+  const line = (label: string, t: FeeStats, foot = false) => (
+    <tr key={label} className={foot ? '' : 'border-t border-[#EEF4F4]'}>
+      <td className="px-3 py-2 font-semibold whitespace-nowrap">{label}</td>
+      <td className="px-3 py-2 text-center">{t.students}</td>
+      <td className="px-3 py-2 text-center text-green-700">{t.fullyPaid}</td>
+      <td className="px-3 py-2 text-center text-amber-700">{t.partPaid}</td>
+      <td className="px-3 py-2 text-center text-red-600">{t.notPaid}</td>
+      <td className="px-3 py-2 text-right">{fmt(t.allotted)}</td>
+      <td className="px-3 py-2 text-right text-green-700">{fmt(t.collected)}</td>
+      <td className="px-3 py-2 text-right text-red-600">{fmt(t.balance)}</td>
+      <td className="px-3 py-2 text-right">{pctLabel(t)}</td>
+    </tr>
+  );
+  return (
+    <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+      <table className="w-full text-[12px]">
+        <thead className={ACCENT}>
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold">By student group</th>
+            <th className="px-3 py-2 text-center font-semibold">Students</th>
+            <th className="px-3 py-2 text-center font-semibold">Fully paid</th>
+            <th className="px-3 py-2 text-center font-semibold">Part paid</th>
+            <th className="px-3 py-2 text-center font-semibold">Not paid</th>
+            <th className="px-3 py-2 text-right font-semibold">Allotted</th>
+            <th className="px-3 py-2 text-right font-semibold">Collected</th>
+            <th className="px-3 py-2 text-right font-semibold">Balance (dues)</th>
+            <th className="px-3 py-2 text-right font-semibold">Coll. %</th>
+          </tr>
+        </thead>
+        <tbody>{STUDENT_GROUPS.map((g) => line(STUDENT_GROUP_LABEL[g], byGroup[g]))}</tbody>
+        <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">{line('Total', all, true)}</tfoot>
+      </table>
     </div>
+  );
+}
+
+function TransferredList({ rows }: { rows: StudentFeeRow[] }) {
+  return (
+    <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+      <table className="w-full text-[12px]">
+        <thead className={ACCENT}>
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold">Student</th>
+            <th className="px-3 py-2 text-left font-semibold">Reg No</th>
+            <th className="px-3 py-2 text-left font-semibold">Course / Year</th>
+            <th className="px-3 py-2 text-left font-semibold">Transferred to</th>
+            <th className="px-3 py-2 text-left font-semibold">On</th>
+            <th className="px-3 py-2 text-right font-semibold">Allotted</th>
+            <th className="px-3 py-2 text-right font-semibold">Paid</th>
+            <th className="px-3 py-2 text-right font-semibold">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.student.id} className="border-t border-[#EEF4F4]">
+              <td className="px-3 py-2 font-medium">{r.student.studentNameSSLC}</td>
+              <td className="px-3 py-2 text-gray-500">{r.student.regNumber || '—'}</td>
+              <td className="px-3 py-2">{r.student.course} / {r.student.year}</td>
+              <td className="px-3 py-2">{r.student.transferOutPolytechnic || '—'}</td>
+              <td className="px-3 py-2 whitespace-nowrap">{r.student.transferOutDate ? formatDate(r.student.transferOutDate) : '—'}</td>
+              <td className="px-3 py-2 text-right">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
+              <td className="px-3 py-2 text-right text-green-700">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
+              <td className={`px-3 py-2 text-right ${(r.balance ?? 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance !== null ? fmt(r.balance) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DiscontinuedView({ entries, statusFilterActive }: { entries: DiscontinuedEntry[]; statusFilterActive: boolean }) {
+  const t     = useMemo(() => discontinuedTotals(entries), [entries]);
+  const lines = useMemo(() => discontinuedByCourseYear(entries), [entries]);
+  const row = (g: DiscontinuedTotals, foot = false) => (
+    <tr key={g.label} className={foot ? '' : 'border-t border-[#EEF4F4]'}>
+      <td className="px-3 py-2 font-semibold whitespace-nowrap">{g.label}</td>
+      <td className="px-3 py-2 text-center">{g.students}</td>
+      <td className="px-3 py-2 text-center">{g.paidStudents}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.smpColl)}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.svkBaseColl)}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.addColl)}</td>
+      <td className="px-3 py-2 text-right font-semibold text-green-700">{fmt(g.collected)}</td>
+      <td className="px-3 py-2 text-right text-[#A5173A]">{fmt(g.refunded)}</td>
+      <td className="px-3 py-2 text-right font-semibold">{fmt(g.retained)}</td>
+      <td className="px-3 py-2 text-right text-gray-500">{fmt(g.uncollected)}</td>
+    </tr>
+  );
+
+  if (entries.length === 0) {
+    return <p className="rounded-2xl border border-[#CDE7E7] bg-white px-4 py-8 text-center text-[12.5px] text-[#8A93A3]">No discontinued students for the selected filters.</p>;
+  }
+
+  return (
+    <>
+      <StatChipRow entries={[
+        { label: 'Discontinued', value: t.students,          color: 'text-[#A5173A]', bg: 'bg-[#FFF1F3]',     border: 'border-[#E11D48]/25' },
+        { label: 'Had Paid',  value: t.paidStudents,      color: 'text-[#0B6567]', bg: 'bg-[#DDF0F0]/40', border: 'border-[#0F8B8D]/25', title: 'Paid some fee before leaving' },
+        { label: 'Never Paid', value: t.students - t.paidStudents, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-300', title: 'Marked Discontinued before paying any fee' },
+        { label: 'Refunded To', value: t.refundedStudents, color: 'text-[#A5173A]', bg: 'bg-white',        border: 'border-[#CDE7E7]', title: 'Students with a seat-cancellation (or other fee) refund recorded' },
+        { label: 'Collected', value: fmt(t.collected),    color: 'text-green-700', bg: 'bg-green-50',     border: 'border-green-200' },
+        { label: 'Refunded',  value: fmt(t.refunded),     color: 'text-[#A5173A]', bg: 'bg-[#FFF1F3]',     border: 'border-[#E11D48]/25' },
+        { label: 'Retained',  value: fmt(t.retained),     color: 'text-[#0B6567]', bg: 'bg-white',        border: 'border-[#CDE7E7]', title: 'Collected − refunded: what the institution keeps' },
+        { label: 'Uncollected', value: fmt(t.uncollected), color: 'text-slate-700', bg: 'bg-slate-50',     border: 'border-slate-300', title: 'Balance left when the student left — not recoverable, not counted as dues' },
+      ]} />
+      {statusFilterActive && (
+        <p className="text-[11.5px] text-[#9A5B00]">The fee-status filter applies to current students only and is ignored here.</p>
+      )}
+
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+        <table className="w-full text-[12px]">
+          <thead className={ACCENT}>
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold">Course / Year</th>
+              <th className="px-3 py-2 text-center font-semibold">Students</th>
+              <th className="px-3 py-2 text-center font-semibold">Had paid</th>
+              <th className="px-3 py-2 text-right font-semibold">SMP</th>
+              <th className="px-3 py-2 text-right font-semibold">SVK Base</th>
+              <th className="px-3 py-2 text-right font-semibold">Additional</th>
+              <th className="px-3 py-2 text-right font-semibold">Collected</th>
+              <th className="px-3 py-2 text-right font-semibold">Refunded</th>
+              <th className="px-3 py-2 text-right font-semibold">Retained</th>
+              <th className="px-3 py-2 text-right font-semibold" title="Not recoverable — not counted as dues">Uncollected</th>
+            </tr>
+          </thead>
+          <tbody>{lines.map((g) => row(g))}</tbody>
+          <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">{row(t, true)}</tfoot>
+        </table>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee max-h-[480px]">
+        <table className="w-full text-[11.5px]">
+          <thead className={`${ACCENT} sticky top-0 z-10`}>
+            <tr>
+              <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Student</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Reg No</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Course / Year</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Adm Type / Cat</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Left on</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Reason</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Allotted</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Collected</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Refunded</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Retained</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Uncollected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => {
+              const r = e.row;
+              return (
+                <tr key={r.student.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                  <td className="px-2 py-1.5 font-medium">{r.student.studentNameSSLC}</td>
+                  <td className="px-2 py-1.5 text-gray-500">{r.student.regNumber || '—'}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{r.student.course} / {r.student.year}</td>
+                  <td className="px-2 py-1.5 text-gray-600">{r.student.admType} / {r.student.admCat}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{r.student.discontinuedDate ? formatDate(r.student.discontinuedDate) : '—'}</td>
+                  <td className="px-2 py-1.5 text-gray-600">{r.student.discontinuedReason || '—'}</td>
+                  <td className="px-2 py-1.5 text-right">{r.allotted !== null ? fmt(r.allotted) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right text-green-700">{r.paid > 0 ? fmt(r.paid) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right text-[#A5173A]">{e.refunded > 0 ? fmt(e.refunded) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold">{r.paid > 0 ? fmt(r.paid - e.refunded) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right text-gray-500">{r.balance ? fmt(r.balance) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function PriorDuesView({ summary, loading, statusFilterActive }: { summary: PriorDuesSummary; loading: boolean; statusFilterActive: boolean }) {
+  const t = summary.totals;
+  if (loading && summary.receipts.length === 0) {
+    return <p className="rounded-2xl border border-[#CDE7E7] bg-white px-4 py-8 text-center text-[12.5px] text-[#8A93A3]">Loading this financial year's collections…</p>;
+  }
+  const groupHead = (first: string) => (
+    <thead className={ACCENT}>
+      <tr>
+        <th className="px-3 py-2 text-left font-semibold">{first}</th>
+        <th className="px-3 py-2 text-center font-semibold">Students</th>
+        <th className="px-3 py-2 text-center font-semibold">Receipts</th>
+        <th className="px-3 py-2 text-right font-semibold">SMP</th>
+        <th className="px-3 py-2 text-right font-semibold">SVK Base</th>
+        <th className="px-3 py-2 text-right font-semibold">Additional</th>
+        <th className="px-3 py-2 text-right font-semibold">Total</th>
+        <th className="px-3 py-2 text-right font-semibold">Cash</th>
+        <th className="px-3 py-2 text-right font-semibold">UPI</th>
+      </tr>
+    </thead>
+  );
+  const groupRow = (g: PriorDueGroup, foot = false) => (
+    <tr key={g.label} className={foot ? '' : 'border-t border-[#EEF4F4]'}>
+      <td className="px-3 py-2 font-semibold whitespace-nowrap">{g.label}</td>
+      <td className="px-3 py-2 text-center">{g.students}</td>
+      <td className="px-3 py-2 text-center">{g.receipts}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.smp)}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.svk)}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.add)}</td>
+      <td className="px-3 py-2 text-right font-semibold text-green-700">{fmt(g.total)}</td>
+      <td className="px-3 py-2 text-right">{fmt(g.cash)}</td>
+      <td className="px-3 py-2 text-right text-[#1D4ED8]">{fmt(g.upi)}</td>
+    </tr>
+  );
+
+  return (
+    <>
+      <StatChipRow entries={[
+        { label: 'Students',  value: t.students,      color: 'text-[#0B6567]', bg: 'bg-[#DDF0F0]/40', border: 'border-[#0F8B8D]/25' },
+        { label: 'Receipts',  value: t.receipts,      color: 'text-[#0B6567]', bg: 'bg-white',        border: 'border-[#CDE7E7]' },
+        { label: 'Collected', value: fmt(t.total),    color: 'text-green-700', bg: 'bg-green-50',     border: 'border-green-200' },
+        { label: 'Cash',      value: fmt(t.cash),     color: 'text-[#9A5B00]', bg: 'bg-amber-50',     border: 'border-amber-200' },
+        { label: 'UPI',       value: fmt(t.upi),      color: 'text-[#1D4ED8]', bg: 'bg-blue-50',      border: 'border-blue-200' },
+      ]} />
+      {statusFilterActive && (
+        <p className="text-[11.5px] text-[#9A5B00]">The fee-status filter applies to current-year students only and is ignored here.</p>
+      )}
+
+      {summary.receipts.length === 0 ? (
+        <p className="rounded-2xl border border-[#CDE7E7] bg-white px-4 py-8 text-center text-[12.5px] text-[#8A93A3]">No previous-year dues collected in this financial year for the selected filters.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+            <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+              <table className="w-full text-[12px]">
+                {groupHead('Dues of academic year')}
+                <tbody>{summary.byYear.map((g) => groupRow(g))}</tbody>
+                <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">{groupRow(t, true)}</tfoot>
+              </table>
+            </div>
+            <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee">
+              <table className="w-full text-[12px]">
+                {groupHead('Course / Year (then)')}
+                <tbody>{summary.byCourseYear.map((g) => groupRow(g))}</tbody>
+                <tfoot className="bg-[#E6F4F4] font-semibold border-t border-[#CDE7E7] text-[#0B6567]">{groupRow(t, true)}</tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-[#CDE7E7] overflow-auto scroll-fee max-h-[480px]">
+            <table className="w-full text-[11.5px]">
+              <thead className={`${ACCENT} sticky top-0 z-10`}>
+                <tr>
+                  <th className="px-2 py-1.5 text-center font-semibold">Sl</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Date</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Receipt No(s)</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Student</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Reg No</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Acad. Year</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Course / Year</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">SMP</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">SVK Base</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Additional</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.receipts.map((x, i) => (
+                  <tr key={x.record.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{formatDate(x.record.date)}</td>
+                    <td className="px-2 py-1.5 text-gray-600">{x.receiptNos || '—'}</td>
+                    <td className="px-2 py-1.5 font-medium">{x.record.studentName}</td>
+                    <td className="px-2 py-1.5 text-gray-500">{x.record.regNumber || '—'}</td>
+                    <td className="px-2 py-1.5">{x.record.academicYear}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{x.record.course} / {x.record.year}</td>
+                    <td className="px-2 py-1.5 text-right">{x.smp ? fmt(x.smp) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{x.svk ? fmt(x.svk) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right">{x.add ? fmt(x.add) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold text-green-700">{fmt(x.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -720,26 +1057,15 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
 
 // ── Tab: Course & Year Wise ───────────────────────────────────────────────────
 function CourseYearTab({ rows, academicYear, fp }: { rows: StudentFeeRow[]; academicYear: string; fp: CommonFilterProps }) {
-  const breakdown = useMemo(() => buildBreakdown(rows), [rows]);
-  const totals = useMemo(() => ({
-    students: rows.length,
-    paid:     rows.filter((r) => r.paid > 0).length,
-    smpAllt:  rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
-    svkAllt:  rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0),
-    smpColl:  rows.reduce((s, r) => s + r.smpPaid, 0),
-    svkColl:  rows.reduce((s, r) => s + r.svkPaid, 0),
-    svkBaseAllt: rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
-    addAllt:     rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
-    svkBaseColl: rows.reduce((s, r) => s + r.svkBasePaid, 0),
-    addColl:     rows.reduce((s, r) => s + r.additionalPaid, 0),
-  }), [rows]);
+  const lines = useMemo(() => courseYearBreakdown(rows), [rows]);
+  const total = useMemo(() => computeFeeStats(rows), [rows]);
 
   return (
     <div className="space-y-3">
       <CommonFilters collapsible={false} fp={fp} extra={
         <ExportBar onPdf={() => void reportPdf().then((m) => m.exportCourseYearPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportCourseYearExcel(rows, academicYear))} />
       } />
-      <GroupTable breakdown={breakdown} totals={totals} />
+      <GroupTable lines={lines} total={total} />
     </div>
   );
 }
@@ -7911,8 +8237,9 @@ export function FeeReportsPage() {
   const { records: feeRecords,   loading: feeLoading       } = useFeeRecords(academicYear);
   // Fetches all payments whose date falls within the current financial year (Apr–Mar),
   // including prior-year dues collected this year. Only subscribes when toggle is on.
+  // Statistics › Previous Year reads the same records (prior-year dues collected this FY).
   const { records: allYearsRecords, loading: allYearsLoading } = useFeeRecords(
-    showAllYears ? academicYear : null,
+    showAllYears || activeTab === 'statistics' ? academicYear : null,
     { mode: 'by-date' },
   );
   const { overrides: feeOverrides, loading: overridesLoading } = useFeeOverrides(academicYear);
@@ -7993,8 +8320,10 @@ export function FeeReportsPage() {
   // Only CONFIRMED students appear in student-based tabs (Statistics, Fee List, Dues, Course & Year, Consolidated).
   // Cancelled students with paid fees still appear in receipt-based tabs (Daily Collections, Datewise Headwise, Bank Remittance)
   // because those tabs consume raw feeRecords directly, not this list.
-  const allStudentRows = useMemo((): StudentFeeRow[] =>
-    allStudents.filter((s) => s.admissionStatus?.trim() === 'CONFIRMED').map((s) => {
+  const { allStudentRows, discontinuedEntries } = useMemo(() => {
+    // netRefunds=false keeps paid amounts gross (used for discontinued students, whose refunds
+    // are reported separately as Refunded / Retained).
+    const toRow = (s: Student, netRefunds: boolean): StudentFeeRow => {
       const override = overrideByStudent.get(s.id);
       const key      = `${s.course}__${s.year}__${s.admType}__${s.admCat}`;
       const finePaid = finePaidByStudent.get(s.id) ?? 0;
@@ -8027,7 +8356,7 @@ export function FeeReportsPage() {
       // SNQ refunds are netted against SMP paid: after a GM→SNQ concession refund the
       // student's net paid matches the SNQ allotted, so due is exactly 0 and Paid totals
       // aren't inflated by amounts already returned to the student.
-      const refunded   = refundedByStudent.get(s.id) ?? 0;
+      const refunded   = netRefunds ? (refundedByStudent.get(s.id) ?? 0) : 0;
       const smpPaid    = Math.max(0, (smpPaidByStudent.get(s.id) ?? 0) - refunded);
       const svkPaid    = svkPaidByStudent.get(s.id) ?? 0;
       const svkBasePaid = svkBasePaidByStudent.get(s.id) ?? 0;
@@ -8046,8 +8375,17 @@ export function FeeReportsPage() {
         svkBaseAllotted, additionalAllotted,
         svkBasePaid, additionalPaid: additionalPaidAmt, svkBaseBalance, additionalBalance,
       };
-    }),
-  [
+    };
+    return {
+      allStudentRows: allStudents.filter((s) => s.admissionStatus?.trim() === 'CONFIRMED').map((s) => toRow(s, true)),
+      // Confirmed students who later left — shown only in Statistics › Discontinued; never part of dues.
+      // Seats cancelled before joining (no flag, no fee paid) are left out.
+      discontinuedEntries: allStudents
+        .filter((s) => s.admissionStatus?.trim() === 'CANCELLED')
+        .map((s): DiscontinuedEntry => ({ row: toRow(s, false), refunded: refundedByStudent.get(s.id) ?? 0 }))
+        .filter((e) => isDiscontinued(e.row.student, e.row.paid)),
+    };
+  }, [
     allStudents, overrideByStudent, smpAllottedNoFineByKey, structureFineByKey, svkAllottedByKey,
     svkBaseAllottedByKey, additionalAllottedByKey, smpPaidByStudent, svkPaidByStudent,
     svkBasePaidByStudent, additionalPaidByStudent, finePaidByStudent, refundedByStudent,
@@ -8207,14 +8545,17 @@ export function FeeReportsPage() {
   }, [dashboardTotals, stats, feeRecords.length, uniqueCollectionDays, cashUpiSplit, aidedUnaidedSplit, feeStructureStats]);
 
   // ── Filtered rows ─────────────────────────────────────────────────────────
+  const matchesFieldFilters = useCallback((s: Student) =>
+    (aidedFilter !== 'AIDED'   || (AIDED_COURSES as Course[]).includes(s.course)) &&
+    (aidedFilter !== 'UNAIDED' || (UNAIDED_COURSES as Course[]).includes(s.course)) &&
+    (!courseFilter  || s.course  === courseFilter) &&
+    (!yearFilter    || s.year    === yearFilter) &&
+    (!admTypeFilter || s.admType === admTypeFilter) &&
+    (!admCatFilter  || s.admCat  === admCatFilter),
+  [aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
+
   const filteredRows = useMemo((): StudentFeeRow[] => {
-    let rows = allStudentRows;
-    if (aidedFilter === 'AIDED')   rows = rows.filter((r) => (AIDED_COURSES as Course[]).includes(r.student.course));
-    if (aidedFilter === 'UNAIDED') rows = rows.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.student.course));
-    if (courseFilter)  rows = rows.filter((r) => r.student.course  === courseFilter);
-    if (yearFilter)    rows = rows.filter((r) => r.student.year    === yearFilter);
-    if (admTypeFilter) rows = rows.filter((r) => r.student.admType === admTypeFilter);
-    if (admCatFilter)  rows = rows.filter((r) => r.student.admCat  === admCatFilter);
+    let rows = allStudentRows.filter((r) => matchesFieldFilters(r.student));
     if (feeStatusFilter === 'PAID')        rows = rows.filter((r) => r.paid > 0);
     if (feeStatusFilter === 'NOT_PAID')    rows = rows.filter((r) => r.paid === 0);
     if (feeStatusFilter === 'FEE_DUES')    rows = rows.filter((r) => r.balance !== null && r.balance > 0);
@@ -8226,7 +8567,18 @@ export function FeeReportsPage() {
       if (c !== 0) return c;
       return a.student.studentNameSSLC.localeCompare(b.student.studentNameSSLC);
     });
-  }, [allStudentRows, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter, feeStatusFilter]);
+  }, [allStudentRows, matchesFieldFilters, feeStatusFilter]);
+
+  // Statistics › Discontinued (fee-status filter doesn't apply — they owe nothing).
+  const filteredDiscontinued = useMemo(
+    () => discontinuedEntries
+      .filter((e) => matchesFieldFilters(e.row.student))
+      .sort((a, b) => (b.row.paid > 0 ? 1 : 0) - (a.row.paid > 0 ? 1 : 0)
+        || (YEAR_ORDER[a.row.student.year] ?? 9) - (YEAR_ORDER[b.row.student.year] ?? 9)
+        || a.row.student.course.localeCompare(b.row.student.course)
+        || a.row.student.studentNameSSLC.localeCompare(b.row.student.studentNameSSLC)),
+    [discontinuedEntries, matchesFieldFilters],
+  );
 
   // ── Filtered fee records (Consolidated tab) ───────────────────────────────
   const filteredFeeRecords = useMemo(() => {
@@ -8242,8 +8594,9 @@ export function FeeReportsPage() {
   // When off: use current-year records via the existing paths.
   const dateTabRecords = showAllYears ? allYearsRecords : feeRecords;
 
-  const dateTabFilteredRecords = useMemo(() => {
-    if (!showAllYears) return filteredFeeRecords;
+  // Filters a fee-record list by the record's own course/year/type fields (the students
+  // may belong to other academic years, so student IDs can't be used).
+  const allYearsFieldFiltered = useMemo(() => {
     let records = allYearsRecords;
     if (aidedFilter === 'AIDED')   records = records.filter((r) => (AIDED_COURSES as Course[]).includes(r.course));
     if (aidedFilter === 'UNAIDED') records = records.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.course));
@@ -8252,7 +8605,15 @@ export function FeeReportsPage() {
     if (admTypeFilter) records = records.filter((r) => r.admType === admTypeFilter);
     if (admCatFilter)  records = records.filter((r) => r.admCat  === admCatFilter);
     return records;
-  }, [showAllYears, allYearsRecords, filteredFeeRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
+  }, [allYearsRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
+
+  const dateTabFilteredRecords = showAllYears ? allYearsFieldFiltered : filteredFeeRecords;
+
+  // Statistics › Previous Year: dues of earlier academic years collected this financial year.
+  const priorYearRecords = useMemo(
+    () => allYearsFieldFiltered.filter((r) => r.academicYear !== academicYear),
+    [allYearsFieldFiltered, academicYear],
+  );
 
   const hasActiveFilters =
     !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
@@ -8333,7 +8694,7 @@ export function FeeReportsPage() {
           <ReportHub onSelect={setActiveTab} content={hubCardContent} />
         ) : (
           <div key={activeTab} className="flex-1 min-h-0 flex flex-col" style={{ animation: 'content-enter 0.22s ease-out' }}>
-            {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}
+            {activeTab === 'statistics'        && <StatisticsTab       rows={filteredRows}             academicYear={academicYear} fp={fp} priorRecords={priorYearRecords} priorLoading={allYearsLoading} discontinued={filteredDiscontinued} />}
             {activeTab === 'fee-list'          && <FeeListTab          rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'dues'              && <DuesTab             rows={filteredRows}             academicYear={academicYear} fp={fp} />}
             {activeTab === 'course-year'       && <CourseYearTab       rows={filteredRows}             academicYear={academicYear} fp={fp} />}

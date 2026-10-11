@@ -1,7 +1,12 @@
 import * as XLSX from 'xlsx';
 import type { FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
-import type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportPdf';
+import type { StudentFeeRow, DatewiseHeadwiseEntry, StatsExportInput } from './feeReportPdf';
+import {
+  aidedSubtotals, collectionPct, computeFeeStats, courseYearBreakdown, emptyFeeStats, missingStructureKeys,
+  discontinuedByCourseYear, discontinuedTotals,
+  type DiscontinuedEntry, type DiscontinuedTotals, type FeeStats, type PriorDueGroup, type PriorDuesSummary,
+} from './feeStatistics';
 
 const FEE_DETAIL_HEADER = [
   'Sl', 'Name', 'Reg No', 'Course', 'Year',
@@ -33,92 +38,139 @@ function feeDetailRow(r: StudentFeeRow, i: number): (string | number | null)[] {
 }
 
 // ── 1. Statistics ──────────────────────────────────────────────────────────────
-export function exportStatsExcel(rows: StudentFeeRow[], academicYear: string): void {
-  const total       = rows.length;
-  const paidCount   = rows.filter((r) => r.paid > 0).length;
-  const notPaid     = total - paidCount;
-  const duesCount   = rows.filter((r) => r.balance !== null && r.balance > 0).length;
-  const noDuesCount = rows.filter((r) => r.balance !== null && r.balance <= 0).length;
-  const totSmpAllt  = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const totSvkAllt  = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
-  const totSmpPaid  = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const totSvkPaid  = rows.reduce((s, r) => s + r.svkPaid, 0);
-  const totSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-  const totAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-  const totSvkBasePaid = rows.reduce((s, r) => s + r.svkBasePaid, 0);
-  const totAddPaid     = rows.reduce((s, r) => s + r.additionalPaid, 0);
+// Balance = sum of each student's own dues (clamped at 0), matching the Dues report.
+const GRP_HEADER = [
+  'Course', 'Year', 'Students', 'Paid',
+  'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
+  'SMP Collected', 'SVK Base Collected', 'Additional Collected', 'Total Collected',
+  'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance', 'Collected %',
+];
 
-  const breakdown = new Map<string, {
-    course: string; year: string; total: number; paid: number;
-    smpAllt: number; svkAllt: number; smpColl: number; svkColl: number;
-    svkBaseAllt: number; addAllt: number; svkBaseColl: number; addColl: number;
-  }>();
-  for (const r of rows) {
-    const key = `${r.student.course}__${r.student.year}`;
-    if (!breakdown.has(key)) {
-      breakdown.set(key, {
-        course: r.student.course, year: r.student.year,
-        total: 0, paid: 0, smpAllt: 0, svkAllt: 0, smpColl: 0, svkColl: 0,
-        svkBaseAllt: 0, addAllt: 0, svkBaseColl: 0, addColl: 0,
-      });
-    }
-    const e = breakdown.get(key)!;
-    e.total++;
-    if (r.paid > 0) e.paid++;
-    e.smpAllt += r.smpAllotted ?? 0;
-    e.svkAllt += r.svkAllotted ?? 0;
-    e.smpColl += r.smpPaid;
-    e.svkColl += r.svkPaid;
-    e.svkBaseAllt += r.svkBaseAllotted ?? 0;
-    e.addAllt += r.additionalAllotted ?? 0;
-    e.svkBaseColl += r.svkBasePaid;
-    e.addColl += r.additionalPaid;
-  }
-  const bRows = Array.from(breakdown.values()).sort((a, b) => {
-    const c = a.course.localeCompare(b.course);
-    return c !== 0 ? c : a.year.localeCompare(b.year);
-  });
+function grpRow(c1: string, c2: string, t: FeeStats): (string | number | null)[] {
+  const pct = collectionPct(t);
+  return [
+    c1, c2, t.students, t.students - t.notPaid,
+    t.smpAllt, t.svkBaseAllt, t.addAllt, t.allotted,
+    t.smpColl, t.svkBaseColl, t.addColl, t.collected,
+    t.smpBal, t.svkBaseBal, t.addBal, t.balance,
+    pct === null ? null : Math.round(pct * 10) / 10,
+  ];
+}
 
+function breakdownRows(rows: StudentFeeRow[], total: FeeStats): (string | number | null)[][] {
+  return [
+    GRP_HEADER,
+    ...courseYearBreakdown(rows).map((b) => grpRow(b.course, b.year, b.stats)),
+    ...aidedSubtotals(rows).map((s) => grpRow(s.label, '', s.stats)),
+    grpRow('TOTAL', '', total),
+  ];
+}
+
+export function exportStatsExcel({ rows, academicYear, segmentLabel, groups }: StatsExportInput): void {
+  const t = computeFeeStats(rows);
+  const pct = collectionPct(t);
   const data: (string | number | null)[][] = [
-    [`SMP Admissions — Fee Statistics`],
+    [`SMP Admissions — Fee Statistics — ${segmentLabel}`],
     [`Academic Year: ${academicYear}`],
     [],
-    ['Metric', 'SMP', 'SVK Base', 'Additional', 'Total'],
-    ['Total Students', total, null, null, null],
-    ['Paid',           paidCount, null, null, null],
-    ['Not Paid',       notPaid, null, null, null],
-    ['Fee Dues',       duesCount, null, null, null],
-    ['No Fee Dues',    noDuesCount, null, null, null],
-    ['Allotted',       totSmpAllt, totSvkBaseAllt, totAddAllt, totSmpAllt + totSvkAllt],
-    ['Collected',      totSmpPaid, totSvkBasePaid, totAddPaid, totSmpPaid + totSvkPaid],
-    ['Balance',        totSmpAllt - totSmpPaid, totSvkBaseAllt - totSvkBasePaid, totAddAllt - totAddPaid,
-                       (totSmpAllt + totSvkAllt) - (totSmpPaid + totSvkPaid)],
+    ['Students', 'Fully Paid', 'Part Paid', 'Not Paid', 'Fee Dues', 'No Dues', 'No Fee Structure', 'Collected %'],
+    [t.students, t.fullyPaid, t.partPaid, t.notPaid, t.withDues, t.noDues, t.noStructure, pct === null ? null : Math.round(pct * 10) / 10],
     [],
-    ['Course & Year Breakdown'],
-    ['Course', 'Year', 'Students', 'Paid',
-     'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
-     'SMP Collected', 'SVK Base Collected', 'Additional Collected', 'Total Collected',
-     'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance'],
-    ...bRows.map((b) => [
-      b.course, b.year, b.total, b.paid,
-      b.smpAllt, b.svkBaseAllt, b.addAllt, b.smpAllt + b.svkAllt,
-      b.smpColl, b.svkBaseColl, b.addColl, b.smpColl + b.svkColl,
-      b.smpAllt - b.smpColl, b.svkBaseAllt - b.svkBaseColl, b.addAllt - b.addColl,
-      (b.smpAllt + b.svkAllt) - (b.smpColl + b.svkColl),
-    ]),
-    [
-      'TOTAL', '', rows.length, paidCount,
-      totSmpAllt, totSvkBaseAllt, totAddAllt, totSmpAllt + totSvkAllt,
-      totSmpPaid, totSvkBasePaid, totAddPaid, totSmpPaid + totSvkPaid,
-      totSmpAllt - totSmpPaid, totSvkBaseAllt - totSvkBasePaid, totAddAllt - totAddPaid,
-      (totSmpAllt + totSvkAllt) - (totSmpPaid + totSvkPaid),
-    ],
+    ['Metric', 'SMP', 'SVK Base', 'Additional', 'Total'],
+    ['Allotted',       t.smpAllt, t.svkBaseAllt, t.addAllt, t.allotted],
+    ['Collected',      t.smpColl, t.svkBaseColl, t.addColl, t.collected],
+    ['Balance (dues)', t.smpBal,  t.svkBaseBal,  t.addBal,  t.balance],
+    ...(t.excess > 0 ? [['Excess paid (to refund / adjust)', null, null, null, t.excess]] : []),
   ];
+  if (groups?.length) {
+    const all = groups.reduce((acc, g) => {
+      for (const k of Object.keys(acc) as (keyof FeeStats)[]) acc[k] += g.stats[k];
+      return acc;
+    }, emptyFeeStats());
+    const gRow = (label: string, s: FeeStats) => [label, s.students, s.fullyPaid, s.partPaid, s.notPaid, s.allotted, s.collected, s.balance];
+    data.push(
+      [],
+      ['Student Group', 'Students', 'Fully Paid', 'Part Paid', 'Not Paid', 'Allotted', 'Collected', 'Balance (dues)'],
+      ...groups.map((g) => gRow(g.label, g.stats)),
+      gRow('TOTAL', all),
+    );
+  }
+  data.push([], ['Course & Year Breakdown'], ...breakdownRows(rows, t));
+  if (t.noStructure > 0) data.push([], [`${t.noStructure} student(s) have no fee structure and are not in the Balance: ${missingStructureKeys(rows).join('; ')}`]);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{ wch: 30 }, ...Array.from({ length: 16 }, () => ({ wch: 14 }))];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Fee Statistics');
-  XLSX.writeFile(wb, `fee-statistics-${academicYear}.xlsx`);
+  XLSX.writeFile(wb, `fee-statistics-${segmentLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${academicYear}.xlsx`);
+}
+
+// ── 1b. Previous-year dues collected this financial year ───────────────────────
+export function exportPriorDuesExcel(summary: PriorDuesSummary, academicYear: string): void {
+  const t = summary.totals;
+  const start = Number(academicYear.slice(0, 4));
+  const gHead = (first: string) => [first, 'Students', 'Receipts', 'SMP', 'SVK Base', 'Additional', 'Total', 'Cash', 'UPI'];
+  const gRow = (g: PriorDueGroup, label = g.label) => [label, g.students, g.receipts, g.smp, g.svk, g.add, g.total, g.cash, g.upi];
+
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    ['SMP Admissions — Previous-Year Dues Collected'],
+    [`Financial year 01-04-${start} to 31-03-${start + 1} (Academic Year ${academicYear})`],
+    [],
+    gHead('Dues of Academic Year'),
+    ...summary.byYear.map((g) => gRow(g)),
+    gRow(t, 'TOTAL'),
+    [],
+    gHead('Course / Year (then)'),
+    ...summary.byCourseYear.map((g) => gRow(g)),
+    gRow(t, 'TOTAL'),
+  ]);
+  summarySheet['!cols'] = [{ wch: 26 }, ...Array.from({ length: 8 }, () => ({ wch: 12 }))];
+
+  const receiptSheet = XLSX.utils.aoa_to_sheet([
+    ['Sl', 'Date', 'Receipt No(s)', 'Student', 'Reg No', 'Academic Year', 'Course', 'Year', 'SMP', 'SVK Base', 'Additional', 'Total', 'Cash', 'UPI'],
+    ...summary.receipts.map((x, i) => [
+      i + 1, x.record.date.slice(0, 10), x.receiptNos, x.record.studentName, x.record.regNumber, x.record.academicYear,
+      x.record.course, x.record.year, x.smp, x.svk, x.add, x.total, x.cash, x.upi,
+    ]),
+    ['', '', '', 'TOTAL', '', '', '', '', t.smp, t.svk, t.add, t.total, t.cash, t.upi],
+  ]);
+  receiptSheet['!cols'] = [5, 12, 30, 30, 14, 12, 8, 10, 10, 10, 10, 11, 10, 10].map((wch) => ({ wch }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+  XLSX.utils.book_append_sheet(wb, receiptSheet, 'Receipts');
+  XLSX.writeFile(wb, `previous-year-dues-collected-${academicYear}.xlsx`);
+}
+
+// ── 1c. Discontinued students ────────────────────────────────────────────────────────
+export function exportDiscontinuedExcel(entries: DiscontinuedEntry[], academicYear: string): void {
+  const t = discontinuedTotals(entries);
+  const gRow = (g: DiscontinuedTotals, label = g.label) => [label, g.students, g.paidStudents, g.smpColl, g.svkBaseColl, g.addColl, g.collected, g.refunded, g.retained, g.uncollected];
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    ['SMP Admissions — Discontinued Students: Fee Collected & Refunded'],
+    [`Academic Year: ${academicYear}`],
+    [],
+    ['Course / Year', 'Students', 'Had Paid', 'SMP', 'SVK Base', 'Additional', 'Collected', 'Refunded', 'Retained', 'Uncollected (not dues)'],
+    ...discontinuedByCourseYear(entries).map((g) => gRow(g)),
+    gRow(t, 'TOTAL'),
+  ]);
+  summarySheet['!cols'] = [{ wch: 18 }, ...Array.from({ length: 9 }, () => ({ wch: 12 }))];
+
+  const studentSheet = XLSX.utils.aoa_to_sheet([
+    ['Sl', 'Student', 'Reg No', 'Course', 'Year', 'Adm Type', 'Adm Cat', 'Left On', 'Reason', 'Allotted', 'Collected', 'Refunded', 'Retained', 'Uncollected'],
+    ...entries.map(({ row: r, refunded }, i) => [
+      i + 1, r.student.studentNameSSLC, r.student.regNumber, r.student.course, r.student.year, r.student.admType, r.student.admCat,
+      r.student.discontinuedDate?.slice(0, 10) ?? '', r.student.discontinuedReason ?? '',
+      r.allotted, r.paid, refunded, r.paid - refunded, r.balance,
+    ]),
+    ['', 'TOTAL', '', '', '', '', '', '', '', null, t.collected, t.refunded, t.retained, t.uncollected],
+  ]);
+  studentSheet['!cols'] = [5, 32, 14, 8, 10, 10, 8, 11, 28, 11, 11, 11, 11, 12].map((wch) => ({ wch }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+  XLSX.utils.book_append_sheet(wb, studentSheet, 'Students');
+  XLSX.writeFile(wb, `discontinued-students-fee-${academicYear}.xlsx`);
 }
 
 // ── 2. Fee List ────────────────────────────────────────────────────────────────
@@ -184,56 +236,12 @@ export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): vo
 
 // ── 4. Course & Year Wise ──────────────────────────────────────────────────────
 export function exportCourseYearExcel(rows: StudentFeeRow[], academicYear: string): void {
-  const groups = new Map<string, StudentFeeRow[]>();
-  for (const r of rows) {
-    const key = `${r.student.course}__${r.student.year}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(r);
-  }
-
-  const sortedKeys = Array.from(groups.keys()).sort();
-  const tableRows = sortedKeys.map((key) => {
-    const g       = groups.get(key)!;
-    const smpAllt = g.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-    const svkAllt = g.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
-    const smpColl = g.reduce((s, r) => s + r.smpPaid, 0);
-    const svkColl = g.reduce((s, r) => s + r.svkPaid, 0);
-    const svkBaseAllt = g.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-    const addAllt     = g.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-    const svkBaseColl = g.reduce((s, r) => s + r.svkBasePaid, 0);
-    const addColl     = g.reduce((s, r) => s + r.additionalPaid, 0);
-    return [
-      g[0].student.course, g[0].student.year, g.length, g.filter((r) => r.paid > 0).length,
-      smpAllt, svkBaseAllt, addAllt, smpAllt + svkAllt,
-      smpColl, svkBaseColl, addColl, smpColl + svkColl,
-      smpAllt - smpColl, svkBaseAllt - svkBaseColl, addAllt - addColl, (smpAllt + svkAllt) - (smpColl + svkColl),
-    ];
-  });
-
-  const gSmpAllt = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const gSvkAllt = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
-  const gSmpColl = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const gSvkColl = rows.reduce((s, r) => s + r.svkPaid, 0);
-  const gSvkBaseAllt = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-  const gAddAllt     = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-  const gSvkBaseColl = rows.reduce((s, r) => s + r.svkBasePaid, 0);
-  const gAddColl     = rows.reduce((s, r) => s + r.additionalPaid, 0);
-
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Course & Year Wise Report`],
     [`Academic Year: ${academicYear}`],
     [],
-    ['Course', 'Year', 'Students', 'Paid',
-     'SMP Allotted', 'SVK Base Allotted', 'Additional Allotted', 'Total Allotted',
-     'SMP Collected', 'SVK Base Collected', 'Additional Collected', 'Total Collected',
-     'SMP Balance', 'SVK Base Balance', 'Additional Balance', 'Total Balance'],
-    ...tableRows,
-    ['TOTAL', '', rows.length, rows.filter((r) => r.paid > 0).length,
-     gSmpAllt, gSvkBaseAllt, gAddAllt, gSmpAllt + gSvkAllt,
-     gSmpColl, gSvkBaseColl, gAddColl, gSmpColl + gSvkColl,
-     gSmpAllt - gSmpColl, gSvkBaseAllt - gSvkBaseColl, gAddAllt - gAddColl, (gSmpAllt + gSvkAllt) - (gSmpColl + gSvkColl)],
+    ...breakdownRows(rows, computeFeeStats(rows)),
   ];
-
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Course & Year Wise');

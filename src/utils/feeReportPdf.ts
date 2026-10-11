@@ -3,6 +3,11 @@ import { autoTable } from 'jspdf-autotable';
 import type { FeeRecord, SMPFeeHead } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 import type { StudentFeeRow, DatewiseHeadwiseEntry } from './feeReportData';
+import {
+  aidedSubtotals, computeFeeStats, courseYearBreakdown, emptyFeeStats, missingStructureKeys, pctLabel,
+  discontinuedByCourseYear, discontinuedTotals,
+  type DiscontinuedEntry, type DiscontinuedTotals, type FeeStats, type PriorDueGroup, type PriorDuesSummary,
+} from './feeStatistics';
 
 // Pure row/aggregation helpers live in feeReportData so pages can use them
 // without pulling jsPDF into their chunk.
@@ -188,29 +193,33 @@ function feeRow(r: StudentFeeRow, i: number): (string | number)[] {
   ];
 }
 
-// ── Group-summary table definition (13 cols, 277 mm) ─────────────────────────
+// ── Group-summary table definition (17 cols, 277 mm) ─────────────────────────
 //
-//  Course(16) + Year(20) + Students(15) + Paid(15) = 66 mm
-//  + 3 × [ SMP(22) + SVK(22) + Total(26) ]         = 210 mm  → 276 mm total
+//  Course(14) + Year(18) + Students(12) + Paid(12)  = 56 mm
+//  + 3 × [ SMP(17) + SVK(17) + Addl(14) + Total(22) ] = 210 mm
+//  + Coll.%(11)                                       → 277 mm total
 //
+// Balance = sum of each student's own dues (clamped at 0), matching the Dues report.
 const GRP_HEAD1 = [
   'Course', 'Year', 'Count', 'Paid',
   'Allotted (Rs.)', '', '', '',
   'Collected (Rs.)', '', '', '',
-  'Balance (Rs.)', '', '', '',
+  'Balance / Dues (Rs.)', '', '', '',
+  'Coll. %',
 ];
 const GRP_HEAD2 = [
   '', '', '', '',
   'SMP', 'SVK Base', 'Addl.', 'Total',
   'SMP', 'SVK Base', 'Addl.', 'Total',
   'SMP', 'SVK Base', 'Addl.', 'Total',
+  '',
 ];
 
 const GRP_COLS: Record<number, object> = {
-  0:  { cellWidth: 16, halign: 'center' },
-  1:  { cellWidth: 20 },
-  2:  { cellWidth: 15, halign: 'center' },
-  3:  { cellWidth: 15, halign: 'center' },
+  0:  { cellWidth: 14, halign: 'center' },
+  1:  { cellWidth: 18 },
+  2:  { cellWidth: 12, halign: 'center' },
+  3:  { cellWidth: 12, halign: 'center' },
   4:  { cellWidth: 17, halign: 'right' },
   5:  { cellWidth: 17, halign: 'right' },
   6:  { cellWidth: 14, halign: 'right' },
@@ -223,134 +232,247 @@ const GRP_COLS: Record<number, object> = {
   13: { cellWidth: 17, halign: 'right' },
   14: { cellWidth: 14, halign: 'right' },
   15: { cellWidth: 22, halign: 'right' },
+  16: { cellWidth: 11, halign: 'right' },
 };
 
-function grpRow(
-  c1: string, c2: string | number,
-  total: number, paid: number,
-  sA: number, vBaseA: number, addA: number,
-  sC: number, vBaseC: number, addC: number,
-): (string | number)[] {
-  const vA = vBaseA + addA;
-  const vC = vBaseC + addC;
+function grpRow(c1: string, c2: string, t: FeeStats): (string | number)[] {
   return [
-    c1, c2, total, paid,
-    num(sA), num(vBaseA), num(addA), num(sA + vA),
-    num(sC), num(vBaseC), num(addC), num(sC + vC),
-    num(sA - sC), num(vBaseA - vBaseC), num(addA - addC), num((sA + vA) - (sC + vC)),
+    c1, c2, t.students, t.students - t.notPaid,
+    num(t.smpAllt), num(t.svkBaseAllt), num(t.addAllt), num(t.allotted),
+    num(t.smpColl), num(t.svkBaseColl), num(t.addColl), num(t.collected),
+    num(t.smpBal), num(t.svkBaseBal), num(t.addBal), num(t.balance),
+    pctLabel(t),
   ];
 }
 
-function buildBreakdown(rows: StudentFeeRow[]) {
-  const map = new Map<string, {
-    course: string; year: string; total: number; paid: number;
-    sA: number; vA: number; sC: number; vC: number;
-    sBaseA: number; addA: number; sBaseC: number; addC: number;
-  }>();
-  for (const r of rows) {
-    const k = `${r.student.course}__${r.student.year}`;
-    if (!map.has(k)) map.set(k, {
-      course: r.student.course, year: r.student.year,
-      total: 0, paid: 0, sA: 0, vA: 0, sC: 0, vC: 0,
-      sBaseA: 0, addA: 0, sBaseC: 0, addC: 0,
-    });
-    const e = map.get(k)!;
-    e.total++;
-    if (r.paid > 0) e.paid++;
-    e.sA += r.smpAllotted ?? 0;
-    e.vA += r.svkAllotted ?? 0;
-    e.sC += r.smpPaid;
-    e.vC += r.svkPaid;
-    e.sBaseA += r.svkBaseAllotted ?? 0;
-    e.addA += r.additionalAllotted ?? 0;
-    e.sBaseC += r.svkBasePaid;
-    e.addC += r.additionalPaid;
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    const c = a.course.localeCompare(b.course);
-    return c !== 0 ? c : a.year.localeCompare(b.year);
+/** Course/year rows + Aided/Unaided subtotals + TOTAL; returns the body and the bold-row indexes. */
+function breakdownBody(rows: StudentFeeRow[], total: FeeStats): { body: (string | number)[][]; bold: Set<number> } {
+  const lines = courseYearBreakdown(rows);
+  const subs = aidedSubtotals(rows);
+  const body = [
+    ...lines.map((b) => grpRow(b.course, b.year, b.stats)),
+    ...subs.map((s) => grpRow(s.label, '', s.stats)),
+    grpRow('TOTAL', '', total),
+  ];
+  const bold = new Set<number>();
+  for (let i = lines.length; i < body.length; i++) bold.add(i);
+  return { body, bold };
+}
+
+function breakdownTable(doc: jsPDF, startY: number, rows: StudentFeeRow[], total: FeeStats, fill: [number, number, number]): void {
+  const { body, bold } = breakdownBody(rows, total);
+  autoTable(doc, {
+    startY,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [GRP_HEAD1, GRP_HEAD2],
+    body,
+    styles: BASE,
+    headStyles: head(fill),
+    alternateRowStyles: NO_BAND,
+    columnStyles: GRP_COLS,
+    didParseCell: (data) => {
+      if (data.section === 'body' && bold.has(data.row.index)) {
+        (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
+        if (data.row.index < body.length - 1) (data.cell.styles as { fillColor: number[] }).fillColor = [242, 250, 250];
+      }
+    },
+    didDrawPage: (data) => footer(doc, data.pageNumber),
   });
 }
 
-// ── 1. Statistics ─────────────────────────────────────────────────────────────
-export function exportStatsPdf(rows: StudentFeeRow[], academicYear: string): void {
-  const total       = rows.length;
-  const paidCount   = rows.filter((r) => r.paid > 0).length;
-  const duesCount   = rows.filter((r) => r.balance !== null && r.balance > 0).length;
-  const noDuesCount = rows.filter((r) => r.balance !== null && r.balance <= 0).length;
-  const tSA = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const tVA = rows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
-  const tSC = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const tVC = rows.reduce((s, r) => s + r.svkPaid, 0);
-  const tVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-  const tAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-  const tVBaseC = rows.reduce((s, r) => s + r.svkBasePaid, 0);
-  const tAddC   = rows.reduce((s, r) => s + r.additionalPaid, 0);
+const nextY = (doc: jsPDF, gap = 6) => (doc as JsPDFWithAutoTable).lastAutoTable.finalY + gap;
 
+// ── 1. Statistics ─────────────────────────────────────────────────────────────
+export interface StatsExportInput {
+  rows: StudentFeeRow[];
+  academicYear: string;
+  segmentLabel: string;                         // "Regular students", "All students", …
+  groups?: { label: string; stats: FeeStats }[]; // Show All → per-group summary
+}
+
+export function exportStatsPdf({ rows, academicYear, segmentLabel, groups }: StatsExportInput): void {
+  const t = computeFeeStats(rows);
   const BLUE: [number, number, number] = [30, 64, 175];
   const doc = buildDoc(
-    'SMP Admissions \u2014 Fee Statistics',
-    `Academic Year: ${academicYear}  |  ${total} students`,
+    `SMP Admissions — Fee Statistics — ${segmentLabel}`,
+    `Academic Year: ${academicYear}  |  ${t.students} students`,
   );
 
-  // Summary table
+  // Counts
   autoTable(doc, {
     startY: 23,
     margin: { left: MARGIN, right: MARGIN },
+    head: [['Students', 'Fully paid', 'Part paid', 'Not paid', 'Fee dues', 'No dues', 'No fee structure', 'Collected %']],
+    body: [[t.students, t.fullyPaid, t.partPaid, t.notPaid, t.withDues, t.noDues, t.noStructure, pctLabel(t)]],
+    styles: { ...BASE, halign: 'center' },
+    headStyles: { ...head(BLUE), halign: 'center' },
+    alternateRowStyles: NO_BAND,
+    didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+
+  // Amounts
+  const amountBody: (string | number)[][] = [
+    ['Allotted',       num(t.smpAllt), num(t.svkBaseAllt), num(t.addAllt), num(t.allotted)],
+    ['Collected',      num(t.smpColl), num(t.svkBaseColl), num(t.addColl), num(t.collected)],
+    ['Balance (dues)', num(t.smpBal),  num(t.svkBaseBal),  num(t.addBal),  num(t.balance)],
+  ];
+  if (t.excess > 0) amountBody.push(['Excess paid (to refund / adjust)', '', '', '', num(t.excess)]);
+  autoTable(doc, {
+    startY: nextY(doc),
+    margin: { left: MARGIN, right: MARGIN },
     tableWidth: 205,
     head: [['Metric', 'SMP (Rs.)', 'SVK Base (Rs.)', 'Additional (Rs.)', 'Total (Rs.)']],
-    body: [
-      ['Total',      String(total),          '', '', ''],
-      ['Paid',       String(paidCount),       '', '', ''],
-      ['Not Paid',   String(total-paidCount), '', '', ''],
-      ['Fee Dues',   String(duesCount),       '', '', ''],
-      ['No Dues',    String(noDuesCount),     '', '', ''],
-      ['Allotted',       num(tSA),                num(tVBaseA),               num(tAddA),               num(tSA + tVA)                ],
-      ['Collected',      num(tSC),                num(tVBaseC),               num(tAddC),               num(tSC + tVC)                ],
-      ['Balance',        num(tSA - tSC),          num(tVBaseA - tVBaseC),     num(tAddA - tAddC),       num((tSA+tVA) - (tSC+tVC))   ],
-    ],
+    body: amountBody,
     styles: BASE,
     headStyles: head(BLUE),
     alternateRowStyles: NO_BAND,
     columnStyles: {
-      0: { cellWidth: 45, font: 'helvetica', fontStyle: 'normal' },
+      0: { cellWidth: 45 },
       1: { cellWidth: 40, halign: 'right' },
       2: { cellWidth: 40, halign: 'right' },
       3: { cellWidth: 40, halign: 'right' },
-      4: { cellWidth: 40, halign: 'right' },
-    },
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index >= 5) {
-        (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
-      }
+      4: { cellWidth: 40, halign: 'right', fontStyle: 'bold' },
     },
     didDrawPage: (data) => footer(doc, data.pageNumber),
   });
 
-  const bRows = buildBreakdown(rows);
-  const afterSummary = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
+  // Per student group (Show All)
+  if (groups?.length) {
+    const all = groups.reduce((acc, g) => {
+      for (const k of Object.keys(acc) as (keyof FeeStats)[]) acc[k] += g.stats[k];
+      return acc;
+    }, emptyFeeStats());
+    const gRow = (label: string, s: FeeStats) => [label, s.students, s.fullyPaid, s.partPaid, s.notPaid, num(s.allotted), num(s.collected), num(s.balance), pctLabel(s)];
+    autoTable(doc, {
+      startY: nextY(doc),
+      margin: { left: MARGIN, right: MARGIN },
+      head: [['Student group', 'Students', 'Fully paid', 'Part paid', 'Not paid', 'Allotted (Rs.)', 'Collected (Rs.)', 'Balance (Rs.)', 'Coll. %']],
+      body: [...groups.map((g) => gRow(g.label, g.stats)), gRow('TOTAL', all)],
+      styles: BASE,
+      headStyles: head(BLUE),
+      alternateRowStyles: NO_BAND,
+      columnStyles: { 0: { cellWidth: 60 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index === groups.length) (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
+      },
+      didDrawPage: (data) => footer(doc, data.pageNumber),
+    });
+  }
+
+  breakdownTable(doc, nextY(doc, 8), rows, t, BLUE);
+
+  const notes = ['Balance = sum of each student\'s own dues; an excess payment by one student does not reduce another student\'s due.'];
+  if (t.noStructure > 0) notes.push(`${t.noStructure} student(s) have no fee structure and are not in the Balance: ${missingStructureKeys(rows).join('; ')}.`);
+  const W = doc.internal.pageSize.getWidth();
+  let y = nextY(doc, 6);
+  if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); y = 16; }
+  doc.setFontSize(6.8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(doc.splitTextToSize(notes.join('  '), W - 2 * MARGIN), MARGIN, y);
+  doc.setTextColor(20, 20, 20);
+
+  doc.save(`fee-statistics-${segmentLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${academicYear}.pdf`);
+}
+
+// ── 1b. Previous-year dues collected this financial year ──────────────────────
+export function exportPriorDuesPdf(summary: PriorDuesSummary, academicYear: string): void {
+  const t = summary.totals;
+  const start = Number(academicYear.slice(0, 4));
+  const GREEN: [number, number, number] = [11, 101, 103];
+  const doc = buildDoc(
+    'SMP Admissions — Previous-Year Dues Collected',
+    `Financial year 01-04-${start} to 31-03-${start + 1} (Academic Year ${academicYear})  |  ${t.students} students  |  ${t.receipts} receipts`,
+  );
+  const gHead = (first: string) => [[first, 'Students', 'Receipts', 'SMP (Rs.)', 'SVK Base (Rs.)', 'Additional (Rs.)', 'Total (Rs.)', 'Cash (Rs.)', 'UPI (Rs.)']];
+  const gRow = (g: PriorDueGroup) => [g.label, g.students, g.receipts, num(g.smp), num(g.svk), num(g.add), num(g.total), num(g.cash), num(g.upi)];
+  const gCols = { 0: { cellWidth: 50 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right', fontStyle: 'bold' }, 7: { halign: 'right' }, 8: { halign: 'right' } } as Record<number, object>;
+  const boldLast = (n: number) => (data: { section: string; row: { index: number }; cell: { styles: unknown } }) => {
+    if (data.section === 'body' && data.row.index === n) (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
+  };
 
   autoTable(doc, {
-    startY: afterSummary,
-    margin: { left: MARGIN, right: MARGIN },
-    head: [GRP_HEAD1, GRP_HEAD2],
+    startY: 23, margin: { left: MARGIN, right: MARGIN },
+    head: gHead('Dues of academic year'), body: [...summary.byYear.map(gRow), gRow({ ...t, label: 'TOTAL' })],
+    styles: BASE, headStyles: head(GREEN), alternateRowStyles: NO_BAND, columnStyles: gCols,
+    didParseCell: boldLast(summary.byYear.length), didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+  autoTable(doc, {
+    startY: nextY(doc), margin: { left: MARGIN, right: MARGIN },
+    head: gHead('Course / Year (then)'), body: [...summary.byCourseYear.map(gRow), gRow({ ...t, label: 'TOTAL' })],
+    styles: BASE, headStyles: head(GREEN), alternateRowStyles: NO_BAND, columnStyles: gCols,
+    didParseCell: boldLast(summary.byCourseYear.length), didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+  autoTable(doc, {
+    startY: nextY(doc, 8), margin: { left: MARGIN, right: MARGIN },
+    head: [['Sl', 'Date', 'Receipt No(s)', 'Student', 'Reg No', 'Acad. Year', 'Course / Year', 'SMP', 'SVK Base', 'Addl.', 'Total']],
     body: [
-      ...bRows.map((b) => grpRow(b.course, b.year, b.total, b.paid, b.sA, b.sBaseA, b.addA, b.sC, b.sBaseC, b.addC)),
-      grpRow('TOTAL', '', total, paidCount, tSA, tVBaseA, tAddA, tSC, tVBaseC, tAddC),
+      ...summary.receipts.map((x, i) => [
+        i + 1, fmtDate(x.record.date), x.receiptNos || '-', x.record.studentName, x.record.regNumber || '-',
+        x.record.academicYear, `${x.record.course} / ${x.record.year}`,
+        x.smp ? num(x.smp) : '-', x.svk ? num(x.svk) : '-', x.add ? num(x.add) : '-', num(x.total),
+      ]),
+      ['', '', '', 'TOTAL', '', '', '', num(t.smp), num(t.svk), num(t.add), num(t.total)],
     ],
-    styles: BASE,
-    headStyles: head(BLUE),
-    alternateRowStyles: NO_BAND,
-    columnStyles: GRP_COLS,
+    styles: BASE, headStyles: head(GREEN), alternateRowStyles: NO_BAND,
+    columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 20 }, 2: { cellWidth: 50 }, 3: { cellWidth: 56 }, 4: { cellWidth: 24 }, 5: { cellWidth: 18 }, 6: { cellWidth: 26 }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right', fontStyle: 'bold' } },
+    didParseCell: boldLast(summary.receipts.length), didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+
+  doc.save(`previous-year-dues-collected-${academicYear}.pdf`);
+}
+
+// ── 1c. Discontinued students ────────────────────────────────────────────────────────
+export function exportDiscontinuedPdf(entries: DiscontinuedEntry[], academicYear: string): void {
+  const t = discontinuedTotals(entries);
+  const RED: [number, number, number] = [165, 23, 58];
+  const doc = buildDoc(
+    'SMP Admissions — Discontinued Students: Fee Collected & Refunded',
+    `Academic Year: ${academicYear}  |  ${t.students} discontinued  |  ${t.paidStudents} had paid  |  ${t.refundedStudents} refunded`,
+  );
+  const gRow = (g: DiscontinuedTotals) => [g.label, g.students, g.paidStudents, num(g.smpColl), num(g.svkBaseColl), num(g.addColl), num(g.collected), num(g.refunded), num(g.retained), num(g.uncollected)];
+  const lines = discontinuedByCourseYear(entries);
+  autoTable(doc, {
+    startY: 23, margin: { left: MARGIN, right: MARGIN },
+    head: [['Course / Year', 'Students', 'Had paid', 'SMP (Rs.)', 'SVK Base (Rs.)', 'Addl. (Rs.)', 'Collected (Rs.)', 'Refunded (Rs.)', 'Retained (Rs.)', 'Uncollected (Rs.)']],
+    body: [...lines.map(gRow), gRow({ ...t, label: 'TOTAL' })],
+    styles: BASE, headStyles: head(RED), alternateRowStyles: NO_BAND,
+    columnStyles: { 0: { cellWidth: 34 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right', fontStyle: 'bold' }, 9: { halign: 'right' } },
     didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index === bRows.length) {
-        (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
-      }
+      if (data.section === 'body' && data.row.index === lines.length) (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
     },
     didDrawPage: (data) => footer(doc, data.pageNumber),
   });
+  autoTable(doc, {
+    startY: nextY(doc, 8), margin: { left: MARGIN, right: MARGIN },
+    head: [['Sl', 'Student', 'Reg No', 'Course / Year', 'Adm Type / Cat', 'Left on', 'Reason', 'Allotted', 'Collected', 'Refunded', 'Retained', 'Uncollected']],
+    body: [
+      ...entries.map(({ row: r, refunded }, i) => [
+        i + 1, r.student.studentNameSSLC, r.student.regNumber || '-', `${r.student.course} / ${r.student.year}`,
+        `${r.student.admType} / ${r.student.admCat}`,
+        r.student.discontinuedDate ? fmtDate(r.student.discontinuedDate) : '-', r.student.discontinuedReason || '-',
+        r.allotted !== null ? num(r.allotted) : '-',
+        r.paid > 0 ? num(r.paid) : '-', refunded > 0 ? num(refunded) : '-', r.paid > 0 ? num(r.paid - refunded) : '-', r.balance ? num(r.balance) : '-',
+      ]),
+      ['', 'TOTAL', '', '', '', '', '', '', num(t.collected), num(t.refunded), num(t.retained), num(t.uncollected)],
+    ],
+    styles: BASE, headStyles: head(RED), alternateRowStyles: NO_BAND,
+    columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 50 }, 2: { cellWidth: 22 }, 3: { cellWidth: 24 }, 4: { cellWidth: 26 }, 5: { cellWidth: 18 }, 6: { cellWidth: 36 }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right', fontStyle: 'bold' }, 11: { halign: 'right' } },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === entries.length) (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
+    },
+    didDrawPage: (data) => footer(doc, data.pageNumber),
+  });
+  const y = nextY(doc, 6);
+  doc.setFontSize(6.8);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Retained = collected - refunded. Uncollected = balance left when the student left; not recoverable and not counted as dues. Discontinued = confirmed students who later left (marked, or cancelled after paying fees).', MARGIN, y > doc.internal.pageSize.getHeight() - 12 ? 16 : y);
+  doc.setTextColor(20, 20, 20);
+  doc.save(`discontinued-students-fee-${academicYear}.pdf`);
+}
 
-  doc.save(`fee-statistics-${academicYear}.pdf`);
+function fmtDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return y && m && d ? `${d}-${m}-${y}` : iso;
 }
 
 // ── 2. Fee List ───────────────────────────────────────────────────────────────
@@ -451,57 +573,11 @@ export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void
 // ── 4. Course & Year Wise ─────────────────────────────────────────────────────
 export function exportCourseYearPdf(rows: StudentFeeRow[], academicYear: string): void {
   const BLUE: [number, number, number] = [30, 64, 175];
-  const groups = new Map<string, StudentFeeRow[]>();
-  for (const r of rows) {
-    const k = `${r.student.course}__${r.student.year}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k)!.push(r);
-  }
-
-  const body = Array.from(groups.keys()).sort().map((k) => {
-    const g = groups.get(k)!;
-    return grpRow(
-      g[0].student.course, g[0].student.year,
-      g.length, g.filter((r) => r.paid > 0).length,
-      g.reduce((s, r) => s + (r.smpAllotted ?? 0), 0),
-      g.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0),
-      g.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0),
-      g.reduce((s, r) => s + r.smpPaid, 0),
-      g.reduce((s, r) => s + r.svkBasePaid, 0),
-      g.reduce((s, r) => s + r.additionalPaid, 0),
-    );
-  });
-
-  const gSA = rows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
-  const gVBaseA = rows.reduce((s, r) => s + (r.svkBaseAllotted ?? 0), 0);
-  const gAddA   = rows.reduce((s, r) => s + (r.additionalAllotted ?? 0), 0);
-  const gSC = rows.reduce((s, r) => s + r.smpPaid, 0);
-  const gVBaseC = rows.reduce((s, r) => s + r.svkBasePaid, 0);
-  const gAddC   = rows.reduce((s, r) => s + r.additionalPaid, 0);
-  body.push(grpRow('TOTAL', '', rows.length, rows.filter((r) => r.paid > 0).length, gSA, gVBaseA, gAddA, gSC, gVBaseC, gAddC));
-
   const doc = buildDoc(
     'SMP Admissions \u2014 Course & Year Wise Report',
     `Academic Year: ${academicYear}`,
   );
-
-  autoTable(doc, {
-    startY: 23,
-    margin: { left: MARGIN, right: MARGIN },
-    head: [GRP_HEAD1, GRP_HEAD2],
-    body,
-    styles: BASE,
-    headStyles: head(BLUE),
-    alternateRowStyles: NO_BAND,
-    columnStyles: GRP_COLS,
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.row.index === body.length - 1) {
-        (data.cell.styles as { fontStyle: string }).fontStyle = 'bold';
-      }
-    },
-    didDrawPage: (data) => footer(doc, data.pageNumber),
-  });
-
+  breakdownTable(doc, 23, rows, computeFeeStats(rows), BLUE);
   doc.save(`course-year-report-${academicYear}.pdf`);
 }
 

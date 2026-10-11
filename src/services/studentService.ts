@@ -390,6 +390,30 @@ export async function updateStudentTransferOut(id: string, transferOut: boolean,
   });
 }
 
+/** Confirmed student who left: cancels the seat and records when / why. Fee records are kept. */
+export async function markStudentDiscontinued(id: string, info: { date: string; reason?: string }): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, {
+    admissionStatus: 'CANCELLED',
+    discontinued: true,
+    discontinuedDate: info.date,
+    discontinuedReason: info.reason?.trim() ? info.reason.trim() : deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+/** Undo a Discontinued marking — the student is back on the roll as Confirmed. */
+export async function undoStudentDiscontinued(id: string): Promise<void> {
+  const ref = doc(db, STUDENTS_COLLECTION, id);
+  await updateDoc(ref, {
+    admissionStatus: 'CONFIRMED',
+    discontinued: deleteField(),
+    discontinuedDate: deleteField(),
+    discontinuedReason: deleteField(),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export async function deleteStudent(id: string): Promise<void> {
   // Cascade-delete all associated data: fee records, fee overrides, student documents
   const [feeRecordsSnap, feeOverridesSnap] = await Promise.all([

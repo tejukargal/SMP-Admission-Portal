@@ -74,12 +74,12 @@ export function ClearButton({ active, onClick }: { active: boolean; onClick: () 
 }
 
 // ── Stat chip strip ──────────────────────────────────────────────────────────
-export interface StatChipEntry { label: string; value: string | number; color: string; bg: string; border: string; }
+export interface StatChipEntry { label: string; value: string | number; color: string; bg: string; border: string; title?: string; }
 export function StatChipRow({ entries, compact = false }: { entries: StatChipEntry[]; compact?: boolean }) {
   return (
     <div className={compact ? 'shrink-0 flex gap-1.5 overflow-x-auto no-scrollbar' : 'shrink-0 flex flex-wrap gap-2'}>
       {entries.map((c) => (
-        <div key={c.label} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} py-[5px] whitespace-nowrap ${compact ? 'flex-1 justify-center px-2.5' : 'px-3'}`}>
+        <div key={c.label} title={c.title} className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} py-[5px] whitespace-nowrap ${compact ? 'flex-1 justify-center px-2.5' : 'px-3'}`}>
           <span className="text-[10px] font-medium text-[#5B6371] uppercase tracking-wide">{c.label}</span>
           <span className={`text-[13px] font-semibold tabular-nums ${c.color}`}>{c.value}</span>
         </div>

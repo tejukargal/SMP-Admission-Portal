@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { useStudents } from '../hooks/useStudents';
 import { useMeritListSnapshots } from '../hooks/useMeritListSnapshots';
-import { updateStudentStatus, updateStudentAllottedCategory } from '../services/studentService';
+import { useRefundRecords } from '../hooks/useRefundRecords';
+import { updateStudentStatus, updateStudentAllottedCategory, undoStudentDiscontinued } from '../services/studentService';
 import { isWPStudent } from '../utils/wpStudent';
+import { isDiscontinued } from '../utils/studentStatus';
 import { getAllFeeRecordsByStudent } from '../services/feeRecordService';
 import { SMP_FEE_HEADS } from '../types';
 import { saveMeritListSnapshot, saveLateralMeritListSnapshot, deleteMeritListSnapshot } from '../services/meritListSnapshotService';
@@ -20,8 +22,38 @@ import { Modal } from '../components/common/Modal';
 import { SeatCancellationRefundModal } from '../components/common/SeatCancellationRefundModal';
 import { StudentDetailModal } from '../components/student/StudentDetailModal';
 import { EnrollmentBreakdownModal } from '../components/student/EnrollmentBreakdownModal';
+import { DiscontinueStudentModal } from '../components/student/DiscontinueStudentModal';
 import { exportMeritListPdf, exportMeritListExcel, sortByMerit, sslcPct, fmtDOB, fmtGender, sortByLateralMerit, exportLateralMeritListPdf, exportLateralMeritListExcel } from '../utils/meritListExport';
 import type { Student, AcademicYear, Course, MeritListSnapshot } from '../types';
+
+/** 2026-10-11 → 11/10/2026 */
+function fmtIsoDay(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+/** Quick refund view for a Discontinued student: fee paid vs refunded so far. */
+function RefundStatus({ paid, refund }: { paid: number | undefined; refund: { amount: number; lastDate: string; count: number } | undefined }) {
+  if (paid === undefined) return <span className="text-gray-400">…</span>; // fee totals still loading
+  const refunded = refund?.amount ?? 0;
+  const pill = (cls: string, text: string, sub?: string, tip?: string) => (
+    <span title={tip}>
+      <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${cls}`}>{text}</span>
+      {sub && <span className="block text-[10px] text-gray-500 mt-0.5">{sub}</span>}
+    </span>
+  );
+  const when = refund?.lastDate ? fmtIsoDay(refund.lastDate) : '';
+  if (paid <= 0 && refunded <= 0) return pill('bg-gray-100 text-gray-500', 'No fee paid');
+  if (refunded <= 0) return pill('bg-amber-100 text-amber-800', 'Not refunded', `Paid ${inr(paid)}`, 'Right-click › Fee Refund to issue a refund');
+  if (refunded >= paid) {
+    return pill('bg-emerald-100 text-emerald-700', `Refunded ${inr(refunded)}`, when ? `on ${when}` : undefined,
+      refund && refund.count > 1 ? `${refund.count} refunds` : undefined);
+  }
+  return pill('bg-sky-100 text-sky-800', `Part refunded ${inr(refunded)}`, `of ${inr(paid)} paid · kept ${inr(paid - refunded)}`,
+    when ? `Last refund on ${when}` : undefined);
+}
 
 type Tab = 'pending' | 'cancelled' | 'merit' | 'saved' | 'pendingLateral' | 'meritLateral';
 type QuotaFilter = 'aided' | 'unaided' | 'all';
@@ -82,6 +114,19 @@ export function Admissions() {
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
   const { students: allStudents, loading, error } = useStudents(academicYear);
+  // Refunds for the year (live, cache-first) — drives the Refund Status column for Discontinued students.
+  const { refunds } = useRefundRecords(academicYear);
+  const refundByStudent = useMemo(() => {
+    const map = new Map<string, { amount: number; lastDate: string; count: number }>();
+    for (const r of refunds) {
+      const e = map.get(r.studentId) ?? { amount: 0, lastDate: '', count: 0 };
+      e.amount += r.refundAmount ?? 0;
+      e.count += 1;
+      if ((r.paymentDate ?? '') > e.lastDate) e.lastDate = r.paymentDate ?? '';
+      map.set(r.studentId, e);
+    }
+    return map;
+  }, [refunds]);
 
   const VALID_TABS: Tab[] = ['pending', 'merit', 'pendingLateral', 'meritLateral', 'saved', 'cancelled'];
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -191,6 +236,18 @@ export function Admissions() {
     })();
     return () => { cancelled = true; };
   }, [activeTab, cancelledStudents]);
+
+  // Cancelled tab split: seats cancelled before joining vs Discontinued (confirmed students who
+  // later left — explicitly marked, or cancelled after paying fees). See isDiscontinued().
+  type CancelledView = 'ALL' | 'BEFORE' | 'DISCONTINUED';
+  const [cancelledView, setCancelledView] = useState<CancelledView>('ALL');
+  const [discontinueTarget, setDiscontinueTarget] = useState<Student | null>(null);
+  const feePaidLoaded = cancelledStudents.every((s) => cancelledFeePaid.has(s.id));
+  const cancelledSplit = useMemo(() => {
+    const discontinued = cancelledStudents.filter((s) => isDiscontinued(s, cancelledFeePaid.get(s.id) ?? 0));
+    const ids = new Set(discontinued.map((s) => s.id));
+    return { discontinued, before: cancelledStudents.filter((s) => !ids.has(s.id)) };
+  }, [cancelledStudents, cancelledFeePaid]);
 
   // Merit list = pending non-lateral students sorted by SSLC % desc (search + quota/course apply)
   const meritStudents = useMemo(() => {
@@ -467,6 +524,30 @@ export function Admissions() {
       .finally(() => setExportingLateralExcel(false));
   }
 
+  async function handleUndoDiscontinued(student: Student) {
+    setActionLoading(student.id);
+    try {
+      await undoStudentDiscontinued(student.id);
+      if (user && student.regNumber) {
+        void createStudentNotification({
+          studentId: student.id,
+          regNumber: student.regNumber,
+          type: 'status-changed',
+          title: 'Admission Status Updated',
+          message: 'Your admission status was changed to CONFIRMED.',
+          createdBy: user.uid,
+        });
+      }
+      setToastError(false);
+      setToastMsg(`${student.studentNameSSLC} restored to Confirmed — back in the ${isWPStudent(student) ? 'WP Students' : 'Students'} list.`);
+    } catch {
+      setToastError(true);
+      setToastMsg('Failed to update status. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleAction(
     student: Student,
     newStatus: 'CONFIRMED' | 'CANCELLED' | 'PENDING'
@@ -546,8 +627,12 @@ export function Admissions() {
 
   const displayStudents =
     activeTab === 'pending' ? pendingStudents :
-    activeTab === 'cancelled' ? cancelledStudents :
+    activeTab === 'cancelled'
+      ? (cancelledView === 'DISCONTINUED' ? cancelledSplit.discontinued : cancelledView === 'BEFORE' ? cancelledSplit.before : cancelledStudents) :
     meritStudents;
+
+  // Refund Status column: Cancelled tab, except the "before joining" view (no fee was paid there).
+  const showRefundCol = activeTab === 'cancelled' && cancelledView !== 'BEFORE';
 
   const isLateralTab = activeTab === 'pendingLateral' || activeTab === 'meritLateral';
   const totalPending = courseStats.reduce((s, c) => s + (isLateralTab ? c.pendingLateral : c.pendingRegular), 0);
@@ -883,6 +968,27 @@ export function Admissions() {
             })}
           </div>
         ))}
+
+        {/* Cancelled tab: before joining vs Discontinued (left after admission) */}
+        {activeTab === 'cancelled' && cancelledStudents.length > 0 && (
+          <div className="flex-shrink-0 ml-auto pl-2 inline-flex items-center rounded-full border border-[#CDE7E7] bg-[#F2FAFA] p-0.5">
+            {([
+              { v: 'ALL', label: 'All', n: cancelledStudents.length, tip: '' },
+              { v: 'BEFORE', label: 'Cancelled before joining', n: cancelledSplit.before.length, tip: 'Seats cancelled before the student joined — no fee paid' },
+              { v: 'DISCONTINUED', label: 'Discontinued', n: cancelledSplit.discontinued.length, tip: 'Confirmed students who later left: marked Discontinued, or cancelled after paying fees' },
+            ] as const).map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                title={o.tip || undefined}
+                onClick={() => setCancelledView(o.v)}
+                className={`px-3 py-1 rounded-full text-[11.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${cancelledView === o.v ? 'bg-[#0F8B8D] text-white' : 'text-[#5B6371] hover:text-[#0B6567]'}`}
+              >
+                {o.label} ({o.v === 'ALL' || feePaidLoaded ? o.n : '…'})
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Merit list actions — only on merit tabs */}
         {activeTab === 'merit' && meritStudents.length > 0 && (
@@ -1402,6 +1508,9 @@ export function Admissions() {
                 <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-16">Adm Cat</th>
                 <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Mobile</th>
                 <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-28">Enrolled On</th>
+                {showRefundCol && (
+                  <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-40" title="Fee paid vs refunded, for Discontinued students">Refund Status</th>
+                )}
                 {isAdmin && (
                   <th className="px-3 py-2 text-left font-medium text-[#0B6567] whitespace-nowrap w-44">Actions</th>
                 )}
@@ -1410,6 +1519,7 @@ export function Admissions() {
             <tbody className="divide-y divide-[#EEF6F6]">
               {displayStudents.map((student, idx) => {
                 const hasFeePaid = activeTab === 'cancelled' && (cancelledFeePaid.get(student.id) ?? 0) > 0;
+                const discontinued = activeTab === 'cancelled' && isDiscontinued(student, cancelledFeePaid.get(student.id) ?? 0);
                 return (
                 <tr
                   key={student.id}
@@ -1426,6 +1536,17 @@ export function Admissions() {
                         Fee Paid
                       </span>
                     )}
+                    {discontinued && (
+                      <span
+                        className="ml-1.5 inline-block px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-rose-100 text-rose-700 align-middle"
+                        title={[student.discontinuedDate && `Left on ${fmtIsoDay(student.discontinuedDate)}`, student.discontinuedReason].filter(Boolean).join(' — ') || 'Confirmed, then left (date not recorded — right-click to add)'}
+                      >
+                        Discontinued{student.discontinuedDate ? ` · ${fmtIsoDay(student.discontinuedDate)}` : ''}
+                      </span>
+                    )}
+                    {discontinued && student.discontinuedReason && (
+                      <div className="text-[10.5px] font-normal text-gray-500 whitespace-normal">{student.discontinuedReason}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.regNumber || '—'}</td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.course}</td>
@@ -1435,6 +1556,13 @@ export function Admissions() {
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{student.admCat || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.studentMobile}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{student.enrollmentDate || '—'}</td>
+                  {showRefundCol && (
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {discontinued
+                        ? <RefundStatus paid={cancelledFeePaid.get(student.id)} refund={refundByStudent.get(student.id)} />
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                  )}
                   {isAdmin && (
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex gap-1.5">
@@ -1444,6 +1572,8 @@ export function Admissions() {
                             <ActionBtn tone="mint" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => setConfirmTarget(student)}>Confirm</ActionBtn>
                             <ActionBtn tone="coral" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'CANCELLED')}>Cancel</ActionBtn>
                           </>
+                        ) : discontinued ? (
+                          <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleUndoDiscontinued(student)}>Undo Discontinued</ActionBtn>
                         ) : (
                           <ActionBtn tone="amber" loading={actionLoading === student.id} disabled={actionLoading !== null && actionLoading !== student.id} onClick={() => void handleAction(student, 'PENDING')}>Restore to Pending</ActionBtn>
                         )}
@@ -1527,6 +1657,20 @@ export function Admissions() {
               <span>Seat Allotment Letter</span>
               <span className="ml-auto text-[10px] font-semibold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">ಕನ್ನಡ</span>
             </button>
+            {isAdmin && contextMenu.student.admissionStatus?.trim() === 'CANCELLED' && (
+              <>
+                <div className="my-1 h-px bg-gray-100 mx-3" />
+                <button
+                  className="group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-rose-50/70 hover:text-rose-800 flex items-center gap-2.5 transition-colors duration-100"
+                  onClick={() => { setDiscontinueTarget(contextMenu.student); setContextMenu(null); }}
+                >
+                  <span className="w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-rose-100 group-hover:text-rose-600 transition-colors">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </span>
+                  {contextMenu.student.discontinued ? 'Edit Discontinued Details' : 'Mark as Discontinued…'}
+                </button>
+              </>
+            )}
             {isAdmin && contextMenu.student.admissionStatus === 'CANCELLED' && (cancelledFeePaid.get(contextMenu.student.id) ?? 0) > 0 && (
               <>
                 <div className="my-1 h-px bg-gray-100 mx-3" />
@@ -1553,6 +1697,15 @@ export function Admissions() {
           </div>
         </div>
       </>
+    )}
+
+    {discontinueTarget && (
+      <DiscontinueStudentModal
+        student={discontinueTarget}
+        userId={user?.uid}
+        onClose={() => setDiscontinueTarget(null)}
+        onSaved={(msg) => { setDiscontinueTarget(null); setToastError(false); setToastMsg(msg); }}
+      />
     )}
 
     {admLetterModal && (
