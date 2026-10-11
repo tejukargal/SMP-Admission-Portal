@@ -4,8 +4,9 @@ import * as XLSX from 'xlsx';
 import type { CashAccount, CashDeposit } from '../types';
 import { INSTITUTE_LOGO_B64 } from './instituteLogo';
 import {
-  ACCOUNT_ORDER, CASH_ACCOUNTS, buildCashBook, buildRemittanceSummary, depositMismatch, inr,
-  type AccountFilter, type CashBook, type DayAccountRow,
+  ACCOUNT_ORDER, AIDED_LABEL, CASH_ACCOUNTS, aidedNote, aidedStatus, buildCashBook, buildRemittanceSummary,
+  depositAidedSplit, depositMismatch, emptyAided, inr, sumAided,
+  type AccountFilter, type AidedSplit, type CashBook, type DayAccountRow,
 } from './cashLedger';
 
 // ── Cash & Bank audit reports (PDF + Excel) ──────────────────────────────────
@@ -43,6 +44,14 @@ function fileStem(kind: CashReportKind, input: CashReportInput): string {
   const t = CASH_REPORTS.find((r) => r.kind === kind)!.title.replace(/\s+/g, '_');
   return `${t}_${input.filter}_${input.from}_to_${input.to}`;
 }
+
+/** PDF cell: amount with its aided/unaided split on the lines below. */
+function withSplit(amount: string, split: AidedSplit): string {
+  const note = aidedNote(split, '\n');
+  return note ? `${amount}\n${note}` : amount;
+}
+
+const AIDED_FOOTNOTE = 'Aided / Unaided is by the student\'s course (EE = Unaided; CE, ME, EC, CS = Aided).';
 
 function inRange(date: string, { from, to }: CashReportInput): boolean {
   return date >= from && date <= to;
@@ -157,8 +166,8 @@ const CASH_BOOK_HEAD = ['Date', 'Opening Cash', 'Cash Received', 'Cash Receipts'
 
 function cashBookRows(book: CashBook): (string | number)[][] {
   return book.rows.map((r) => [
-    dmy(r.date), inr(r.opening), r.received ? inr(r.received) : '-', r.receiptCount || '-',
-    r.deposited ? inr(r.deposited) : '-', r.depositRefs.join(', ') || '-', inr(r.closing), r.upi ? inr(r.upi) : '-',
+    dmy(r.date), inr(r.opening), r.received ? withSplit(inr(r.received), r.receivedByAided) : '-', r.receiptCount || '-',
+    r.deposited ? inr(r.deposited) : '-', r.depositRefs.join(', ') || '-', inr(r.closing), r.upi ? withSplit(inr(r.upi), r.upiByAided) : '-',
   ]);
 }
 
@@ -175,14 +184,14 @@ function cashBookPdf(input: CashReportInput): void {
         ['Opening balance', inr(book.opening), '', '', '', '', inr(book.opening), ''],
         ...cashBookRows(book),
       ],
-      foot: [['Total', '', inr(book.totalReceived), '', inr(book.totalDeposited), '', inr(book.closing), inr(book.totalUpi)]],
+      foot: [['Total', '', withSplit(inr(book.totalReceived), book.totalReceivedByAided), '', inr(book.totalDeposited), '', inr(book.closing), withSplit(inr(book.totalUpi), book.totalUpiByAided)]],
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'center' }, 4: { halign: 'right' }, 6: { halign: 'right', fontStyle: 'bold' }, 7: { halign: 'right' } },
     });
     y = doc.lastAutoTable.finalY + 6;
   }
   finish(doc, fileStem('cash-book', input),
     `Cash Received = cash portion of fee receipts (incl. cash part of split payments) on the collection date. Deposited = cash remitted to the bank on the deposit date. ` +
-    `Closing Cash in Hand = Opening + Received - Deposited. UPI amounts are credited directly to the bank and are shown for reference only. Tracking started ${dmy(input.startDate)}.`);
+    `Closing Cash in Hand = Opening + Received - Deposited. UPI amounts are credited directly to the bank and are shown for reference only. Tracking started ${dmy(input.startDate)}. ${AIDED_FOOTNOTE}`);
 }
 
 function cashBookExcel(input: CashReportInput): void {
@@ -190,13 +199,17 @@ function cashBookExcel(input: CashReportInput): void {
   for (const { label, book } of cashBooks(input)) {
     const aoa: (string | number)[][] = [
       [INSTITUTE], [`Cash Book — ${label}`], [`Period: ${dmy(input.from)} to ${dmy(input.to)}`], [],
-      CASH_BOOK_HEAD,
-      ['Opening balance', book.opening, '', '', '', '', book.opening, ''],
-      ...book.rows.map((r) => [dmy(r.date), r.opening, r.received, r.receiptCount, r.deposited, r.depositRefs.join(', '), r.closing, r.upi]),
-      ['Total', '', book.totalReceived, '', book.totalDeposited, '', book.closing, book.totalUpi],
+      [...CASH_BOOK_HEAD, 'Cash Received — Aided', 'Cash Received — Unaided', 'UPI — Aided', 'UPI — Unaided'],
+      ['Opening balance', book.opening, '', '', '', '', book.opening, '', '', '', '', ''],
+      ...book.rows.map((r) => [
+        dmy(r.date), r.opening, r.received, r.receiptCount, r.deposited, r.depositRefs.join(', '), r.closing, r.upi,
+        r.receivedByAided.AIDED, r.receivedByAided.UNAIDED, r.upiByAided.AIDED, r.upiByAided.UNAIDED,
+      ]),
+      ['Total', '', book.totalReceived, '', book.totalDeposited, '', book.closing, book.totalUpi,
+        book.totalReceivedByAided.AIDED, book.totalReceivedByAided.UNAIDED, book.totalUpiByAided.AIDED, book.totalUpiByAided.UNAIDED],
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [12, 14, 14, 12, 16, 34, 18, 14].map((wch) => ({ wch }));
+    ws['!cols'] = [12, 14, 14, 12, 16, 34, 18, 14, 14, 14, 12, 12].map((wch) => ({ wch }));
     const name = label.startsWith('Combined') ? 'Combined' : label.split(' — ')[0];
     XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
   }
@@ -210,6 +223,7 @@ interface DepositRow {
   receipts: number;
   range: string;
   mismatch: number;
+  split: AidedSplit;
 }
 
 function depositRows(input: CashReportInput): DepositRow[] {
@@ -225,6 +239,7 @@ function depositRows(input: CashReportInput): DepositRow[] {
         receipts: nos.length,
         range: nos.length ? (nos.length === 1 ? nos[0] : `${nos[0]} … ${nos[nos.length - 1]}`) : '-',
         mismatch: depositMismatch(d, input.ledger, input.startDate),
+        split: depositAidedSplit(d, input.ledger),
       };
     });
 }
@@ -241,38 +256,52 @@ function depositPdf(input: CashReportInput): void {
     head: [DEP_HEAD],
     body: rows.map((r, i) => [
       i + 1, dmy(r.d.depositDate), CASH_ACCOUNTS[r.d.account].name, r.d.depositMode, r.d.reference,
-      r.d.collectionDates.map(dmy).join(', '), r.receipts, r.range, inr(r.d.amount),
+      r.d.collectionDates.map(dmy).join(', '), r.receipts, r.range, withSplit(inr(r.d.amount), r.split),
       r.mismatch > 0 ? `MISMATCH Rs.${inr(r.mismatch)}` : 'OK', r.d.createdByEmail ?? '',
     ]),
-    foot: [['', '', '', '', '', '', '', 'Total', inr(total), '', '']],
+    foot: [['', '', '', '', '', '', '', 'Total', withSplit(inr(total), sumAided(rows.map((r) => r.split))), '', '']],
     columnStyles: { 0: { halign: 'center', cellWidth: 8 }, 5: { cellWidth: 52 }, 6: { halign: 'center' }, 8: { halign: 'right', fontStyle: 'bold' } },
   });
   finish(doc, fileStem('deposit-register', input),
-    'Check = OK when the receipts recorded for the covered days still total the amount deposited. MISMATCH means a receipt was edited or deleted after the deposit was recorded.');
+    'Check = OK when the receipts recorded for the covered days still total the amount deposited. MISMATCH means a receipt was edited or deleted after the deposit was recorded. ' +
+    `${AIDED_FOOTNOTE} A deposit's aided/unaided split follows the cash collected on the days it covers.`);
 }
 
 function depositExcel(input: CashReportInput): void {
   const rows = depositRows(input);
+  const split = sumAided(rows.map((r) => r.split));
   const aoa: (string | number)[][] = [
     [INSTITUTE], ['Deposit Register — Cash Remitted to Bank'], [`Period: ${dmy(input.from)} to ${dmy(input.to)}`], [],
-    DEP_HEAD,
+    [...DEP_HEAD, 'Amount — Aided', 'Amount — Unaided'],
     ...rows.map((r, i) => [
       i + 1, dmy(r.d.depositDate), CASH_ACCOUNTS[r.d.account].name, r.d.depositMode, r.d.reference,
       r.d.collectionDates.map(dmy).join(', '), r.receipts, r.range, r.d.amount,
-      r.mismatch > 0 ? `MISMATCH ${r.mismatch}` : 'OK', r.d.createdByEmail ?? '',
+      r.mismatch > 0 ? `MISMATCH ${r.mismatch}` : 'OK', r.d.createdByEmail ?? '', r.split.AIDED, r.split.UNAIDED,
     ]),
-    ['', '', '', '', '', '', '', 'Total', rows.reduce((s, r) => s + r.d.amount, 0), '', ''],
+    ['', '', '', '', '', '', '', 'Total', rows.reduce((s, r) => s + r.d.amount, 0), '', '', split.AIDED, split.UNAIDED],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [5, 12, 12, 10, 20, 36, 10, 24, 12, 16, 24].map((wch) => ({ wch }));
+  ws['!cols'] = [5, 12, 12, 10, 20, 36, 10, 24, 12, 16, 24, 14, 14].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws, 'Deposits');
   XLSX.writeFile(wb, `${fileStem('deposit-register', input)}.xlsx`);
 }
 
 // ── Receipt-wise detail ──────────────────────────────────────────────────────
 
-const RCPT_HEAD = ['Sl', 'Date', 'Account', 'Receipt No.', 'Student', 'Reg No.', 'Course / Year', 'Cash', 'UPI', 'Remitted to Bank (Date / Ref)'];
+const RCPT_HEAD = ['Sl', 'Date', 'Account', 'Receipt No.', 'Student', 'Reg No.', 'Course / Year', 'Aided / Unaided', 'Cash', 'UPI', 'Remitted to Bank (Date / Ref)'];
+
+/** Cash/UPI totals per aided status, for the receipt-wise foot rows. */
+function receiptTotals(list: { x: { record: { course: Parameters<typeof aidedStatus>[0] }; cash: number; upi: number } }[]) {
+  const cash = emptyAided();
+  const upi = emptyAided();
+  for (const { x } of list) {
+    const k = aidedStatus(x.record.course);
+    cash[k] += x.cash;
+    upi[k] += x.upi;
+  }
+  return { cash, upi };
+}
 
 function receiptRows(input: CashReportInput) {
   const rows = input.ledger
@@ -285,42 +314,50 @@ function receiptPdf(input: CashReportInput): void {
   const list = receiptRows(input);
   const cash = list.reduce((s, { x }) => s + x.cash, 0);
   const upi = list.reduce((s, { x }) => s + x.upi, 0);
+  const tot = receiptTotals(list);
   autoTable(doc, {
     ...TABLE_BASE,
     startY: 31,
     head: [RCPT_HEAD],
     body: list.map(({ row, x }, i) => [
       i + 1, dmy(row.date), CASH_ACCOUNTS[row.account].name, x.receiptNo || '-', x.record.studentName,
-      x.record.regNumber || '-', `${x.record.course} / ${x.record.year}`,
+      x.record.regNumber || '-', `${x.record.course} / ${x.record.year}`, AIDED_LABEL[aidedStatus(x.record.course)],
       x.cash ? inr(x.cash) : '-', x.upi ? inr(x.upi) : '-', receiptStatus(row, x.cash, x.upi),
     ]),
-    foot: [['', '', '', '', '', '', 'Total', inr(cash), inr(upi), '']],
-    columnStyles: { 0: { halign: 'center', cellWidth: 8 }, 4: { cellWidth: 46 }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { cellWidth: 72 } },
+    foot: [
+      ['', '', '', '', '', '', '', 'Aided', inr(tot.cash.AIDED), inr(tot.upi.AIDED), ''],
+      ['', '', '', '', '', '', '', 'Unaided', inr(tot.cash.UNAIDED), inr(tot.upi.UNAIDED), ''],
+      ['', '', '', '', '', '', '', 'Total', inr(cash), inr(upi), ''],
+    ],
+    columnStyles: { 0: { halign: 'center', cellWidth: 8 }, 4: { cellWidth: 42 }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { cellWidth: 66 } },
     didParseCell: (data) => {
-      if (data.section === 'body' && data.column.index === 9 && String(data.cell.raw).includes('PENDING')) {
+      if (data.section === 'body' && data.column.index === 10 && String(data.cell.raw).includes('PENDING')) {
         data.cell.styles.textColor = [165, 23, 58];
         data.cell.styles.fontStyle = 'bold';
       }
     },
   });
-  finish(doc, fileStem('receipt-detail', input));
+  finish(doc, fileStem('receipt-detail', input), AIDED_FOOTNOTE);
 }
 
 function receiptExcel(input: CashReportInput): void {
   const list = receiptRows(input);
+  const tot = receiptTotals(list);
   const aoa: (string | number)[][] = [
     [INSTITUTE], ['Receipt-wise Cash & UPI Detail'], [`Period: ${dmy(input.from)} to ${dmy(input.to)}`], [],
     RCPT_HEAD,
     ...list.map(({ row, x }, i) => [
       i + 1, dmy(row.date), CASH_ACCOUNTS[row.account].name, x.receiptNo, x.record.studentName,
-      x.record.regNumber, `${x.record.course} / ${x.record.year}`, x.cash, x.upi,
+      x.record.regNumber, `${x.record.course} / ${x.record.year}`, AIDED_LABEL[aidedStatus(x.record.course)], x.cash, x.upi,
       receiptStatus(row, x.cash, x.upi),
     ]),
-    ['', '', '', '', '', '', 'Total', list.reduce((s, { x }) => s + x.cash, 0), list.reduce((s, { x }) => s + x.upi, 0), ''],
+    ['', '', '', '', '', '', '', 'Aided', tot.cash.AIDED, tot.upi.AIDED, ''],
+    ['', '', '', '', '', '', '', 'Unaided', tot.cash.UNAIDED, tot.upi.UNAIDED, ''],
+    ['', '', '', '', '', '', '', 'Total', list.reduce((s, { x }) => s + x.cash, 0), list.reduce((s, { x }) => s + x.upi, 0), ''],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [5, 12, 10, 22, 30, 14, 16, 10, 10, 44].map((wch) => ({ wch }));
+  ws['!cols'] = [5, 12, 10, 22, 30, 14, 16, 14, 10, 10, 44].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws, 'Receipts');
   XLSX.writeFile(wb, `${fileStem('receipt-detail', input)}.xlsx`);
 }
@@ -348,30 +385,32 @@ function upiPdf(input: CashReportInput): void {
     startY: 31,
     head: [UPI_HEAD],
     body: rows.map(({ r, n, lag }, i) => [
-      i + 1, dmy(r.date), `${CASH_ACCOUNTS[r.account].name} (${CASH_ACCOUNTS[r.account].number})`, n, inr(r.upiCredited),
+      i + 1, dmy(r.date), `${CASH_ACCOUNTS[r.account].name} (${CASH_ACCOUNTS[r.account].number})`, n, withSplit(inr(r.upiCredited), r.upiByAided),
       `${dmy(r.upiCreditDate)}${r.upiCredit ? '' : ' *'}`, lag || '-', r.upiCredit?.reference || '-', r.upiCredit?.remarks || '', '',
     ]),
-    foot: [['', 'Total', '', rows.reduce((s, x) => s + x.n, 0), inr(total), '', '', '', '', '']],
+    foot: [['', 'Total', '', rows.reduce((s, x) => s + x.n, 0), withSplit(inr(total), sumAided(rows.map((x) => x.r.upiByAided))), '', '', '', '', '']],
     columnStyles: { 0: { halign: 'center', cellWidth: 8 }, 3: { halign: 'center' }, 4: { halign: 'right', fontStyle: 'bold' }, 6: { halign: 'center' } },
   });
   finish(doc, fileStem('upi-statement', input),
-    '* Credit date not separately recorded — assumed credited on the collection date. UPI payments go directly to the bank and are never part of cash in hand.');
+    `* Credit date not separately recorded — assumed credited on the collection date. UPI payments go directly to the bank and are never part of cash in hand. ${AIDED_FOOTNOTE}`);
 }
 
 function upiExcel(input: CashReportInput): void {
   const rows = upiRows(input);
   const aoa: (string | number)[][] = [
     [INSTITUTE], ['UPI Credit Statement'], [`Period: ${dmy(input.from)} to ${dmy(input.to)}`], [],
-    [...UPI_HEAD.slice(0, -1), 'Credit Date Source'],
+    [...UPI_HEAD.slice(0, -1), 'Credit Date Source', 'Amount — Aided', 'Amount — Unaided'],
     ...rows.map(({ r, n, lag }, i) => [
       i + 1, dmy(r.date), `${CASH_ACCOUNTS[r.account].name} (${CASH_ACCOUNTS[r.account].number})`, n, r.upiCredited,
       dmy(r.upiCreditDate), lag, r.upiCredit?.reference ?? '', r.upiCredit?.remarks ?? '', r.upiCredit ? 'Recorded' : 'Assumed (collection date)',
+      r.upiByAided.AIDED, r.upiByAided.UNAIDED,
     ]),
-    ['', 'Total', '', rows.reduce((s, x) => s + x.n, 0), rows.reduce((s, x) => s + x.r.upiCredited, 0), '', '', '', '', ''],
+    ['', 'Total', '', rows.reduce((s, x) => s + x.n, 0), rows.reduce((s, x) => s + x.r.upiCredited, 0), '', '', '', '', '',
+      rows.reduce((s, x) => s + x.r.upiByAided.AIDED, 0), rows.reduce((s, x) => s + x.r.upiByAided.UNAIDED, 0)],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [5, 14, 26, 12, 12, 16, 6, 22, 24, 22].map((wch) => ({ wch }));
+  ws['!cols'] = [5, 14, 26, 12, 12, 16, 6, 22, 24, 22, 14, 14].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws, 'UPI Credits');
   XLSX.writeFile(wb, `${fileStem('upi-statement', input)}.xlsx`);
 }
@@ -411,6 +450,27 @@ function remittancePdf(input: CashReportInput): void {
     columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
   });
 
+  // Aided / Unaided split of the same totals
+  const cashA = sumAided(rows.map((r) => r.cashByAided));
+  const pendA = sumAided(rows.map((r) => r.cashPendingByAided));
+  const upiA = sumAided(rows.map((r) => r.upiByAided));
+  const splitRow = (label: string, k: 'AIDED' | 'UNAIDED' | null) => {
+    const pick = (x: AidedSplit) => (k ? x[k] : x.AIDED + x.UNAIDED);
+    const collected = pick(cashA) + pick(upiA);
+    const remitted = pick(cashA) - pick(pendA) + pick(upiA);
+    return [label, inr(pick(cashA)), inr(pick(cashA) - pick(pendA)), inr(pick(pendA)), inr(pick(upiA)), inr(collected), inr(remitted),
+      collected ? `${((remitted / collected) * 100).toFixed(1)}%` : '-'];
+  };
+  const ys = sectionTitle(doc, 'Aided / Unaided split', doc.lastAutoTable.finalY + 7);
+  autoTable(doc, {
+    ...TABLE_BASE,
+    startY: ys,
+    head: [['', 'Cash Collected', 'Cash Deposited', 'Cash in Hand', 'UPI Collected (credited)', 'Total Collected', 'Total Remitted', 'Remitted %']],
+    body: [splitRow('Aided (CE, ME, EC, CS)', 'AIDED'), splitRow('Unaided (EE)', 'UNAIDED')],
+    foot: [splitRow('Total', null)],
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+  });
+
   const y = sectionTitle(doc, 'Day-wise detail', doc.lastAutoTable.finalY + 7);
   autoTable(doc, {
     ...TABLE_BASE,
@@ -418,10 +478,10 @@ function remittancePdf(input: CashReportInput): void {
     head: [REM_HEAD],
     body: rows.map((r) => [
       dmy(r.date), CASH_ACCOUNTS[r.account].name,
-      r.cashCollected ? inr(r.cashCollected) : '-', r.cashDeposited ? inr(r.cashDeposited) : '-',
+      r.cashCollected ? withSplit(inr(r.cashCollected), r.cashByAided) : '-', r.cashDeposited ? inr(r.cashDeposited) : '-',
       r.cashDepositInfo ? r.cashDepositInfo.split('; ').map((x) => { const [d, ref] = x.split(' / '); return `${dmy(d)} / ${ref}`; }).join('; ') : (r.cashCollected ? 'NOT DEPOSITED' : '-'),
-      r.cashPending ? inr(r.cashPending) : '-',
-      r.upiCollected ? inr(r.upiCollected) : '-',
+      r.cashPending ? withSplit(inr(r.cashPending), r.cashPendingByAided) : '-',
+      r.upiCollected ? withSplit(inr(r.upiCollected), r.upiByAided) : '-',
       r.upiCollected ? `${dmy(r.upiCreditDate)}${r.upiConfirmed ? '' : ' *'}${r.upiReference ? ` / ${r.upiReference}` : ''}` : '-',
       inr(r.totalCollected), inr(r.totalRemitted), r.unremitted ? inr(r.unremitted) : 'Nil',
     ]),
@@ -441,14 +501,15 @@ function remittancePdf(input: CashReportInput): void {
   });
   finish(doc, fileStem('remittance-summary', input),
     'Total Remitted = cash deposited to bank (up to the cash collected) + UPI credited directly. Unremitted = cash still in hand. ' +
-    '* UPI credit date not separately recorded — assumed credited on the collection date.');
+    '* UPI credit date not separately recorded — assumed credited on the collection date. ' +
+    `${AIDED_FOOTNOTE} Deposits are not recorded per aided/unaided, so a part-deposited day's cash in hand is split in proportion to its cash collected.`);
 }
 
 function remittanceExcel(input: CashReportInput): void {
   const rows = buildRemittanceSummary(input.ledger, input.filter, input.from, input.to);
   const aoa: (string | number)[][] = [
     [INSTITUTE], ['Fee Remittance Summary — Cash & UPI to Bank'], [`Period: ${dmy(input.from)} to ${dmy(input.to)}`], [accountLine(input.filter)], [],
-    [...REM_HEAD, 'UPI Credit Date Source'],
+    [...REM_HEAD, 'UPI Credit Date Source', 'Cash Collected — Aided', 'Cash Collected — Unaided', 'Cash Pending — Aided', 'Cash Pending — Unaided', 'UPI — Aided', 'UPI — Unaided'],
     ...rows.map((r) => [
       dmy(r.date), CASH_ACCOUNTS[r.account].name, r.cashCollected, r.cashDeposited,
       r.cashDepositInfo ? r.cashDepositInfo.split('; ').map((x) => { const [d, ref] = x.split(' / '); return `${dmy(d)} / ${ref}`; }).join('; ') : (r.cashCollected ? 'NOT DEPOSITED' : ''),
@@ -456,14 +517,19 @@ function remittanceExcel(input: CashReportInput): void {
       r.upiCollected ? `${dmy(r.upiCreditDate)}${r.upiReference ? ` / ${r.upiReference}` : ''}` : '',
       r.totalCollected, r.totalRemitted, r.unremitted,
       r.upiCollected ? (r.upiConfirmed ? 'Recorded' : 'Assumed (collection date)') : '',
+      r.cashByAided.AIDED, r.cashByAided.UNAIDED, r.cashPendingByAided.AIDED, r.cashPendingByAided.UNAIDED, r.upiByAided.AIDED, r.upiByAided.UNAIDED,
     ]),
     ['Total', '', ...(['cashCollected', 'cashDeposited'] as const).map((k) => rows.reduce((s, r) => s + r[k], 0)), '',
       rows.reduce((s, r) => s + r.cashPending, 0), rows.reduce((s, r) => s + r.upiCollected, 0), '',
-      rows.reduce((s, r) => s + r.totalCollected, 0), rows.reduce((s, r) => s + r.totalRemitted, 0), rows.reduce((s, r) => s + r.unremitted, 0), ''],
+      rows.reduce((s, r) => s + r.totalCollected, 0), rows.reduce((s, r) => s + r.totalRemitted, 0), rows.reduce((s, r) => s + r.unremitted, 0), '',
+      ...(['cashByAided', 'cashPendingByAided', 'upiByAided'] as const).flatMap((k) => {
+        const t = sumAided(rows.map((r) => r[k]));
+        return [t.AIDED, t.UNAIDED];
+      })],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [12, 10, 13, 13, 30, 12, 12, 28, 14, 14, 12, 22].map((wch) => ({ wch }));
+  ws['!cols'] = [12, 10, 13, 13, 30, 12, 12, 28, 14, 14, 12, 22, 14, 14, 14, 14, 12, 12].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, ws, 'Remittance Summary');
   XLSX.writeFile(wb, `${fileStem('remittance-summary', input)}.xlsx`);
 }

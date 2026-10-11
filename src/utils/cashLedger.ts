@@ -1,4 +1,4 @@
-import type { CashAccount, CashDeposit, FeeRecord, PaymentMode, SplitPayment, UpiCredit } from '../types';
+import type { CashAccount, CashDeposit, Course, FeeRecord, PaymentMode, SplitPayment, UpiCredit } from '../types';
 import { SMP_FEE_HEADS } from '../types';
 
 // ── Cash-in-hand ledger ──────────────────────────────────────────────────────
@@ -16,6 +16,32 @@ export const CASH_ACCOUNTS: Record<CashAccount, { short: string; bank: string; n
 export const ACCOUNT_ORDER: CashAccount[] = ['SBI', 'SVK'];
 
 export interface CashUpi { cash: number; upi: number; }
+
+// ── Aided / Unaided ──────────────────────────────────────────────────────────
+// Same course mapping as the Fee Register and Fee Reports: EE is the unaided
+// course, every other course is aided.
+export type AidedStatus = 'AIDED' | 'UNAIDED';
+export const AIDED_ORDER: AidedStatus[] = ['AIDED', 'UNAIDED'];
+export const AIDED_LABEL: Record<AidedStatus, string> = { AIDED: 'Aided', UNAIDED: 'Unaided' };
+const UNAIDED_COURSES: Course[] = ['EE'];
+
+export function aidedStatus(course: Course): AidedStatus {
+  return UNAIDED_COURSES.includes(course) ? 'UNAIDED' : 'AIDED';
+}
+
+export type AidedSplit = Record<AidedStatus, number>;
+export const emptyAided = (): AidedSplit => ({ AIDED: 0, UNAIDED: 0 });
+export const addAided = (a: AidedSplit, b: AidedSplit): AidedSplit => ({ AIDED: a.AIDED + b.AIDED, UNAIDED: a.UNAIDED + b.UNAIDED });
+export const sumAided = (list: AidedSplit[]): AidedSplit => list.reduce(addAided, emptyAided());
+
+/** Plain-text split for PDF/Excel: "Aided 1,200 / Unaided 300", or just "Aided" /
+ *  "Unaided" when the whole amount is one kind; '' when there is nothing. */
+export function aidedNote(split: AidedSplit, sep = ' / '): string {
+  if (split.AIDED > 0 && split.UNAIDED > 0) return `Aided ${inr(split.AIDED)}${sep}Unaided ${inr(split.UNAIDED)}`;
+  if (split.AIDED > 0) return 'Aided';
+  if (split.UNAIDED > 0) return 'Unaided';
+  return '';
+}
 
 /** Normalise a fee/deposit date (some records hold full ISO strings). */
 export function dayKey(date: string): string {
@@ -71,6 +97,19 @@ export interface DayAccountRow {
   upiCredit: UpiCredit | null; // confirmed bank credit for this day's UPI (null → assumed same day)
   upiCreditDate: string;    // confirmed credit date, else the collection date
   upiMismatch: number;      // current UPI − confirmed amount (≠ 0 → receipts changed after confirming)
+  cashByAided: AidedSplit;  // cashCollected split by the student's course (aided / unaided)
+  upiByAided: AidedSplit;   // upiCredited split the same way
+  pendingByAided: AidedSplit; // pending split — see pendingAidedSplit()
+}
+
+/** Deposits are recorded per (day, account), not per aided/unaided, so a day's
+ *  pending cash is split in proportion to its aided/unaided cash collected
+ *  (exact when nothing from the day has been deposited yet). */
+function pendingAidedSplit(pending: number, cash: AidedSplit, collected: number): AidedSplit {
+  if (pending <= 0 || collected <= 0) return emptyAided();
+  if (pending >= collected) return { ...cash };
+  const unaided = Math.round((pending * cash.UNAIDED) / collected);
+  return { AIDED: pending - unaided, UNAIDED: unaided };
 }
 
 /** One row per (collection day, account) from `startDate` onwards, sorted by date. */
@@ -88,6 +127,7 @@ export function buildDayLedger(
       row = {
         key, date, account, receipts: [], cashCollected: 0, upiCredited: 0, cashDeposited: 0, pending: 0, excess: 0, deposits: [],
         upiCredit: null, upiCreditDate: date, upiMismatch: 0,
+        cashByAided: emptyAided(), upiByAided: emptyAided(), pendingByAided: emptyAided(),
       };
       map.set(key, row);
     }
@@ -98,6 +138,7 @@ export function buildDayLedger(
     const date = dayKey(r.date);
     if (!date || date < startDate) continue;
     const split = receiptAccountSplit(r);
+    const status = aidedStatus(r.course);
     for (const account of ACCOUNT_ORDER) {
       const { cash, upi } = split[account];
       if (cash <= 0 && upi <= 0) continue;
@@ -105,6 +146,8 @@ export function buildDayLedger(
       row.receipts.push({ record: r, cash, upi, receiptNo: receiptNumbersFor(r, account) });
       row.cashCollected += cash;
       row.upiCredited += upi;
+      row.cashByAided[status] += cash;
+      row.upiByAided[status] += upi;
     }
   }
 
@@ -130,6 +173,7 @@ export function buildDayLedger(
     const diff = row.cashCollected - row.cashDeposited;
     row.pending = Math.max(0, diff);
     row.excess = Math.max(0, -diff);
+    row.pendingByAided = pendingAidedSplit(row.pending, row.cashByAided, row.cashCollected);
     row.receipts.sort((a, b) => a.receiptNo.localeCompare(b.receiptNo, undefined, { numeric: true }));
   }
   return rows.sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
@@ -142,14 +186,17 @@ export function daysBetween(from: string, to: string): number {
 
 export interface AccountCashSummary {
   pending: number;
+  pendingByAided: AidedSplit;
   pendingDays: number;
   oldestDate: string | null;
   upiToday: number;
+  upiTodayByAided: AidedSplit;
 }
 
 export interface CashSummary {
   byAccount: Record<CashAccount, AccountCashSummary>;
   total: number;
+  totalByAided: AidedSplit;
   oldestDate: string | null;
   daysHeld: number;          // days since the oldest pending collection day
   isOverdue: boolean;
@@ -160,8 +207,8 @@ export interface CashSummary {
 
 export function cashInHandSummary(ledger: DayAccountRow[], today: string, overdueDays: number): CashSummary {
   const byAccount: Record<CashAccount, AccountCashSummary> = {
-    SBI: { pending: 0, pendingDays: 0, oldestDate: null, upiToday: 0 },
-    SVK: { pending: 0, pendingDays: 0, oldestDate: null, upiToday: 0 },
+    SBI: { pending: 0, pendingByAided: emptyAided(), pendingDays: 0, oldestDate: null, upiToday: 0, upiTodayByAided: emptyAided() },
+    SVK: { pending: 0, pendingByAided: emptyAided(), pendingDays: 0, oldestDate: null, upiToday: 0, upiTodayByAided: emptyAided() },
   };
   let mismatchCount = 0;
   let upiMismatchCount = 0;
@@ -172,10 +219,15 @@ export function cashInHandSummary(ledger: DayAccountRow[], today: string, overdu
     const acc = byAccount[row.account];
     if (row.pending > 0) {
       acc.pending += row.pending;
+      acc.pendingByAided.AIDED += row.pendingByAided.AIDED;
+      acc.pendingByAided.UNAIDED += row.pendingByAided.UNAIDED;
       acc.pendingDays += 1;
       if (!acc.oldestDate || row.date < acc.oldestDate) acc.oldestDate = row.date;
     }
-    if (row.date === today) acc.upiToday += row.upiCredited;
+    if (row.date === today) {
+      acc.upiToday += row.upiCredited;
+      acc.upiTodayByAided = addAided(acc.upiTodayByAided, row.upiByAided);
+    }
     if (row.excess > 0) mismatchCount += 1;
   }
   const oldestDates = ACCOUNT_ORDER.map((a) => byAccount[a].oldestDate).filter((d): d is string => !!d).sort();
@@ -184,6 +236,10 @@ export function cashInHandSummary(ledger: DayAccountRow[], today: string, overdu
   return {
     byAccount,
     total: byAccount.SBI.pending + byAccount.SVK.pending,
+    totalByAided: {
+      AIDED: byAccount.SBI.pendingByAided.AIDED + byAccount.SVK.pendingByAided.AIDED,
+      UNAIDED: byAccount.SBI.pendingByAided.UNAIDED + byAccount.SVK.pendingByAided.UNAIDED,
+    },
     oldestDate,
     daysHeld,
     isOverdue: !!oldestDate && daysHeld > overdueDays,
@@ -191,6 +247,20 @@ export function cashInHandSummary(ledger: DayAccountRow[], today: string, overdu
     upiMismatchCount,
     upiDelayedDays,
   };
+}
+
+/** A deposit's amount split aided / unaided. Each covered day's share is split in
+ *  proportion to that day's aided/unaided cash collected (exact for whole days). */
+export function depositAidedSplit(deposit: CashDeposit, ledger: DayAccountRow[]): AidedSplit {
+  const out = emptyAided();
+  for (const [date, amt] of Object.entries(deposit.amountByDate ?? {})) {
+    const row = ledger.find((r) => r.date === date && r.account === deposit.account);
+    if (!row || row.cashCollected <= 0) continue;
+    const unaided = Math.round((amt * row.cashByAided.UNAIDED) / row.cashCollected);
+    out.AIDED += amt - unaided;
+    out.UNAIDED += unaided;
+  }
+  return out;
 }
 
 /** Deposited − collected for a deposit's days, where the receipts now show less cash
@@ -218,6 +288,8 @@ export interface CashBookRow {
   deposited: number;
   closing: number;
   receiptCount: number;
+  receivedByAided: AidedSplit;
+  upiByAided: AidedSplit;
   depositRefs: string[];
 }
 
@@ -226,6 +298,8 @@ export interface CashBook {
   rows: CashBookRow[];
   totalReceived: number;
   totalUpi: number;
+  totalReceivedByAided: AidedSplit;
+  totalUpiByAided: AidedSplit;
   totalDeposited: number;
   closing: number;
 }
@@ -246,7 +320,7 @@ export function buildCashBook(
   const day = (date: string): CashBookRow => {
     let row = days.get(date);
     if (!row) {
-      row = { date, opening: 0, received: 0, upi: 0, deposited: 0, closing: 0, receiptCount: 0, depositRefs: [] };
+      row = { date, opening: 0, received: 0, upi: 0, deposited: 0, closing: 0, receiptCount: 0, depositRefs: [], receivedByAided: emptyAided(), upiByAided: emptyAided() };
       days.set(date, row);
     }
     return row;
@@ -261,6 +335,8 @@ export function buildCashBook(
     row.received += r.cashCollected;
     row.upi += r.upiCredited;
     row.receiptCount += r.receipts.filter((x) => x.cash > 0).length;
+    row.receivedByAided = addAided(row.receivedByAided, r.cashByAided);
+    row.upiByAided = addAided(row.upiByAided, r.upiByAided);
   }
   for (const d of deposits) {
     if (!inFilter(d.account, filter)) continue;
@@ -283,6 +359,8 @@ export function buildCashBook(
     rows,
     totalReceived: rows.reduce((s, r) => s + r.received, 0),
     totalUpi: rows.reduce((s, r) => s + r.upi, 0),
+    totalReceivedByAided: sumAided(rows.map((r) => r.receivedByAided)),
+    totalUpiByAided: sumAided(rows.map((r) => r.upiByAided)),
     totalDeposited: rows.reduce((s, r) => s + r.deposited, 0),
     closing: bal,
   };
@@ -317,6 +395,9 @@ export interface RemittanceSummaryRow {
   totalCollected: number;
   totalRemitted: number;     // cash deposited (capped at collected) + UPI
   unremitted: number;        // cash still in hand
+  cashByAided: AidedSplit;
+  cashPendingByAided: AidedSplit;
+  upiByAided: AidedSplit;
 }
 
 export function buildRemittanceSummary(ledger: DayAccountRow[], filter: AccountFilter, from: string, to: string): RemittanceSummaryRow[] {
@@ -338,6 +419,9 @@ export function buildRemittanceSummary(ledger: DayAccountRow[], filter: AccountF
         totalCollected: r.cashCollected + r.upiCredited,
         totalRemitted: deposited + r.upiCredited,
         unremitted: r.pending,
+        cashByAided: r.cashByAided,
+        cashPendingByAided: r.pendingByAided,
+        upiByAided: r.upiByAided,
       };
     });
 }

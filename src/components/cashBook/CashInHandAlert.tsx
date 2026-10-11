@@ -1,9 +1,26 @@
 import { useNavigate } from 'react-router-dom';
 import { useCashInHand } from '../../contexts/CashInHandContext';
-import { ACCOUNT_ORDER, CASH_ACCOUNTS } from '../../utils/cashLedger';
+import { ACCOUNT_ORDER, AIDED_LABEL, AIDED_ORDER, CASH_ACCOUNTS, type AidedSplit } from '../../utils/cashLedger';
 import { formatIsoDate } from '../../utils/formatDates';
 
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+/** "Aided ₹x · Unaided ₹y" — zero parts are left out; nothing when both are zero. */
+function AidedLine({ split, className = '' }: { split: AidedSplit; className?: string }) {
+  const parts = AIDED_ORDER.filter((k) => split[k] > 0);
+  if (parts.length === 0) return null;
+  return (
+    <span className={`text-[#5B6371] whitespace-nowrap ${className}`}>
+      {parts.map((k, i) => (
+        <span key={k}>
+          {i > 0 && <span className="text-[#B4BBC6]"> · </span>}
+          <span className={k === 'AIDED' ? 'text-[#0B6567]' : 'text-[#7C3AED]'}>{AIDED_LABEL[k]}</span>{' '}
+          <span className="tabular-nums">{rupee(split[k])}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function tones(overdue: boolean, clear: boolean) {
   if (clear) return { border: 'rgba(15,169,104,0.30)', bg: 'rgba(15,169,104,0.06)', ink: '#0A7A4B', dot: '#0FA968' };
@@ -80,6 +97,9 @@ export function CashInHandAlert({ variant }: { variant: 'banner' | 'card' }) {
             {overdue ? `· Overdue — held ${summary.daysHeld} days` : summary.daysHeld > 0 ? `· held ${summary.daysHeld} day${summary.daysHeld === 1 ? '' : 's'}` : '· collected today'}
           </span>
         )}
+        {configured && pending && (
+          <AidedLine split={summary.totalByAided} className="text-[11.5px] rounded-full bg-white/70 px-2 py-[2px]" />
+        )}
         <button
           type="button"
           onClick={go}
@@ -113,8 +133,10 @@ export function CashInHandAlert({ variant }: { variant: 'banner' | 'card' }) {
                     <span className="text-[#5B6371]">since {formatIsoDate(s.oldestDate)} ({s.pendingDays} day{s.pendingDays === 1 ? '' : 's'})</span>
                   )}
                 </div>
+                {s.pending > 0 && <AidedLine split={s.pendingByAided} className="mt-0.5 block text-[11px]" />}
                 <p className="mt-1 text-[11.5px] text-[#5B6371]">
                   UPI credited directly today: <span className="font-medium tabular-nums text-[#1D4ED8]">{s.upiToday > 0 ? rupee(s.upiToday) : '—'}</span>
+                  {s.upiToday > 0 && <AidedLine split={s.upiTodayByAided} className="ml-1.5 text-[11px]" />}
                 </p>
               </div>
             );

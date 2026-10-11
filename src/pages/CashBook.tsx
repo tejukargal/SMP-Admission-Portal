@@ -9,12 +9,12 @@ import {
   BTN_GRAY, BTN_GREEN, BTN_PRIMARY, BTN_RED, BTN_TEAL, TABLE_CARD, THEAD, TFOOT, fs, SegmentedToggle,
 } from '../components/feeReports/feeReportUi';
 import {
-  ACCOUNT_ORDER, CASH_ACCOUNTS, buildCashBook, buildRemittanceSummary, daysBetween, depositMismatch,
-  type AccountFilter, type DayAccountRow,
+  ACCOUNT_ORDER, AIDED_LABEL, AIDED_ORDER, CASH_ACCOUNTS, aidedStatus, buildCashBook, buildRemittanceSummary, daysBetween, depositMismatch, sumAided,
+  type AccountFilter, type AidedSplit, type DayAccountRow,
 } from '../utils/cashLedger';
 import { CASH_REPORTS, type CashReportKind } from '../utils/cashReports';
 import { formatIsoDate, formatIsoDateTime } from '../utils/formatDates';
-import type { CashAccount, CashDeposit } from '../types';
+import type { CashAccount, CashDeposit, Course } from '../types';
 
 type Tab = 'hand' | 'deposits' | 'upi' | 'reports';
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -22,7 +22,7 @@ const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 
 // ── Small building blocks ────────────────────────────────────────────────────
 
-function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'amber' | 'red' | 'green' | 'blue' | 'teal' }) {
+function Tile({ label, value, sub, split, tone }: { label: string; value: string; sub?: string; split?: AidedSplit; tone: 'amber' | 'red' | 'green' | 'blue' | 'teal' }) {
   const c = {
     amber: { b: 'rgba(217,119,6,0.30)', bg: '#FFF8EB', ink: '#9A5B00' },
     red:   { b: 'rgba(225,29,72,0.30)', bg: '#FFF1F3', ink: '#A5173A' },
@@ -34,8 +34,35 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
     <div className="rounded-[14px] border px-4 py-3 min-w-0" style={{ borderColor: c.b, background: c.bg }}>
       <p className="text-[10px] font-medium uppercase tracking-[0.8px]" style={{ color: c.ink }}>{label}</p>
       <p className="mt-1 text-[22px] font-semibold tabular-nums leading-none" style={{ color: c.ink }}>{value}</p>
-      {sub && <p className="mt-1.5 text-[11px] text-[#5B6371] truncate" title={sub}>{sub}</p>}
+      {split && <AidedLine split={split} className="mt-1.5 text-[11px]" />}
+      {sub && <p className="mt-1 text-[11px] text-[#5B6371] truncate" title={sub}>{sub}</p>}
     </div>
+  );
+}
+
+/** "Aided ₹x · Unaided ₹y" — zero parts are left out; nothing when both are zero. */
+function AidedLine({ split, className = '' }: { split: AidedSplit; className?: string }) {
+  const parts = AIDED_ORDER.filter((k) => split[k] > 0);
+  if (parts.length === 0) return null;
+  return (
+    <div className={`text-[#5B6371] whitespace-nowrap ${className}`}>
+      {parts.map((k, i) => (
+        <Fragment key={k}>
+          {i > 0 && <span className="text-[#B4BBC6]"> · </span>}
+          <span className={k === 'AIDED' ? 'text-[#0B6567]' : 'text-[#7C3AED]'}>{AIDED_LABEL[k]}</span>{' '}
+          <span className="tabular-nums">{rupee(split[k])}</span>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function AidedBadge({ course }: { course: Course }) {
+  const s = aidedStatus(course);
+  return (
+    <span className={`ml-1.5 rounded-full border px-1.5 py-[1px] text-[9.5px] font-semibold ${s === 'AIDED' ? 'border-[#0F8B8D]/30 text-[#0B6567]' : 'border-[#7C3AED]/30 text-[#7C3AED]'}`}>
+      {AIDED_LABEL[s]}
+    </span>
   );
 }
 
@@ -113,6 +140,7 @@ function AccountPendingSection({ account, rows, today, overdueDays, onRecord }: 
   // Selections for days that are no longer pending (e.g. just deposited) are ignored
   // because only pendingRows are matched against `selected`.
   const total = pendingRows.reduce((s, r) => s + r.pending, 0);
+  const totalSplit = sumAided(pendingRows.map((r) => r.pendingByAided));
   const selRows = pendingRows.filter((r) => selected.has(r.key));
   const selTotal = selRows.reduce((s, r) => s + r.pending, 0);
   const allOn = pendingRows.length > 0 && selRows.length === pendingRows.length;
@@ -130,9 +158,12 @@ function AccountPendingSection({ account, rows, today, overdueDays, onRecord }: 
           <p className="text-[13.5px] font-semibold text-[#0B6567]">{acc.name} <span className="font-normal text-[#5B6371]">· {acc.bank} · A/c {acc.number}</span></p>
           <p className="text-[11px] text-[#8A93A3]">{acc.covers}</p>
         </div>
-        <span className={`ml-auto rounded-full border px-2.5 py-1 text-[12px] font-semibold tabular-nums ${total > 0 ? 'border-[#D97706]/40 bg-[#FFF8EB] text-[#9A5B00]' : 'border-[#0FA968]/35 bg-[#0FA968]/[0.06] text-[#0A7A4B]'}`}>
-          {total > 0 ? `${rupee(total)} pending` : 'Nil — all deposited'}
-        </span>
+        <div className="ml-auto flex flex-col items-end gap-1">
+          <span className={`rounded-full border px-2.5 py-1 text-[12px] font-semibold tabular-nums ${total > 0 ? 'border-[#D97706]/40 bg-[#FFF8EB] text-[#9A5B00]' : 'border-[#0FA968]/35 bg-[#0FA968]/[0.06] text-[#0A7A4B]'}`}>
+            {total > 0 ? `${rupee(total)} pending` : 'Nil — all deposited'}
+          </span>
+          <AidedLine split={totalSplit} className="text-[11px]" />
+        </div>
       </div>
 
       {pendingRows.length === 0 ? (
@@ -166,9 +197,9 @@ function AccountPendingSection({ account, rows, today, overdueDays, onRecord }: 
                         <td className="px-3 py-2 font-medium whitespace-nowrap">{formatIsoDate(r.date)}</td>
                         <td className="px-3 py-2 text-center tabular-nums">{cashReceipts.length}</td>
                         <td className="px-3 py-2 text-[#5B6371] whitespace-nowrap">{receiptRange(r)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{rupee(r.cashCollected)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{rupee(r.cashCollected)}<AidedLine split={r.cashByAided} className="text-[10.5px]" /></td>
                         <td className="px-3 py-2 text-right tabular-nums text-[#5B6371]">{r.cashDeposited ? rupee(r.cashDeposited) : '—'}</td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#9A5B00]">{rupee(r.pending)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#9A5B00]">{rupee(r.pending)}<AidedLine split={r.pendingByAided} className="text-[10.5px] font-normal" /></td>
                         <td className="px-3 py-2 text-center">
                           <span className={`rounded-full px-2 py-[2px] text-[10.5px] font-semibold ${late ? 'bg-[#FFF1F3] text-[#A5173A]' : 'bg-[#F3F5F8] text-[#5B6371]'}`}>
                             {held === 0 ? 'today' : `${held}d`}
@@ -193,7 +224,7 @@ function AccountPendingSection({ account, rows, today, overdueDays, onRecord }: 
                                   <tr key={x.record.id} className="border-t border-[#EEF1F5]">
                                     <td className="py-1">{x.receiptNo || '—'}</td>
                                     <td className="py-1">{x.record.studentName}</td>
-                                    <td className="py-1 text-[#5B6371]">{x.record.course} / {x.record.year}</td>
+                                    <td className="py-1 text-[#5B6371] whitespace-nowrap">{x.record.course} / {x.record.year}<AidedBadge course={x.record.course} /></td>
                                     <td className="py-1 text-right tabular-nums">{x.cash ? rupee(x.cash) : '—'}</td>
                                     <td className="py-1 text-right tabular-nums text-[#1D4ED8]">{x.upi ? rupee(x.upi) : '—'}</td>
                                   </tr>
@@ -250,6 +281,7 @@ function UpiCredits({ ledger, today, onOpen }: { ledger: DayAccountRow[]; today:
                 {' '}{r.upiCreditDate === r.date ? 'same day' : <>on <b>{formatIsoDate(r.upiCreditDate)}</b></>}
                 {r.upiCredit?.reference && <> · UTR {r.upiCredit.reference}</>}
               </span>
+              <AidedLine split={r.upiByAided} className="text-[11.5px]" />
             </li>
           ))}
         </ul>
@@ -275,6 +307,7 @@ function UpiCreditsTab({ ledger, onSet, onReset }: {
   );
   const selRows = rows.filter((r) => selected.has(r.key) && r.upiCredited > 0);
   const total = rows.reduce((s, r) => s + r.upiCredited, 0);
+  const totalSplit = sumAided(rows.map((r) => r.upiByAided));
   const toggle = (key: string) => setSelected((s) => {
     const n = new Set(s);
     if (n.has(key)) n.delete(key); else n.add(key);
@@ -290,6 +323,7 @@ function UpiCreditsTab({ ledger, onSet, onReset }: {
           onChange={(v) => setFilter(v as AccountFilter)}
         />
         <span className="text-[12px] text-[#5B6371]">{rows.length} day{rows.length === 1 ? '' : 's'} · <b className="tabular-nums text-[#1D4ED8]">{rupee(total)}</b></span>
+        <AidedLine split={totalSplit} className="text-[12px]" />
         <span className="ml-auto text-[12px] text-[#5B6371]">{selRows.length ? `${selRows.length} selected · ${rupee(selRows.reduce((s, r) => s + r.upiCredited, 0))}` : 'Tick days that were credited on a different date.'}</span>
         <button type="button" className={BTN_PRIMARY} disabled={!selRows.length} onClick={() => { onSet(selRows); setSelected(new Set()); }}>Set credit date</button>
       </div>
@@ -322,7 +356,7 @@ function UpiCreditsTab({ ledger, onSet, onReset }: {
                   <td className="px-3 py-2 font-medium whitespace-nowrap">{formatIsoDate(r.date)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{CASH_ACCOUNTS[r.account].name}<div className="text-[10.5px] text-[#8A93A3]">{CASH_ACCOUNTS[r.account].number}</div></td>
                   <td className="px-3 py-2 text-center tabular-nums">{r.receipts.filter((x) => x.upi > 0).length}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#1D4ED8]">{rupee(r.upiCredited)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-[#1D4ED8]">{rupee(r.upiCredited)}<AidedLine split={r.upiByAided} className="text-[10.5px] font-normal" /></td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatIsoDate(r.upiCreditDate)}
                     {r.upiCredit
@@ -444,6 +478,8 @@ function ReportsTab({ ledger, deposits, startDate, today }: { ledger: DayAccount
       cashDep: list.reduce((s, r) => s + Math.min(r.cashDeposited, r.cashCollected), 0),
       cashPending: list.reduce((s, r) => s + r.cashPending, 0),
       upi: list.reduce((s, r) => s + r.upiCollected, 0),
+      cashPendingSplit: sumAided(list.map((r) => r.cashPendingByAided)),
+      upiSplit: sumAided(list.map((r) => r.upiByAided)),
       upiLate: list.filter((r) => r.upiCollected > 0 && r.upiCreditDate > r.date).length,
       total: list.reduce((s, r) => s + r.totalCollected, 0),
       remitted: list.reduce((s, r) => s + r.totalRemitted, 0),
@@ -520,8 +556,8 @@ function ReportsTab({ ledger, deposits, startDate, today }: { ledger: DayAccount
                     <td className="px-3 py-2 whitespace-nowrap">{CASH_ACCOUNTS[x.a].name} <span className="text-[11px] text-[#8A93A3]">{CASH_ACCOUNTS[x.a].number}</span></td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(x.cash)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-[#0A7A4B]">{rupee(x.cashDep)}</td>
-                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${x.cashPending ? 'text-[#9A5B00]' : 'text-[#0A7A4B]'}`}>{x.cashPending ? rupee(x.cashPending) : 'Nil'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[#1D4ED8]">{rupee(x.upi)}{x.upiLate > 0 && <div className="text-[10.5px] text-[#5B6371]">{x.upiLate} day(s) credited later</div>}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${x.cashPending ? 'text-[#9A5B00]' : 'text-[#0A7A4B]'}`}>{x.cashPending ? rupee(x.cashPending) : 'Nil'}<AidedLine split={x.cashPendingSplit} className="text-[10.5px] font-normal" /></td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[#1D4ED8]">{rupee(x.upi)}<AidedLine split={x.upiSplit} className="text-[10.5px]" />{x.upiLate > 0 && <div className="text-[10.5px] text-[#5B6371]">{x.upiLate} day(s) credited later</div>}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(x.total)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{rupee(x.remitted)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{x.total ? `${((x.remitted / x.total) * 100).toFixed(1)}%` : '—'}</td>
@@ -534,8 +570,8 @@ function ReportsTab({ ledger, deposits, startDate, today }: { ledger: DayAccount
                     <td className="px-3 py-2">Total</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.cash)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.cashDep)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{remit.all.cashPending ? rupee(remit.all.cashPending) : 'Nil'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.upi)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{remit.all.cashPending ? rupee(remit.all.cashPending) : 'Nil'}<AidedLine split={remit.all.cashPendingSplit} className="text-[10.5px] font-normal" /></td>
+                    <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.upi)}<AidedLine split={remit.all.upiSplit} className="text-[10.5px] font-normal" /></td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.total)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{rupee(remit.all.remitted)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{remit.all.total ? `${((remit.all.remitted / remit.all.total) * 100).toFixed(1)}%` : '—'}</td>
@@ -623,10 +659,10 @@ export function CashBook() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const upiThisMonth = useMemo(
-    () => ledger.filter((r) => r.date >= monthStart(today)).reduce((s, r) => s + r.upiCredited, 0),
-    [ledger, today],
-  );
+  const upiThisMonth = useMemo(() => {
+    const rows = ledger.filter((r) => r.date >= monthStart(today));
+    return { total: rows.reduce((s, r) => s + r.upiCredited, 0), split: sumAided(rows.map((r) => r.upiByAided)) };
+  }, [ledger, today]);
 
   async function confirmUndo() {
     if (!undoing) return;
@@ -700,14 +736,14 @@ export function CashBook() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Tile label="Total cash in hand" value={summary.total ? rupee(summary.total) : 'Nil'}
-                  tone={summary.total === 0 ? 'green' : summary.isOverdue ? 'red' : 'amber'}
+                  tone={summary.total === 0 ? 'green' : summary.isOverdue ? 'red' : 'amber'} split={summary.totalByAided}
                   sub={summary.oldestDate ? `Oldest from ${formatIsoDate(summary.oldestDate)} · ${summary.daysHeld} day${summary.daysHeld === 1 ? '' : 's'}${summary.isOverdue ? ' — OVERDUE' : ''}` : 'Everything deposited'} />
                 {ACCOUNT_ORDER.map((a) => (
                   <Tile key={a} label={`${CASH_ACCOUNTS[a].name} cash pending`} value={summary.byAccount[a].pending ? rupee(summary.byAccount[a].pending) : 'Nil'}
-                    tone={summary.byAccount[a].pending ? 'amber' : 'green'}
+                    tone={summary.byAccount[a].pending ? 'amber' : 'green'} split={summary.byAccount[a].pendingByAided}
                     sub={summary.byAccount[a].oldestDate ? `${summary.byAccount[a].pendingDays} day(s) since ${formatIsoDate(summary.byAccount[a].oldestDate!)}` : `A/c ${CASH_ACCOUNTS[a].number}`} />
                 ))}
-                <Tile label="UPI credited this month" value={rupee(upiThisMonth)} tone="blue" sub="Directly to bank — no deposit needed" />
+                <Tile label="UPI credited this month" value={rupee(upiThisMonth.total)} split={upiThisMonth.split} tone="blue" sub="Directly to bank — no deposit needed" />
               </div>
 
               {summary.upiMismatchCount > 0 && (
