@@ -5,6 +5,8 @@ import { Select } from '../components/common/Select';
 import { TextModelPicker } from '../components/common/TextModelPicker';
 import { useTextModelChoice } from '../hooks/useTextModelChoice';
 import { formatIsoDate, formatIsoDateTime, daysAgo } from '../utils/formatDates';
+import { groupByDate, matchesDtekSearch } from '../utils/dtekGroups';
+import { useDtekArchive } from '../hooks/useDtekArchive';
 import {
   getDtekSources, saveDtekSources, getPublishedDtekNews, fetchDtekNews, publishDtekNews,
   DEFAULT_DTEK_SOURCES, EMPTY_DTEK_CIRCULAR, DTEK_CATEGORIES,
@@ -31,7 +33,9 @@ export function DtekNewsPanel() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [showPublished, setShowPublished] = useState(false);
+  const [showPrevious, setShowPrevious] = useState(false);
   const dtekAi = useTextModelChoice('dtek');
+  const archive = useDtekArchive(showPrevious);
 
   useEffect(() => {
     Promise.all([getDtekSources(), getPublishedDtekNews()])
@@ -111,6 +115,8 @@ export function DtekNewsPanel() {
       setPublished(await publishDtekNews({ ...pending, circulars }));
       setPending(null);
       setShowPublished(false);
+      // The publish just archived new circulars; an open list would be stale.
+      archive.refetch();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not publish. Please try again.');
     } finally {
@@ -300,9 +306,97 @@ export function DtekNewsPanel() {
                 )}
               </div>
             )}
+
+            {/* Every circular ever published (read-only) */}
+            <div>
+              <button
+                type="button"
+                className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+                onClick={() => setShowPrevious((v) => !v)}
+              >
+                {showPrevious ? '▾' : '▸'} Show previous circulars
+              </button>
+              {showPrevious && <PreviousCirculars archive={archive} />}
+            </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function PreviousCirculars({ archive }: { archive: ReturnType<typeof useDtekArchive> }) {
+  const [search, setSearch] = useState('');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const groups = groupByDate(archive.items.filter((c) => matchesDtekSearch(c, search)));
+
+  return (
+    <div className="mt-3 space-y-3">
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search title, order number, category…"
+        className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+      />
+      <div className="space-y-3 max-h-96 overflow-y-auto pr-1 rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+        {groups.map((group) => (
+          <div key={group.key} className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
+            {group.items.map((c) => (
+              openId === c.id ? (
+                <div key={c.id} className="space-y-1">
+                  <CircularView circular={c} />
+                  <div className="flex items-center gap-3 px-1">
+                    <button type="button" className="text-xs font-semibold text-gray-500 hover:text-gray-700" onClick={() => setOpenId(null)}>
+                      Collapse
+                    </button>
+                    {c.url && (
+                      <a href={c.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                        Open circular ↗
+                      </a>
+                    )}
+                    <span className="text-[11px] text-gray-400 ml-auto">First published {formatIsoDateTime(c.firstPublishedAt)}</span>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setOpenId(c.id)}
+                  className="w-full text-left rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-emerald-300 transition-colors"
+                >
+                  <p className="text-sm font-medium text-gray-800 line-clamp-2">{c.title}</p>
+                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.category}</span>
+                    {c.referenceNo && <span className="text-[11px] text-gray-400">{c.referenceNo}</span>}
+                    {c.actionRequired && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                        {c.actionBy ? `Action by ${formatIsoDate(c.actionBy)}` : 'Action needed'}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            ))}
+          </div>
+        ))}
+        {!archive.loading && archive.items.length === 0 && !archive.error && (
+          <p className="text-xs text-gray-500">No circulars archived yet — they are kept from the next Publish onwards.</p>
+        )}
+        {archive.items.length > 0 && groups.length === 0 && (
+          <p className="text-xs text-gray-500">No loaded circulars match “{search}”.{archive.hasMore ? ' Load more to search further back.' : ''}</p>
+        )}
+        {archive.error && <p className="text-xs text-red-500 font-medium">{archive.error}</p>}
+        {archive.loading && <p className="text-xs text-gray-400">Loading…</p>}
+        {archive.hasMore && !archive.loading && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => void archive.loadMore()}>Load more</Button>
+        )}
+      </div>
+      <p className="text-[11px] text-gray-400">
+        {archive.items.length} circular{archive.items.length === 1 ? '' : 's'} loaded{archive.hasMore ? ' — more available' : ''}.
+        Each circular is kept once; publishing it again updates its write-up.
+      </p>
     </div>
   );
 }

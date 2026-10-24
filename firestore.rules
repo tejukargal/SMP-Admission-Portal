@@ -345,6 +345,12 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if false;
     }
+    // Every circular ever published, one doc each, so older ones survive the
+    // next publish replacing dtekNews/current. Also publishDtekNews-only.
+    match /dtekCirculars/{docId} {
+      allow read: if isActiveUser();
+      allow write: if false;
+    }
 
     // ── Student Portal Login Activity ("active users") ─────────────────────
     // Docs are created only by the studentLogin Cloud Function via the Admin SDK

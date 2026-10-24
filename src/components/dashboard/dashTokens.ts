@@ -117,3 +117,15 @@ export const GIRL_HEX = '#EC4899';
 
 /** Student groups shown per page in Dashboard search results ("Show more" adds this many). */
 export const SEARCH_PAGE_SIZE = 10;
+
+/** Category pill colours for DTEK circulars (card + archive modal). */
+export const DTEK_CATEGORY_HEX: Record<string, string> = {
+  Circular: '#7B7F8C',
+  Exams: '#8B5CF6',
+  Admissions: '#0EA5E9',
+  Academics: '#14B8A6',
+  Administration: '#64748B',
+  Recruitment: PERI,
+  Finance: '#10B981',
+  Other: '#7B7F8C',
+};

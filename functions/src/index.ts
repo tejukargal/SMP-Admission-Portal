@@ -2029,6 +2029,14 @@ function normalizeDtekCircular(value: unknown): DtekCircular | null {
   };
 }
 
+/** Stable archive key for a circular. The PDF link is read from the listing
+ *  table rather than retyped by the model, so the same circular re-fetched a
+ *  week later lands on the same doc instead of a duplicate. */
+function dtekArchiveId(c: DtekCircular): string {
+  const basis = c.url || `${c.referenceNo}|${c.date ?? ''}|${c.title}`;
+  return crypto.createHash('sha256').update(basis).digest('hex').slice(0, 32);
+}
+
 /** There is deliberately no "too old" filter here. An earlier version dropped
  *  anything past a date window, which could — and did — discard every entry and
  *  leave the admin with a bare "no usable circulars". Listing rank is the
@@ -2315,7 +2323,13 @@ export const fetchDtekNews = onCall(
 
 /** Settings › DTEK News › "Publish": stores the reviewed digest at
  *  dtekNews/current (Admin SDK — clients can't write it). Re-runs the same
- *  normaliser, so a hand-edited payload can't smuggle in unvalidated data. */
+ *  normaliser, so a hand-edited payload can't smuggle in unvalidated data.
+ *
+ *  Every circular is also kept in dtekCirculars/{id}, since current only ever
+ *  holds the newest five and is replaced wholesale. The outgoing digest is
+ *  archived alongside the new one, which also backfills whatever was live
+ *  before the archive existed. A circular published again takes the newer
+ *  reviewed write-up but keeps its firstPublishedAt. */
 export const publishDtekNews = onCall(
   { region: 'asia-south1', timeoutSeconds: 30 },
   async (request) => {
@@ -2325,6 +2339,11 @@ export const publishDtekNews = onCall(
     if (!normalized) {
       throw new HttpsError('invalid-argument', 'At least one circular with a title is required.');
     }
+    const currentRef = db.doc('dtekNews/current');
+    const previousSnap = await currentRef.get();
+    const previous = normalizeDtekNews(previousSnap.data());
+    const previousPublishedAt = cleanString(previousSnap.get('publishedAt'), 40);
+
     const doc: DtekNewsDoc = {
       ...normalized,
       sourceUrls: cleanStringList(data.sourceUrls, 10, 1000).map(cleanUrl).filter(Boolean),
@@ -2335,7 +2354,35 @@ export const publishDtekNews = onCall(
       publishedAt: new Date().toISOString(),
       publishedBy: request.auth?.uid ?? '',
     };
-    await db.doc('dtekNews/current').set(doc);
+
+    // Outgoing first, so where the two overlap the new write-up is what stays.
+    const entries = new Map<string, { circular: DtekCircular; publishedAt: string; publishedBy: string }>();
+    for (const c of previous?.circulars ?? []) {
+      entries.set(dtekArchiveId(c), {
+        circular: c,
+        publishedAt: previousPublishedAt || doc.publishedAt,
+        publishedBy: cleanString(previousSnap.get('publishedBy'), 128),
+      });
+    }
+    for (const c of doc.circulars) {
+      entries.set(dtekArchiveId(c), { circular: c, publishedAt: doc.publishedAt, publishedBy: doc.publishedBy });
+    }
+    const refs = [...entries.keys()].map((id) => db.doc(`dtekCirculars/${id}`));
+    const existing = refs.length > 0 ? await db.getAll(...refs) : [];
+    const existingIds = new Set(existing.filter((s) => s.exists).map((s) => s.id));
+
+    const batch = db.batch();
+    batch.set(currentRef, doc);
+    for (const ref of refs) {
+      const { circular, publishedAt, publishedBy } = entries.get(ref.id)!;
+      batch.set(ref, {
+        ...circular,
+        lastPublishedAt: publishedAt,
+        publishedBy,
+        ...(existingIds.has(ref.id) ? {} : { firstPublishedAt: publishedAt }),
+      }, { merge: true });
+    }
+    await batch.commit();
     return doc;
   },
 );

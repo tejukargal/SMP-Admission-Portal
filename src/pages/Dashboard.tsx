@@ -36,6 +36,7 @@ import { dayKey, receiptAccountSplit } from '../utils/cashLedger';
 import { DtekNewsCard } from '../components/dashboard/DtekNewsCard';
 import { SideCardToggle, type SideCard } from '../components/dashboard/SideCardToggle';
 import { DtekCircularModal } from '../components/dashboard/DtekCircularModal';
+import { DtekArchiveModal } from '../components/dashboard/DtekArchiveModal';
 import { SearchResults, type StudentGroup, type FeeStatus, type NextEnroll } from '../components/dashboard/SearchResults';
 import type { DtekCircular } from '../services/dtekNewsService';
 import { useAccentOverride } from '../components/layout/AccentOverrideContext';
@@ -242,6 +243,7 @@ export function Dashboard() {
   const { dashboardFilters, setDashboardFilters } = useFilters();
   const [feeHistoryStudent, setFeeHistoryStudent] = useState<Student | null>(null);
   const [dtekCircular, setDtekCircular] = useState<DtekCircular | null>(null);
+  const [dtekArchiveOpen, setDtekArchiveOpen] = useState(false);
   const [resultsStudent, setResultsStudent] = useState<Student | null>(null);
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
@@ -2483,7 +2485,7 @@ const [barsReady, setBarsReady] = useState(false);
                       />
                     </div>
                     <div className={`absolute inset-0 overflow-hidden rounded-2xl ${sideCard === 'dtek' ? '' : 'hidden'}`}>
-                      <DtekNewsCard onOpen={setDtekCircular} isAdmin={role === 'admin'} headerExtra={sideToggle} />
+                      <DtekNewsCard onOpen={setDtekCircular} onShowPrevious={() => setDtekArchiveOpen(true)} isAdmin={role === 'admin'} headerExtra={sideToggle} />
                     </div>
                   </div>
                 );
@@ -2496,6 +2498,11 @@ const [barsReady, setBarsReady] = useState(false);
       )}
 
     </div>
+
+    {/* Before the circular modal, so a circular opened from the archive stacks on top. */}
+    {dtekArchiveOpen && (
+      <DtekArchiveModal onOpen={setDtekCircular} onClose={() => setDtekArchiveOpen(false)} />
+    )}
 
     {dtekCircular && (
       <DtekCircularModal circular={dtekCircular} onClose={() => setDtekCircular(null)} />

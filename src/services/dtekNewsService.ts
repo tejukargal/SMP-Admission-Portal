@@ -3,7 +3,10 @@
 // date-wise digest, which the admin reviews and publishes to dtekNews/current
 // for the Dashboard. Same fetch -> edit -> publish shape as the scholarship
 // summary, and dtekNews/current is Admin-SDK-only for the same reason.
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  doc, getDoc, setDoc, collection, query, orderBy, limit, startAfter, getDocs,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, app } from '../config/firebase';
 
@@ -86,6 +89,37 @@ export async function getPublishedDtekNews(): Promise<DtekNewsRecord | null> {
   const snap = await getDoc(doc(db, 'dtekNews', 'current'));
   const data = snap.data() as DtekNewsRecord | undefined;
   return data && Array.isArray(data.circulars) && data.circulars.length > 0 ? data : null;
+}
+
+/** A circular kept in dtekCirculars after publishing. Written only by
+ *  publishDtekNews, which keys it on the PDF link so re-fetches don't duplicate. */
+export interface ArchivedDtekCircular extends DtekCircular {
+  id: string;
+  firstPublishedAt: string;
+  lastPublishedAt: string;
+}
+
+export interface DtekArchivePage {
+  items: ArchivedDtekCircular[];
+  cursor: QueryDocumentSnapshot | null;
+  hasMore: boolean;
+}
+
+/** Newest circular date first; undated ones (date null) sort last. */
+export async function getDtekArchivePage(
+  pageSize: number,
+  cursor?: QueryDocumentSnapshot | null,
+): Promise<DtekArchivePage> {
+  const base = query(collection(db, 'dtekCirculars'), orderBy('date', 'desc'));
+  // One extra row tells us whether another page exists without a count query.
+  const q = cursor ? query(base, startAfter(cursor), limit(pageSize + 1)) : query(base, limit(pageSize + 1));
+  const snap = await getDocs(q);
+  const docs = snap.docs.slice(0, pageSize);
+  return {
+    items: docs.map((d) => ({ id: d.id, ...d.data() }) as ArchivedDtekCircular),
+    cursor: docs.length > 0 ? docs[docs.length - 1] : cursor ?? null,
+    hasMore: snap.docs.length > pageSize,
+  };
 }
 
 export async function fetchDtekNews(sourceUrls: string[]): Promise<PendingDtekNews> {
