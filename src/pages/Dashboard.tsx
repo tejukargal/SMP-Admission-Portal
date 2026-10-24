@@ -41,6 +41,8 @@ import { SearchResults, type StudentGroup, type FeeStatus, type NextEnroll } fro
 import type { DtekCircular } from '../services/dtekNewsService';
 import { useAccentOverride } from '../components/layout/AccentOverrideContext';
 import { SEARCH_ACCENT } from '../components/layout/pageAccents';
+import { useStudentFileCounts } from '../hooks/useStudentFiles';
+import { studentFileOwnerKey } from '../services/studentFileService';
 import {
   PAGE_BG, CARD, OUTLINE_PILL_BTN, ICON_PILL_BTN, EYEBROW, PERI, PERI_INK, PERI_BORDER, PERI_DIVIDER,
   FAINT, AMBER, MINT, accentVars, V, mix, pastel, inkOf, TILE, tileStyle, wellStyle, SEARCH_PAGE_SIZE,
@@ -245,6 +247,8 @@ export function Dashboard() {
   const [dtekCircular, setDtekCircular] = useState<DtekCircular | null>(null);
   const [dtekArchiveOpen, setDtekArchiveOpen] = useState(false);
   const [resultsStudent, setResultsStudent] = useState<Student | null>(null);
+  const [filesStudent, setFilesStudent] = useState<Student | null>(null);
+  const fileCounts = useStudentFileCounts();
   const [courseModalCourse, setCourseModalCourse] = useState<Course | null>(null);
   const [yearModalYear, setYearModalYear] = useState<Year | null>(null);
   const [genderModal, setGenderModal] = useState<'BOY' | 'GIRL' | null>(null);
@@ -362,20 +366,21 @@ export function Dashboard() {
   }, [isSearchMode, setOverride]);
   useEffect(() => () => setOverride(null), [setOverride]);
 
-  // Sticky toolbar: true once it has pinned to the top of the scroller (top: -1rem).
-  const toolbarRef = useRef<HTMLDivElement>(null);
+  // Sticky toolbar: true once it has pinned to the top of the scroller. A sentinel at the
+  // heading's bottom edge (= the toolbar's resting top) leaving through the scroller's top
+  // means the toolbar is pinned — independent of how the browser applies main's padding.
+  const toolbarSentinelRef = useRef<HTMLSpanElement>(null);
   const [toolbarStuck, setToolbarStuck] = useState(false);
   useEffect(() => {
-    const el = toolbarRef.current;
+    const el = toolbarSentinelRef.current;
     const scroller = el?.closest('main');
     if (!el || !scroller) return;
-    const check = () => {
-      const offset = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      setToolbarStuck(offset <= -15);
-    };
-    check();
-    scroller.addEventListener('scroll', check, { passive: true });
-    return () => scroller.removeEventListener('scroll', check);
+    const observer = new IntersectionObserver(([entry]) => {
+      const rootTop = entry.rootBounds?.top ?? scroller.getBoundingClientRect().top;
+      setToolbarStuck(!entry.isIntersecting && entry.boundingClientRect.top < rootTop);
+    }, { root: scroller, threshold: 0 });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [loading]);
 
   // Search results paging + keyboard cursor — both reset whenever the query changes.
@@ -1350,7 +1355,9 @@ const [barsReady, setBarsReady] = useState(false);
       />
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-4 flex-wrap">
+      <div className="relative flex-shrink-0 flex items-center justify-between gap-4 flex-wrap">
+        {/* Sticky-toolbar sentinel — see toolbarStuck. */}
+        <span ref={toolbarSentinelRef} aria-hidden className="pointer-events-none absolute bottom-0 left-0 h-px w-px" />
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
             <p className={EYEBROW}>SMP Admissions · {greeting}</p>
@@ -1388,15 +1395,20 @@ const [barsReady, setBarsReady] = useState(false);
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <div ref={toolbarRef} className="sticky -top-4 z-20 -mx-4 -mt-3 px-4 pt-6 pb-1">
-       {/* Backdrop that hides content scrolling under the toolbar — only once it's stuck.
-           At rest it stays clear so the page gradient and search glow run on unbroken. */}
+      <div className="sticky -top-4 z-20 -mx-4 -mt-3 px-4 pt-6 pb-1">
+       {/* Solid backdrop over the gap above the card, down to the card's middle, so content
+           scrolls in behind the card instead of showing between the title bar and it.
+           Only once stuck (appears instantly, fades out) — at rest it stays clear so the
+           page gradient and search glow run on unbroken. */}
        <span
          aria-hidden
-         className="pointer-events-none absolute inset-0 -z-10 transition-opacity duration-200"
-         style={{ opacity: toolbarStuck ? 1 : 0, background: `linear-gradient(180deg,${V.tint} 0%,${V.tint} 80%,${mix(V.tint, 0)} 100%)` }}
+         className={`pointer-events-none absolute inset-x-0 top-0 bottom-1/2 -z-10 ${toolbarStuck ? '' : 'transition-opacity duration-200'}`}
+         style={{ opacity: toolbarStuck ? 1 : 0, background: V.tint }}
        />
-       <div className={`${CARD} px-2.5 py-2`}>
+       <div
+         className={`${CARD} px-2.5 py-2`}
+         style={{ boxShadow: toolbarStuck ? `0 6px 18px ${mix(V.acc, 12)}` : undefined }}
+       >
         {/* Single row: search + inline filters + actions */}
         <div className="flex items-center gap-2">
           <div className="relative shrink-0 w-60">
@@ -1772,6 +1784,8 @@ const [barsReady, setBarsReady] = useState(false);
           onEdit={(s) => void navigate(`/enroll?edit=${s.id}&from=dashboard`, { state: { student: s } })}
           onCollect={setCollectFeeStudent}
           onRowContextMenu={(pos, s) => setCtxMenu({ ...pos, student: s })}
+          fileCounts={fileCounts}
+          onOpenFiles={setFilesStudent}
         />
 
       ) : (
@@ -2517,6 +2531,15 @@ const [barsReady, setBarsReady] = useState(false);
       />
     )}
 
+    {filesStudent && (
+      <StudentDetailModal
+        theme="periwinkle"
+        student={filesStudent}
+        onClose={() => setFilesStudent(null)}
+        defaultTab="files"
+      />
+    )}
+
     {resultsStudent && (
       <StudentDetailModal
         theme="periwinkle"
@@ -2587,6 +2610,18 @@ const [barsReady, setBarsReady] = useState(false);
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><path d="M6 5h12v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 13l2 2 4-4"/></svg>
               </span>
               View Results
+            </button>
+            <button
+              className="group w-full text-left px-3 py-[5px] text-[12px] font-medium text-[#5B6371] hover:bg-(--dk-tint) hover:text-(--dk-ink) flex items-center gap-2 transition-colors duration-100"
+              onClick={() => { setFilesStudent(ctxMenu.student); setCtxMenu(null); }}
+            >
+              <span className="w-[20px] h-[20px] rounded-[6px] bg-(--dk-tile) text-[#5B6371] flex items-center justify-center flex-shrink-0 group-hover:bg-(--dk-band) group-hover:text-(--dk-ink) transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              </span>
+              Files
+              {(fileCounts.get(studentFileOwnerKey(ctxMenu.student)) ?? 0) > 0 && (
+                <span className="ml-auto text-[10.5px] font-medium tabular-nums" style={{ color: FAINT }}>{fileCounts.get(studentFileOwnerKey(ctxMenu.student))}</span>
+              )}
             </button>
             {isAdmin && (
               <button

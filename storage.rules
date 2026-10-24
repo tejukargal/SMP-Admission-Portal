@@ -35,6 +35,19 @@ service firebase.storage {
                 && request.resource.contentType.matches('application/pdf|image/jpeg|image/png')));
     }
 
+    // ── Student Files (letters / documents kept against a student, 10MB) ───
+    // Staff/admin only — student-app sessions (custom token with a `student`
+    // claim) are signed in too, so they're excluded explicitly.
+    match /studentFiles/{fileId}/{fileName} {
+      // token.get(): staff/admin tokens have no `student` key, and reading a missing
+      // key directly is an error (= deny).
+      allow read: if request.auth != null && request.auth.token.get('student', false) != true;
+      allow create, update: if isAdmin()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/jpeg|image/png');
+      allow delete: if isAdmin();
+    }
+
     // ── Circular attachments (PDF/JPEG/PNG/CSV, 5MB) ───────────────────────
     // Students never read via the SDK — they use tokenized download URLs
     // stored in the Firestore circular docs.

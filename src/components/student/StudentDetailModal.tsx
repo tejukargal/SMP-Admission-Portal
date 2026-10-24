@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getAllFeeRecordsByStudent, getAllFeeRecordsByRegNumber, removeFeeRecordRemark } from '../../services/feeRecordService';
 import { getFeeStructure } from '../../services/feeStructureService';
 import { getFeeOverride } from '../../services/feeOverrideService';
@@ -23,6 +23,14 @@ import { getExamResultsByRegNumber, deleteExamResult } from '../../services/resu
 import { invalidateResultsCache } from '../../hooks/useResults';
 import { mergeResultsBySession } from '../../utils/resultMerge';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
+import { useStudentFiles } from '../../hooks/useStudentFiles';
+import {
+  uploadStudentFile, updateStudentFileMeta, deleteStudentFile, downloadStudentFile, studentFileErrorMessage,
+  STUDENT_FILE_CATEGORIES, STUDENT_FILE_CATEGORY_LABEL, type StudentFileMeta,
+} from '../../services/studentFileService';
+import { validateStudentFile } from '../../utils/compressImage';
+import { formatBytes } from '../../utils/htmlContent';
+import { AttachmentPreview } from '../circulars/AttachmentPreview';
 import { ResultDetailModal } from '../results/ResultDetailModal';
 import { FeeReceiptDetailModal } from '../fee/FeeReceiptDetailModal';
 import {
@@ -32,7 +40,7 @@ import {
 import type {
   Student, FeeRecord, AcademicYear,
   AdmType, AdmCat, DocRecord, ExamResult, AnsLetterRecord, AnsLetterStatus,
-  SeatCancelLetterRecord,
+  SeatCancelLetterRecord, StudentFile, StudentFileCategory,
 } from '../../types';
 import { REQUIRED_DOCS, SMP_FEE_HEADS } from '../../types';
 import { isDiscontinued } from '../../utils/studentStatus';
@@ -51,6 +59,7 @@ const SKY = '#0284C7';
 const VIOLET = '#7C3AED';
 const ROSE = '#DB2777';
 const FALLBACK_COLOR = '#8A93A3';
+const FILES_TINT = '#0D9488';
 
 const DEPT_DOT: Record<string, string> = {
   CE: '#3B82F6', ME: '#10B981', CS: '#8B5CF6', EC: '#F97316', EE: '#EF4444',
@@ -1732,12 +1741,13 @@ function ResultsTab({
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'documents' | 'fee' | 'tc' | 'pc' | 'results' | 'refund' | 'ans';
+type Tab = 'profile' | 'documents' | 'files' | 'fee' | 'tc' | 'pc' | 'results' | 'refund' | 'ans';
 
 // Each tab keeps a small identifying colour on its pill.
 const TAB_TINT: Record<Tab, string> = {
   profile:   OCEAN,
   documents: AMBER,
+  files:     FILES_TINT,
   fee:       MINT,
   tc:        VIOLET,
   pc:        ROSE,
@@ -1749,6 +1759,7 @@ const TAB_TINT: Record<Tab, string> = {
 const TAB_ICON: Record<Tab, React.ReactNode> = {
   profile:   Ico.user,
   documents: Ico.folder,
+  files:     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>,
   fee:       Ico.rupee,
   tc:        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
   pc:        Ico.cap,
@@ -1769,6 +1780,346 @@ function InfoLine({ items }: { items: { value?: string; title: string; mono?: bo
         </span>
       ))}
     </p>
+  );
+}
+
+// ─── Files tab — scanned letters / documents kept against the student ────────
+
+const FILE_CATEGORY_COLOR: Record<StudentFileCategory, string> = {
+  TC_REQUEST: VIOLET,
+  PC_REQUEST: ROSE,
+  FEE_CONCESSION: MINT,
+  STUDY_CERT_REQUEST: SKY,
+  AFFIDAVIT: AMBER,
+  OTHER: FALLBACK_COLOR,
+};
+
+const FILE_INPUT =
+  'w-full rounded-lg border border-[#D5DEE8] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#262B35] placeholder:text-[#A9B0BB] placeholder:font-normal focus:outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/20';
+
+const todayLocal = () => new Date().toLocaleDateString('en-CA');
+
+function FileCategoryPicker({ value, onChange }: { value: StudentFileCategory; onChange: (c: StudentFileCategory) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {STUDENT_FILE_CATEGORIES.map((c) => {
+        const active = value === c;
+        const color = FILE_CATEGORY_COLOR[c];
+        return (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            className="inline-flex items-center gap-1 rounded-full border px-2.5 py-[5px] text-[11px] font-medium leading-none cursor-pointer transition-colors"
+            style={active
+              ? { background: color, borderColor: color, color: '#fff' }
+              : { background: '#fff', borderColor: `${color}66`, color: inkOf(color) }}
+          >
+            {STUDENT_FILE_CATEGORY_LABEL[c]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Category / title / letter date / note — shared by the upload card and the row editor. */
+function FileMetaFields({ meta, onChange }: { meta: StudentFileMeta; onChange: (m: StudentFileMeta) => void }) {
+  return (
+    <div className="space-y-2.5">
+      <FileCategoryPicker value={meta.category} onChange={(category) => onChange({ ...meta, category })} />
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-2">
+        <input
+          className={FILE_INPUT}
+          placeholder="Title (optional) — e.g. Request for TC after 2nd year"
+          value={meta.title ?? ''}
+          onChange={(e) => onChange({ ...meta, title: e.target.value })}
+        />
+        <input
+          type="date"
+          className={FILE_INPUT}
+          title="Date on the letter"
+          value={meta.letterDate ?? ''}
+          onChange={(e) => onChange({ ...meta, letterDate: e.target.value })}
+        />
+      </div>
+      <textarea
+        rows={2}
+        className={`${FILE_INPUT} resize-none`}
+        placeholder="Note (optional) — e.g. Approved by Principal on 12/10"
+        value={meta.note ?? ''}
+        onChange={(e) => onChange({ ...meta, note: e.target.value })}
+      />
+    </div>
+  );
+}
+
+function FileUploadCard({ student }: { student: Student }) {
+  const { user } = useAuth();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [meta, setMeta] = useState<StudentFileMeta>({ category: 'OTHER', letterDate: todayLocal() });
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedName, setSavedName] = useState<string | null>(null);
+
+  function pick(f: File | undefined) {
+    if (!f) return;
+    const problem = validateStudentFile(f);
+    setError(problem);
+    setSavedName(null);
+    setFile(problem ? null : f);
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const saved = await uploadStudentFile(student, file, meta, user?.email ?? '');
+      setSavedName(saved.title || saved.name);
+      setFile(null);
+      setMeta({ category: 'OTHER', letterDate: todayLocal() });
+      if (inputRef.current) inputRef.current.value = '';
+    } catch (err) {
+      setError(studentFileErrorMessage(err, 'Upload failed. Please try again.'));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <IconCard title="Add a file" color={FILES_TINT} icon={Ico.plus}>
+      <div className="space-y-2.5">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,image/jpeg,image/png"
+          className="hidden"
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+        {file ? (
+          <div className="flex items-center gap-2 rounded-xl border border-[#0D9488]/30 bg-[#0D9488]/[0.05] px-3 py-2">
+            <span className="text-[#0D9488]">{Ico.doc}</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[#262B35]" title={file.name}>{file.name}</span>
+            <span className="shrink-0 text-[10.5px] font-medium text-[#8A93A3] tabular-nums">{formatBytes(file.size)}</span>
+            <PillBtn variant="neutral" onClick={() => { setFile(null); if (inputRef.current) inputRef.current.value = ''; }} disabled={uploading}>
+              Change
+            </PillBtn>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files?.[0]); }}
+            className={`w-full rounded-xl border-2 border-dashed px-4 py-4 text-center transition-colors cursor-pointer ${
+              dragOver ? 'border-[#0D9488] bg-[#0D9488]/[0.07]' : 'border-[#0D9488]/30 bg-[#0D9488]/[0.03] hover:bg-[#0D9488]/[0.06]'
+            }`}
+          >
+            <p className="text-[12.5px] font-semibold text-[#0B6E66]">Drop a letter here or click to browse</p>
+            <p className="mt-0.5 text-[10.5px] font-medium text-[#8A93A3]">PDF, JPG or PNG · up to 10 MB · photos are shrunk automatically</p>
+          </button>
+        )}
+
+        <FileMetaFields meta={meta} onChange={setMeta} />
+
+        {error && <Banner color={CORAL}>{error}</Banner>}
+
+        <div className="flex items-center justify-end gap-2">
+          {savedName && !file && (
+            <span className="mr-auto text-[11px] font-medium text-[#0B6E66]">✓ Saved “{savedName}”</span>
+          )}
+          <PillBtn color={FILES_TINT} variant="solid" onClick={() => void handleUpload()} disabled={!file || uploading}>
+            {uploading ? 'Uploading…' : <>{Ico.plus} Upload</>}
+          </PillBtn>
+        </div>
+      </div>
+    </IconCard>
+  );
+}
+
+function FilesTab({ student, files, loading, error }: {
+  student: Student;
+  files: StudentFile[];
+  loading: boolean;
+  error: string | null;
+}) {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+  const [filter, setFilter] = useState<StudentFileCategory | 'ALL'>('ALL');
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editMeta, setEditMeta] = useState<StudentFileMeta>({ category: 'OTHER' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const usedCategories = STUDENT_FILE_CATEGORIES.filter((c) => files.some((f) => f.category === c));
+  const shown = filter === 'ALL' ? files : files.filter((f) => f.category === filter);
+
+  function startEdit(f: StudentFile) {
+    setEditId(f.id);
+    setEditMeta({ category: f.category, title: f.title, letterDate: f.letterDate, note: f.note });
+    setActionError(null);
+  }
+
+  async function saveEdit(id: string) {
+    setSavingEdit(true);
+    setActionError(null);
+    try {
+      await updateStudentFileMeta(id, editMeta);
+      setEditId(null);
+    } catch (err) {
+      setActionError(studentFileErrorMessage(err, 'Could not save changes.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(f: StudentFile) {
+    setDeletingId(f.id);
+    setActionError(null);
+    try {
+      await deleteStudentFile(f);
+      setPendingDeleteId(null);
+    } catch (err) {
+      setActionError(studentFileErrorMessage(err, 'Could not delete the file.'));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="px-5 py-4 space-y-3" style={{ animation: 'content-enter 0.26s ease-out' }}>
+      {isAdmin && <FileUploadCard student={student} />}
+
+      {error && <Banner color={CORAL}>{error}</Banner>}
+      {actionError && <Banner color={CORAL}>{actionError}</Banner>}
+
+      {loading ? (
+        <CardSkeleton count={1} cells={3} />
+      ) : files.length === 0 ? (
+        <EmptyState
+          color={FILES_TINT}
+          icon={Ico.big(<path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>)}
+          title="No files yet"
+          subtitle={isAdmin
+            ? 'Upload request letters, concession letters or any document you want to keep with this student.'
+            : 'Letters and documents uploaded by the office will appear here.'}
+        />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SummaryPill color={FILES_TINT}>
+              {files.length} file{files.length > 1 ? 's' : ''}{student.regNumber ? ' · all academic years' : ''}
+            </SummaryPill>
+            {usedCategories.length > 1 && (
+              <div className="ml-auto flex flex-wrap items-center gap-1">
+                {(['ALL', ...usedCategories] as const).map((c) => {
+                  const active = filter === c;
+                  const color = c === 'ALL' ? FILES_TINT : FILE_CATEGORY_COLOR[c];
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFilter(c)}
+                      className="rounded-full border px-2.5 py-[4px] text-[10.5px] font-medium leading-none cursor-pointer transition-colors"
+                      style={active
+                        ? { background: color, borderColor: color, color: '#fff' }
+                        : { background: '#fff', borderColor: `${color}55`, color: inkOf(color) }}
+                    >
+                      {c === 'ALL' ? 'All' : STUDENT_FILE_CATEGORY_LABEL[c]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {shown.map((f) => {
+            const color = FILE_CATEGORY_COLOR[f.category] ?? FALLBACK_COLOR;
+            const isImage = f.type.startsWith('image/');
+            const editing = editId === f.id;
+            const previewing = previewId === f.id;
+            return (
+              <RecordCard
+                key={f.id}
+                color={color}
+                icon={isImage
+                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  : Ico.doc}
+                title={<span className="block max-w-[340px] truncate" title={f.title || f.name}>{f.title || f.name}</span>}
+                pills={
+                  <>
+                    <LinePill value={STUDENT_FILE_CATEGORY_LABEL[f.category]} color={color} dot />
+                    {f.academicYear !== student.academicYear && <LinePill value={f.academicYear} color={FALLBACK_COLOR} title="Uploaded from this academic year's record" />}
+                  </>
+                }
+                meta={f.letterDate ? `Letter ${fmtDate(f.letterDate)}` : undefined}
+                actions={
+                  <>
+                    <PillBtn color={color} onClick={() => setPreviewId(previewing ? null : f.id)}>
+                      {Ico.eye} {previewing ? 'Hide' : 'Preview'}
+                    </PillBtn>
+                    <PillBtn color={color} onClick={() => window.open(f.url, '_blank', 'noopener')} title="Open in a new tab">
+                      Open
+                    </PillBtn>
+                    <PillBtn color={color} onClick={() => void downloadStudentFile(f)} title={`Download ${f.name}`}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Download
+                    </PillBtn>
+                    {isAdmin && !editing && (
+                      <PillBtn variant="neutral" onClick={() => startEdit(f)} title="Edit details">{Ico.edit}</PillBtn>
+                    )}
+                    {isAdmin && pendingDeleteId !== f.id && (
+                      <PillBtn color={CORAL} onClick={() => setPendingDeleteId(f.id)} title="Delete file">{Ico.trash}</PillBtn>
+                    )}
+                  </>
+                }
+              >
+                {pendingDeleteId === f.id && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/[0.05] px-3 py-2">
+                    <span className="mr-auto text-[11.5px] font-medium text-[#9F1239]">Delete this file permanently? This can't be undone.</span>
+                    <PillBtn variant="neutral" onClick={() => setPendingDeleteId(null)} disabled={deletingId === f.id}>Cancel</PillBtn>
+                    <PillBtn color={CORAL} variant="solid" onClick={() => void handleDelete(f)} disabled={deletingId === f.id}>
+                      {deletingId === f.id ? 'Deleting…' : 'Delete'}
+                    </PillBtn>
+                  </div>
+                )}
+
+                {editing ? (
+                  <div className="space-y-2.5">
+                    <FileMetaFields meta={editMeta} onChange={setEditMeta} />
+                    <div className="flex justify-end gap-2">
+                      <PillBtn variant="neutral" onClick={() => setEditId(null)} disabled={savingEdit}>Cancel</PillBtn>
+                      <PillBtn color={FILES_TINT} variant="solid" onClick={() => void saveEdit(f.id)} disabled={savingEdit}>
+                        {savingEdit ? 'Saving…' : <>{Ico.check} Save</>}
+                      </PillBtn>
+                    </div>
+                  </div>
+                ) : (
+                  <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3">
+                    <Field label="File" value={`${f.name} · ${formatBytes(f.size)}`} wide />
+                    <Field label="Uploaded" value={`${fmtDate(f.uploadedAt)}${f.uploadedBy ? ` · ${f.uploadedBy}` : ''}`} wide />
+                    {f.note && <Field label="Note" value={f.note} wide />}
+                  </dl>
+                )}
+
+                {previewing && (
+                  <div className="mt-3">
+                    <AttachmentPreview attachment={f} accentText="text-[#0B6E66]" accentBorder="border-[#0D9488]/30" />
+                  </div>
+                )}
+              </RecordCard>
+            );
+          })}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1796,6 +2147,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
 
   // Documents — load eagerly (single Firestore doc, cheap)
   const { docs, loading: docsLoading, error: docsError } = useStudentDocuments(student.id);
+
+  // Files — live, shared across the student's academic-year records (by Reg No)
+  const { files, loading: filesLoading, error: filesError } = useStudentFiles(student);
 
   // TC history state — lazy-loaded on first visit to tc tab
   const [tcRecords, setTcRecords] = useState<TCRecord[]>([]);
@@ -2006,6 +2360,7 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
   const allTabs: { id: Tab; label: string }[] = [
     { id: 'profile',   label: 'Profile' },
     { id: 'documents', label: 'Docs History' },
+    { id: 'files',     label: files.length > 0 ? `Files · ${files.length}` : 'Files' },
     { id: 'fee',       label: 'Fee History' },
     { id: 'tc',        label: 'TC History' },
     { id: 'pc',        label: 'PC History' },
@@ -2154,6 +2509,9 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
           {activeTab === 'profile' && <ProfileTab student={student} />}
           {activeTab === 'documents' && (
             <DocumentsTab docs={docs} loading={docsLoading} error={docsError} />
+          )}
+          {activeTab === 'files' && (
+            <FilesTab student={student} files={files} loading={filesLoading} error={filesError} />
           )}
           {activeTab === 'fee' && (
             <FeeTab

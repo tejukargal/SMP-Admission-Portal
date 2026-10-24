@@ -8,6 +8,8 @@ import {
   CARD, pastel, PERI, V, mix, pastelVar, INK, MUTED, FAINT,
   MINT, AMBER, CORAL, COURSE_HEX, YEAR_HEX, BOY_HEX, GIRL_HEX, SEARCH_PAGE_SIZE,
 } from './dashTokens';
+import { FileCountBadge } from '../student/FileCountBadge';
+import { studentFileOwnerKey } from '../../services/studentFileService';
 import { isWPStudent } from '../../utils/wpStudent';
 
 // Dashboard search results — one profile card per student, with that student's
@@ -319,12 +321,15 @@ export interface SearchResultsProps {
   onCollect: (s: Student) => void;
   onReEnroll: (next: NextEnroll) => void;
   onRowContextMenu: (pos: MenuPos, s: Student) => void;
+  /** File count per studentFileOwnerKey — drives the 📎 badge. */
+  fileCounts: Map<string, number>;
+  onOpenFiles: (s: Student) => void;
 }
 
 export function SearchResults({
   groups, query, feeStatus, groupDue, studentDue, feeLoading, isAdmin, currentAcademicYear, nextEnroll,
   activeIdx, visibleCount, ctxStudentId,
-  onShowMore, onClear, onView, onEdit, onCollect, onReEnroll, onRowContextMenu,
+  onShowMore, onClear, onView, onEdit, onCollect, onReEnroll, onRowContextMenu, fileCounts, onOpenFiles,
 }: SearchResultsProps) {
   const activeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -528,6 +533,10 @@ export function SearchResults({
                     <IdentificationCard size={13} weight="bold" /> No Reg No
                   </span>
                 )}
+                <FileCountBadge
+                  count={[...new Set(group.records.map(studentFileOwnerKey))].reduce((t, k) => t + (fileCounts.get(k) ?? 0), 0)}
+                  onClick={() => onOpenFiles(latest)}
+                />
                 {hint && <MatchHintChip hint={hint} />}
                 {hasWP && (
                   <span

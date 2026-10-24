@@ -128,6 +128,15 @@ service cloud.firestore {
       allow write: if isActiveUser();
     }
 
+    // ── Student Files (scanned letters / documents, Files tab) ────────────
+    // Metadata only — the file itself lives in Storage at studentFiles/{fileId}/…
+    match /studentFiles/{fileId} {
+      allow read:   if isActiveUser();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['ownerKey', 'studentId', 'storagePath', 'url']);
+      allow update, delete: if isAdmin();
+    }
+
     // ── Exam Fee Records ──────────────────────────────────────────────────
     match /examFeeRecords/{recordId} {
       allow read:  if isActiveUser();

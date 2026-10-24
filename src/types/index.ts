@@ -557,6 +557,27 @@ export interface StoredAttachment {
   storagePath: string;  // e.g. circulars/{circularId}/{ts}_{name} — for admin delete
 }
 
+/** Kind of letter/document kept in a student's Files tab. */
+export type StudentFileCategory =
+  | 'TC_REQUEST' | 'PC_REQUEST' | 'FEE_CONCESSION' | 'STUDY_CERT_REQUEST' | 'AFFIDAVIT' | 'OTHER';
+
+/** A scanned letter / document kept against a student (studentFiles/{id}).
+ *  Owned by regNumber so it shows on every academic-year record of that student. */
+export interface StudentFile extends StoredAttachment {
+  id: string;
+  ownerKey: string;           // regNumber.trim().toUpperCase(), else `id_${studentId}`
+  regNumber?: string;
+  studentId: string;          // record it was uploaded from
+  studentName: string;
+  academicYear: AcademicYear; // year of the record it was uploaded from
+  category: StudentFileCategory;
+  title?: string;
+  letterDate?: string;        // YYYY-MM-DD, date written on the letter
+  note?: string;
+  uploadedAt: string;
+  uploadedBy: string;         // uploader email
+}
+
 /** College-wide circular — visible to ALL students; department is a label/filter, not access control. */
 export interface Circular {
   id: string;

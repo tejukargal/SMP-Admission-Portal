@@ -26,6 +26,9 @@ import { AllottedCategoryModal } from '../components/common/AllottedCategoryModa
 import { SnqRefundModal } from '../components/common/SnqRefundModal';
 import { DiscontinueStudentModal } from '../components/student/DiscontinueStudentModal';
 import { Modal } from '../components/common/Modal';
+import { FileCountBadge } from '../components/student/FileCountBadge';
+import { useStudentFileCounts } from '../hooks/useStudentFiles';
+import { studentFileOwnerKey } from '../services/studentFileService';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category } from '../types';
 import { PageSpinner } from '../components/common/PageSpinner';
 
@@ -229,6 +232,9 @@ export function Students() {
   }, [toastMsg]);
 
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
+  const [detailTab, setDetailTab] = useState<'profile' | 'files'>('profile');
+  const fileCounts = useStudentFileCounts();
+  const openDetail = (s: Student, tab: 'profile' | 'files' = 'profile') => { setDetailTab(tab); setDetailStudent(s); };
   const [docsModalStudent, setDocsModalStudent] = useState<Student | null>(null);
   const [printProfileStudent, setPrintProfileStudent] = useState<Student | null>(null);
   const [showMissingDocs, setShowMissingDocs] = useState(false);
@@ -1003,6 +1009,7 @@ export function Students() {
                       <div className="flex items-center gap-2.5 min-w-0">
                         <RingAvatar name={student.studentNameSSLC} course={student.course} />
                         <span className="text-[12.5px] font-medium text-[#075E93] truncate min-w-0" title={student.studentNameSSLC}>{student.studentNameSSLC}</span>
+                        <FileCountBadge count={fileCounts.get(studentFileOwnerKey(student))} onClick={() => openDetail(student, 'files')} />
                         <LinePill value="New" color={MINT} />
                       </div>
                     </td>
@@ -1079,6 +1086,7 @@ export function Students() {
                     <div className="flex items-center gap-2.5 min-w-0">
                       <RingAvatar name={student.studentNameSSLC} course={student.course} />
                       <span className="text-[12.5px] font-medium text-[#075E93] truncate min-w-0" title={student.studentNameSSLC}>{student.studentNameSSLC}</span>
+                      <FileCountBadge count={fileCounts.get(studentFileOwnerKey(student))} onClick={() => openDetail(student, 'files')} />
                     </div>
                   </td>
                   <td className={TD_NUM}>{student.regNumber || '—'}</td>
@@ -1216,7 +1224,7 @@ export function Students() {
           <div className="p-1">
             <button
               className={MENU_ITEM}
-              onClick={() => { setDetailStudent(contextMenu.student); setContextMenu(null); }}
+              onClick={() => { openDetail(contextMenu.student); setContextMenu(null); }}
             >
               <span className={`${MENU_ICON} group-hover:bg-[#0B7BC0]/10 group-hover:text-[#0B7BC0]`}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
@@ -1261,6 +1269,18 @@ export function Students() {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
               </span>
               Manage Documents
+            </button>
+            <button
+              className={MENU_ITEM}
+              onClick={() => { openDetail(contextMenu.student, 'files'); setContextMenu(null); }}
+            >
+              <span className={`${MENU_ICON} group-hover:bg-[#0D9488]/10 group-hover:text-[#0D9488]`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              </span>
+              Files
+              {(fileCounts.get(studentFileOwnerKey(contextMenu.student)) ?? 0) > 0 && (
+                <span className="ml-auto text-[10.5px] font-medium tabular-nums text-[#8A93A3]">{fileCounts.get(studentFileOwnerKey(contextMenu.student))}</span>
+              )}
             </button>
             <button
               className={MENU_ITEM}
@@ -1387,6 +1407,7 @@ export function Students() {
     {detailStudent && (
       <StudentDetailModal
         student={detailStudent}
+        defaultTab={detailTab}
         onClose={() => setDetailStudent(null)}
       />
     )}
