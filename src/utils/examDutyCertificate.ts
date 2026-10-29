@@ -1,4 +1,4 @@
-import type { ExamDuty, ExamDutyCertificate, ExamDutyType } from '../types';
+import type { ExamCertSalutation, ExamDuty, ExamDutyCertificate, ExamDutyType } from '../types';
 
 // ── Exam duty Attendance Certificate ──────────────────────────────────────────
 // Half-A4 (210 × 148.5 mm) certificate in the Chief Superintendent's format.
@@ -25,6 +25,20 @@ export const DUTY_ORDER: ExamDutyType[] = [
 
 export const SESSION_LABEL_SUGGESTIONS = ['APR/MAY', 'MAY/JUNE', 'OCT/NOV', 'NOV/DEC'];
 
+export const SALUTATIONS: ExamCertSalutation[] = ['Sri.', 'Smt.', 'Kum.', 'Dr.', 'Prof.'];
+
+export const DESIGNATIONS = [
+  'Lecturer', 'Senior Lecturer', 'Selection Grade Lecturer', 'HOD', 'Selection Grade Lecturer & HOD',
+  'Principal', 'Workshop Superintendent', 'Foreman', 'Instructor', 'Assistant Instructor',
+  'First Division Assistant', 'Second Division Assistant',
+];
+
+export const DEPARTMENTS = [
+  'Civil Engineering', 'Mechanical Engineering', 'Electrical & Electronics Engineering',
+  'Electronics & Communication Engineering', 'Computer Science & Engineering', 'Automobile Engineering',
+  'Chemical Engineering', 'Commercial Practice', 'Science', 'Humanities',
+];
+
 export type ExamCertContent = Pick<
   ExamDutyCertificate,
   'salutation' | 'name' | 'designation' | 'department' | 'polytechnic'
@@ -33,7 +47,7 @@ export type ExamCertContent = Pick<
 
 // ── Text helpers ──────────────────────────────────────────────────────────────
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -45,6 +59,31 @@ function esc(s: string): string {
 export function dmy(iso: string): string {
   const [y, m, d] = iso.split('-');
   return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+/** 'dd/mm/yyyy' (also d/m/yyyy, dd-mm-yyyy, dd.mm.yyyy, ddmmyyyy) → 'YYYY-MM-DD', or '' if not a real date. */
+export function parseDmy(text: string): string {
+  const t = text.trim();
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t) ?? /^(\d{2})(\d{2})(\d{4})$/.exec(t);
+  if (!m) return '';
+  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (y < 2000 || y > 2100 || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+export function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Guess the current exam session from the month: Oct–Jan → NOV/DEC, else APR/MAY. */
+export function defaultSession(): { label: string; year: number } {
+  const d = new Date();
+  const m = d.getMonth() + 1;
+  if (m >= 10) return { label: 'NOV/DEC', year: d.getFullYear() };
+  if (m === 1) return { label: 'NOV/DEC', year: d.getFullYear() - 1 };
+  return { label: 'APR/MAY', year: d.getFullYear() };
 }
 
 function joinAnd(parts: string[]): string {
@@ -282,9 +321,17 @@ if (document.readyState === 'complete') fitHalves(); else window.addEventListene
  */
 export function printExamCerts(certs: ExamCertContent[], target?: Window | null): void {
   if (!certs.length) { target?.close(); return; }
-  const html = buildExamCertHTML(certs).replace('</body>', `<script>
+  openPrintHtml(buildExamCertHTML(certs), 'fitHalves', target);
+}
+
+/**
+ * Opens a certificate document in a print window: runs `fitFn` (a global
+ * function defined by the document) on load, prints, and closes afterwards.
+ */
+export function openPrintHtml(doc: string, fitFn: string, target?: Window | null): void {
+  const html = doc.replace('</body>', `<script>
   window.addEventListener('load', function () {
-    fitHalves();
+    ${fitFn}();
     setTimeout(function () { window.print(); }, 60);
     window.addEventListener('afterprint', function () { window.close(); });
   });

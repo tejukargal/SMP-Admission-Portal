@@ -796,3 +796,46 @@ export interface ExamDutyStaff extends ExamDutyPerson {
   id: string;
   lastUsedAt: string;
 }
+
+// ── Setting & Conducting Certificates ───────────────────────────────────────
+// Issued to external examiners who set the question paper and/or conducted the
+// semester (practical) examination in one or more subjects. Shares the per-session
+// serial series (counters/examCert__{session}) with the Attendance certificates.
+
+export type ExamSettingWork = 'SET_AND_CONDUCTED' | 'CONDUCTED' | 'SET';
+
+export interface ExamSettingSubject {
+  code: string;             // uppercase, e.g. '20EC41P'
+  name: string;             // uppercase, e.g. 'PCB LAB'
+  batchesAllotted: number;
+  studentsAllotted: number;
+  batchesConducted: number;
+  studentsAttended: number;
+}
+
+export interface ExamSettingCertificate extends ExamDutyPerson {
+  id: string;
+  sessionKey: string;       // 'APR-MAY-2026' — shared serial series key
+  sessionLabel: string;     // 'APR/MAY'
+  sessionYear: number;      // 2026
+  serial: number;
+  refNo: string;            // 'SMP/SEM/APR/MAY-2026/83'
+  issueDate: string;        // 'YYYY-MM-DD'
+  work: ExamSettingWork;
+  subjects: ExamSettingSubject[];
+  bodyOverride?: string;    // manual wording; absent = generated
+  createdBy: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ExamSettingCertificateInput = Omit<ExamSettingCertificate, 'id' | 'sessionKey' | 'refNo' | 'createdBy' | 'createdByEmail' | 'createdAt' | 'updatedAt'>;
+
+/** Remembered subject codes, used to auto-fill the subject name. */
+export interface ExamSubject {
+  id: string;
+  code: string;
+  name: string;
+  lastUsedAt: string;
+}

@@ -1,5 +1,4 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type React from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   createExamCert,
@@ -13,14 +12,31 @@ import {
 import {
   buildExamCertBody,
   buildExamCertHTML,
-  dmy,
+  defaultSession,
+  DEPARTMENTS,
+  DESIGNATIONS,
   DUTY_LABELS,
   DUTY_ORDER,
   printExamCerts,
   rangeDays,
+  SALUTATIONS,
   SESSION_LABEL_SUGGESTIONS,
+  todayIso,
   type ExamCertContent,
 } from '../../utils/examDutyCertificate';
+import {
+  DmyDateInput,
+  FIELD,
+  HALF_A4_H,
+  Label,
+  ScaledPreview,
+  SectionTitle,
+  Segmented,
+  WINE,
+  WINE_BAND,
+  WINE_HAIR,
+  WINE_INK,
+} from './examCertFormKit';
 import type {
   ExamCertSalutation,
   ExamDuty,
@@ -32,26 +48,6 @@ import type {
   ExamKind,
 } from '../../types';
 
-// Page accent — wine (shared with ExamDutyCertificates.tsx)
-export const WINE = '#BE185D';
-export const WINE_INK = '#9D174D';
-export const WINE_HAIR = '#F3D3E1';
-export const WINE_BAND = '#FDF0F5';
-
-const SALUTATIONS: ExamCertSalutation[] = ['Sri.', 'Smt.', 'Kum.', 'Dr.', 'Prof.'];
-
-const DESIGNATIONS = [
-  'Lecturer', 'Senior Lecturer', 'Selection Grade Lecturer', 'HOD', 'Selection Grade Lecturer & HOD',
-  'Principal', 'Workshop Superintendent', 'Foreman', 'Instructor', 'Assistant Instructor',
-  'First Division Assistant', 'Second Division Assistant',
-];
-
-const DEPARTMENTS = [
-  'Civil Engineering', 'Mechanical Engineering', 'Electrical & Electronics Engineering',
-  'Electronics & Communication Engineering', 'Computer Science & Engineering', 'Automobile Engineering',
-  'Chemical Engineering', 'Commercial Practice', 'Science', 'Humanities',
-];
-
 const MODE_OPTIONS: { value: ExamDutyDateMode; label: string }[] = [
   { value: 'single', label: 'One day' },
   { value: 'range', label: 'From – To' },
@@ -62,24 +58,6 @@ const KIND_OPTIONS: { value: ExamKind; label: string }[] = [
   { value: 'THEORY', label: 'Theory' },
   { value: 'PRACTICAL', label: 'Practical' },
 ];
-
-// A4 half at 96 dpi
-const SHEET_W = 794;
-const SHEET_H = 561;
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** Guess the current exam session from the month: Oct–Jan → NOV/DEC, else APR/MAY. */
-function defaultSession(): { label: string; year: number } {
-  const d = new Date();
-  const m = d.getMonth() + 1;
-  if (m >= 10) return { label: 'NOV/DEC', year: d.getFullYear() };
-  if (m === 1) return { label: 'NOV/DEC', year: d.getFullYear() - 1 };
-  return { label: 'APR/MAY', year: d.getFullYear() };
-}
 
 function blankDuty(prev?: ExamDuty): ExamDuty {
   return {
@@ -203,98 +181,6 @@ function toInput(f: FormState, generated: string): ExamDutyCertificateInput {
   };
 }
 
-// ── Small UI pieces ─────────────────────────────────────────────────────────
-
-const FIELD =
-  'block w-full rounded-lg border border-[#E7E3E8] bg-white px-3 py-2 text-[13.5px] text-[#262B35] placeholder:text-[#A9A2AC] ' +
-  'focus:outline-none focus:border-[#BE185D]/60 focus:ring-2 focus:ring-[#BE185D]/15 transition-colors';
-
-function Label({ children, hint }: { children: React.ReactNode; hint?: string }) {
-  return (
-    <span className="flex items-baseline justify-between gap-2 mb-1">
-      <span className="text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#7A6F7D]">{children}</span>
-      {hint && <span className="text-[10.5px] text-[#A9A2AC]">{hint}</span>}
-    </span>
-  );
-}
-
-function Segmented<T extends string>({ value, options, onChange }: {
-  value: T; options: { value: T; label: string }[]; onChange: (v: T) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-full border border-[#E7E3E8] bg-[#FBF9FB] p-0.5">
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            className={`rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${on ? 'text-white' : 'text-[#6B6170] hover:text-[#9D174D]'}`}
-            style={on ? { background: WINE } : undefined}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function SectionTitle({ n, children }: { n: number; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 mb-2.5">
-      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-medium text-white" style={{ background: WINE }}>{n}</span>
-      <span className="text-[12.5px] font-medium text-[#9D174D]">{children}</span>
-      <span className="flex-1 h-px" style={{ background: WINE_HAIR }} />
-    </div>
-  );
-}
-
-/** 'dd/mm/yyyy' (also d/m/yyyy, dd-mm-yyyy, dd.mm.yyyy, ddmmyyyy) → 'YYYY-MM-DD', or '' if not a real date. */
-function parseDmy(text: string): string {
-  const t = text.trim();
-  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t) ?? /^(\d{2})(\d{2})(\d{4})$/.exec(t);
-  if (!m) return '';
-  const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const dt = new Date(Date.UTC(y, mo - 1, d));
-  if (y < 2000 || y > 2100 || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return '';
-  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-/** Typed date field in dd/mm/yyyy. `value` / `onChange` use 'YYYY-MM-DD' ('' while incomplete or invalid). */
-function DmyDateInput({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
-  const [text, setText] = useState(() => (value ? dmy(value) : ''));
-  const [blurred, setBlurred] = useState(false);
-  // Follow outside changes (e.g. To pushed forward by From) without fighting the user's typing.
-  useEffect(() => {
-    if (parseDmy(text) !== value) setText(value ? dmy(value) : '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  const invalid = blurred && text.trim() !== '' && !parseDmy(text);
-  return (
-    <input
-      className={`${FIELD} tabular-nums ${invalid ? '!border-[#B4232F] !ring-[#B4232F]/15' : ''}`}
-      inputMode="numeric"
-      placeholder="dd/mm/yyyy"
-      maxLength={10}
-      value={text}
-      onChange={(e) => {
-        const v = e.target.value.replace(/[^\d/.-]/g, '');
-        setText(v);
-        setBlurred(false);
-        onChange(parseDmy(v));
-      }}
-      onBlur={() => {
-        setBlurred(true);
-        const iso = parseDmy(text);
-        if (iso) setText(dmy(iso));
-      }}
-    />
-  );
-}
-
 function DutyEditor({ duty, index, count, onChange, onRemove }: {
   duty: ExamDuty; index: number; count: number;
   onChange: (d: ExamDuty) => void; onRemove: () => void;
@@ -387,38 +273,6 @@ function DutyEditor({ duty, index, count, onChange, onRemove }: {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ScaledPreview({ html }: { html: string }) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.6);
-  useLayoutEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    // Rounded so sub-pixel width jitter (fractional display scaling) can't
-    // keep re-triggering the observer.
-    const update = () => setScale(Math.min(1, Math.floor((el.clientWidth / SHEET_W) * 1000) / 1000));
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <div ref={boxRef} className="w-full">
-      <div
-        className="relative overflow-hidden rounded-md bg-white shadow-[0_6px_24px_rgba(80,10,40,0.10)] ring-1 ring-black/5"
-        style={{ height: SHEET_H * scale }}
-      >
-        <iframe
-          title="Certificate preview"
-          srcDoc={html}
-          sandbox="allow-scripts"
-          className="absolute left-0 top-0 border-0 origin-top-left pointer-events-none"
-          style={{ width: SHEET_W, height: SHEET_H, transform: `scale(${scale})` }}
-        />
-      </div>
     </div>
   );
 }
@@ -746,7 +600,7 @@ export function ExamDutyCertificateModal({ mode, cert, session, onClose, onSaved
               <span className="text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#7A6F7D]">Preview · half A4</span>
               <span className="text-[10.5px] text-[#A9A2AC]">Prints staff + office copy on one A4 sheet</span>
             </div>
-            <ScaledPreview html={previewHtml} />
+            <ScaledPreview html={previewHtml} height={HALF_A4_H} />
           </div>
         </div>
 

@@ -269,6 +269,18 @@ service cloud.firestore {
       allow read, write: if isActiveUser();
     }
 
+    // ── Setting & Conducting Certificates (external examiners) ────────────────
+    // Same access as the Attendance certificates; shares their serial counter.
+    match /examSettingCertificates/{docId} {
+      allow read, create, update: if isActiveUser();
+      allow delete: if isAdmin();
+    }
+
+    // Remembered subject codes → names, used to auto-fill the subjects table.
+    match /examSubjects/{docId} {
+      allow read, write: if isActiveUser();
+    }
+
     // ── SMP Budget (planned vs actual spend per SMP fee head) ──────────────────
     match /smpBudgets/{yearId} {
       allow read:  if isActiveUser();

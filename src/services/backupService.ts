@@ -51,6 +51,8 @@ export interface BackupData {
     // Optional so backups made before this feature still restore.
     examDutyCertificates?: BackupDoc[];
     examDutyStaff?: BackupDoc[];
+    examSettingCertificates?: BackupDoc[];
+    examSubjects?: BackupDoc[];
   };
 }
 
@@ -121,7 +123,7 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
   const regPrefix = `${academicYear}__regseq__`;
   const regPrefixEnd = regPrefix + String.fromCodePoint(0xf8ff);
   const examCertPrefix = 'examCert__';
-  const [regSnap, merit, tc, receipts, examCertSnap, examDutyCertificates, examDutyStaff] = await Promise.all([
+  const [regSnap, merit, tc, receipts, examCertSnap, examDutyCertificates, examDutyStaff, examSettingCertificates, examSubjects] = await Promise.all([
     getDocs(
       query(
         collection(db, 'counters'),
@@ -141,6 +143,8 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
     ),
     fetchAll('examDutyCertificates'),
     fetchAll('examDutyStaff'),
+    fetchAll('examSettingCertificates'),
+    fetchAll('examSubjects'),
   ]);
 
   return {
@@ -174,6 +178,8 @@ export async function exportBackup(academicYear: AcademicYear): Promise<BackupDa
       },
       examDutyCertificates,
       examDutyStaff,
+      examSettingCertificates,
+      examSubjects,
     },
   };
 }
@@ -193,6 +199,8 @@ export async function restoreBackup(backup: BackupData): Promise<void> {
     batchSetDocs('feeStructure',    data.feeStructures ?? []),
     batchSetDocs('examDutyCertificates', data.examDutyCertificates ?? []),
     batchSetDocs('examDutyStaff',   data.examDutyStaff ?? []),
+    batchSetDocs('examSettingCertificates', data.examSettingCertificates ?? []),
+    batchSetDocs('examSubjects',    data.examSubjects ?? []),
   ]);
 
   if (data.fineSchedule) {

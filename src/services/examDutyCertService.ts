@@ -51,15 +51,16 @@ export function examRefNo(label: string, year: number, serial: number): string {
 // counters/examCert__{sessionKey} → { seq, used: { [serial]: certId }, updatedAt }
 // `used` makes a duplicate serial impossible inside a session, and `seq` is
 // always the highest serial still in use, so deleting the newest certificate
-// hands its number back.
+// hands its number back. Shared with the Setting & Conducting certificates
+// (examSettingCertService) — one outward number series per session.
 
 interface SerialCounter { seq: number; used: Record<string, string> }
 
-function counterRef(sessionKey: string) {
+export function counterRef(sessionKey: string) {
   return doc(db, 'counters', `examCert__${sessionKey}`);
 }
 
-function readCounter(snap: DocumentSnapshot): SerialCounter {
+export function readCounter(snap: DocumentSnapshot): SerialCounter {
   const used = (snap.exists() ? (snap.data().used as Record<string, string> | undefined) : undefined) ?? {};
   return { seq: maxSerial(used), used: { ...used } };
 }
@@ -68,7 +69,7 @@ function maxSerial(used: Record<string, string>): number {
   return Object.keys(used).reduce((m, k) => Math.max(m, Number(k) || 0), 0);
 }
 
-function counterData(used: Record<string, string>) {
+export function counterData(used: Record<string, string>) {
   return { seq: maxSerial(used), used, updatedAt: new Date().toISOString() };
 }
 
@@ -77,8 +78,11 @@ export async function peekNextExamCertSerial(sessionKey: string): Promise<number
   return readCounter(snap).seq + 1;
 }
 
-function duplicateSerialError(serial: number, label: string, year: number): Error {
-  return new Error(`Ref. No. ${examRefNo(label, year, serial)} has already been issued. Choose another serial number.`);
+export function duplicateSerialError(serial: number, label: string, year: number): Error {
+  return new Error(
+    `Serial ${serial} of ${examSessionTitle(label, year)} is already used by another certificate ` +
+    `(Attendance or Setting & Conducting). Choose another serial number.`
+  );
 }
 
 // ── Certificates ────────────────────────────────────────────────────────────
