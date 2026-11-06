@@ -362,7 +362,8 @@ export function Students() {
           s.studentNameAadhar.toUpperCase().includes(search);
         const matchMobile =
           s.fatherMobile?.includes(search) || s.studentMobile?.includes(search);
-        const matchReg = s.regNumber?.toUpperCase().includes(search);
+        const matchReg = s.regNumber?.toUpperCase().includes(search)
+          || s.previousRegNumber?.toUpperCase().includes(search);
         return matchName || matchMobile || matchReg;
       });
     }

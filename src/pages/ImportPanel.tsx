@@ -2,13 +2,14 @@ import type { ComponentType } from 'react';
 import { ImportStudents } from './ImportStudents';
 import { ImportFeeRegister } from './ImportFeeRegister';
 import { ImportAddress } from './ImportAddress';
+import { ImportBoardCorrections } from './ImportBoardCorrections';
 import { ImportResults } from './ImportResults';
 import { ImportFeeStructure } from './ImportFeeStructure';
 import { SettingsSectionNav } from '../components/settings/settingsUi';
 
-export type ImportSection = 'students' | 'fee-register' | 'address' | 'results' | 'fee-structure';
+export type ImportSection = 'students' | 'fee-register' | 'address' | 'board-corrections' | 'results' | 'fee-structure';
 
-export const IMPORT_SECTIONS: ImportSection[] = ['students', 'fee-register', 'address', 'results', 'fee-structure'];
+export const IMPORT_SECTIONS: ImportSection[] = ['students', 'fee-register', 'address', 'board-corrections', 'results', 'fee-structure'];
 
 export function isImportSection(value: unknown): value is ImportSection {
   return typeof value === 'string' && (IMPORT_SECTIONS as string[]).includes(value);
@@ -20,6 +21,7 @@ const SECTION_GROUPS: { title: string; items: { id: ImportSection; label: string
     items: [
       { id: 'students', label: 'Students', hint: 'Enrollment master list (.xlsx)' },
       { id: 'address', label: 'Personal Details', hint: 'Address, DOB, parents, phone, Aadhar, caste — all years' },
+      { id: 'board-corrections', label: 'Board Corrections', hint: 'Board Reg Nos and corrected details, with undo' },
     ],
   },
   {
@@ -36,6 +38,7 @@ const SECTION_PANELS: Record<ImportSection, ComponentType> = {
   students: ImportStudents,
   'fee-register': ImportFeeRegister,
   address: ImportAddress,
+  'board-corrections': ImportBoardCorrections,
   results: ImportResults,
   'fee-structure': ImportFeeStructure,
 };

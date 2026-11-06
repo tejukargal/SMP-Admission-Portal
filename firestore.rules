@@ -192,7 +192,19 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
              'studentId', 'academicYear', 'refundAmount', 'paymentType', 'paymentDate'
            ]);
+      // Board Corrections keeps the student's identity copies in step. Amounts and
+      // payment details stay immutable.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['regNumber', 'studentName', 'fatherName', 'updatedAt']);
       allow delete: if isAdmin();
+    }
+
+    // ── Board Corrections runs (Settings › Import) ────────────────────────
+    // One doc per run plus items/{studentDocId} holding before/after values, used
+    // for undo. Student details inside, so admin only.
+    match /boardCorrectionRuns/{document=**} {
+      allow read, write: if isAdmin();
     }
 
     // ── Public meta (pre-aggregated stats readable by anyone) ────────────

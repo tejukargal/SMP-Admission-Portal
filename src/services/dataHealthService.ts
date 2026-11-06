@@ -51,7 +51,7 @@ const ADM_CATS: readonly AdmCat[] = ['GM', 'SNQ', 'OTHERS'];
 
 const MOBILE_RE = /^[6-9]\d{9}$/;
 
-function isValidDob(v: string): boolean {
+export function isValidDob(v: string): boolean {
   const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!m) return false;
   const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];

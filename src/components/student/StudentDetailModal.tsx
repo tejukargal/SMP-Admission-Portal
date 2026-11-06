@@ -2414,6 +2414,12 @@ export function StudentDetailModal({ student, onClose, defaultTab = 'profile', t
                     {student.regNumber}
                   </span>
                 )}
+                {student.previousRegNumber && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#D8DCE3] bg-white/85 px-2.5 py-[6px] text-[11px] font-medium leading-none text-[#5B6472] tabular-nums">
+                    <span className="text-[8.5px] font-medium uppercase tracking-[0.6px] text-[#8A93A3]">Old Reg</span>
+                    {student.previousRegNumber}
+                  </span>
+                )}
                 <LinePill tall value={student.admissionStatus} color={STATUS_COLOR[student.admissionStatus] ?? AMBER} dot />
                 {student.transferOut && (
                   <LinePill

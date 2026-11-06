@@ -111,6 +111,9 @@ export interface Student {
   applicationNumber: string;
   meritNumber: string;
   regNumber: string;
+  // Temporary number this student held before the Board allotted regNumber.
+  // Set by Board Corrections; paper receipts and files may still carry it.
+  previousRegNumber?: string;
   aadharNumber: string;
   apaarId: string;
   allottedCategory?: string;
@@ -130,11 +133,11 @@ export interface Student {
   updatedAt: string;
 }
 
-// allottedCategory, notAdmittedStatusTag, transferOut*, and discontinued* are intentionally
+// previousRegNumber, allottedCategory, notAdmittedStatusTag, transferOut*, and discontinued* are intentionally
 // excluded — they are set via their own dedicated service calls (not through the enrollment
 // form), so normal edits must never accidentally clear them. transferredIn/transferInPolytechnic
 // stay in the form — captured via the enrollment form's "Transferred In" checkbox + polytechnic name field.
-export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'allottedCategory' | 'notAdmittedStatusTag' | 'transferOut' | 'transferOutDate' | 'transferOutPolytechnic' | 'discontinued' | 'discontinuedDate' | 'discontinuedReason'>;
+export type StudentFormData = Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'previousRegNumber' | 'allottedCategory' | 'notAdmittedStatusTag' | 'transferOut' | 'transferOutDate' | 'transferOutPolytechnic' | 'discontinued' | 'discontinuedDate' | 'discontinuedReason'>;
 
 // ─── Fee types ────────────────────────────────────────────────────────────────
 
