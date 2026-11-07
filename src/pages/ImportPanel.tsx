@@ -21,7 +21,7 @@ const SECTION_GROUPS: { title: string; items: { id: ImportSection; label: string
     items: [
       { id: 'students', label: 'Students', hint: 'Enrollment master list (.xlsx)' },
       { id: 'address', label: 'Personal Details', hint: 'Address, DOB, parents, phone, Aadhar, caste — all years' },
-      { id: 'board-corrections', label: 'Board Corrections', hint: 'Board Reg Nos and corrected details, with undo' },
+      { id: 'board-corrections', label: 'Board Corrections', hint: 'Temp → Board Reg No, names, parents, DOB, gender, category' },
     ],
   },
   {

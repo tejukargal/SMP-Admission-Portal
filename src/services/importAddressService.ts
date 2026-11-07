@@ -62,7 +62,7 @@ const RELIGIONS: readonly Religion[] = ['HINDU', 'MUSLIM', 'CHRISTIAN', 'JAIN', 
 const CATEGORIES: readonly Category[] = ['SC', 'ST', 'C1', '2A', '2B', '3A', '3B', 'GM'];
 const MOBILE_RE = /^[6-9]\d{9}$/;
 
-function normGender(v: string): string | null {
+export function normGender(v: string): string | null {
   const g = v.toUpperCase();
   if (['BOY', 'MALE', 'M'].includes(g)) return 'BOY';
   if (['GIRL', 'FEMALE', 'F'].includes(g)) return 'GIRL';
@@ -70,10 +70,35 @@ function normGender(v: string): string | null {
 }
 
 /** "CAT-1" / "CAT1" / "C-1" / "Cat 1" → "C1"; "2-A" / "2 a" → "2A". */
-function normCategory(v: string): Category | null {
+export function normCategory(v: string): Category | null {
   let c = v.toUpperCase().replace(/[\s\-_.]/g, '');
   if (/^(CAT|CATEGORY|C)(1|I)$/.test(c)) c = 'C1';
   return (CATEGORIES as readonly string[]).includes(c) ? (c as Category) : null;
+}
+
+// Convert Excel date serial number to DD/MM/YYYY string
+function excelSerialToDDMMYYYY(serial: number): string {
+  // 25569 = days between Excel epoch (1900-01-01) and Unix epoch (1970-01-01),
+  // accounting for Excel's phantom leap day bug (day 60 = Feb 29, 1900)
+  const date = new Date(Math.round((serial - 25569) * 86400000));
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const y = date.getUTCFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+/** Normalise a DOB value from Excel into DD/MM/YYYY (the app's storage format). */
+export function parseDOB(raw: string | number | null | undefined): string {
+  if (!raw && raw !== 0) return '';
+  if (typeof raw === 'number') return excelSerialToDDMMYYYY(raw);
+  const s = String(raw).trim();
+  if (!s) return '';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;                       // already DD/MM/YYYY
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;                       // YYYY-MM-DD → DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (dmy) return `${dmy[1].padStart(2,'0')}/${dmy[2].padStart(2,'0')}/${dmy[3]}`; // D-M-YYYY, D/M/YYYY
+  return s; // return as-is if unrecognised — let the user notice in preview
 }
 
 export async function importAddresses(

@@ -2,7 +2,7 @@ import { useState, useRef, type ChangeEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { Button } from '../components/common/Button';
 import {
-  importAddresses, hasUpdateFields, ADDRESS_UPDATE_FIELDS,
+  importAddresses, hasUpdateFields, parseDOB, ADDRESS_UPDATE_FIELDS,
   type AddressRow, type AddressImportResult,
 } from '../services/importAddressService';
 
@@ -10,31 +10,6 @@ type PageState = 'idle' | 'preview' | 'importing' | 'done';
 
 // Columns required for matching rows to students (Reg No + name check)
 const REQUIRED_COLUMNS = ['Name', 'Reg No'];
-
-// Convert Excel date serial number to DD/MM/YYYY string
-function excelSerialToDDMMYYYY(serial: number): string {
-  // 25569 = days between Excel epoch (1900-01-01) and Unix epoch (1970-01-01),
-  // accounting for Excel's phantom leap day bug (day 60 = Feb 29, 1900)
-  const date = new Date(Math.round((serial - 25569) * 86400000));
-  const d = String(date.getUTCDate()).padStart(2, '0');
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const y = date.getUTCFullYear();
-  return `${d}/${m}/${y}`;
-}
-
-// Normalise a DOB value from Excel into DD/MM/YYYY (the app's storage format)
-function parseDOB(raw: string | number | null): string {
-  if (!raw && raw !== 0) return '';
-  if (typeof raw === 'number') return excelSerialToDDMMYYYY(raw);
-  const s = String(raw).trim();
-  if (!s) return '';
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;                       // already DD/MM/YYYY
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;                       // YYYY-MM-DD → DD/MM/YYYY
-  const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dmy) return `${dmy[1].padStart(2,'0')}/${dmy[2].padStart(2,'0')}/${dmy[3]}`; // DD-MM-YYYY
-  return s; // return as-is if unrecognised — let the user notice in preview
-}
 
 // Sample workbook: the headers parseSheet() recognises, two example rows (text
 // cells so mobile/Aadhar/DOB don't turn into numbers or dates) and a notes sheet.
