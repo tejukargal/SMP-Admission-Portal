@@ -527,7 +527,7 @@ export function exportFeeListPdf(rows: StudentFeeRow[], academicYear: string): v
 }
 
 // ── 3. Dues Report ────────────────────────────────────────────────────────────
-export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void {
+export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string, filterLabel = ''): void {
   const dueRows = rows.filter((r) => r.balance !== null && r.balance > 0);
   const RED: [number, number, number] = [185, 28, 28];
   const tSmpA = dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
@@ -548,9 +548,16 @@ export function exportDuesPdf(rows: StudentFeeRow[], academicYear: string): void
     'SMP Admissions \u2014 Dues Report',
     `Academic Year: ${academicYear}  |  ${dueRows.length} students with outstanding balance`,
   );
+  // Active filters get their own line under the header rule (they can be long).
+  if (filterLabel) {
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 110);
+    doc.text(`Filters: ${filterLabel}`, MARGIN, 24.5, { maxWidth: doc.internal.pageSize.getWidth() - MARGIN * 2 });
+    doc.setTextColor(20, 20, 20);
+  }
 
   autoTable(doc, {
-    startY: 23,
+    startY: filterLabel ? 27 : 23,
     margin: { left: MARGIN, right: MARGIN },
     head: [FEE_HEAD1, FEE_HEAD2],
     body: [...dueRows.map(feeRow), totalRow],

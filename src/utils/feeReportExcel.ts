@@ -204,7 +204,7 @@ export function exportFeeListExcel(rows: StudentFeeRow[], academicYear: string):
 }
 
 // ── 3. Dues Report ─────────────────────────────────────────────────────────────
-export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): void {
+export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string, filterLabel = ''): void {
   const dueRows = rows.filter((r) => r.balance !== null && r.balance > 0);
   const tSmpA = dueRows.reduce((s, r) => s + (r.smpAllotted ?? 0), 0);
   const tSvkA = dueRows.reduce((s, r) => s + (r.svkAllotted ?? 0), 0);
@@ -217,6 +217,7 @@ export function exportDuesExcel(rows: StudentFeeRow[], academicYear: string): vo
   const data: (string | number | null)[][] = [
     [`SMP Admissions — Dues Report`],
     [`Academic Year: ${academicYear}  |  ${dueRows.length} students with outstanding balance`],
+    ...(filterLabel ? [[`Filters: ${filterLabel}`]] : []),
     [],
     FEE_DETAIL_HEADER,
     ...dueRows.map(feeDetailRow),

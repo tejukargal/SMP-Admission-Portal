@@ -9,6 +9,7 @@ import { isFeeNettingRefund } from '../services/refundService';
 import { FeeStructureView } from './FeeStructureView';
 import { fs, THEAD, THEAD_DARK, TFOOT, BTN_GRAY, BTN_PRIMARY, ReportCard, TEAL_INK, HAIRLINE, Chip, ExportBar, ClearButton, StatChipRow, SegmentedToggle, SearchBox, FilterPanel } from '../components/feeReports/feeReportUi';
 import { FilterDropdown } from '../components/common/FilterDropdown';
+import { MultiSelectFilterDropdown } from '../components/common/MultiSelectFilterDropdown';
 import { PageSpinner } from '../components/common/PageSpinner';
 import type { jsPDF as JsPDFDoc } from 'jspdf';
 import { loadXlsx, loadPdf } from '../utils/lazyLibs';
@@ -36,7 +37,19 @@ import { createStudentNotification } from '../services/studentNotificationServic
 import { formatDate } from '../utils/feeReceipts';
 
 type TabId = 'statistics' | 'fee-list' | 'dues' | 'course-year' | 'consolidated' | 'blue-register' | 'daily-collections' | 'day-summary' | 'datewise-headwise' | 'additional-fee-receipts' | 'bank-remittance' | 'fee-distribution' | 'wp-fee-distribution' | 'budget' | 'fee-reg-1' | 'fee-structure';
-type FeeStatus = 'ALL' | 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
+// Fee-status filter values; an empty selection means "All".
+type FeeStatus = 'PAID' | 'NOT_PAID' | 'FEE_DUES' | 'NO_FEE_DUES';
+const FEE_STATUS_LABEL: Record<FeeStatus, string> = {
+  PAID: 'Paid', NOT_PAID: 'Not Paid', FEE_DUES: 'Fee Dues', NO_FEE_DUES: 'No Fee Dues',
+};
+function matchesFeeStatus(r: StudentFeeRow, st: FeeStatus): boolean {
+  switch (st) {
+    case 'PAID':        return r.paid > 0;
+    case 'NOT_PAID':    return r.paid === 0;
+    case 'FEE_DUES':    return r.balance !== null && r.balance > 0;
+    case 'NO_FEE_DUES': return r.balance !== null && r.balance <= 0;
+  }
+}
 
 // Export libraries (~850 KB) are fetched on the first export click, not with the
 // page — the report hub renders without waiting on them.
@@ -525,9 +538,9 @@ function StatisticsTab({ rows, academicYear, fp, priorRecords, priorLoading, dis
       </div>
 
       {segment === 'PRIOR'
-        ? <PriorDuesView summary={prior} loading={priorLoading} statusFilterActive={fp.feeStatusFilter !== 'ALL'} />
+        ? <PriorDuesView summary={prior} loading={priorLoading} statusFilterActive={fp.feeStatusFilter.length > 0} />
         : segment === 'DISCONTINUED'
-        ? <DiscontinuedView entries={discontinued} statusFilterActive={fp.feeStatusFilter !== 'ALL'} />
+        ? <DiscontinuedView entries={discontinued} statusFilterActive={fp.feeStatusFilter.length > 0} />
         : <StudentStatsView rows={segRows} segment={segment} byGroup={byGroup} />}
     </div>
   );
@@ -1015,7 +1028,7 @@ function DuesTab({ rows: allRows, academicYear, fp }: { rows: StudentFeeRow[]; a
           extra={
             <>
               <span className="text-xs text-gray-500 whitespace-nowrap">{dueRows.length} student{dueRows.length !== 1 ? 's' : ''} with dues</span>
-              <ExportBar onPdf={() => void reportPdf().then((m) => m.exportDuesPdf(rows, academicYear))} onExcel={() => void reportExcel().then((m) => m.exportDuesExcel(rows, academicYear))} />
+              <ExportBar onPdf={() => void reportPdf().then((m) => m.exportDuesPdf(rows, academicYear, filterSummary(fp, debouncedSearch)))} onExcel={() => void reportExcel().then((m) => m.exportDuesExcel(rows, academicYear, filterSummary(fp, debouncedSearch)))} />
             </>
           }
         />
@@ -7662,49 +7675,67 @@ function BlueRegisterTab({
 }
 
 // ── Shared filter props + component ───────────────────────────────────────────
+// Course / Year / Adm Type / Adm Cat / Fee Status are multi-select (empty = All),
+// like the Students page; Aided/Unaided stays single-pick.
 interface CommonFilterProps {
   aidedFilter: 'AIDED' | 'UNAIDED' | '';
   setAidedFilter: (v: 'AIDED' | 'UNAIDED' | '') => void;
-  courseFilter: Course | '';
-  setCourseFilter: (v: Course | '') => void;
-  yearFilter: Year | '';
-  setYearFilter: (v: Year | '') => void;
-  admTypeFilter: AdmType | '';
-  setAdmTypeFilter: (v: AdmType | '') => void;
-  admCatFilter: AdmCat | '';
-  setAdmCatFilter: (v: AdmCat | '') => void;
-  feeStatusFilter: FeeStatus;
-  setFeeStatusFilter: (v: FeeStatus) => void;
+  courseFilter: Course[];
+  setCourseFilter: (v: Course[]) => void;
+  yearFilter: Year[];
+  setYearFilter: (v: Year[]) => void;
+  admTypeFilter: AdmType[];
+  setAdmTypeFilter: (v: AdmType[]) => void;
+  admCatFilter: AdmCat[];
+  setAdmCatFilter: (v: AdmCat[]) => void;
+  feeStatusFilter: FeeStatus[];
+  setFeeStatusFilter: (v: FeeStatus[]) => void;
   stats: { total: number; paidCount: number; notPaid: number; duesCount: number; noDuesCount: number };
   hasActiveFilters: boolean;
   clearFilters: () => void;
 }
 
+// One-line description of the active filters, for export headers ('' when none).
+function filterSummary(fp: CommonFilterProps, search?: string): string {
+  const parts: string[] = [];
+  if (fp.aidedFilter) parts.push(fp.aidedFilter === 'AIDED' ? 'Aided' : 'Unaided');
+  if (fp.courseFilter.length)    parts.push(`Course: ${fp.courseFilter.join(', ')}`);
+  if (fp.yearFilter.length)      parts.push(`Year: ${fp.yearFilter.join(', ')}`);
+  if (fp.admTypeFilter.length)   parts.push(`Adm Type: ${fp.admTypeFilter.join(', ')}`);
+  if (fp.admCatFilter.length)    parts.push(`Adm Cat: ${fp.admCatFilter.join(', ')}`);
+  if (fp.feeStatusFilter.length) parts.push(`Fee Status: ${fp.feeStatusFilter.map((s) => FEE_STATUS_LABEL[s]).join(', ')}`);
+  if (search?.trim())            parts.push(`Search: "${search.trim()}"`);
+  return parts.join('  |  ');
+}
+
 function CommonFilters({ fp, extra, search, collapsible }: { fp: CommonFilterProps; extra?: ReactNode; search?: ReactNode; collapsible?: boolean }) {
+  const toggleStatus = (st: FeeStatus) => fp.setFeeStatusFilter(
+    fp.feeStatusFilter.includes(st) ? fp.feeStatusFilter.filter((x) => x !== st) : [...fp.feeStatusFilter, st],
+  );
   return (
     <div className="space-y-1.5">
       {fp.stats.total > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter === 'ALL'}          colorClass="border-[#0F8B8D] bg-[#0F8B8D]/10 text-[#0B6567]"          onClick={() => fp.setFeeStatusFilter('ALL')} />
-          <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter === 'PAID'}         colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]"       onClick={() => fp.setFeeStatusFilter('PAID')} />
-          <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter === 'NOT_PAID'}     colorClass="border-[#E11D48]/50 bg-[#E11D48]/[0.08] text-[#A5173A]"             onClick={() => fp.setFeeStatusFilter('NOT_PAID')} />
-          <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter === 'FEE_DUES'}     colorClass="border-[#D97706]/60 bg-[#D97706]/10 text-[#9A5B00]"       onClick={() => fp.setFeeStatusFilter('FEE_DUES')} />
-          <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter === 'NO_FEE_DUES'}  colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]" onClick={() => fp.setFeeStatusFilter('NO_FEE_DUES')} />
+          <Chip label="Total"       count={fp.stats.total}       active={fp.feeStatusFilter.length === 0}           colorClass="border-[#0F8B8D] bg-[#0F8B8D]/10 text-[#0B6567]"          onClick={() => fp.setFeeStatusFilter([])} />
+          <Chip label="Paid"        count={fp.stats.paidCount}   active={fp.feeStatusFilter.includes('PAID')}        colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]"       onClick={() => toggleStatus('PAID')} />
+          <Chip label="Not Paid"    count={fp.stats.notPaid}     active={fp.feeStatusFilter.includes('NOT_PAID')}    colorClass="border-[#E11D48]/50 bg-[#E11D48]/[0.08] text-[#A5173A]"             onClick={() => toggleStatus('NOT_PAID')} />
+          <Chip label="Fee Dues"    count={fp.stats.duesCount}   active={fp.feeStatusFilter.includes('FEE_DUES')}    colorClass="border-[#D97706]/60 bg-[#D97706]/10 text-[#9A5B00]"       onClick={() => toggleStatus('FEE_DUES')} />
+          <Chip label="No Fee Dues" count={fp.stats.noDuesCount} active={fp.feeStatusFilter.includes('NO_FEE_DUES')} colorClass="border-[#0FA968]/60 bg-[#0FA968]/10 text-[#0A7A4B]" onClick={() => toggleStatus('NO_FEE_DUES')} />
         </div>
       )}
       <FilterPanel search={search} right={extra} hasActiveFilters={fp.hasActiveFilters} onClear={fp.clearFilters} collapsible={collapsible}>
         <FilterDropdown<'AIDED' | 'UNAIDED'> color="teal" value={fp.aidedFilter} onChange={(v) => fp.setAidedFilter(v)} placeholder="Aided & Unaided"
           options={[{ value: 'AIDED', label: 'Aided (CE, ME, EC, CS)' }, { value: 'UNAIDED', label: 'Unaided (EE)' }]} />
-        <FilterDropdown<Course> color="teal" value={fp.courseFilter} onChange={(v) => fp.setCourseFilter(v)} placeholder="All Courses"
+        <MultiSelectFilterDropdown<Course> tone="teal" value={fp.courseFilter} onChange={fp.setCourseFilter} placeholder="All Courses"
           options={COURSES.map((c) => ({ value: c, label: c }))} />
-        <FilterDropdown<Year> color="teal" value={fp.yearFilter} onChange={(v) => fp.setYearFilter(v)} placeholder="All Years"
+        <MultiSelectFilterDropdown<Year> tone="teal" value={fp.yearFilter} onChange={fp.setYearFilter} placeholder="All Years"
           options={YEARS.map((y) => ({ value: y, label: y }))} />
-        <FilterDropdown<AdmType> color="teal" value={fp.admTypeFilter} onChange={(v) => fp.setAdmTypeFilter(v)} placeholder="All Adm Types"
+        <MultiSelectFilterDropdown<AdmType> tone="teal" value={fp.admTypeFilter} onChange={fp.setAdmTypeFilter} placeholder="All Adm Types"
           options={ADM_TYPES.map((t) => ({ value: t, label: t }))} />
-        <FilterDropdown<AdmCat> color="teal" value={fp.admCatFilter} onChange={(v) => fp.setAdmCatFilter(v)} placeholder="All Adm Cats"
+        <MultiSelectFilterDropdown<AdmCat> tone="teal" value={fp.admCatFilter} onChange={fp.setAdmCatFilter} placeholder="All Adm Cats"
           options={ADM_CATS.map((c) => ({ value: c, label: c }))} />
-        <FilterDropdown<Exclude<FeeStatus, 'ALL'>> color="teal" value={fp.feeStatusFilter === 'ALL' ? '' : fp.feeStatusFilter} onChange={(v) => fp.setFeeStatusFilter(v || 'ALL')} placeholder="All Fee Status"
-          options={[{ value: 'PAID', label: 'Paid' }, { value: 'NOT_PAID', label: 'Not Paid' }, { value: 'FEE_DUES', label: 'Fee Dues' }, { value: 'NO_FEE_DUES', label: 'No Fee Dues' }]} />
+        <MultiSelectFilterDropdown<FeeStatus> tone="teal" value={fp.feeStatusFilter} onChange={fp.setFeeStatusFilter} placeholder="All Fee Status"
+          options={(Object.keys(FEE_STATUS_LABEL) as FeeStatus[]).map((s) => ({ value: s, label: FEE_STATUS_LABEL[s] }))} />
       </FilterPanel>
     </div>
   );
@@ -8223,11 +8254,11 @@ export function FeeReportsPage() {
   const academicYear = (settings?.currentAcademicYear ?? null) as AcademicYear | null;
 
   const [aidedFilter,     setAidedFilter]     = useState<'AIDED' | 'UNAIDED' | ''>('');
-  const [courseFilter,    setCourseFilter]    = useState<Course | ''>('');
-  const [yearFilter,      setYearFilter]      = useState<Year | ''>('');
-  const [admTypeFilter,   setAdmTypeFilter]   = useState<AdmType | ''>('');
-  const [admCatFilter,    setAdmCatFilter]    = useState<AdmCat | ''>('');
-  const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatus>('ALL');
+  const [courseFilter,    setCourseFilter]    = useState<Course[]>([]);
+  const [yearFilter,      setYearFilter]      = useState<Year[]>([]);
+  const [admTypeFilter,   setAdmTypeFilter]   = useState<AdmType[]>([]);
+  const [admCatFilter,    setAdmCatFilter]    = useState<AdmCat[]>([]);
+  const [feeStatusFilter, setFeeStatusFilter] = useState<FeeStatus[]>([]);
   const [activeTab,       setActiveTab]       = useState<TabId | null>(null);
   const [showAllYears,    setShowAllYears]    = useState(false);
 
@@ -8548,18 +8579,16 @@ export function FeeReportsPage() {
   const matchesFieldFilters = useCallback((s: Student) =>
     (aidedFilter !== 'AIDED'   || (AIDED_COURSES as Course[]).includes(s.course)) &&
     (aidedFilter !== 'UNAIDED' || (UNAIDED_COURSES as Course[]).includes(s.course)) &&
-    (!courseFilter  || s.course  === courseFilter) &&
-    (!yearFilter    || s.year    === yearFilter) &&
-    (!admTypeFilter || s.admType === admTypeFilter) &&
-    (!admCatFilter  || s.admCat  === admCatFilter),
+    (!courseFilter.length  || courseFilter.includes(s.course)) &&
+    (!yearFilter.length    || yearFilter.includes(s.year)) &&
+    (!admTypeFilter.length || admTypeFilter.includes(s.admType)) &&
+    (!admCatFilter.length  || admCatFilter.includes(s.admCat)),
   [aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
 
   const filteredRows = useMemo((): StudentFeeRow[] => {
     let rows = allStudentRows.filter((r) => matchesFieldFilters(r.student));
-    if (feeStatusFilter === 'PAID')        rows = rows.filter((r) => r.paid > 0);
-    if (feeStatusFilter === 'NOT_PAID')    rows = rows.filter((r) => r.paid === 0);
-    if (feeStatusFilter === 'FEE_DUES')    rows = rows.filter((r) => r.balance !== null && r.balance > 0);
-    if (feeStatusFilter === 'NO_FEE_DUES') rows = rows.filter((r) => r.balance !== null && r.balance <= 0);
+    // Several fee statuses → a student matching any of them is kept.
+    if (feeStatusFilter.length) rows = rows.filter((r) => feeStatusFilter.some((st) => matchesFeeStatus(r, st)));
     return rows.slice().sort((a, b) => {
       const y = (YEAR_ORDER[a.student.year] ?? 9) - (YEAR_ORDER[b.student.year] ?? 9);
       if (y !== 0) return y;
@@ -8582,7 +8611,7 @@ export function FeeReportsPage() {
 
   // ── Filtered fee records (Consolidated tab) ───────────────────────────────
   const filteredFeeRecords = useMemo(() => {
-    if (!aidedFilter && !courseFilter && !yearFilter && !admTypeFilter && !admCatFilter && feeStatusFilter === 'ALL')
+    if (!aidedFilter && !courseFilter.length && !yearFilter.length && !admTypeFilter.length && !admCatFilter.length && !feeStatusFilter.length)
       return feeRecords;
     const ids = new Set(filteredRows.map((r) => r.student.id));
     return feeRecords.filter((r) => ids.has(r.studentId));
@@ -8600,10 +8629,10 @@ export function FeeReportsPage() {
     let records = allYearsRecords;
     if (aidedFilter === 'AIDED')   records = records.filter((r) => (AIDED_COURSES as Course[]).includes(r.course));
     if (aidedFilter === 'UNAIDED') records = records.filter((r) => (UNAIDED_COURSES as Course[]).includes(r.course));
-    if (courseFilter)  records = records.filter((r) => r.course  === courseFilter);
-    if (yearFilter)    records = records.filter((r) => r.year    === yearFilter);
-    if (admTypeFilter) records = records.filter((r) => r.admType === admTypeFilter);
-    if (admCatFilter)  records = records.filter((r) => r.admCat  === admCatFilter);
+    if (courseFilter.length)  records = records.filter((r) => courseFilter.includes(r.course));
+    if (yearFilter.length)    records = records.filter((r) => yearFilter.includes(r.year));
+    if (admTypeFilter.length) records = records.filter((r) => admTypeFilter.includes(r.admType));
+    if (admCatFilter.length)  records = records.filter((r) => admCatFilter.includes(r.admCat));
     return records;
   }, [allYearsRecords, aidedFilter, courseFilter, yearFilter, admTypeFilter, admCatFilter]);
 
@@ -8616,11 +8645,11 @@ export function FeeReportsPage() {
   );
 
   const hasActiveFilters =
-    !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || feeStatusFilter !== 'ALL';
+    !!aidedFilter || courseFilter.length > 0 || yearFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0 || feeStatusFilter.length > 0;
 
   function clearFilters() {
-    setAidedFilter(''); setCourseFilter(''); setYearFilter(''); setAdmTypeFilter(''); setAdmCatFilter('');
-    setFeeStatusFilter('ALL');
+    setAidedFilter(''); setCourseFilter([]); setYearFilter([]); setAdmTypeFilter([]); setAdmCatFilter([]);
+    setFeeStatusFilter([]);
   }
 
   const loading = settingsLoading || studentsLoading || feeLoading || overridesLoading || (showAllYears && allYearsLoading);

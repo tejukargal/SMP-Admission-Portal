@@ -13,7 +13,7 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   options: Option<T>[];
   className?: string;
   /** Accent colour; defaults to the app's emerald. */
-  tone?: 'emerald' | 'indigo' | 'pea' | 'ocean' | 'cyan';
+  tone?: 'emerald' | 'indigo' | 'pea' | 'ocean' | 'cyan' | 'teal';
 }
 
 const TONES = {
@@ -63,6 +63,16 @@ const TONES = {
     allRow: 'text-[#0E6A85] bg-[#ECF7FA]/60',
     checkedRow: 'text-[#0E6A85] bg-[#ECF7FA]',
     checkbox: 'border-[#0891B2] bg-[#0891B2]',
+    font: 'font-wp',
+  },
+  // Teal — Fee Reports revamp.
+  teal: {
+    ring: 'focus:ring-[#0F8B8D]/40',
+    active: 'border-[#0F8B8D] bg-[#0F8B8D]/10 text-[#0B6567]',
+    idle: 'border-[#CDE7E7] text-[#0B6567] hover:border-[#0F8B8D]/50 hover:bg-[#0F8B8D]/[0.06]',
+    allRow: 'text-[#0B6567] bg-[#0F8B8D]/[0.06]',
+    checkedRow: 'text-[#0B6567] bg-[#0F8B8D]/10',
+    checkbox: 'border-[#0F8B8D] bg-[#0F8B8D]',
     font: 'font-wp',
   },
 } as const;
