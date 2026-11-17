@@ -6160,7 +6160,7 @@ function addlRegDate(date: string): string {
 }
 
 async function exportAdditionalFeeRegisterExcel(
-  rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string,
+  rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string, filterLabel = '',
 ): Promise<void> {
   await needXlsx();
   const header = ['Sl', 'Date', 'Year', 'Course', 'Name', 'Adm Type', ...cols.map((c) => c.label), 'Total'];
@@ -6175,7 +6175,9 @@ async function exportAdditionalFeeRegisterExcel(
   const colTotals = cols.map((c) => rows.reduce((s, r) => s + (addlHeadAmounts(r)[c.key] || 0), 0));
   const grandTotal = rows.reduce((s, r) => s + addlTotal(r), 0);
   const totRow = ['TOTAL', '', '', '', '', '', ...colTotals.map((v) => v || null), grandTotal];
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  // Active filters go in their own row above the table (plus a spacer row).
+  const preamble = filterLabel ? [[`Filters: ${filterLabel}`], []] : [];
+  const ws = XLSX.utils.aoa_to_sheet([...preamble, header, ...dataRows, totRow]);
   // Column widths sized so the sheet fits an A4 portrait page when printed
   // (Excel's default orientation) — Name gets the room, the rest stay narrow.
   ws['!cols'] = [
@@ -6190,6 +6192,7 @@ async function exportAdditionalFeeRegisterExcel(
 
 async function exportAdditionalFeeRegisterPdf(
   rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string, dateLabel: string,
+  filterLabel = '',
 ): Promise<void> {
   await needPdf();
   const FONT_SIZE   = 8;
@@ -6276,9 +6279,20 @@ async function exportAdditionalFeeRegisterPdf(
   doc.text(`Generated ${dateStr}`, pageW - margin, 19.5, { align: 'right' });
   doc.setTextColor(0);
 
+  // Active filters get their own (wrapped) line under the chips — they can be long.
+  let ruleY = 22;
+  if (filterLabel) {
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 110);
+    const lines = doc.splitTextToSize(`Filters: ${filterLabel}`, pageW - margin * 2) as string[];
+    doc.text(lines, margin, 24);
+    doc.setTextColor(0);
+    ruleY = 24 + lines.length * 3 - 0.5;
+  }
+
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.2);
-  doc.line(margin, 22, pageW - margin, 22);
+  doc.line(margin, ruleY, pageW - margin, ruleY);
 
   const bodyRows = rows.map((r, i) => COLUMNS.map((c) => c.get(r, i)));
   const headers  = [COLUMNS.map((c) => ({ content: c.header, styles: { halign: c.halign } }))];
@@ -6289,7 +6303,7 @@ async function exportAdditionalFeeRegisterPdf(
   });
 
   autoTable(doc, {
-    startY: 25,
+    startY: ruleY + 3,
     margin: { left: margin, right: margin, top: margin, bottom: 12 },
     head: headers,
     body: [...bodyRows, totalRow],
@@ -6334,6 +6348,45 @@ async function exportAdditionalFeeRegisterPdf(
   });
 
   doc.save(`Additional_Fee_Register_${academicYear}.pdf`);
+}
+
+// Multi-select Course / Year / Adm Type / Adm Cat for both views of this tab —
+// same teal checkbox dropdowns as the shared CommonFilters bar (empty = All).
+function AddlMultiFilters({
+  course, setCourse, year, setYear, admType, setAdmType, admCat, setAdmCat,
+}: {
+  course: Course[];   setCourse: (v: Course[]) => void;
+  year: Year[];       setYear: (v: Year[]) => void;
+  admType: AdmType[]; setAdmType: (v: AdmType[]) => void;
+  admCat: AdmCat[];   setAdmCat: (v: AdmCat[]) => void;
+}) {
+  return (
+    <>
+      <MultiSelectFilterDropdown<Course> tone="teal" value={course} onChange={setCourse} placeholder="All Courses"
+        options={COURSES.map((c) => ({ value: c, label: c }))} />
+      <MultiSelectFilterDropdown<Year> tone="teal" value={year} onChange={setYear} placeholder="All Years"
+        options={YEARS.map((y) => ({ value: y, label: y }))} />
+      <MultiSelectFilterDropdown<AdmType> tone="teal" value={admType} onChange={setAdmType} placeholder="All Adm Types"
+        options={ADM_TYPES.map((t) => ({ value: t, label: t }))} />
+      <MultiSelectFilterDropdown<AdmCat> tone="teal" value={admCat} onChange={setAdmCat} placeholder="All Adm Cats"
+        options={ADM_CATS.map((c) => ({ value: c, label: c }))} />
+    </>
+  );
+}
+
+// "Filters:" line for the Additional Fee Register exports ('' when none) —
+// same wording/separators as filterSummary() for the shared filter bar.
+function addlFilterSummary(f: {
+  aided: 'AIDED' | 'UNAIDED' | ''; course: Course[]; year: Year[]; admType: AdmType[]; admCat: AdmCat[]; search?: string;
+}): string {
+  const parts: string[] = [];
+  if (f.aided)          parts.push(f.aided === 'AIDED' ? 'Aided' : 'Unaided');
+  if (f.course.length)  parts.push(`Course: ${f.course.join(', ')}`);
+  if (f.year.length)    parts.push(`Year: ${f.year.join(', ')}`);
+  if (f.admType.length) parts.push(`Adm Type: ${f.admType.join(', ')}`);
+  if (f.admCat.length)  parts.push(`Adm Cat: ${f.admCat.join(', ')}`);
+  if (f.search?.trim()) parts.push(`Search: "${f.search.trim()}"`);
+  return parts.join('  |  ');
 }
 
 function AdditionalFeeReceiptsTab({
@@ -6399,10 +6452,10 @@ function BulkAdditionalCollectPanel({
 }) {
   const { user } = useAuth();
   const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
-  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
-  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
-  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
-  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course[]>([]);   // empty = All
+  const [yearFilter,    setYearFilter]    = useState<Year[]>([]);
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType[]>([]);
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat[]>([]);
   const [searchTerm,      setSearchTerm]      = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
@@ -6469,10 +6522,10 @@ function BulkAdditionalCollectPanel({
       if (!isConfirmedActive(s) || isWPStudent(s)) continue;
       if (aidedFilter === 'AIDED'   && !AIDED_COURSES_SET.has(s.course)) continue;
       if (aidedFilter === 'UNAIDED' &&  AIDED_COURSES_SET.has(s.course)) continue;
-      if (courseFilter  && s.course  !== courseFilter)  continue;
-      if (yearFilter    && s.year    !== yearFilter)    continue;
-      if (admTypeFilter && s.admType !== admTypeFilter) continue;
-      if (admCatFilter  && s.admCat  !== admCatFilter)  continue;
+      if (courseFilter.length  && !courseFilter.includes(s.course))   continue;
+      if (yearFilter.length    && !yearFilter.includes(s.year))       continue;
+      if (admTypeFilter.length && !admTypeFilter.includes(s.admType)) continue;
+      if (admCatFilter.length  && !admCatFilter.includes(s.admCat))   continue;
 
       const allotted = overrideByStudent.get(s.id)?.additionalHeads
         ?? structureByKey.get(`${s.course}__${s.year}__${s.admType}__${s.admCat}`)?.additionalHeads
@@ -6542,11 +6595,11 @@ function BulkAdditionalCollectPanel({
   const selTotal     = selectedRows.reduce((s, r) => s + r.total, 0);
   const headTotals   = selectedHeads.map((h) => selectedRows.reduce((s, r) => s + (r.pending[h.key] ?? 0), 0));
 
-  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || courseFilter.length > 0 || yearFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0;
   function clearFilters() {
     setSearchTerm('');
-    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
-    setAdmTypeFilter(''); setAdmCatFilter('');
+    setAidedFilter(''); setCourseFilter([]); setYearFilter([]);
+    setAdmTypeFilter([]); setAdmCatFilter([]);
   }
 
   async function handleCollect() {
@@ -6619,22 +6672,12 @@ function BulkAdditionalCollectPanel({
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       >
-        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-          <option value="">All Adm Types</option>
-          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
-          <option value="">All Adm Cats</option>
-          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <AddlMultiFilters
+          course={courseFilter} setCourse={setCourseFilter}
+          year={yearFilter} setYear={setYearFilter}
+          admType={admTypeFilter} setAdmType={setAdmTypeFilter}
+          admCat={admCatFilter} setAdmCat={setAdmCatFilter}
+        />
       </FilterPanel>
 
       {/* Heads to collect + batch settings */}
@@ -6799,10 +6842,10 @@ function AdditionalFeeReceiptsList({
   academicYear: string;
 }) {
   const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
-  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
-  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
-  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
-  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course[]>([]);   // empty = All
+  const [yearFilter,    setYearFilter]    = useState<Year[]>([]);
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType[]>([]);
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat[]>([]);
   const [dateFrom,      setDateFrom]      = useState('');
   const [dateTo,        setDateTo]        = useState('');
   const [searchTerm,      setSearchTerm]      = useState('');
@@ -6853,10 +6896,10 @@ function AdditionalFeeReceiptsList({
     } else if (selectedDate) {
       list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
     }
-    if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
-    if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
-    if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
-    if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
+    if (courseFilter.length)  list = list.filter((r) => courseFilter.includes(r.course));
+    if (yearFilter.length)    list = list.filter((r) => yearFilter.includes(r.year));
+    if (admTypeFilter.length) list = list.filter((r) => admTypeFilter.includes(r.admType));
+    if (admCatFilter.length)  list = list.filter((r) => admCatFilter.includes(r.admCat));
 
     return [...list].sort((a, b) => {
       const d = a.date.localeCompare(b.date);
@@ -6934,11 +6977,11 @@ function AdditionalFeeReceiptsList({
     setSelected((prev) => (prev.size === rows.length ? new Set() : new Set(rowIds)));
   }
 
-  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || courseFilter.length > 0 || yearFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0 || !!dateFrom || !!dateTo;
   function clearFilters() {
     setSearchTerm('');
-    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
-    setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
+    setAidedFilter(''); setCourseFilter([]); setYearFilter([]);
+    setAdmTypeFilter([]); setAdmCatFilter([]); setDateFrom(''); setDateTo('');
     setSelectedDate(availableDates[availableDates.length - 1] ?? '');
   }
 
@@ -6952,6 +6995,11 @@ function AdditionalFeeReceiptsList({
 
   const allChecked  = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const someChecked = rows.some((r) => selected.has(r.id)) && !allChecked;
+
+  const exportFilterLabel = addlFilterSummary({
+    aided: aidedFilter, course: courseFilter, year: yearFilter,
+    admType: admTypeFilter, admCat: admCatFilter, search: debouncedSearch,
+  });
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
@@ -6994,8 +7042,8 @@ function AdditionalFeeReceiptsList({
           )}
           <span className="text-xs text-gray-500 whitespace-nowrap">{selected.size} / {rows.length} selected</span>
           <ExportBar
-            onPdf={() => rows.length > 0 && exportAdditionalFeeRegisterPdf(rows, addCols, nameOf, academicYear, reportDateLabel(selectedDate, dateFrom, dateTo))}
-            onExcel={() => rows.length > 0 && exportAdditionalFeeRegisterExcel(rows, addCols, nameOf, academicYear)}
+            onPdf={() => rows.length > 0 && exportAdditionalFeeRegisterPdf(rows, addCols, nameOf, academicYear, reportDateLabel(selectedDate, dateFrom, dateTo), exportFilterLabel)}
+            onExcel={() => rows.length > 0 && exportAdditionalFeeRegisterExcel(rows, addCols, nameOf, academicYear, exportFilterLabel)}
           />
           <button
             onClick={handlePrint}
@@ -7012,22 +7060,12 @@ function AdditionalFeeReceiptsList({
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       >
-        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-          <option value="">All Adm Types</option>
-          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={admCatFilter} onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
-          <option value="">All Adm Cats</option>
-          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <AddlMultiFilters
+          course={courseFilter} setCourse={setCourseFilter}
+          year={yearFilter} setYear={setYearFilter}
+          admType={admTypeFilter} setAdmType={setAdmTypeFilter}
+          admCat={admCatFilter} setAdmCat={setAdmCatFilter}
+        />
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={fs} title="From date" />
         <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}   className={fs} title="To date" />
       </FilterPanel>
