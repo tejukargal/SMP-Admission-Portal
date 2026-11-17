@@ -7171,6 +7171,7 @@ interface BlueRegColDef {
 
 async function exportBlueRegisterExcel(
   rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string,
+  filterLabel = '',
 ): Promise<void> {
   await needXlsx();
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -7208,7 +7209,9 @@ async function exportBlueRegisterExcel(
     ...(showAdditional ? addTotals.map((v) => v || null) : []),
     grandTotal,
   ];
-  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows, totRow]);
+  // Active filters go in their own row above the table (plus a spacer row).
+  const preamble = filterLabel ? [[`Filters: ${filterLabel}`], []] : [];
+  const ws = XLSX.utils.aoa_to_sheet([...preamble, header, ...dataRows, totRow]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Blue Register');
   XLSX.writeFile(wb, `Blue_Register_${academicYear}.xlsx`);
@@ -7216,6 +7219,7 @@ async function exportBlueRegisterExcel(
 
 async function exportBlueRegisterPdf(
   rows: BlueRegRow[], addCols: BlueRegAddCol[], showAdditional: boolean, showSvk: boolean, academicYear: string, dateLabel: string,
+  filterLabel = '',
 ): Promise<void> {
   await needPdf();
   const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -7322,9 +7326,20 @@ async function exportBlueRegisterPdf(
   doc.text(`Generated ${dateStr}`, pageW - margin, 19.5, { align: 'right' });
   doc.setTextColor(0);
 
+  // Active filters get their own (wrapped) line under the chips — they can be long.
+  let ruleY = 22;
+  if (filterLabel) {
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 110);
+    const lines = doc.splitTextToSize(`Filters: ${filterLabel}`, pageW - margin * 2) as string[];
+    doc.text(lines, margin, 24);
+    doc.setTextColor(0);
+    ruleY = 24 + lines.length * 3 - 0.5;
+  }
+
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.2);
-  doc.line(margin, 22, pageW - margin, 22);
+  doc.line(margin, ruleY, pageW - margin, ruleY);
 
   const bodyRows = rows.map((r, i) => COLUMNS.map((c) => c.get(r, i)));
   const headers  = [COLUMNS.map((c) => ({ content: c.header, styles: { halign: c.halign as 'left' | 'center' | 'right' } }))];
@@ -7339,7 +7354,7 @@ async function exportBlueRegisterPdf(
   });
 
   autoTable(doc, {
-    startY: 25,
+    startY: ruleY + 3,
     margin: { left: margin, right: margin, top: margin, bottom: 12 },
     head: headers,
     body: [...bodyRows, totalRow],
@@ -7392,10 +7407,10 @@ function BlueRegisterTab({
   academicYear: string;
 }) {
   const [aidedFilter,   setAidedFilter]   = useState<'AIDED' | 'UNAIDED' | ''>('');
-  const [courseFilter,  setCourseFilter]  = useState<Course | ''>('');
-  const [yearFilter,    setYearFilter]    = useState<Year | ''>('');
-  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType | ''>('');
-  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat | ''>('');
+  const [courseFilter,  setCourseFilter]  = useState<Course[]>([]);   // empty = All
+  const [yearFilter,    setYearFilter]    = useState<Year[]>([]);
+  const [admTypeFilter, setAdmTypeFilter] = useState<AdmType[]>([]);
+  const [admCatFilter,  setAdmCatFilter]  = useState<AdmCat[]>([]);
   const [dateFrom,      setDateFrom]      = useState('');
   const [dateTo,        setDateTo]        = useState('');
   const [searchTerm,      setSearchTerm]      = useState('');
@@ -7439,10 +7454,10 @@ function BlueRegisterTab({
     } else if (selectedDate) {
       list = list.filter((r) => r.date.slice(0, 10) === selectedDate);
     }
-    if (courseFilter)  list = list.filter((r) => r.course  === courseFilter);
-    if (yearFilter)    list = list.filter((r) => r.year    === yearFilter);
-    if (admTypeFilter) list = list.filter((r) => r.admType === admTypeFilter);
-    if (admCatFilter)  list = list.filter((r) => r.admCat  === admCatFilter);
+    if (courseFilter.length)  list = list.filter((r) => courseFilter.includes(r.course));
+    if (yearFilter.length)    list = list.filter((r) => yearFilter.includes(r.year));
+    if (admTypeFilter.length) list = list.filter((r) => admTypeFilter.includes(r.admType));
+    if (admCatFilter.length)  list = list.filter((r) => admCatFilter.includes(r.admCat));
 
     return list.map((r): BlueRegRow => {
       const smp = {} as Record<SMPFeeHead, number>;
@@ -7513,12 +7528,17 @@ function BlueRegisterTab({
     return { smp, additional, smpTotal, svkTotal, addTotal };
   }, [rows]);
 
-  const hasActiveFilters = !!searchTerm || !!aidedFilter || !!courseFilter || !!yearFilter || !!admTypeFilter || !!admCatFilter || !!dateFrom || !!dateTo;
+  const hasActiveFilters = !!searchTerm || !!aidedFilter || courseFilter.length > 0 || yearFilter.length > 0 || admTypeFilter.length > 0 || admCatFilter.length > 0 || !!dateFrom || !!dateTo;
   function clearFilters() {
     setSearchTerm('');
-    setAidedFilter(''); setCourseFilter(''); setYearFilter('');
-    setAdmTypeFilter(''); setAdmCatFilter(''); setDateFrom(''); setDateTo('');
+    setAidedFilter(''); setCourseFilter([]); setYearFilter([]);
+    setAdmTypeFilter([]); setAdmCatFilter([]); setDateFrom(''); setDateTo('');
   }
+
+  const exportFilterLabel = addlFilterSummary({
+    aided: aidedFilter, course: courseFilter, year: yearFilter,
+    admType: admTypeFilter, admCat: admCatFilter, search: debouncedSearch,
+  });
 
   const td  = 'px-2 py-1.5 text-right text-[11px] tabular-nums';
   const tdL = 'px-2 py-1.5 text-left  text-[11px]';
@@ -7597,29 +7617,19 @@ function BlueRegisterTab({
           </button>
           <span className="text-xs text-gray-500 whitespace-nowrap">{rows.length} record{rows.length !== 1 ? 's' : ''}</span>
           <ExportBar
-            onExcel={() => exportBlueRegisterExcel(rows, additionalCols, showAdditional, showSvk, academicYear)}
-            onPdf={() => exportBlueRegisterPdf(rows, additionalCols, showAdditional, showSvk, academicYear, reportDateLabel(selectedDate, dateFrom, dateTo))}
+            onExcel={() => exportBlueRegisterExcel(rows, additionalCols, showAdditional, showSvk, academicYear, exportFilterLabel)}
+            onPdf={() => exportBlueRegisterPdf(rows, additionalCols, showAdditional, showSvk, academicYear, reportDateLabel(selectedDate, dateFrom, dateTo), exportFilterLabel)}
           />
         </>}
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       >
-        <select value={courseFilter}  onChange={(e) => setCourseFilter(e.target.value as Course | '')} className={fs}>
-          <option value="">All Courses</option>
-          {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={yearFilter}    onChange={(e) => setYearFilter(e.target.value as Year | '')} className={fs}>
-          <option value="">All Years</option>
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={admTypeFilter} onChange={(e) => setAdmTypeFilter(e.target.value as AdmType | '')} className={fs}>
-          <option value="">All Adm Types</option>
-          {ADM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={admCatFilter}  onChange={(e) => setAdmCatFilter(e.target.value as AdmCat | '')} className={fs}>
-          <option value="">All Adm Cats</option>
-          {ADM_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <AddlMultiFilters
+          course={courseFilter} setCourse={setCourseFilter}
+          year={yearFilter} setYear={setYearFilter}
+          admType={admTypeFilter} setAdmType={setAdmTypeFilter}
+          admCat={admCatFilter} setAdmCat={setAdmCatFilter}
+        />
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
           className={fs} title="From date" />
         <input type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)}
