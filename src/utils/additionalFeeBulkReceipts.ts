@@ -42,7 +42,15 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // "0012", "0020", matching the report, not a fresh 0001/0002/0003 count of
 // just what's selected. This never touches record.additionalReceiptNumber
 // (the real database receipt number, unaffected and shown as-is elsewhere).
-export interface AdditionalFeeReceiptEntry { record: FeeRecord; serial: string; }
+//
+// `record` only needs the fields printed on the slip, so the WP Receipts view
+// (Fee Reports › Additional Fee Receipts) can pass a synthetic, print-only
+// entry built from the student + allotted heads — WP students have no
+// feeRecords and nothing is ever saved for them.
+export type AdditionalReceiptSource = Pick<
+  FeeRecord, 'date' | 'additionalPaid' | 'studentName' | 'year' | 'course' | 'admType' | 'admCat'
+>;
+export interface AdditionalFeeReceiptEntry { record: AdditionalReceiptSource; serial: string; }
 
 // ── One compact copy (quarter-band height) ───────────────────────────────────
 // Same field order and visual language as buildAdditionalCopy() in
@@ -52,7 +60,12 @@ export interface AdditionalFeeReceiptEntry { record: FeeRecord; serial: string; 
 // whatever vertical space is left in the band, so a 1-2 item receipt still
 // uses the full band instead of leaving a blank gap below the signature.
 
-function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY' | 'OFFICE COPY', serial: string): string {
+function secTag(record: AdditionalReceiptSource): string {
+  if (record.admType === 'EXTERNAL') return 'WP';
+  return record.admCat === 'SNQ' ? 'SNQ' : record.admType;
+}
+
+function buildCompactAdditionalCopy(record: AdditionalReceiptSource, copyLabel: 'STUDENT COPY' | 'OFFICE COPY', serial: string): string {
   const date  = formatDate(record.date);
   const items = record.additionalPaid.filter((h) => h.amount > 0);
   const total = items.reduce((s, h) => s + h.amount, 0);
@@ -83,7 +96,7 @@ function buildCompactAdditionalCopy(record: FeeRecord, copyLabel: 'STUDENT COPY'
 
     <div class="field-row class-field">
       <span class="cls-group"><span class="field-lbl">Class</span><span class="class-dl"><span class="bval">${esc(record.year)}</span></span></span>
-      <span class="cls-group"><span class="field-lbl">Sec</span><span class="sec-dl"><span class="bval">${esc(record.course)}&nbsp;(${esc(record.admCat === 'SNQ' ? 'SNQ' : record.admType)})</span></span></span>
+      <span class="cls-group"><span class="field-lbl">Sec</span><span class="sec-dl"><span class="bval">${esc(record.course)}&nbsp;(${esc(secTag(record))})</span></span></span>
     </div>
 
     <div class="fee-wrap">

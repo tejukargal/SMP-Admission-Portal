@@ -6400,7 +6400,7 @@ function AdditionalFeeReceiptsTab({
   showAllYears: boolean;
   academicYear: string;
 }) {
-  const [mode, setMode] = useState<'receipts' | 'collect'>('receipts');
+  const [mode, setMode] = useState<'receipts' | 'collect' | 'wp'>('receipts');
   const segBtn = (active: boolean) =>
     `px-3.5 py-1.5 text-xs font-semibold transition-colors ${
       active ? 'bg-[#0F8B8D] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -6411,10 +6411,17 @@ function AdditionalFeeReceiptsTab({
         <div className="inline-flex rounded-full border border-[#0F8B8D]/30 overflow-hidden shadow-sm">
           <button type="button" onClick={() => setMode('receipts')} className={segBtn(mode === 'receipts')}>Receipts</button>
           <button type="button" onClick={() => setMode('collect')}  className={segBtn(mode === 'collect')}>Collect Dues (Bulk)</button>
+          <button type="button" onClick={() => setMode('wp')}       className={segBtn(mode === 'wp')}>WP Receipts</button>
         </div>
       </div>
       {mode === 'receipts' ? (
         <AdditionalFeeReceiptsList feeRecords={feeRecords} allStudents={allStudents} showAllYears={showAllYears} academicYear={academicYear} />
+      ) : mode === 'wp' ? (
+        <WPAdditionalReceiptsPanel
+          allStudents={allStudents}
+          feeStructures={feeStructures}
+          overrideByStudent={overrideByStudent}
+        />
       ) : (
         <BulkAdditionalCollectPanel
           feeRecords={yearFeeRecords}
@@ -6433,6 +6440,7 @@ function AdditionalFeeReceiptsTab({
 // additional heads (allotted from override > fee structure, minus paid by exact
 // label — same math as FeeCollectionModal), and collects the ticked ones in one
 // go: one additional-only record + one Additional receipt number per student.
+// WP students get their own print-only view (WPAdditionalReceiptsPanel below).
 
 interface PendingAddlRow {
   student: Student;
@@ -6811,6 +6819,322 @@ function BulkAdditionalCollectPanel({
                       );
                     })}
                     <td className="px-2 py-1.5 text-right tabular-nums font-semibold border-l border-[#E3F1F1]">{fmt(r.total)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {rows.length > 0 && (
+              <tfoot className={TFOOT}>
+                <tr>
+                  <td className="px-2 py-2" colSpan={7}>Selected — {selectedRows.length} of {rows.length}</td>
+                  {selectedHeads.map((h, idx) => (
+                    <td key={h.key} className="px-2 py-2 text-right tabular-nums border-l border-[#CDE7E7]">{headTotals[idx] > 0 ? fmt(headTotals[idx]) : '—'}</td>
+                  ))}
+                  <td className="px-2 py-2 text-right tabular-nums border-l border-[#CDE7E7]">{fmt(selTotal)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── WP Additional Fee Receipts (print only) ─────────────────────────────────
+// WP (EXTERNAL) students have no feeRecords — their fee is tracked as manual
+// counts in WP Fee Distribution — but the office still hands them Red Cross /
+// Insurance slips. This view lists confirmed WP students with the additional
+// heads a REGULAR student of the same Course + Year is allotted (a per-student
+// override wins if one exists) and prints them 4 per A4 via
+// generateAdditionalFeeReceiptsBulk. Deliberately read-only: nothing is saved,
+// no receipt counter is consumed, and nothing reaches the Fee Register, Blue
+// Register, Statistics or Cash Book. "No." is the row's position in this list.
+
+interface WPAddlRow {
+  student: Student;
+  heads: FeeAdditionalHead[];        // allotted heads with amount > 0 (exact labels)
+  noStructure: boolean;              // no REGULAR structure / override found
+}
+
+function WPAdditionalReceiptsPanel({
+  allStudents, feeStructures, overrideByStudent,
+}: {
+  allStudents: Student[];
+  feeStructures: FeeStructure[];
+  overrideByStudent: Map<string, StudentFeeOverride>;
+}) {
+  const [courseFilter, setCourseFilter] = useState<Course[]>([]);   // empty = All
+  const [yearFilter,   setYearFilter]   = useState<Year[]>([]);
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const [date, setDate] = useState(() => {
+    const d = new Date();  // local (IST) date, not UTC
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
+  const structureByKey = useMemo(
+    () => new Map(feeStructures.map((s) => [`${s.course}__${s.year}__${s.admType}__${s.admCat}`, s])),
+    [feeStructures],
+  );
+
+  // Every confirmed WP student with the heads a REGULAR student of the same
+  // Course + Year (same Adm Cat, else GM) is allotted.
+  const wpRows = useMemo((): WPAddlRow[] => {
+    const out: WPAddlRow[] = [];
+    for (const s of allStudents) {
+      if (!isConfirmedActive(s) || !isWPStudent(s)) continue;
+      const allotted = overrideByStudent.get(s.id)?.additionalHeads
+        ?? structureByKey.get(`${s.course}__${s.year}__REGULAR__${s.admCat}`)?.additionalHeads
+        ?? structureByKey.get(`${s.course}__${s.year}__REGULAR__GM`)?.additionalHeads;
+      const heads = (allotted ?? []).filter((h) => h.label.trim() && h.amount > 0);
+      out.push({ student: s, heads, noStructure: heads.length === 0 });
+    }
+    const courseIdx = (c: Course) => COURSES.indexOf(c);
+    const yearIdx   = (y: Year)   => YEARS.indexOf(y);
+    return out.sort((a, b) =>
+      courseIdx(a.student.course) - courseIdx(b.student.course) ||
+      yearIdx(a.student.year) - yearIdx(b.student.year) ||
+      a.student.studentNameSSLC.localeCompare(b.student.studentNameSSLC));
+  }, [allStudents, overrideByStudent, structureByKey]);
+
+  // Distinct heads across the WP rows — toggled as chips (all on by default).
+  const allHeads = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const r of wpRows) {
+      for (const h of r.heads) {
+        const key = h.label.trim().toUpperCase();
+        if (!byKey.has(key)) byKey.set(key, h.label.trim());
+      }
+    }
+    return [...byKey.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([key, label]) => ({ key, label }));
+  }, [wpRows]);
+
+  const [offHeads, setOffHeads] = useState<Set<string>>(new Set());
+  const selectedHeads = useMemo(() => allHeads.filter((h) => !offHeads.has(h.key)), [allHeads, offHeads]);
+  function toggleHead(key: string) {
+    setOffHeads((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  const rows = useMemo(() => {
+    let list = wpRows;
+    if (courseFilter.length) list = list.filter((r) => courseFilter.includes(r.student.course));
+    if (yearFilter.length)   list = list.filter((r) => yearFilter.includes(r.student.year));
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toUpperCase();
+      list = list.filter((r) =>
+        r.student.studentNameSSLC.toUpperCase().includes(q) ||
+        (r.student.regNumber ?? '').toUpperCase().includes(q));
+    }
+    return list;
+  }, [wpRows, courseFilter, yearFilter, debouncedSearch]);
+
+  // Per-row amounts for the selected heads only.
+  const selectedKeys = useMemo(() => new Set(selectedHeads.map((h) => h.key)), [selectedHeads]);
+  const printHeadsOf = useCallback(
+    (r: WPAddlRow) => r.heads.filter((h) => selectedKeys.has(h.label.trim().toUpperCase())),
+    [selectedKeys],
+  );
+  const amountsOf = (r: WPAddlRow): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const h of printHeadsOf(r)) {
+      const key = h.label.trim().toUpperCase();
+      out[key] = (out[key] ?? 0) + h.amount;
+    }
+    return out;
+  };
+  const totalOf = (r: WPAddlRow) => printHeadsOf(r).reduce((s, h) => s + h.amount, 0);
+  const isPrintable = (r: WPAddlRow) => totalOf(r) > 0;
+
+  // Local serial = the row's position in the current list (same as Receipts view).
+  const serialById = useMemo(
+    () => new Map(rows.map((r, i) => [r.student.id, String(i + 1).padStart(4, '0')])),
+    [rows],
+  );
+
+  const rowIds    = useMemo(() => rows.map((r) => r.student.id), [rows]);
+  const rowIdsKey = rowIds.join('|');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const visible = new Set(rowIds);
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visible.has(id)) next.add(id); else changed = true;
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowIdsKey]);
+
+  const printableRows = rows.filter(isPrintable);
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setSelected((prev) => {
+      const allOn = printableRows.length > 0 && printableRows.every((r) => prev.has(r.student.id));
+      return allOn ? new Set() : new Set(printableRows.map((r) => r.student.id));
+    });
+  }
+  const selectedRows = printableRows.filter((r) => selected.has(r.student.id));
+  const allChecked   = printableRows.length > 0 && printableRows.every((r) => selected.has(r.student.id));
+  const someChecked  = selectedRows.length > 0 && !allChecked;
+  const selTotal     = selectedRows.reduce((s, r) => s + totalOf(r), 0);
+  const headTotals   = selectedHeads.map((h) => selectedRows.reduce((s, r) => s + (amountsOf(r)[h.key] ?? 0), 0));
+
+  const hasActiveFilters = !!searchTerm || courseFilter.length > 0 || yearFilter.length > 0;
+  function clearFilters() {
+    setSearchTerm(''); setCourseFilter([]); setYearFilter([]);
+  }
+
+  function handlePrint() {
+    if (selectedRows.length === 0 || !date) return;
+    generateAdditionalFeeReceiptsBulk(selectedRows.map((r) => ({
+      record: {
+        date,
+        additionalPaid: printHeadsOf(r).map((h) => ({ label: h.label, amount: h.amount })),
+        studentName: r.student.studentNameSSLC,
+        year: r.student.year,
+        course: r.student.course,
+        admType: r.student.admType,
+        admCat: r.student.admCat,
+      },
+      serial: serialById.get(r.student.id) ?? '—',
+    })));
+  }
+
+  const colCount = 7 + selectedHeads.length + 1;
+
+  return (
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <FilterPanel
+        search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg…" />}
+        right={<span className="text-xs text-gray-500 whitespace-nowrap">{selectedRows.length} / {rows.length} WP student{rows.length !== 1 ? 's' : ''} selected</span>}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      >
+        <MultiSelectFilterDropdown<Course> tone="teal" value={courseFilter} onChange={setCourseFilter} placeholder="All Courses"
+          options={COURSES.map((c) => ({ value: c, label: c }))} />
+        <MultiSelectFilterDropdown<Year> tone="teal" value={yearFilter} onChange={setYearFilter} placeholder="All Years"
+          options={YEARS.map((y) => ({ value: y, label: y }))} />
+      </FilterPanel>
+
+      {/* Heads to print + receipt date */}
+      <div className="shrink-0 bg-white rounded-xl border border-[#CDE7E7] px-3 py-2 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mr-1">Heads</span>
+        {allHeads.length === 0 ? (
+          <span className="text-xs text-gray-400">No additional heads in the Regular fee structures for these WP students.</span>
+        ) : allHeads.map((h) => {
+          const on = !offHeads.has(h.key);
+          return (
+            <button
+              key={h.key}
+              type="button"
+              onClick={() => toggleHead(h.key)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                on ? 'border-[#0F8B8D]/40 bg-[#DDF0F0] text-[#0B6567]' : 'border-[#CDE7E7] bg-white text-gray-400 line-through hover:border-[#0F8B8D]/40'
+              }`}
+            >{h.label}</button>
+          );
+        })}
+        <span className="text-[11px] text-gray-400">Print only — not saved, not in any register</span>
+        <div className="flex-1" />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fs} title="Receipt date" />
+        <span className="text-xs text-gray-600 whitespace-nowrap font-medium">
+          {selectedRows.length} selected · {fmt(selTotal)}
+        </span>
+        <button
+          type="button"
+          onClick={handlePrint}
+          disabled={selectedRows.length === 0 || !date}
+          className={`rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shadow-sm transition-colors ${
+            selectedRows.length === 0 || !date
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-[#0F8B8D] text-white hover:bg-[#0B6567]'
+          }`}
+        >Print WP Receipts (4 per A4)</button>
+      </div>
+
+      <div className="flex-1 min-h-0 bg-white rounded-xl border border-[#CDE7E7] flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-auto scroll-fee scroll-fee-h1">
+          <table className="w-full text-[11px] border-collapse">
+            <thead className={`sticky top-0 z-10 ${ACCENT}`}>
+              <tr>
+                <th className="px-2 py-1.5 text-center w-8">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    ref={(el) => { if (el) el.indeterminate = someChecked; }}
+                    onChange={toggleAll}
+                    className="cursor-pointer"
+                  />
+                </th>
+                <th className="px-2 py-1.5 text-center font-semibold w-10">Sl</th>
+                <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Reg No</th>
+                <th className="px-2 py-1.5 text-left font-semibold">Name</th>
+                <th className="px-2 py-1.5 text-center font-semibold">Course</th>
+                <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Year</th>
+                <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Adm Type/Cat</th>
+                {selectedHeads.map((h) => (
+                  <th key={h.key} className="px-2 py-1.5 text-right font-semibold whitespace-nowrap border-l border-[#CDE7E7]">{h.label}</th>
+                ))}
+                <th className="px-2 py-1.5 text-right font-semibold border-l border-[#CDE7E7]">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={colCount} className="px-4 py-8 text-center text-gray-400 text-xs">No confirmed WP students match the current filters.</td>
+                </tr>
+              ) : rows.map((r, i) => {
+                const printable = isPrintable(r);
+                const isSel = printable && selected.has(r.student.id);
+                const amts = amountsOf(r);
+                return (
+                  <tr
+                    key={r.student.id}
+                    onClick={() => printable && toggleOne(r.student.id)}
+                    className={`${printable ? 'cursor-pointer' : 'text-gray-400'} ${isSel ? 'bg-[#DDF0F0]/40' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                  >
+                    <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={isSel} disabled={!printable} onChange={() => toggleOne(r.student.id)} className="cursor-pointer disabled:cursor-not-allowed" />
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-gray-400">{serialById.get(r.student.id)}</td>
+                    <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{r.student.regNumber || '—'}</td>
+                    <td className="px-2 py-1.5 font-medium">{r.student.studentNameSSLC}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold">{r.student.course}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{r.student.year}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">WP / {r.student.admCat}</td>
+                    {r.noStructure ? (
+                      <td colSpan={selectedHeads.length + 1} className="px-2 py-1.5 text-center text-[11px] text-amber-600 border-l border-[#E3F1F1]">
+                        No Regular fee structure for {r.student.course} {r.student.year}
+                      </td>
+                    ) : (<>
+                      {selectedHeads.map((h) => {
+                        const v = amts[h.key] ?? 0;
+                        return (
+                          <td key={h.key} className={`px-2 py-1.5 text-right tabular-nums border-l border-[#E3F1F1] ${v > 0 ? 'text-blue-700' : 'text-gray-300'}`}>
+                            {v > 0 ? fmt(v) : '—'}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold border-l border-[#E3F1F1]">{fmt(totalOf(r))}</td>
+                    </>)}
                   </tr>
                 );
               })}
