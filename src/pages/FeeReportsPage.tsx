@@ -32,6 +32,7 @@ import { getSMPBudget, saveSMPBudget } from '../services/smpBudgetService';
 import { getWPFeeDistribution, saveWPFeeDistribution } from '../services/wpFeeDistributionService';
 import { useAuth } from '../contexts/AuthContext';
 import { generateAdditionalFeeReceiptsBulk } from '../utils/additionalFeeBulkReceipts';
+import type { AdditionalReceiptSource } from '../utils/additionalFeeBulkReceipts';
 import { collectAdditionalFeesBulk, BulkCollectError } from '../services/feeRecordService';
 import { createStudentNotification } from '../services/studentNotificationService';
 import { formatDate } from '../utils/feeReceipts';
@@ -6136,10 +6137,18 @@ interface AddlRegCol { key: string; label: string }
 interface AddlRegColDef {
   header: string;
   halign: 'left' | 'center' | 'right';
-  get: (r: FeeRecord, i: number) => string | number;
+  get: (r: AdditionalReceiptSource, i: number) => string | number;
 }
 
-function addlHeadAmounts(r: FeeRecord): Record<string, number> {
+// Optional overrides so the print-only WP Receipts view can reuse these
+// exports: its own title / file name, and Sl numbers matching its slips.
+interface AddlRegExportOpts {
+  title?: string;                             // PDF heading + sheet name
+  fileBase?: string;                          // file name before _<AY>
+  slOf?: (i: number) => string | number;      // default i + 1
+}
+
+function addlHeadAmounts(r: AdditionalReceiptSource): Record<string, number> {
   const out: Record<string, number> = {};
   for (const h of r.additionalPaid) {
     const key = h.label.trim().toUpperCase();
@@ -6149,7 +6158,7 @@ function addlHeadAmounts(r: FeeRecord): Record<string, number> {
   return out;
 }
 
-function addlTotal(r: FeeRecord): number {
+function addlTotal(r: AdditionalReceiptSource): number {
   return r.additionalPaid.reduce((s, h) => s + (h.amount > 0 ? h.amount : 0), 0);
 }
 
@@ -6159,15 +6168,17 @@ function addlRegDate(date: string): string {
   return `${rd} ${MONTHS[parseInt(rm) - 1]} ${ry}`;
 }
 
-async function exportAdditionalFeeRegisterExcel(
-  rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string, filterLabel = '',
+async function exportAdditionalFeeRegisterExcel<T extends AdditionalReceiptSource>(
+  rows: T[], cols: AddlRegCol[], nameOf: (r: T) => string, academicYear: string, filterLabel = '',
+  opts: AddlRegExportOpts = {},
 ): Promise<void> {
   await needXlsx();
+  const slOf = opts.slOf ?? ((i: number) => i + 1);
   const header = ['Sl', 'Date', 'Year', 'Course', 'Name', 'Adm Type', ...cols.map((c) => c.label), 'Total'];
   const dataRows = rows.map((r, i) => {
     const amts = addlHeadAmounts(r);
     return [
-      i + 1, addlRegDate(r.date), r.year, r.course, nameOf(r), r.admType,
+      slOf(i), addlRegDate(r.date), r.year, r.course, nameOf(r), r.admType,
       ...cols.map((c) => amts[c.key] || null),
       addlTotal(r),
     ];
@@ -6186,15 +6197,16 @@ async function exportAdditionalFeeRegisterExcel(
     { wch: 9 },
   ];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Additional Fee Register');
-  XLSX.writeFile(wb, `Additional_Fee_Register_${academicYear}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, (opts.title ?? 'Additional Fee Register').slice(0, 31));
+  XLSX.writeFile(wb, `${opts.fileBase ?? 'Additional_Fee_Register'}_${academicYear}.xlsx`);
 }
 
-async function exportAdditionalFeeRegisterPdf(
-  rows: FeeRecord[], cols: AddlRegCol[], nameOf: (r: FeeRecord) => string, academicYear: string, dateLabel: string,
-  filterLabel = '',
+async function exportAdditionalFeeRegisterPdf<T extends AdditionalReceiptSource>(
+  rows: T[], cols: AddlRegCol[], nameOf: (r: T) => string, academicYear: string, dateLabel: string,
+  filterLabel = '', opts: AddlRegExportOpts = {},
 ): Promise<void> {
   await needPdf();
+  const slOf = opts.slOf ?? ((i: number) => i + 1);
   const FONT_SIZE   = 8;
   const PAD_H       = 4;
   const margin      = 10;
@@ -6205,11 +6217,11 @@ async function exportAdditionalFeeRegisterPdf(
   const amtsByRow = rows.map(addlHeadAmounts);
 
   const COLUMNS: AddlRegColDef[] = [
-    { header: 'Sl',       halign: 'center', get: (_r, i) => i + 1 },
+    { header: 'Sl',       halign: 'center', get: (_r, i) => slOf(i) },
     { header: 'Date',     halign: 'left',   get: (r) => addlRegDate(r.date) },
     { header: 'Year',     halign: 'center', get: (r) => r.year },
     { header: 'Course',   halign: 'center', get: (r) => r.course },
-    { header: 'Name',     halign: 'left',   get: (r) => nameOf(r) },
+    { header: 'Name',     halign: 'left',   get: (r) => nameOf(r as T) },
     { header: 'Adm Type', halign: 'center', get: (r) => r.admType },
     ...cols.map((c): AddlRegColDef => ({ header: c.label, halign: 'right', get: (_r, i) => fmtN(amtsByRow[i][c.key] || 0) })),
     { header: 'Total',    halign: 'right',  get: (r) => addlTotal(r).toLocaleString('en-IN') },
@@ -6267,7 +6279,7 @@ async function exportAdditionalFeeRegisterPdf(
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text('SMP Admissions — Additional Fee Register', margin, 13);
+  doc.text(`SMP Admissions — ${opts.title ?? 'Additional Fee Register'}`, margin, 13);
 
   const chips = [`AY ${academicYear}`, dateLabel, `${rows.length} record${rows.length !== 1 ? 's' : ''}`];
   const dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -6347,7 +6359,7 @@ async function exportAdditionalFeeRegisterPdf(
     },
   });
 
-  doc.save(`Additional_Fee_Register_${academicYear}.pdf`);
+  doc.save(`${opts.fileBase ?? 'Additional_Fee_Register'}_${academicYear}.pdf`);
 }
 
 // Multi-select Course / Year / Adm Type / Adm Cat for both views of this tab —
@@ -6421,6 +6433,7 @@ function AdditionalFeeReceiptsTab({
           allStudents={allStudents}
           feeStructures={feeStructures}
           overrideByStudent={overrideByStudent}
+          academicYear={academicYear}
         />
       ) : (
         <BulkAdditionalCollectPanel
@@ -6858,11 +6871,12 @@ interface WPAddlRow {
 }
 
 function WPAdditionalReceiptsPanel({
-  allStudents, feeStructures, overrideByStudent,
+  allStudents, feeStructures, overrideByStudent, academicYear,
 }: {
   allStudents: Student[];
   feeStructures: FeeStructure[];
   overrideByStudent: Map<string, StudentFeeOverride>;
+  academicYear: string;
 }) {
   const [courseFilter, setCourseFilter] = useState<Course[]>([]);   // empty = All
   const [yearFilter,   setYearFilter]   = useState<Year[]>([]);
@@ -7018,13 +7032,53 @@ function WPAdditionalReceiptsPanel({
     })));
   }
 
+  // Register export — every printable row in the current list (filters +
+  // selected heads), same as the Receipts view exporting all filtered rows.
+  // Sl = the row's list serial, so the register lines up with printed slips.
+  function exportRows() {
+    return printableRows.map((r) => ({
+      date,
+      additionalPaid: printHeadsOf(r).map((h) => ({ label: h.label, amount: h.amount })),
+      studentName: r.student.studentNameSSLC,
+      year: r.student.year,
+      course: r.student.course,
+      admType: r.student.admType,
+      admCat: r.student.admCat,
+      serial: serialById.get(r.student.id) ?? '—',
+    }));
+  }
+  type WPExportRow = ReturnType<typeof exportRows>[number];
+  const exportCols: AddlRegCol[] = selectedHeads;
+  const exportFilterLabel = [
+    addlFilterSummary({ aided: '', course: courseFilter, year: yearFilter, admType: [], admCat: [], search: debouncedSearch }),
+    offHeads.size > 0 && selectedHeads.length > 0 ? `Heads: ${selectedHeads.map((h) => h.label).join(', ')}` : '',
+  ].filter(Boolean).join('  |  ');
+  function handleExport(kind: 'pdf' | 'excel') {
+    const list = exportRows();
+    if (list.length === 0 || !date) return;
+    const opts = {
+      title: 'WP Additional Fee Register',
+      fileBase: 'WP_Additional_Fee_Register',
+      slOf: (i: number) => list[i].serial,
+    };
+    const nameOf = (r: WPExportRow) => r.studentName;
+    if (kind === 'pdf') {
+      void exportAdditionalFeeRegisterPdf(list, exportCols, nameOf, academicYear, `Receipt date ${formatDate(date)}`, exportFilterLabel, opts);
+    } else {
+      void exportAdditionalFeeRegisterExcel(list, exportCols, nameOf, academicYear, exportFilterLabel, opts);
+    }
+  }
+
   const colCount = 7 + selectedHeads.length + 1;
 
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0">
       <FilterPanel
         search={<SearchBox value={searchTerm} onChange={setSearchTerm} placeholder="Search name / reg…" />}
-        right={<span className="text-xs text-gray-500 whitespace-nowrap">{selectedRows.length} / {rows.length} WP student{rows.length !== 1 ? 's' : ''} selected</span>}
+        right={<>
+          <span className="text-xs text-gray-500 whitespace-nowrap">{selectedRows.length} / {rows.length} WP student{rows.length !== 1 ? 's' : ''} selected</span>
+          <ExportBar onPdf={() => handleExport('pdf')} onExcel={() => handleExport('excel')} />
+        </>}
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       >
