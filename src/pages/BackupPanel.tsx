@@ -16,8 +16,8 @@ const SECTION_GROUPS: { title: string; items: { id: BackupSection; label: string
   {
     title: 'Backup',
     items: [
-      { id: 'export', label: 'Export Backup', hint: 'Download a full JSON backup' },
-      { id: 'restore', label: 'Restore from Backup', hint: 'Restore records from a backup file' },
+      { id: 'export', label: 'Export Backup', hint: 'Full backup: JSON, Excel, files ZIP' },
+      { id: 'restore', label: 'Restore from Backup', hint: 'Restore chosen collections from a backup' },
     ],
   },
   {

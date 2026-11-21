@@ -424,9 +424,11 @@ service cloud.firestore {
     match /studentMessages/{msgId} {
       allow read:   if isActiveUser()
         || (isStudentClaim() && resource.data.regNumber == request.auth.token.regNumber);
-      allow create: if isStudentClaim()
+      allow create: if (isStudentClaim()
         && request.resource.data.regNumber == request.auth.token.regNumber
-        && request.resource.data.keys().hasAll(['regNumber', 'studentName', 'category', 'message', 'status']);
+        && request.resource.data.keys().hasAll(['regNumber', 'studentName', 'category', 'message', 'status']))
+        // Admins may re-create messages when restoring a backup.
+        || isAdmin();
       allow update: if isActiveUser();
       allow delete: if isAdmin();
     }

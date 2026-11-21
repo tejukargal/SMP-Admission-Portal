@@ -7,3 +7,6 @@ export async function loadPdf() {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   return { jsPDF, autoTable };
 }
+
+// fflate (~30 KB) — only needed when a backup ZIP is built or opened.
+export const loadZip = () => import('fflate');
