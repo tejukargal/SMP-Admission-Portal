@@ -12,6 +12,8 @@ interface MultiSelectFilterDropdownProps<T extends string> {
   placeholder: string;
   options: Option<T>[];
   className?: string;
+  /** When set, the menu gets a "Select …" header with All | None links (column-picker style). */
+  title?: string;
   /** Accent colour; defaults to the app's emerald. */
   tone?: 'emerald' | 'indigo' | 'pea' | 'ocean' | 'cyan' | 'teal';
 }
@@ -84,6 +86,7 @@ export function MultiSelectFilterDropdown<T extends string>({
   options,
   className = '',
   tone = 'emerald',
+  title,
 }: MultiSelectFilterDropdownProps<T>) {
   const t = TONES[tone];
   const [open, setOpen] = useState(false);
@@ -123,6 +126,8 @@ export function MultiSelectFilterDropdown<T extends string>({
     menu.style.left = `${left}px`;
     menu.style.top = `${rect.bottom + 4}px`;
     menu.style.minWidth = `${menuWidth}px`;
+    // Long option lists (e.g. every academic year) scroll inside the menu.
+    menu.style.maxHeight = `${Math.max(window.innerHeight - rect.bottom - 16, 200)}px`;
   }, [open]);
 
   function toggleValue(v: T) {
@@ -153,12 +158,23 @@ export function MultiSelectFilterDropdown<T extends string>({
       {open && createPortal(
         <div
           ref={menuRef}
-          className={`fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden py-1 ${t.font}`}
+          className={`fixed z-[9999] bg-white border border-gray-200/80 rounded-2xl overflow-hidden flex flex-col ${title ? '' : 'py-1'} ${t.font}`}
           style={{
             boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
             animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)',
           }}
         >
+          {title && (
+            <div className="flex items-center justify-between gap-4 px-3 py-2 border-b border-gray-100 shrink-0">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">{title}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => onChange(options.map((o) => o.value))} className={`text-[11px] font-semibold ${t.checkedRow.split(' ')[0]} cursor-pointer`}>All</button>
+                <span className="text-gray-200 text-[11px]">|</span>
+                <button onClick={() => onChange([])} className="text-[11px] font-semibold text-gray-400 hover:text-gray-600 cursor-pointer">None</button>
+              </div>
+            </div>
+          )}
+          <div className={`overflow-y-auto ${title ? 'py-1' : ''}`}>
           {/* "All" / clear-all option */}
           <button
             className={`w-full text-left px-3 py-[5px] text-[12px] flex items-center gap-2 transition-colors duration-100 ${
@@ -197,6 +213,7 @@ export function MultiSelectFilterDropdown<T extends string>({
               </button>
             );
           })}
+          </div>
         </div>,
         document.body,
       )}
