@@ -1,4 +1,4 @@
-import type { ExamSettingCertificate, ExamSettingSubject, ExamSettingWork } from '../types';
+import type { ExamKind, ExamSettingCertificate, ExamSettingSubject, ExamSettingWork } from '../types';
 import { dmy, esc, openPrintHtml } from './examDutyCertificate';
 
 // ── Setting & Conducting Certificate ──────────────────────────────────────────
@@ -17,8 +17,13 @@ export const WORK_ORDER: ExamSettingWork[] = ['SET_AND_CONDUCTED', 'CONDUCTED', 
 export type SettingCertContent = Pick<
   ExamSettingCertificate,
   'salutation' | 'name' | 'designation' | 'department' | 'polytechnic'
-  | 'sessionLabel' | 'sessionYear' | 'work' | 'subjects' | 'bodyOverride' | 'refNo' | 'issueDate'
+  | 'sessionLabel' | 'sessionYear' | 'work' | 'examKind' | 'subjects' | 'bodyOverride' | 'refNo' | 'issueDate'
 >;
+
+export const EXAM_KIND_LABELS: Record<ExamKind, string> = {
+  PRACTICAL: 'Practical',
+  THEORY: 'Theory',
+};
 
 /** True when the batch / student columns apply (not for "Set QP only"). */
 export function showsCounts(work: ExamSettingWork): boolean {
@@ -56,9 +61,11 @@ function titleCase(s: string): string {
   return s.toLowerCase().replace(/(^|[\s(./&-])([a-z])/g, (_m, p: string, c: string) => p + c.toUpperCase());
 }
 
-/** "APR/MAY", 2026 → "Semester 2026 APR / MAY examination" */
+/** "APR/MAY", 2026, PRACTICAL → "Semester 2026 APR / MAY Practical examination"
+ *  (no exam type on older records → "Semester 2026 APR / MAY examination"). */
 function examPhrase(c: SettingCertContent): string {
-  return `Semester ${c.sessionYear} ${c.sessionLabel.replace(/\s*\/\s*/g, ' / ')} examination`;
+  const kind = c.examKind ? `${EXAM_KIND_LABELS[c.examKind]} ` : '';
+  return `Semester ${c.sessionYear} ${c.sessionLabel.replace(/\s*\/\s*/g, ' / ')} ${kind}examination`;
 }
 
 function personPhrase(c: SettingCertContent): string {

@@ -825,6 +825,7 @@ export interface ExamSettingCertificate extends ExamDutyPerson {
   refNo: string;            // 'SMP/SEM/APR/MAY-2026/83'
   issueDate: string;        // 'YYYY-MM-DD'
   work: ExamSettingWork;
+  examKind?: ExamKind;      // absent on older records = no exam type in the wording
   subjects: ExamSettingSubject[];
   bodyOverride?: string;    // manual wording; absent = generated
   createdBy: string;

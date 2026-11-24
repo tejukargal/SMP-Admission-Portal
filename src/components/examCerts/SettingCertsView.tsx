@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { examSessionTitle } from '../../services/examDutyCertService';
 import { deleteSettingCert, subscribeSettingCerts } from '../../services/examSettingCertService';
 import { dmy } from '../../utils/examDutyCertificate';
-import { printSettingCerts, showsCounts, subjectTotals, WORK_LABELS, WORK_ORDER } from '../../utils/examSettingCertificate';
+import { EXAM_KIND_LABELS, printSettingCerts, showsCounts, subjectTotals, WORK_LABELS, WORK_ORDER } from '../../utils/examSettingCertificate';
 import { exportSettingCertsXlsx } from '../../utils/examSettingCertExport';
 import { ExamSettingCertificateModal } from '../common/ExamSettingCertificateModal';
 import { WINE, WINE_BAND, WINE_HAIR, WINE_INK } from '../common/examCertFormKit';
@@ -30,8 +30,10 @@ type ModalState =
   | { mode: 'edit' | 'duplicate'; cert: ExamSettingCertificate }
   | null;
 
-export function SettingCertsView({ heading, prefill }: {
+export function SettingCertsView({ heading, prefill, guardEdit }: {
   heading: React.ReactNode;
+  /** Runs the edit once the passkey has been entered (once per visit). */
+  guardEdit: (run: () => void) => void;
   /** Opens a new certificate for this examiner as soon as the tab mounts. */
   prefill?: SettingPrefill | null;
 }) {
@@ -281,18 +283,15 @@ export function SettingCertsView({ heading, prefill }: {
                         {c.department && <div className="text-[11.5px] text-[#7A6F7D]">{c.department}</div>}
                       </td>
                       <td className="px-2 py-2.5">
-                        <div className="flex flex-col gap-1">
-                          {c.subjects.map((s, i) => (
-                            <div key={i} className="flex flex-wrap items-center gap-1.5">
-                              {s.code && (
-                                <span className="rounded-full border px-2 py-0.5 text-[11px] tabular-nums" style={{ borderColor: `${WINE}55`, color: WINE_INK }}>{s.code}</span>
-                              )}
-                              <span className="text-[12px] text-[#3F3843]">{s.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-1 text-[10.5px] text-[#8A8190]">
-                          {WORK_LABELS[c.work]}{c.bodyOverride && <span className="ml-1.5 text-[#B45309]">· custom wording</span>}
+                        <span
+                          className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] tabular-nums whitespace-nowrap cursor-default"
+                          style={{ borderColor: `${WINE}55`, color: WINE_INK }}
+                          title={c.subjects.map((s) => (s.code ? `${s.code} – ${s.name}` : s.name)).join('\n')}
+                        >
+                          {c.subjects.length} {c.subjects.length === 1 ? 'Subject' : 'Subjects'}
+                        </span>
+                        <div className="mt-1 text-[10.5px] text-[#8A8190] whitespace-nowrap">
+                          {WORK_LABELS[c.work]}{c.examKind && ` · ${EXAM_KIND_LABELS[c.examKind]}`}{c.bodyOverride && <span className="ml-1.5 text-[#B45309]">· custom wording</span>}
                         </div>
                       </td>
                       <td className="px-2 py-2.5 text-center whitespace-nowrap tabular-nums text-[#3F3843]">
@@ -305,7 +304,7 @@ export function SettingCertsView({ heading, prefill }: {
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           <RowBtn title="Print (staff + office copy)" onClick={() => printSettingCerts([c])} d={ICONS.print} />
-                          <RowBtn title="Edit" onClick={() => setModal({ mode: 'edit', cert: c })} d={ICONS.edit} />
+                          <RowBtn title="Edit" onClick={() => guardEdit(() => setModal({ mode: 'edit', cert: c }))} d={ICONS.edit} />
                           <RowBtn title="New certificate with the same subjects" onClick={() => setModal({ mode: 'duplicate', cert: c })} d={ICONS.copy} />
                           {isAdmin && <RowBtn title="Delete" danger onClick={() => setToDelete(c)} d={ICONS.trash} />}
                         </div>

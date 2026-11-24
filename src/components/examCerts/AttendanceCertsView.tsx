@@ -25,8 +25,10 @@ type ModalState =
   | { mode: 'edit' | 'duplicate'; cert: ExamDutyCertificate }
   | null;
 
-export function AttendanceCertsView({ heading, onSettingCert }: {
+export function AttendanceCertsView({ heading, guardEdit, onSettingCert }: {
   heading: React.ReactNode;
+  /** Runs the edit once the passkey has been entered (once per visit). */
+  guardEdit: (run: () => void) => void;
   /** Opens a Setting & Conducting certificate for this examiner (Practical Examiner rows). */
   onSettingCert: (cert: ExamDutyCertificate) => void;
 }) {
@@ -288,7 +290,7 @@ export function AttendanceCertsView({ heading, onSettingCert }: {
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
                         <RowBtn title="Print (staff + office copy)" onClick={() => printExamCerts([c])} d={ICONS.print} />
-                        <RowBtn title="Edit" onClick={() => setModal({ mode: 'edit', cert: c })} d={ICONS.edit} />
+                        <RowBtn title="Edit" onClick={() => guardEdit(() => setModal({ mode: 'edit', cert: c }))} d={ICONS.edit} />
                         <RowBtn title="New certificate with the same duties" onClick={() => setModal({ mode: 'duplicate', cert: c })} d={ICONS.copy} />
                         {c.duties.some((d) => d.type === 'PRACTICAL_EXAMINER') && (
                           <RowBtn title="Issue a Setting & Conducting certificate to this examiner" onClick={() => onSettingCert(c)} d={ICONS.setting} />

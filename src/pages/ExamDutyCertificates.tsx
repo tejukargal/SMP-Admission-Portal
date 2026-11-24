@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AttendanceCertsView } from '../components/examCerts/AttendanceCertsView';
 import { SettingCertsView, type SettingPrefill } from '../components/examCerts/SettingCertsView';
-import { CertsHeading, type CertTab } from '../components/examCerts/certUi';
+import { CertsHeading, PasskeyPrompt, type CertTab } from '../components/examCerts/certUi';
 
 // Exam Duty Certificates: Attendance certificates (half-A4 staff + office copy)
 // and Setting & Conducting certificates (A4 staff + office copy). The tab lives
@@ -13,6 +13,17 @@ export function ExamDutyCertificates() {
   const tab: CertTab = params.get('tab') === 'setting' ? 'setting' : 'attendance';
   // Examiner handed over from an Attendance certificate; opens the Setting form once.
   const [prefill, setPrefill] = useState<SettingPrefill | null>(null);
+  // Editing an issued certificate needs the passkey once per visit to this page
+  // (both tabs share it); New / Duplicate / Print stay open.
+  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [pendingEdit, setPendingEdit] = useState<(() => void) | null>(null);
+
+  const guardEdit = useCallback((run: () => void) => {
+    if (editUnlocked) run();
+    else setPendingEdit(() => run);
+  }, [editUnlocked]);
+
+  const cancelPasskey = useCallback(() => setPendingEdit(null), []);
 
   function switchTab(t: CertTab) {
     setPrefill(null);
@@ -21,11 +32,12 @@ export function ExamDutyCertificates() {
 
   const heading = <CertsHeading tab={tab} onTab={switchTab} />;
 
-  return tab === 'setting' ? (
-    <SettingCertsView heading={heading} prefill={prefill} />
+  const view = tab === 'setting' ? (
+    <SettingCertsView heading={heading} prefill={prefill} guardEdit={guardEdit} />
   ) : (
     <AttendanceCertsView
       heading={heading}
+      guardEdit={guardEdit}
       onSettingCert={(c) => {
         setPrefill({
           person: {
@@ -40,5 +52,22 @@ export function ExamDutyCertificates() {
         setParams({ tab: 'setting' });
       }}
     />
+  );
+
+  return (
+    <>
+      {view}
+      {pendingEdit && (
+        <PasskeyPrompt
+          onCancel={cancelPasskey}
+          onUnlock={() => {
+            const run = pendingEdit;
+            setEditUnlocked(true);
+            setPendingEdit(null);
+            run();
+          }}
+        />
+      )}
+    </>
   );
 }

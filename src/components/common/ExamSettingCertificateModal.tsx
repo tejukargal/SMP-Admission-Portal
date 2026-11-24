@@ -23,6 +23,7 @@ import {
 import {
   buildSettingCertBody,
   buildSettingCertHTML,
+  EXAM_KIND_LABELS,
   printSettingCerts,
   showsCounts,
   subjectTotals,
@@ -46,6 +47,7 @@ import type {
   ExamCertSalutation,
   ExamDutyPerson,
   ExamDutyStaff,
+  ExamKind,
   ExamSettingCertificate,
   ExamSettingCertificateInput,
   ExamSettingSubject,
@@ -54,6 +56,12 @@ import type {
 } from '../../types';
 
 const WORK_OPTIONS = WORK_ORDER.map((value) => ({ value, label: WORK_LABELS[value] }));
+
+// '' = no exam type (older certificates), which keeps their original wording.
+const KIND_OPTIONS: { value: ExamKind | ''; label: string }[] = [
+  { value: 'PRACTICAL', label: EXAM_KIND_LABELS.PRACTICAL },
+  { value: 'THEORY', label: EXAM_KIND_LABELS.THEORY },
+];
 
 /** One editable subject row. Counts are kept as typed text; conducted/attended
  *  follow the allotted figures until edited by hand. */
@@ -118,6 +126,7 @@ interface FormState {
   department: string;
   polytechnic: string;
   work: ExamSettingWork;
+  examKind: ExamKind | '';
   subjects: SubjectRow[];
   bodyOverride: string;
   bodyEdited: boolean;
@@ -142,6 +151,7 @@ function initialForm(
       department: cert.department,
       polytechnic: cert.polytechnic,
       work: cert.work,
+      examKind: cert.examKind ?? '',
       subjects: cert.subjects.length ? cert.subjects.map(toRow) : [blankRow()],
       bodyOverride: cert.bodyOverride ?? '',
       bodyEdited: !!cert.bodyOverride,
@@ -158,6 +168,7 @@ function initialForm(
     department: prefill?.department ?? '',
     polytechnic: prefill?.polytechnic ?? '',
     work: cert?.work ?? 'SET_AND_CONDUCTED',
+    examKind: cert?.examKind ?? 'PRACTICAL',
     // Duplicate keeps the session, work and subjects for another examiner.
     subjects: cert?.subjects.length ? cert.subjects.map(toRow) : [blankRow()],
     bodyOverride: '',
@@ -197,6 +208,7 @@ function toInput(f: FormState, generated: string): ExamSettingCertificateInput {
     department: f.department.trim(),
     polytechnic: f.polytechnic.trim().toUpperCase(),
     work: f.work,
+    ...(f.examKind ? { examKind: f.examKind } : {}),
     subjects: cleanSubjects(f.subjects, f.work),
     // Only keep an override that actually differs from the generated wording.
     ...(f.bodyEdited && body && body !== generated ? { bodyOverride: body } : {}),
@@ -401,6 +413,7 @@ export function ExamSettingCertificateModal({ mode, cert, session, prefill, onCl
       sessionLabel: label,
       sessionYear: yr,
       work: form.work,
+      ...(form.examKind ? { examKind: form.examKind } : {}),
       subjects: cleanSubjects(form.subjects, form.work),
       refNo: settingRefNo(label, yr, Number(form.serial) || 0),
       issueDate: form.issueDate,
@@ -610,8 +623,12 @@ export function ExamSettingCertificateModal({ mode, cert, session, prefill, onCl
 
             <section>
               <SectionTitle n={3}>Work done &amp; subjects</SectionTitle>
-              <div className="mb-3">
+              <div className="mb-3 flex flex-wrap items-center gap-2.5">
                 <Segmented value={form.work} options={WORK_OPTIONS} onChange={(work) => set({ work })} />
+                <Segmented value={form.examKind} options={KIND_OPTIONS} onChange={(examKind) => set({ examKind })} />
+                {!form.examKind && (
+                  <span className="text-[11px] text-[#B45309]">No exam type on this older certificate — pick one to add it to the text.</span>
+                )}
               </div>
               <SubjectsEditor
                 rows={form.subjects}
