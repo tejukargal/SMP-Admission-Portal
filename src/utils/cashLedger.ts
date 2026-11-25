@@ -425,3 +425,36 @@ export function buildRemittanceSummary(ledger: DayAccountRow[], filter: AccountF
       };
     });
 }
+
+// ── Deposit reference prefill ────────────────────────────────────────────────
+// Suggested reference for a deposit, from the bank, the mode and each kind of cash
+// with its amount: "SBI Challan - Aided Rs.12,500",
+// "SVK Mgt Can Bank Challan - Aided Rs.5,000 & Unaided Rs.8,000", …
+// ASCII "Rs." (not ₹) because the reference is printed in jsPDF exports.
+const BANK_PREFIX: Record<CashAccount, string> = { SBI: 'SBI', SVK: 'SVK Mgt Can Bank' };
+const MODE_WORD: Record<CashDeposit['depositMode'], string> = { Challan: 'Challan', CDM: 'CDM', Other: 'Deposit' };
+
+export function suggestedDepositReference(account: CashAccount, mode: CashDeposit['depositMode'], split: AidedSplit): string {
+  const parts: string[] = [];
+  if (split.AIDED > 0) parts.push(`Aided Rs.${inr(split.AIDED)}`);
+  if (split.UNAIDED > 0) parts.push(`Unaided Rs.${inr(split.UNAIDED)}`);
+  return `${BANK_PREFIX[account]} ${MODE_WORD[mode]}${parts.length ? ` - ${parts.join(' & ')}` : ''}`;
+}
+
+/** The standard prefill reference for an already-recorded deposit (bank, mode and
+ *  aided / unaided amounts). It replaces whatever reference was typed before.
+ *  null when the reference already matches, or the split cannot be worked out. */
+export function referenceWithAmounts(deposit: CashDeposit, ledger: DayAccountRow[]): { reference: string; split: AidedSplit } | null {
+  if (deposit.amount <= 0) return null;
+  const split = depositAidedSplit(deposit, ledger);
+  if (split.AIDED + split.UNAIDED !== deposit.amount) return null;
+  const reference = suggestedDepositReference(deposit.account, deposit.depositMode, split);
+  return reference === (deposit.reference ?? '').trim() ? null : { reference, split };
+}
+
+/** True when a deposit's reference is already the standard prefill. */
+export function referenceIsStandard(deposit: CashDeposit, ledger: DayAccountRow[]): boolean {
+  const split = depositAidedSplit(deposit, ledger);
+  return split.AIDED + split.UNAIDED === deposit.amount
+    && suggestedDepositReference(deposit.account, deposit.depositMode, split) === (deposit.reference ?? '').trim();
+}

@@ -78,6 +78,18 @@ export async function updateCashDeposit(
   await updateDoc(doc(db, COL, deposit.id), patch);
 }
 
+/** Rewrite the reference of several deposits at once (batched, ≤ 450 writes per commit). */
+export async function updateDepositReferences(updates: { id: string; reference: string }[]): Promise<void> {
+  const now = new Date().toISOString();
+  for (let i = 0; i < updates.length; i += 450) {
+    const batch = writeBatch(db);
+    for (const u of updates.slice(i, i + 450)) {
+      batch.update(doc(db, COL, u.id), { reference: u.reference, updatedAt: now });
+    }
+    await batch.commit();
+  }
+}
+
 /** Undo a deposit — its days return to cash in hand. */
 export async function deleteCashDeposit(deposit: CashDeposit): Promise<void> {
   await deleteDoc(doc(db, COL, deposit.id));

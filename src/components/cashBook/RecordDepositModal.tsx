@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { addCashDeposit, updateCashDeposit } from '../../services/cashDepositService';
-import { CASH_ACCOUNTS, sumAided, type AidedSplit, type DayAccountRow } from '../../utils/cashLedger';
+import { CASH_ACCOUNTS, suggestedDepositReference, sumAided, type DayAccountRow } from '../../utils/cashLedger';
 import { formatIsoDate, todayIST } from '../../utils/formatDates';
 import { BTN_GRAY, BTN_PRIMARY, fs } from '../feeReports/feeReportUi';
 import type { CashAccount, CashDeposit, CashDepositMode } from '../../types';
@@ -9,18 +9,6 @@ import type { CashAccount, CashDeposit, CashDepositMode } from '../../types';
 const DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
 const MODES: CashDepositMode[] = ['Challan', 'CDM', 'Other'];
 const rupee = (n: number) => `₹${n.toLocaleString('en-IN')}`;
-
-// Suggested reference for a new deposit, from the bank and the kind of cash being
-// deposited: "SBI Challan - Aided", "SVK Mgt Can Bank Challan - Aided & Unaided", …
-const BANK_PREFIX: Record<CashAccount, string> = { SBI: 'SBI', SVK: 'SVK Mgt Can Bank' };
-const MODE_WORD: Record<CashDepositMode, string> = { Challan: 'Challan', CDM: 'CDM', Other: 'Deposit' };
-
-function suggestedReference(account: CashAccount, mode: CashDepositMode, split: AidedSplit): string {
-  const kind = split.AIDED > 0 && split.UNAIDED > 0 ? 'Aided & Unaided'
-    : split.UNAIDED > 0 ? 'Unaided'
-    : split.AIDED > 0 ? 'Aided' : '';
-  return `${BANK_PREFIX[account]} ${MODE_WORD[mode]}${kind ? ` - ${kind}` : ''}`;
-}
 
 const LABEL = 'block text-[10.5px] font-medium uppercase tracking-[0.6px] text-[#5B6371] mb-1';
 const INPUT = 'w-full rounded-[10px] border border-[#CDE7E7] bg-white px-3 py-2 text-[13px] text-[#262B35] focus:outline-none focus:ring-2 focus:ring-[#0F8B8D]/30 focus:border-[#0F8B8D]';
@@ -53,7 +41,7 @@ export function RecordDepositModal(props: Props) {
     () => (isEdit ? null : sumAided(props.days.map((d) => d.pendingByAided))),
     [isEdit, props.days],
   );
-  const suggest = (mode: CashDepositMode) => (pendingSplit ? suggestedReference(account, mode, pendingSplit) : '');
+  const suggest = (mode: CashDepositMode) => (pendingSplit ? suggestedDepositReference(account, mode, pendingSplit) : '');
   const [reference, setReference] = useState(() => (isEdit ? props.existing.reference : suggest('Challan')));
 
   function changeMode(mode: CashDepositMode) {
@@ -176,8 +164,8 @@ export function RecordDepositModal(props: Props) {
               </div>
               <div>
                 <label className={LABEL}>Challan / CDM / UTR reference no. *</label>
-                <input className={INPUT} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. SBI Challan - Aided 004512" />
-                {!isEdit && <p className="mt-1 text-[11px] text-[#8A93A3]">Pre-filled from the bank and cash type — add the challan / UTR number after it.</p>}
+                <input className={INPUT} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. SBI Challan - Aided Rs.12,500 004512" />
+                {!isEdit && <p className="mt-1 text-[11px] text-[#8A93A3]">Pre-filled from the bank, cash type and amount — add the challan / UTR number after it.</p>}
               </div>
               <div>
                 <label className={LABEL}>Deposit slip (photo / PDF, optional)</label>

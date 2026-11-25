@@ -3,13 +3,14 @@ import { useCashInHand } from '../contexts/CashInHandContext';
 import { deleteCashDeposit, deleteUpiCredit, saveCashTrackingSettings, DEFAULT_OVERDUE_DAYS } from '../services/cashDepositService';
 import { RecordDepositModal } from '../components/cashBook/RecordDepositModal';
 import { UpiCreditModal } from '../components/cashBook/UpiCreditModal';
+import { UpdateReferencesModal } from '../components/cashBook/UpdateReferencesModal';
 import { Modal } from '../components/common/Modal';
 import { PageSpinner } from '../components/common/PageSpinner';
 import {
   BTN_GRAY, BTN_GREEN, BTN_PRIMARY, BTN_RED, BTN_TEAL, TABLE_CARD, THEAD, TFOOT, fs, SegmentedToggle,
 } from '../components/feeReports/feeReportUi';
 import {
-  ACCOUNT_ORDER, AIDED_LABEL, AIDED_ORDER, CASH_ACCOUNTS, aidedStatus, buildCashBook, buildRemittanceSummary, daysBetween, depositMismatch, sumAided,
+  ACCOUNT_ORDER, AIDED_LABEL, AIDED_ORDER, CASH_ACCOUNTS, aidedStatus, buildCashBook, buildRemittanceSummary, daysBetween, depositMismatch, referenceWithAmounts, sumAided,
   type AccountFilter, type AidedSplit, type DayAccountRow,
 } from '../utils/cashLedger';
 import { CASH_REPORTS, type CashReportKind } from '../utils/cashReports';
@@ -387,10 +388,11 @@ function UpiCreditsTab({ ledger, onSet, onReset }: {
 
 // ── Deposits tab ─────────────────────────────────────────────────────────────
 
-function DepositsTab({ deposits, ledger, startDate, onEdit, onUndo }: {
+function DepositsTab({ deposits, ledger, startDate, onEdit, onUndo, onAddAmounts }: {
   deposits: CashDeposit[]; ledger: DayAccountRow[]; startDate: string;
-  onEdit: (d: CashDeposit) => void; onUndo: (d: CashDeposit) => void;
+  onEdit: (d: CashDeposit) => void; onUndo: (d: CashDeposit) => void; onAddAmounts: () => void;
 }) {
+  const needAmounts = useMemo(() => deposits.filter((d) => referenceWithAmounts(d, ledger)).length, [deposits, ledger]);
   const [filter, setFilter] = useState<AccountFilter>('ALL');
   const list = useMemo(
     () => deposits
@@ -408,6 +410,11 @@ function DepositsTab({ deposits, ledger, startDate, onEdit, onUndo }: {
           value={filter}
           onChange={(v) => setFilter(v as AccountFilter)}
         />
+        {needAmounts > 0 && (
+          <button type="button" className={`${BTN_TEAL} !py-1 !text-[11.5px]`} onClick={onAddAmounts} title="Replace earlier deposit references with the standard pre-fill (bank, mode, Aided / Unaided amounts)">
+            Update references to pre-fill ({needAmounts})
+          </button>
+        )}
         <span className="ml-auto text-[12px] text-[#5B6371]">{list.length} deposit{list.length === 1 ? '' : 's'} · <b className="tabular-nums text-[#262B35]">{rupee(total)}</b></span>
       </div>
       <div className={TABLE_CARD}>
@@ -647,6 +654,7 @@ export function CashBook() {
   const [recordFor, setRecordFor] = useState<{ account: CashAccount; days: DayAccountRow[] } | null>(null);
   const [editing, setEditing] = useState<CashDeposit | null>(null);
   const [undoing, setUndoing] = useState<CashDeposit | null>(null);
+  const [addingAmounts, setAddingAmounts] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const [upiRows, setUpiRows] = useState<DayAccountRow[] | null>(null);
@@ -770,7 +778,7 @@ export function CashBook() {
           )}
 
           {tab === 'deposits' && (
-            <DepositsTab deposits={deposits} ledger={ledger} startDate={settings?.startDate ?? ''} onEdit={setEditing} onUndo={setUndoing} />
+            <DepositsTab deposits={deposits} ledger={ledger} startDate={settings?.startDate ?? ''} onEdit={setEditing} onUndo={setUndoing} onAddAmounts={() => setAddingAmounts(true)} />
           )}
 
           {tab === 'upi' && (
@@ -809,6 +817,15 @@ export function CashBook() {
           existing={editing}
           onClose={() => setEditing(null)}
           onSaved={(msg) => { setEditing(null); setToast({ msg }); }}
+        />
+      )}
+
+      {addingAmounts && (
+        <UpdateReferencesModal
+          deposits={deposits}
+          ledger={ledger}
+          onClose={() => setAddingAmounts(false)}
+          onSaved={(msg) => { setAddingAmounts(false); setToast({ msg }); }}
         />
       )}
 
