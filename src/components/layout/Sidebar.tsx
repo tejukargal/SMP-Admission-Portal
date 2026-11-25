@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, matchPath, useLocation } from 'react-router-dom';
@@ -11,6 +11,7 @@ import {
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { INSTITUTE_LOGO_B64 } from '../../utils/instituteLogo';
+import { PetalRing } from '../login/PetalRing';
 
 interface TooltipState { label: string; y: number; x: number; accent?: string }
 
@@ -85,6 +86,8 @@ const CREST_STYLE: React.CSSProperties = {
   top: `${(-CREST_BOX.top / CREST_BOX.size) * 100}%`,
 };
 
+const LOGO_SHADOW = '0 2px 8px rgba(15,23,42,0.14), 0 0 0 1px rgba(15,23,42,0.04)';
+
 const WORDS = ['', 'SANJAY', 'MEMORIAL', 'POLYTECHNIC', 'SAGAR'];
 
 function initialsOf(email: string | null | undefined): string {
@@ -117,12 +120,13 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 
   const hideTooltip = useCallback(() => setTooltip(null), []);
 
-  // ── Logo: leaf ⇄ college logo every 8s, the badge pops on each swap ──
+  // ── Logo: petals → leaf → college logo, a face every 8s; the badge pops on each swap ──
+  const leafGradId = `sb-leaf-${useId().replace(/:/g, '')}`;
   const [logo, setLogo] = useState({ face: 0, swaps: 0 });
   const [surging, setSurging] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
-      setLogo((l) => ({ face: l.face === 0 ? 1 : 0, swaps: l.swaps + 1 }));
+      setLogo((l) => ({ face: (l.face + 1) % 3, swaps: l.swaps + 1 }));
       setSurging(true);
     }, 8000);
     return () => clearInterval(id);
@@ -232,26 +236,39 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         className="group relative flex items-center gap-3 w-full cursor-pointer h-13 shrink-0 transition-colors hover:bg-[#F5F7FA]/70"
         style={{ paddingLeft: 12, paddingRight: 12, borderBottom: `1px solid ${HAIRLINE}` }}
       >
-        {/* Logo badge — leaf ⇄ college logo with a blur-morph */}
+        {/* Logo badge — petals → leaf → college logo with a blur-morph. The petals
+            (login screen's ring) sit bare; leaf and crest keep their white-ringed disc. */}
         <div
-          className={`relative w-10 h-10 shrink-0 rounded-full bg-white overflow-hidden border-2 border-white ${surging ? 'sb-logo-pop' : ''}`}
-          style={{ boxShadow: '0 2px 8px rgba(15,23,42,0.14), 0 0 0 1px rgba(15,23,42,0.04)' }}
+          className={`relative w-10 h-10 shrink-0 ${surging ? 'sb-logo-pop' : ''}`}
           onAnimationEnd={(e) => { if (e.target === e.currentTarget) setSurging(false); }}
         >
-          <div className="absolute inset-0 rounded-full">
-            <div
-              className={`absolute inset-0 rounded-full flex items-center justify-center ${faceClass(0)}`}
-              style={{ background: 'linear-gradient(135deg, #34d399 0%, #059669 100%)' }}
-            >
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
-                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
-              </svg>
-            </div>
-            <div className={`absolute inset-0 rounded-full overflow-hidden bg-white ${faceClass(1)}`}>
-              {/* Framed by the crest's own content box (not the padded PNG) so the gear fills the disc like the leaf */}
-              <img src={INSTITUTE_LOGO_B64} alt="College Logo" style={CREST_STYLE} />
-            </div>
+          <div className={`absolute inset-0 flex items-center justify-center ${faceClass(0)}`}>
+            {/* 48px ring ≈ 40px of visible petals, matching the leaf / crest discs */}
+            <PetalRing size={48} className="shrink-0" />
+          </div>
+          <div
+            className={`absolute inset-0 rounded-full overflow-hidden bg-white border-2 border-white flex items-center justify-center ${faceClass(1)}`}
+            style={{ boxShadow: LOGO_SHADOW }}
+          >
+            {/* Same leaf as the login screen's petal-ring centre: magenta → violet → blue stroke on white */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={`url(#${leafGradId})`} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <defs>
+                <linearGradient id={leafGradId} gradientUnits="userSpaceOnUse" x1="4" y1="2" x2="18" y2="22">
+                  <stop offset="0%" stopColor="#E040FB" />
+                  <stop offset="50%" stopColor="#9B4DFF" />
+                  <stop offset="100%" stopColor="#4338FF" />
+                </linearGradient>
+              </defs>
+              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+            </svg>
+          </div>
+          <div
+            className={`absolute inset-0 rounded-full overflow-hidden bg-white border-2 border-white ${faceClass(2)}`}
+            style={{ boxShadow: LOGO_SHADOW }}
+          >
+            {/* Framed by the crest's own content box (not the padded PNG) so the gear fills the disc like the leaf */}
+            <img src={INSTITUTE_LOGO_B64} alt="College Logo" style={CREST_STYLE} />
           </div>
         </div>
 

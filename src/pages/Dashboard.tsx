@@ -25,6 +25,12 @@ import { isWPStudent } from '../utils/wpStudent';
 import type { ThemeName } from '../utils/dashboardReportPdf';
 import type { Student, Course, Year, Gender, AcademicYear, AdmType, AdmCat, Category, FeeStructure, StudentFeeOverride, FeeRecord } from '../types';
 import { SMP_FEE_HEADS } from '../types';
+
+// Login "petal aura" palette, reused on the Total Enrolled hero tile.
+const AURA_BG = 'linear-gradient(150deg, #EEF0FF 0%, #F3EDFF 55%, #FBEEFB 100%)';
+const AURA_BORDER = '#DCD6FB';
+const AURA_INK = '#3730A3';
+const AURA_GRADIENT = 'linear-gradient(120deg, #4F46E5 0%, #8B5CF6 55%, #C026D3 100%)';
 import { RecentActivityCard } from '../components/dashboard/RecentActivityCard';
 import { InsightsButton, type DashboardInsights } from '../components/dashboard/InsightsPanel';
 import { useInquiries } from '../hooks/useInquiries';
@@ -105,12 +111,12 @@ const COURSE_PDF_THEME: Record<Course, ThemeName> = { CE: 'amber', ME: 'green', 
 const YEAR_PDF_THEME: Record<Year, ThemeName> = { '1ST YEAR': 'lime', '2ND YEAR': 'emerald', '3RD YEAR': 'teal' };
 
 // ─── Animated number ────────────────────────────────────────────────────────
-function AnimNum({ value }: { value: number }) {
+function AnimNum({ value, gradient }: { value: number; gradient?: string }) {
   return (
     <span
       key={value}
-      className="tabular-nums"
-      style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out' }}
+      className={`tabular-nums ${gradient ? 'bg-clip-text text-transparent' : ''}`}
+      style={{ display: 'inline-block', animation: 'stat-pop 0.28s ease-out', ...(gradient ? { backgroundImage: gradient } : {}) }}
     >
       {value}
     </span>
@@ -1799,32 +1805,35 @@ const [barsReady, setBarsReady] = useState(false);
 
             {/* Overview bento — Total (largest) · Course intake · Boys / Girls */}
             <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
-              {/* Total card */}
+              {/* Total card — login "petal aura" palette: lavender → blush wash with
+                  drifting indigo / magenta glows and a gradient total. */}
               <div
                 onClick={() => setTotalModal(true)}
                 className={`${TILE} col-span-2 lg:col-span-5 lg:row-span-2 flex flex-col`}
-                style={tileStyle(PERI)}
+                style={{ background: AURA_BG, borderColor: AURA_BORDER }}
               >
+                <div aria-hidden="true" className="login-drift absolute -top-20 -left-16 w-64 h-64 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.20), transparent 68%)' }} />
+                <div aria-hidden="true" className="login-drift absolute -bottom-24 -right-12 w-72 h-72 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(217,70,239,0.16), transparent 68%)', animationDelay: '-7s' }} />
                 <div
-                  className="flex items-center justify-between gap-2 px-4 pt-3.5 select-none"
+                  className="relative flex items-center justify-between gap-2 px-4 pt-3.5 select-none"
                   onDoubleClick={(e) => { e.stopPropagation(); exportSummaryReport(confirmedStudents, displayYear, 'All Courses — Admission Type-wise Count'); }}
                   title="Double-click to export PDF"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: PERI }} />
-                    <p className="text-[10.5px] font-medium uppercase tracking-[0.8px]" style={{ color: PERI_INK }}>Total Enrolled</p>
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: AURA_GRADIENT }} />
+                    <p className="text-[10.5px] font-medium uppercase tracking-[0.8px]" style={{ color: AURA_INK }}>Total Enrolled</p>
                   </div>
-                  <span className="rounded-full border bg-white px-2 py-[3px] text-[10px] font-medium leading-none tabular-nums" style={{ borderColor: `${PERI}55`, color: PERI_INK }}>{displayYear}</span>
+                  <span className="rounded-full border bg-white/80 px-2 py-[3px] text-[10px] font-medium leading-none tabular-nums" style={{ borderColor: AURA_BORDER, color: AURA_INK }}>{displayYear}</span>
                 </div>
 
-                <div className="flex-1 flex flex-col justify-center px-4 py-3">
-                  <p className="text-[56px] font-medium leading-none tabular-nums" style={{ color: PERI_INK }}>
-                    <AnimNum value={stats.total} />
+                <div className="relative flex-1 flex flex-col justify-center px-4 py-3">
+                  <p className="text-[56px] font-medium leading-none tabular-nums pb-1">
+                    <AnimNum value={stats.total} gradient={AURA_GRADIENT} />
                   </p>
-                  <p className="text-[10.5px] font-medium uppercase tracking-[0.6px] mt-1.5" style={{ color: FAINT }}>Confirmed</p>
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.6px] mt-1" style={{ color: FAINT }}>Confirmed</p>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2 px-4 pb-4">
+                <div className="relative grid grid-cols-5 gap-2 px-4 pb-4">
                   {[
                     { label: 'Boys',   value: stats.boys,                 c: BOY_HEX },
                     { label: 'Girls',  value: stats.girls,                c: GIRL_HEX },
