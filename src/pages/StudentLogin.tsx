@@ -6,6 +6,8 @@ import { PetalRing } from '../components/login/PetalRing';
 import { LeafMark } from '../components/login/LeafMark';
 import { LoginToast } from '../components/login/LoginToast';
 import { AuraBackdrop } from '../components/login/AuraBackdrop';
+import { AuraTitle } from '../components/login/AuraTitle';
+import { LoginFooter } from '../components/login/LoginFooter';
 import { CARD, CARD_STYLE, FIELD, FIELD_INVALID, INK, LABEL, SECONDARY, SUBMIT, SUBMIT_STYLE } from '../components/login/loginStyles';
 
 const DOB_RE = /^\d{2}\/\d{2}\/\d{4}$/;
@@ -63,7 +65,7 @@ export function StudentLogin() {
           <PetalRing size={240} glow>
             <LeafMark size={64} />
           </PetalRing>
-          <h1 className="mt-7 text-[38px] leading-tight font-bold tracking-[0.02em]" style={{ color: INK }}>SMP Admissions</h1>
+          <AuraTitle className="mt-7 text-[36px] tracking-[0.06em]" />
           <p className="mt-1 text-[15px] text-[#5B6180]">Sanjay Memorial Polytechnic, Sagar</p>
           <p className="mt-5 text-[15px] font-semibold bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, #6366F1, #C026D3)' }}>
             Students Portal
@@ -75,7 +77,7 @@ export function StudentLogin() {
           <PetalRing size={120} glow>
             <LeafMark size={32} />
           </PetalRing>
-          <h1 className="mt-3 text-[22px] font-bold" style={{ color: INK }}>SMP Admissions</h1>
+          <AuraTitle className="mt-3 text-[21px] tracking-[0.05em]" />
           <p className="text-[12.5px] text-[#5B6180]">Sanjay Memorial Polytechnic, Sagar</p>
         </div>
 
@@ -174,6 +176,7 @@ export function StudentLogin() {
             </Link>
           </div>
         </div>
+        <LoginFooter />
       </div>
     </div>
   );
