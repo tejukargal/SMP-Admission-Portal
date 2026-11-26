@@ -99,6 +99,17 @@
   background-clip: text;
   animation: header-aurora 8s linear infinite;
 }
+/* Dashboard title's second palette: the login's petal aura (blue → violet → magenta),
+   crossfaded with .header-aurora every 8s by Header.tsx. */
+.header-aurora-petal {
+  color: transparent;
+  background-image: linear-gradient(90deg, #4338FF 0%, #9B4DFF 25%, #E040FB 50%, #9B4DFF 75%, #4338FF 100%);
+  background-size: 200% 100%;
+  background-repeat: repeat-x;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: header-aurora 8s linear infinite;
+}
 /* App header title — split-flap / slide-up: on each colour tick every letter's old
    colour slides up and out while the new colour slides in from below, staggered. */
 @keyframes header-flap-out {
@@ -154,7 +165,7 @@
   .header-aurora-accent { animation: none; }
   .header-flap-in { animation: none; }
   .header-flap-out { display: none; }
-  .header-aurora { animation: none; }
+  .header-aurora, .header-aurora-petal { animation: none; }
   .header-letter { animation: none; }
   .header-shimmer { display: none; }
 }
@@ -236,9 +247,20 @@
 .sb-word-in  { animation: sb-word-in 650ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .sb-word-out { animation: sb-word-out 450ms cubic-bezier(0.45, 0, 0.55, 1) both; }
 /* Deeper-toned aurora than the header's so it stays legible at sidebar size */
+/* Stops are registered colours so the wordmark can crossfade between palettes:
+   `.sb-aurora-host` transitions them, `.sb-aurora-petal` (toggled every 8s by
+   Sidebar.tsx, in step with the header title) swaps in the login's petal aura. */
+@property --sb-a1 { syntax: '<color>'; inherits: true; initial-value: #CF7F2E; }
+@property --sb-a2 { syntax: '<color>'; inherits: true; initial-value: #2F8DCB; }
+@property --sb-a3 { syntax: '<color>'; inherits: true; initial-value: #22958F; }
+@property --sb-a4 { syntax: '<color>'; inherits: true; initial-value: #7C63D6; }
+.sb-aurora-host {
+  transition: --sb-a1 900ms ease, --sb-a2 900ms ease, --sb-a3 900ms ease, --sb-a4 900ms ease;
+}
+.sb-aurora-petal { --sb-a1: #4338FF; --sb-a2: #9B4DFF; --sb-a3: #D63AF0; --sb-a4: #9B4DFF; }
 .sb-aurora {
   color: transparent;
-  background-image: linear-gradient(90deg, #CF7F2E 0%, #2F8DCB 25%, #22958F 50%, #7C63D6 75%, #CF7F2E 100%);
+  background-image: linear-gradient(90deg, var(--sb-a1) 0%, var(--sb-a2) 25%, var(--sb-a3) 50%, var(--sb-a4) 75%, var(--sb-a1) 100%);
   background-size: 200% 100%;
   background-repeat: repeat-x;
   -webkit-background-clip: text;

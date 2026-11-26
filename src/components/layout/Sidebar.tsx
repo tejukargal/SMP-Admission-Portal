@@ -146,6 +146,14 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
     return () => { clearTimeout(delayId); if (intervalId) clearInterval(intervalId); };
   }, [collapsed]);
 
+  // Wordmark palette alternates pastel aurora ⇄ login petal aura every 8s, like the
+  // Dashboard header title (CSS vars crossfade via `.sb-aurora-host`).
+  const [petalAurora, setPetalAurora] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setPetalAurora((p) => !p), 8000);
+    return () => clearInterval(id);
+  }, []);
+
   function renderWord(i: number) {
     return i === 0 ? (
       <>
@@ -273,7 +281,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         </div>
 
         {/* Wordmark — blur-slide word cycle in the aurora gradient */}
-        <div className="relative flex-1 min-w-0 h-[30px] overflow-hidden text-left" style={labelStyle(0)}>
+        <div className={`sb-aurora-host relative flex-1 min-w-0 h-[30px] overflow-hidden text-left ${petalAurora ? 'sb-aurora-petal' : ''}`} style={labelStyle(0)}>
           {title.prev !== null && (
             <div key={`o${title.prev}-${title.idx}`} className="sb-word-out absolute inset-0 flex flex-col justify-center">
               {renderWord(title.prev)}

@@ -176,6 +176,9 @@ export function Header({ onMenuClick }: HeaderProps) {
   // The Dashboard keeps its pastel multi-colour title aurora; the bar itself uses its own accent
   const isDashboard = matchPath({ path: '/dashboard', end: false }, pathname) !== null;
   const multiAurora = isDashboard && !override;
+  // Dashboard title alternates between its pastel aurora and the login's petal-aura
+  // palette every 8s (every 2nd shimmer tick, so the swap lands with a glossy sweep).
+  const petalAurora = Math.floor(tick / 2) % 2 === 1;
   const accentVars = {
     '--hb-acc': page.accent,
     '--hb-ink': page.ink,
@@ -283,7 +286,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         >
           {/* Both tints stay mounted and crossfade, so switching (e.g. Dashboard search)
               fades the title between the multi-colour aurora and the accent tint. */}
-          <span aria-hidden="true" className="header-aurora transition-opacity duration-[450ms]" style={{ opacity: multiAurora ? 1 : 0 }}>
+          <span aria-hidden="true" className="header-aurora transition-opacity duration-[900ms]" style={{ opacity: multiAurora && !petalAurora ? 1 : 0 }}>
+            {TITLE_CHARS.map((ch, i) => (
+              <span key={i} className="inline-block">{ch}</span>
+            ))}
+          </span>
+          <span aria-hidden="true" className="header-aurora-petal absolute inset-0 transition-opacity duration-[900ms]" style={{ opacity: multiAurora && petalAurora ? 1 : 0 }}>
             {TITLE_CHARS.map((ch, i) => (
               <span key={i} className="inline-block">{ch}</span>
             ))}
