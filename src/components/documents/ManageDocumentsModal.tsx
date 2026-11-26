@@ -1,733 +1,359 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
-import { saveStudentDocuments } from '../../services/studentDocumentService';
-import { printStudentDocs } from '../../utils/printStudentDocs';
-import type { Student, DocKey } from '../../types';
-import { REQUIRED_DOCS } from '../../types';
+import {
+  DocOfflineError, docSummary, statusOf, todayLocal, updateDocEntry,
+} from '../../services/studentDocumentService';
+import { printStudentDocs, printReturnSlip, returnedOnDate } from '../../utils/printStudentDocs';
+import type { DocEntry, DocHistoryAction, DocKey, DocStatus, Student } from '../../types';
+import { DOC_COPY_DEFAULT, REQUIRED_DOCS } from '../../types';
+import { DocRow, type RowSaveState } from './DocRow';
+import { DocHistoryPanel } from './DocHistoryPanel';
+import { OutlinePill, ProgressRing, Spinner, Svg } from './docsUi';
+import { DOC_TONE, STATUS_META, fmtDay } from './docsTokens';
+import { Icon } from './docsIcons';
 
 interface Props {
   student: Student;
   onClose: () => void;
 }
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+type Tab = 'checklist' | 'history';
+interface UndoState { key: DocKey; message: string; before: DocEntry; after: DocEntry; id: number }
 
-// Unique colour per document type — never changes with status
-const DOC_PALETTE: Record<string, { bg: string; border: string; text: string }> = {
-  sslcMarksCard:           { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-700'   },
-  transferCertificate:     { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700'  },
-  studyCertificate:        { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700' },
-  casteCertificate:        { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700' },
-  incomeCertificate:       { bg: 'bg-cyan-50',   border: 'border-cyan-200',   text: 'text-cyan-700'   },
-  aadharCopy:              { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
-  eligibilityCertificate:  { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
-  passportPhotos:          { bg: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700'   },
-};
+const UNDO_MS = 6000;
+const LABEL = Object.fromEntries(REQUIRED_DOCS.map((d) => [d.key, d.label])) as Record<DocKey, string>;
 
 export function ManageDocumentsModal({ student, onClose }: Props) {
-  const { docs: loadedDocs, loading, error } = useStudentDocuments(student.id);
-  const [docs, setDocs]         = useState(loadedDocs);
-  const [saving, setSaving]     = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [isDirty, setIsDirty]   = useState(false);
+  const { docs, loading, error } = useStudentDocuments(student.id);
 
-  const [docContextMenu, setDocContextMenu]       = useState<{ x: number; y: number; key: DocKey } | null>(null);
-  const [detailDoc, setDetailDoc]                 = useState<{ key: DocKey; focusRemarks: boolean } | null>(null);
-  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
-  const remarksRef = useRef<HTMLTextAreaElement>(null);
+  const [tab, setTab] = useState<Tab>('checklist');
+  const [rowState, setRowState] = useState<Partial<Record<DocKey, RowSaveState>>>({});
+  const [rowError, setRowError] = useState<Partial<Record<DocKey, string>>>({});
+  const [offline, setOffline] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState('');
+  const [undo, setUndo] = useState<UndoState | null>(null);
+  const [gmDismissed, setGmDismissed] = useState(false);
+  const [slipDate, setSlipDate] = useState('');
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const savedTimers = useRef<Partial<Record<DocKey, ReturnType<typeof setTimeout>>>>({});
 
-  useEffect(() => { if (loadedDocs) setDocs(loadedDocs); }, [loadedDocs]);
-
-  // Guard close: show warning if there are unsaved changes
-  function handleClose() {
-    if (isDirty) { setShowUnsavedWarning(true); return; }
-    onClose();
-  }
-
-  // Save then close — used by the warning dialog's "Save & Close" action
-  async function handleSaveAndClose() {
-    if (!docs) return;
-    setSaving(true); setSaveError('');
-    try {
-      await saveStudentDocuments(student.id, docs);
-      onClose();
-    } catch {
-      setSaveError('Failed to save. Please try again.');
-      setShowUnsavedWarning(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Escape: close context menu → detail popup → warning → modal
+  // Esc closes (inputs that use Esc stop propagation themselves).
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== 'Escape') return;
-      if (docContextMenu)      { setDocContextMenu(null);      return; }
-      if (detailDoc)           { setDetailDoc(null);           return; }
-      if (showUnsavedWarning)  { setShowUnsavedWarning(false); return; }
-      handleClose();
-    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, docContextMenu, detailDoc, showUnsavedWarning, isDirty]);
+  }, [onClose]);
 
-  // Auto-focus remarks textarea when popup opens with focusRemarks=true
   useEffect(() => {
-    if (!detailDoc?.focusRemarks) return;
-    const t = setTimeout(() => remarksRef.current?.focus(), 80);
-    return () => clearTimeout(t);
-  }, [detailDoc]);
+    const goOnline = () => setOffline(false);
+    window.addEventListener('online', goOnline);
+    const timers = savedTimers.current;
+    return () => {
+      window.removeEventListener('online', goOnline);
+      clearTimeout(undoTimer.current);
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
 
-  function markDirty() { setIsDirty(true); }
+  const anySaving = Object.values(rowState).some((s) => s === 'saving');
 
-  function toggleSubmitted(key: DocKey) {
+  // ── One atomic, audited change ────────────────────────────────────────────
+  const commit = useCallback(async (
+    key: DocKey, next: DocEntry, action: DocHistoryAction, undoMessage?: string, seenOverride?: DocEntry,
+  ) => {
     if (!docs) return;
-    const entry = docs[key];
-    const submitted = !entry.submitted;
-    setDocs({
-      ...docs,
-      [key]: {
-        ...entry,
-        submitted,
-        submittedOn: submitted ? (entry.submittedOn || todayStr()) : '',
-        returned: submitted ? entry.returned : false,
-        returnedOn: submitted ? entry.returnedOn : '',
-      },
-    });
-    markDirty();
-  }
-
-  function toggleNotRequired(key: DocKey) {
-    if (!docs) return;
-    setDocs({ ...docs, [key]: { ...docs[key], notRequired: !docs[key].notRequired } });
-    markDirty();
-  }
-
-  function setSubmittedOn(key: DocKey, date: string) {
-    if (!docs) return;
-    setDocs({ ...docs, [key]: { ...docs[key], submittedOn: date } });
-    markDirty();
-  }
-
-  function toggleReturned(key: DocKey) {
-    if (!docs) return;
-    const entry = docs[key];
-    const returned = !entry.returned;
-    setDocs({
-      ...docs,
-      [key]: {
-        ...entry,
-        returned,
-        returnedOn: returned ? (entry.returnedOn || todayStr()) : '',
-      },
-    });
-    markDirty();
-  }
-
-  function setReturnedOn(key: DocKey, date: string) {
-    if (!docs) return;
-    setDocs({ ...docs, [key]: { ...docs[key], returnedOn: date } });
-    markDirty();
-  }
-
-  function setRemarks(key: DocKey, remarks: string) {
-    if (!docs) return;
-    setDocs({ ...docs, [key]: { ...docs[key], remarks } });
-    markDirty();
-  }
-
-  async function handleSave() {
-    if (!docs) return;
-    setSaving(true); setSaveError('');
+    const seen = seenOverride ?? docs[key];
+    setRowError((e) => ({ ...e, [key]: '' }));
+    setRowState((s) => ({ ...s, [key]: 'saving' }));
     try {
-      await saveStudentDocuments(student.id, docs);
-      setIsDirty(false);
-      onClose();
-    } catch {
-      setSaveError('Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
+      const saved = await updateDocEntry(student.id, key, seen, next, action);
+      setOffline(false);
+      setLastSavedAt(new Date().toISOString());
+      setRowState((s) => ({ ...s, [key]: 'saved' }));
+      clearTimeout(savedTimers.current[key]);
+      savedTimers.current[key] = setTimeout(() => setRowState((s) => ({ ...s, [key]: 'idle' })), 1800);
+      if (undoMessage) {
+        clearTimeout(undoTimer.current);
+        const id = Date.now();
+        setUndo({ key, message: undoMessage, before: seen, after: saved, id });
+        undoTimer.current = setTimeout(() => setUndo((u) => (u?.id === id ? null : u)), UNDO_MS);
+      }
+    } catch (err) {
+      setRowState((s) => ({ ...s, [key]: 'idle' }));
+      if (err instanceof DocOfflineError) setOffline(true);
+      setRowError((e) => ({ ...e, [key]: err instanceof Error ? err.message : 'Could not save. Please try again.' }));
+    }
+  }, [docs, student.id]);
+
+  // ── Status transitions ────────────────────────────────────────────────────
+  function setStatus(key: DocKey, target: DocStatus) {
+    if (!docs) return;
+    const e = docs[key];
+    const from = statusOf(e);
+    const label = LABEL[key];
+    if (target === 'pending') {
+      commit(key, { ...e, submitted: false, submittedOn: '', returned: false, returnedOn: '', notRequired: false, copyType: undefined },
+        from === 'notRequired' ? 'required' : 'pending', `${label} set to Pending`);
+    } else if (target === 'received') {
+      if (from === 'returned') {
+        commit(key, { ...e, returned: false, returnedOn: '' }, 'unreturned', `${label} is back with the college`);
+      } else {
+        commit(key, {
+          ...e, submitted: true, submittedOn: e.submittedOn || todayLocal(),
+          returned: false, returnedOn: '', notRequired: false,
+          copyType: e.copyType ?? DOC_COPY_DEFAULT[key],
+        }, 'received', `${label} marked Received`);
+      }
+    } else if (target === 'notRequired') {
+      commit(key, { ...e, submitted: false, submittedOn: '', returned: false, returnedOn: '', notRequired: true, copyType: undefined },
+        'notRequired', `${label} marked Not required`);
     }
   }
 
-  function handleDocContextMenu(e: React.MouseEvent, key: DocKey) {
-    e.preventDefault(); e.stopPropagation();
-    const MENU_W = 210, MENU_H = 160;
-    const x = e.clientX + MENU_W > window.innerWidth  ? e.clientX - MENU_W : e.clientX;
-    const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
-    setDocContextMenu({ x, y, key });
+  function confirmReturn(key: DocKey, date: string, reason: string) {
+    if (!docs) return;
+    const e = docs[key];
+    const remarks = reason ? (e.remarks ? `${e.remarks} · ${reason}` : reason) : e.remarks;
+    commit(key, { ...e, returned: true, returnedOn: date, remarks }, 'returned', `${LABEL[key]} marked Returned`);
+    setSlipDate(date);
   }
 
-  const notRequiredCount = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].notRequired).length : 0;
-  const total          = REQUIRED_DOCS.length - notRequiredCount;
-  const submittedCount = docs ? REQUIRED_DOCS.filter(({ key }) => !docs[key].notRequired && docs[key].submitted).length : 0;
-  const returnedCount  = docs ? REQUIRED_DOCS.filter(({ key }) => docs[key].returned).length : 0;
-  const pendingCount   = total - submittedCount;
+  function undoLast() {
+    if (!undo || !docs) return;
+    const { key, before, after } = undo;
+    clearTimeout(undoTimer.current);
+    setUndo(null);
+    commit(key, before, 'undo', undefined, after);
+  }
 
-  const headerGradient = (loading || !docs)
-    ? 'from-slate-700 to-slate-900'
-    : submittedCount === total ? 'from-emerald-600 to-emerald-800'
-    : submittedCount === 0    ? 'from-red-600 to-red-800'
-                              : 'from-amber-500 to-amber-700';
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const sum = docs ? docSummary(docs) : null;
+  const today = todayLocal();
+  const showGmHint = !!docs && student.category === 'GM' && !gmDismissed
+    && statusOf(docs.casteCertificate) === 'pending';
 
-  // ── Context menu shared classes ───────────────────────────────────────────
-  const mItem = 'group w-full text-left px-3 py-[7px] text-[13px] text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center gap-2.5 transition-colors duration-100';
-  const mIcon = 'w-[18px] h-[18px] rounded-[5px] bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 transition-colors';
+  /** Distinct dates on which documents were returned (newest first) — for slip reprints. */
+  const returnDates = useMemo(() => {
+    if (!docs) return [];
+    const set = new Set<string>();
+    for (const { key } of REQUIRED_DOCS) if (docs[key].returned && docs[key].returnedOn) set.add(docs[key].returnedOn);
+    return [...set].sort().reverse();
+  }, [docs]);
+  const activeSlipDate = returnDates.includes(slipDate) ? slipDate : returnDates.includes(today) ? today : '';
+  const slipCount = docs && activeSlipDate ? returnedOnDate(docs, activeSlipDate).length : 0;
 
-  // ── Detail popup computed values ──────────────────────────────────────────
-  const dKey    = detailDoc?.key;
-  const dEntry  = dKey && docs ? docs[dKey] : null;
-  const dLabel  = dKey ? REQUIRED_DOCS.find(d => d.key === dKey)?.label ?? '' : '';
-  const dPal    = dKey ? (DOC_PALETTE[dKey] ?? DOC_PALETTE.sslcMarksCard) : DOC_PALETTE.sslcMarksCard;
-  const dStatus = dEntry?.notRequired ? 'Not Required' : dEntry?.returned ? 'Returned' : dEntry?.submitted ? 'Submitted' : 'Pending';
-  const dStatusCls = dEntry?.notRequired
-    ? 'bg-gray-200 text-gray-500'
-    : dEntry?.returned
-      ? 'bg-blue-500 text-white'
-      : dEntry?.submitted
-        ? 'bg-emerald-500 text-white'
-        : 'bg-gray-200 text-gray-600';
-
-  // ── Skeleton grid while loading ───────────────────────────────────────────
-  const skeletonGrid = (
-    <div className="grid grid-cols-4 gap-3 p-5">
-      {Array.from({ length: REQUIRED_DOCS.length }).map((_, i) => (
-        <div key={i} className="rounded-xl border-2 border-gray-100 bg-white p-2.5 h-[114px] flex flex-col">
-          <div className="skeleton h-2.5 w-3/4 rounded mb-1" />
-          <div className="skeleton h-2.5 w-1/2 rounded" />
-          <div className="flex-1 flex items-center justify-center">
-            <div className="skeleton h-4 w-16 rounded" />
-          </div>
-        </div>
-      ))}
-    </div>
+  const historyKey = useMemo(
+    () => (docs ? REQUIRED_DOCS.map(({ key }) => docs[key].updatedAt ?? '').join('|') : ''),
+    [docs],
   );
 
+  const infoBits = [
+    student.regNumber ? `Reg No ${student.regNumber}` : 'No Reg No yet',
+    student.course, student.year, student.academicYear, student.category,
+  ].filter(Boolean);
+
+  // ── Save state chip ───────────────────────────────────────────────────────
+  const saveChip = offline
+    ? { text: 'Offline — not saved', color: DOC_TONE.coral, icon: <Svg size={12}>{Icon.wifiOff}</Svg> }
+    : anySaving
+      ? { text: 'Saving…', color: DOC_TONE.muted, icon: <Spinner size={12} color={DOC_TONE.muted} /> }
+      : lastSavedAt
+        ? { text: 'All changes saved', color: DOC_TONE.accent, icon: <Svg size={12} strokeWidth={2.6}>{Icon.check}</Svg> }
+        : { text: 'Changes save instantly', color: DOC_TONE.faint, icon: <Svg size={12}>{Icon.shield}</Svg> };
+
+  const pillBtn = 'inline-flex items-center gap-1.5 rounded-full border px-3.5 h-8 text-[12.5px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300';
+
   return (
-    <>
-      {/* ════════════════════════════════════════════════════════════════════
-          MODAL
-      ════════════════════════════════════════════════════════════════════ */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 font-wp" style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-6"
-        style={{ animation: 'backdrop-enter 0.18s ease-out' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Manage documents — ${student.studentNameSSLC}`}
+        className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        style={{ width: 780, maxWidth: '100%', maxHeight: 'calc(100vh - 2rem)', animation: 'modal-enter 0.22s ease-out' }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
-        <div
-          className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          style={{ width: '860px', maxWidth: '100%', maxHeight: 'calc(100vh - 3rem)', animation: 'modal-enter 0.22s ease-out' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* ── Header ── */}
-          <div className={`px-5 py-3.5 bg-gradient-to-r ${headerGradient} flex items-center justify-between shrink-0`}>
-            <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white/20 shrink-0">
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+        {/* ── Header ── */}
+        <div className="px-5 pt-4 pb-3 shrink-0 border-b" style={{ background: `linear-gradient(180deg, ${DOC_TONE.wash}, #fff)`, borderColor: DOC_TONE.hairline }}>
+          <div className="flex items-start gap-4">
+            {sum ? <ProgressRing value={sum.received} total={sum.required} /> : <div className="skeleton w-[58px] h-[58px] !rounded-full shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.8px]" style={{ color: DOC_TONE.ink }}>Manage Documents</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: saveChip.color }} aria-live="polite">
+                  · {saveChip.icon}{saveChip.text}
                 </span>
-                Manage Documents
-              </h2>
-              {docs && !loading && (
-                <>
-                  <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40">
-                    {submittedCount}/{total} Submitted
-                    <span className="opacity-60">·</span>
-                    <span>{submittedCount === total ? '✓ Complete' : `${pendingCount} pending`}</span>
-                  </span>
-                  {returnedCount > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/20 text-white border border-white/40">
-                      {returnedCount} Returned
-                    </span>
-                  )}
-                  {notRequiredCount > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full text-[10px] font-semibold px-2.5 py-0.5 bg-white/10 text-white/60 border border-white/20">
-                      {notRequiredCount} N/A
-                    </span>
-                  )}
-                  <span className="ml-1 text-[10px] text-white/55 italic hidden sm:inline">
-                    Tick to mark · Double-click for details · Right-click for options
-                  </span>
-                </>
+              </div>
+              <h2 className="text-[17px] font-semibold truncate mt-0.5" style={{ color: DOC_TONE.text }}>{student.studentNameSSLC}</h2>
+              <p className="text-[12px] truncate" style={{ color: DOC_TONE.muted }}>{infoBits.join(' · ')}</p>
+              {sum && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <OutlinePill color={STATUS_META.received.ink} wash="#fff">{sum.received}/{sum.required} received</OutlinePill>
+                  {sum.withCollege > 0 && <OutlinePill color={DOC_TONE.ink} wash="#fff">{sum.withCollege} with college</OutlinePill>}
+                  {sum.returned > 0 && <OutlinePill color={STATUS_META.returned.ink} wash="#fff">{sum.returned} returned</OutlinePill>}
+                  {sum.pending > 0
+                    ? <OutlinePill color={DOC_TONE.coral} wash="#fff">{sum.pending} pending</OutlinePill>
+                    : <OutlinePill color={DOC_TONE.accent} wash="#fff">✓ All received</OutlinePill>}
+                  {sum.notRequired > 0 && <OutlinePill color={STATUS_META.notRequired.ink} wash="#fff">{sum.notRequired} N/A</OutlinePill>}
+                </div>
               )}
             </div>
             <button
-              onClick={handleClose}
-              className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 text-white text-lg leading-none transition-colors cursor-pointer shrink-0 ml-3"
+              type="button" onClick={onClose} aria-label="Close"
+              className="w-8 h-8 rounded-full flex items-center justify-center border bg-white hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
+              style={{ borderColor: DOC_TONE.line, color: DOC_TONE.muted }}
             >
-              ×
+              <Svg size={14}>{Icon.close}</Svg>
             </button>
           </div>
 
-          {/* ── Student info bar ── */}
-          <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 shrink-0">
-            <div className="flex flex-wrap gap-x-5 gap-y-1">
-              {[
-                { label: 'Student',       value: student.studentNameSSLC, bold: true  },
-                { label: 'Course',        value: student.course,          bold: false },
-                { label: 'Year',          value: student.year,            bold: false },
-                { label: 'Academic Year', value: student.academicYear,    bold: false },
-                ...(student.regNumber ? [{ label: 'Reg No', value: student.regNumber, bold: false }] : []),
-              ].map(({ label, value, bold }) => (
-                <div key={label} className="flex flex-col min-w-0">
-                  <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">{label}</span>
-                  <span className={`text-xs truncate ${bold ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{value}</span>
+          {/* Tabs */}
+          <div className="flex gap-1 mt-3 -mb-3">
+            {([
+              { id: 'checklist', label: 'Checklist', icon: Icon.list },
+              { id: 'history', label: 'History', icon: Icon.history },
+            ] as const).map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={active}
+                  className="flex items-center gap-1.5 px-3 h-9 text-[12.5px] font-medium border-b-2 transition-colors cursor-pointer"
+                  style={{ borderColor: active ? DOC_TONE.accent : 'transparent', color: active ? DOC_TONE.ink : DOC_TONE.muted }}
+                >
+                  <Svg size={13}>{t.icon}</Svg>{t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4" style={{ background: '#FBFCFD' }}>
+          {error ? (
+            <div className="py-16 text-center text-[13px]" style={{ color: DOC_TONE.coral }}>{error}</div>
+          ) : tab === 'history' ? (
+            <DocHistoryPanel studentId={student.id} refreshKey={historyKey} />
+          ) : (loading || !docs) ? (
+            <div className="space-y-2">
+              {REQUIRED_DOCS.map(({ key }) => <div key={key} className="skeleton h-[52px] !rounded-xl" />)}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {showGmHint && (
+                <div className="flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px]" style={{ borderColor: '#F5DEB3', background: '#FFFAF0', color: '#92400E' }}>
+                  <Svg size={15}>{Icon.bulb}</Svg>
+                  <span className="flex-1">GM category: the <b className="font-semibold">Caste Certificate</b> is usually not required.</span>
+                  <button
+                    type="button" onClick={() => setStatus('casteCertificate', 'notRequired')}
+                    className="rounded-full border bg-white px-3 h-7 text-[12px] font-medium cursor-pointer hover:bg-amber-50"
+                    style={{ borderColor: '#F0C987' }}
+                  >
+                    Mark N/A
+                  </button>
+                  <button type="button" onClick={() => setGmDismissed(true)} className="px-2 h-7 text-[12px] font-medium cursor-pointer opacity-70 hover:opacity-100">
+                    Dismiss
+                  </button>
                 </div>
+              )}
+
+              {REQUIRED_DOCS.map(({ key, label }, idx) => (
+                <DocRow
+                  key={key}
+                  docKey={key}
+                  label={label}
+                  entry={docs[key]}
+                  index={idx}
+                  saveState={rowState[key] ?? 'idle'}
+                  error={rowError[key] ?? ''}
+                  onStatus={(t) => setStatus(key, t)}
+                  onConfirmReturn={(d, r) => confirmReturn(key, d, r)}
+                  onDate={(field, date) => commit(key, { ...docs[key], [field]: date }, 'date')}
+                  onRemarks={(remarks) => commit(key, { ...docs[key], remarks }, 'remarks')}
+                  onCopyType={() => commit(key, { ...docs[key], copyType: docs[key].copyType === 'copy' ? 'original' : 'copy' }, 'copyType')}
+                  onDismissError={() => setRowError((e) => ({ ...e, [key]: '' }))}
+                />
               ))}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* ── Body: 4-column document card grid ── */}
-          <div
-            className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: 'none' }}
+        {/* ── Footer ── */}
+        <div className="px-5 py-3 border-t flex items-center gap-2 flex-wrap shrink-0 bg-white" style={{ borderColor: DOC_TONE.line }}>
+          <button
+            type="button"
+            disabled={!docs}
+            onClick={() => docs && printStudentDocs(student, docs)}
+            className={`${pillBtn} bg-white hover:bg-gray-50`}
+            style={{ borderColor: DOC_TONE.line, color: DOC_TONE.text }}
           >
-            {error ? (
-              <div className="flex items-center justify-center h-48 text-sm text-red-500">{error}</div>
-            ) : (loading || !docs) ? skeletonGrid : (
-              <div className="grid grid-cols-4 gap-3 p-5">
-                {REQUIRED_DOCS.map(({ key, label }, idx) => {
-                  const entry         = docs[key];
-                  const isSubmitted   = entry.submitted;
-                  const isReturned    = entry.returned;
-                  const isNotRequired = !!entry.notRequired;
-                  const pal = DOC_PALETTE[key] ?? DOC_PALETTE.sslcMarksCard;
+            <Svg size={13}>{Icon.print}</Svg> Print checklist
+          </button>
 
-                  return (
-                    <div
-                      key={key}
-                      style={{ animation: `modal-enter 0.2s ease-out ${idx * 28}ms both` }}
-                      className={`flex flex-col rounded-xl border-2 p-2.5 h-[114px] select-none transition-shadow duration-150 hover:shadow-md cursor-context-menu ${pal.bg} ${pal.border} ${isNotRequired ? 'opacity-50' : ''}`}
-                      onDoubleClick={() => setDetailDoc({ key, focusRemarks: false })}
-                      onContextMenu={(e) => handleDocContextMenu(e, key)}
-                      title="Double-click for details · Right-click for options"
-                    >
-                      {/* Document label */}
-                      <p className={`text-[15px] font-extrabold leading-snug line-clamp-2 text-center shrink-0 ${pal.text}`}>
-                        {label}
-                      </p>
-
-                      {/* Checkboxes — opposite ends */}
-                      <div className="flex items-end justify-between mt-auto pt-1">
-
-                        {/* Submitted — left */}
-                        <button
-                          type="button"
-                          disabled={isNotRequired}
-                          onClick={(e) => { e.stopPropagation(); toggleSubmitted(key); }}
-                          className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
-                        >
-                          <div className={`w-[28px] h-[28px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
-                            ${isSubmitted
-                              ? 'bg-emerald-500 border-emerald-500 shadow-emerald-200'
-                              : `bg-white/70 ${pal.border} group-hover:border-emerald-400 group-hover:bg-white`}
-                            ${isNotRequired ? 'opacity-40' : ''}`}
-                          >
-                            {isSubmitted && (
-                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className={`text-[10px] font-bold tracking-wide leading-none transition-colors ${isSubmitted ? pal.text : 'text-gray-400 group-hover:text-gray-500'}`}>
-                            SUBM
-                          </span>
-                        </button>
-
-                        {/* Returned — right */}
-                        <button
-                          type="button"
-                          disabled={!isSubmitted || isNotRequired}
-                          onClick={(e) => { e.stopPropagation(); toggleReturned(key); }}
-                          className="flex flex-col items-center gap-1 group disabled:cursor-not-allowed"
-                        >
-                          <div className={`w-[28px] h-[28px] rounded-lg border-2 flex items-center justify-center transition-all duration-150 shadow-sm
-                            ${isReturned
-                              ? 'bg-blue-500 border-blue-500 shadow-blue-200'
-                              : 'bg-white/70 border-blue-200 group-hover:border-blue-400 group-hover:bg-white'}
-                            ${(!isSubmitted || isNotRequired) ? 'opacity-30' : ''}`}
-                          >
-                            {isReturned && (
-                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className={`text-[10px] font-bold tracking-wide leading-none transition-colors ${isReturned ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-500'}`}>
-                            RETD
-                          </span>
-                        </button>
-
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── Footer: colour-coded status legend + action buttons ── */}
-          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/60 shrink-0">
-            <div className="flex gap-2 mb-3">
-              {docs && !loading ? (
-                <>
-                  {/* Total */}
-                  <div className="flex-1 rounded-xl border-2 border-gray-200 bg-white px-3 py-1.5">
-                    <div className="text-[8.5px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
-                    <div className="text-base font-extrabold text-gray-700 leading-tight">{total}</div>
-                    <div className="text-[8.5px] text-gray-400">documents</div>
-                  </div>
-                  {/* Submitted */}
-                  <div className={`flex-1 rounded-xl px-3 py-1.5 ${submittedCount === total ? 'bg-emerald-600' : 'bg-emerald-500'}`}>
-                    <div className="text-[8.5px] text-emerald-100 font-bold uppercase tracking-wider">Submitted</div>
-                    <div className="text-base font-extrabold text-white leading-tight">{submittedCount}</div>
-                    <div className="text-[8.5px] text-emerald-200">
-                      {submittedCount === total ? '✓ All submitted' : `${pendingCount} pending`}
-                    </div>
-                  </div>
-                  {/* Returned */}
-                  <div className="flex-1 rounded-xl bg-blue-500 px-3 py-1.5">
-                    <div className="text-[8.5px] text-blue-100 font-bold uppercase tracking-wider">Returned</div>
-                    <div className="text-base font-extrabold text-white leading-tight">{returnedCount}</div>
-                    <div className="text-[8.5px] text-blue-200">
-                      {submittedCount > 0 && returnedCount < submittedCount
-                        ? `${submittedCount - returnedCount} with college`
-                        : returnedCount === 0 ? 'none returned' : '✓ All returned'}
-                    </div>
-                  </div>
-                  {/* Pending */}
-                  <div className={`flex-1 rounded-xl px-3 py-1.5 border-2 ${pendingCount === 0 ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
-                    <div className={`text-[8.5px] font-bold uppercase tracking-wider ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>Pending</div>
-                    <div className={`text-base font-extrabold leading-tight ${pendingCount === 0 ? 'text-gray-400' : 'text-red-600'}`}>{pendingCount}</div>
-                    <div className={`text-[8.5px] ${pendingCount === 0 ? 'text-gray-400' : 'text-red-400'}`}>
-                      {pendingCount === 0 ? '✓ Complete' : 'not submitted'}
-                    </div>
-                  </div>
-                  {/* Not Required tile */}
-                  {notRequiredCount > 0 && (
-                    <div className="flex-1 rounded-xl px-3 py-1.5 border-2 bg-gray-50 border-gray-200">
-                      <div className="text-[8.5px] text-gray-400 font-bold uppercase tracking-wider">Not Reqd</div>
-                      <div className="text-base font-extrabold text-gray-400 leading-tight">{notRequiredCount}</div>
-                      <div className="text-[8.5px] text-gray-400">exempted</div>
-                    </div>
-                  )}
-                  {/* Error tile */}
-                  {saveError && (
-                    <div className="flex-1 rounded-xl bg-red-50 border-2 border-red-300 px-3 py-1.5">
-                      <div className="text-[8.5px] text-red-400 font-bold uppercase tracking-wider">Error</div>
-                      <div className="text-[10px] font-semibold text-red-600 mt-0.5 leading-tight">{saveError}</div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* Skeleton tiles — same height as real tiles so footer never shifts layout */
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex-1 rounded-xl border-2 border-gray-100 bg-white px-3 py-1.5">
-                    <div className="skeleton h-2 w-12 rounded mb-1.5" />
-                    <div className="skeleton h-4 w-5 rounded mb-1" />
-                    <div className="skeleton h-2 w-14 rounded" />
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
+          {returnDates.length > 0 && docs && (
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={handleClose}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+                type="button"
+                disabled={!activeSlipDate || slipCount === 0}
+                onClick={() => printReturnSlip(student, docs, activeSlipDate)}
+                className={`${pillBtn}`}
+                style={{
+                  borderColor: `${STATUS_META.returned.color}66`,
+                  color: STATUS_META.returned.ink,
+                  background: activeSlipDate === today ? STATUS_META.returned.wash : '#fff',
+                }}
+                title="Acknowledgement for the student to sign when originals are handed back"
               >
-                Close
+                <Svg size={13}>{Icon.back}</Svg>
+                Print return slip{slipCount ? ` (${slipCount})` : ''}
               </button>
-              {docs && (
-                <button
-                  onClick={() => printStudentDocs(student, docs)}
-                  disabled={isDirty}
-                  title={isDirty ? 'Save changes before printing' : 'Print document list'}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 cursor-pointer transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  🖨️ Print
-                </button>
-              )}
-              <button
-                onClick={() => void handleSave()}
-                disabled={saving || loading || !docs || !isDirty}
-                className="rounded-lg bg-blue-600 text-white px-4 py-1.5 text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              <select
+                value={activeSlipDate}
+                onChange={(e) => setSlipDate(e.target.value)}
+                aria-label="Return slip date"
+                className="h-8 rounded-full border bg-white px-2.5 text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-sky-200 cursor-pointer"
+                style={{ borderColor: DOC_TONE.line, color: DOC_TONE.muted }}
               >
-                {saving ? 'Saving…' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-
-          {/* ── Unsaved-changes warning overlay ── */}
-          {showUnsavedWarning && (
-            <div className="absolute inset-0 z-[80] flex items-center justify-center rounded-2xl bg-black/40">
-              <div
-                className="bg-white rounded-2xl shadow-2xl w-72 overflow-hidden"
-                style={{ animation: 'modal-enter 0.16s ease-out' }}
-              >
-                {/* Header */}
-                <div className="px-5 pt-5 pb-3 flex items-start gap-3">
-                  <span className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-lg">⚠️</span>
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900">Unsaved Changes</h3>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                      You have unsaved changes. Save them before closing or they will be lost.
-                    </p>
-                  </div>
-                </div>
-                {/* Actions */}
-                <div className="px-5 pb-5 flex flex-col gap-2 mt-1">
-                  <button
-                    onClick={() => void handleSaveAndClose()}
-                    disabled={saving}
-                    className="w-full rounded-lg bg-blue-600 text-white py-2 text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {saving ? 'Saving…' : 'Save & Close'}
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="w-full rounded-lg border border-red-200 bg-red-50 text-red-600 py-2 text-xs font-semibold hover:bg-red-100 transition-colors"
-                  >
-                    Discard & Close
-                  </button>
-                  <button
-                    onClick={() => setShowUnsavedWarning(false)}
-                    className="w-full rounded-lg border border-gray-200 bg-white text-gray-600 py-2 text-xs font-medium hover:bg-gray-50 transition-colors"
-                  >
-                    Keep Editing
-                  </button>
-                </div>
-              </div>
+                {!activeSlipDate && <option value="">Pick a date</option>}
+                {returnDates.map((d) => <option key={d} value={d}>{d === today ? `Today (${fmtDay(d)})` : fmtDay(d)}</option>)}
+              </select>
             </div>
           )}
 
+          <div className="flex-1" />
+          <button
+            type="button" onClick={onClose}
+            className={`${pillBtn} text-white`}
+            style={{ background: DOC_TONE.accent, borderColor: DOC_TONE.accent }}
+          >
+            Done
+          </button>
         </div>
-      </div>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          DOCUMENT RIGHT-CLICK CONTEXT MENU
-          Rendered as a fragment sibling to avoid overflow/stacking issues
-      ════════════════════════════════════════════════════════════════════ */}
-      {docContextMenu && docs && (() => {
-        const ce    = docs[docContextMenu.key];
-        const cLabel = REQUIRED_DOCS.find(d => d.key === docContextMenu.key)?.label ?? '';
-        const cPal  = DOC_PALETTE[docContextMenu.key] ?? DOC_PALETTE.sslcMarksCard;
-        return (
-          <>
-            <div
-              className="fixed inset-0 z-[60]"
-              onClick={() => setDocContextMenu(null)}
-              onContextMenu={(e) => { e.preventDefault(); setDocContextMenu(null); }}
-            />
-            <div
-              className="fixed z-[70] bg-white border border-gray-200/80 rounded-2xl overflow-hidden min-w-[210px]"
-              style={{
-                left: docContextMenu.x, top: docContextMenu.y,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06)',
-                animation: 'ctx-menu-enter 0.12s cubic-bezier(0.2,0,0,1)',
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              {/* Header: uses the doc's unique palette colour */}
-              <div className={`px-3 pt-2.5 pb-2 border-b border-gray-100 ${cPal.bg}`}>
-                <span className={`text-[11px] font-bold truncate block ${cPal.text}`}>{cLabel}</span>
-              </div>
-
-              <div className="py-1.5">
-                {/* Not Required: only show "Mark as Required" */}
-                {ce.notRequired ? (
-                  <button className={mItem} onClick={() => { toggleNotRequired(docContextMenu.key); setDocContextMenu(null); }}>
-                    <span className={`${mIcon} group-hover:bg-gray-100 group-hover:text-gray-700`}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    </span>
-                    Mark as Required
-                  </button>
-                ) : (
-                  <>
-                    {/* Mark Submitted */}
-                    {!ce.submitted && (
-                      <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                        <span className={`${mIcon} group-hover:bg-emerald-100 group-hover:text-emerald-600`}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        </span>
-                        Mark as Submitted
-                      </button>
-                    )}
-
-                    {/* Submitted, not returned */}
-                    {ce.submitted && !ce.returned && (
-                      <>
-                        <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
-                          <span className={`${mIcon} group-hover:bg-blue-100 group-hover:text-blue-600`}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 00-4-4H4" /></svg>
-                          </span>
-                          Mark as Returned
-                        </button>
-                        <div className="my-1 h-px bg-gray-100 mx-3" />
-                        <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                          <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                          </span>
-                          Mark as Pending
-                        </button>
-                      </>
-                    )}
-
-                    {/* Returned */}
-                    {ce.returned && (
-                      <>
-                        <button className={mItem} onClick={() => { toggleReturned(docContextMenu.key); setDocContextMenu(null); }}>
-                          <span className={`${mIcon} group-hover:bg-amber-100 group-hover:text-amber-600`}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 10 20 15 15 20" /><path d="M4 4v7a4 4 0 004 4h12" /></svg>
-                          </span>
-                          Unmark Returned
-                        </button>
-                        <div className="my-1 h-px bg-gray-100 mx-3" />
-                        <button className={mItem} onClick={() => { toggleSubmitted(docContextMenu.key); setDocContextMenu(null); }}>
-                          <span className={`${mIcon} group-hover:bg-red-100 group-hover:text-red-500`}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                          </span>
-                          Clear All Statuses
-                        </button>
-                      </>
-                    )}
-
-                    {/* Mark as Not Required */}
-                    <div className="my-1 h-px bg-gray-100 mx-3" />
-                    <button className={mItem} onClick={() => { toggleNotRequired(docContextMenu.key); setDocContextMenu(null); }}>
-                      <span className={`${mIcon} group-hover:bg-gray-100 group-hover:text-gray-500`}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-                      </span>
-                      Mark as Not Required
-                    </button>
-                  </>
-                )}
-
-                {/* Always: Add / Edit Remarks */}
-                <div className="my-1 h-px bg-gray-100 mx-3" />
-                <button
-                  className={mItem}
-                  onClick={() => { setDetailDoc({ key: docContextMenu.key, focusRemarks: true }); setDocContextMenu(null); }}
-                >
-                  <span className={`${mIcon} group-hover:bg-violet-100 group-hover:text-violet-600`}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                  </span>
-                  Add / Edit Remarks
-                </button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          DOUBLE-CLICK DETAIL POPUP
-      ════════════════════════════════════════════════════════════════════ */}
-      {detailDoc && dEntry && (
-        <>
-          {/* Semi-opaque backdrop */}
+        {/* ── Undo toast ── */}
+        {undo && (
           <div
-            className="fixed inset-0 z-[60] bg-black/25"
-            onClick={() => setDetailDoc(null)}
-          />
-          {/* Centred detail panel */}
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
-            <div
-              className="pointer-events-auto bg-white rounded-2xl shadow-2xl border border-gray-200 w-80 overflow-hidden"
-              style={{ animation: 'modal-enter 0.18s ease-out' }}
-              onClick={(e) => e.stopPropagation()}
+            key={undo.id}
+            className="absolute left-1/2 -translate-x-1/2 bottom-[68px] z-10 flex items-center gap-3 rounded-full pl-4 pr-1.5 py-1.5 shadow-lg text-[12.5px] font-medium text-white overflow-hidden"
+            style={{ background: '#1F2937', animation: 'toast-in 0.2s ease-out' }}
+            role="status"
+          >
+            <span>{undo.message}</span>
+            <button
+              type="button" onClick={undoLast}
+              className="rounded-full px-3 h-7 text-[12px] font-semibold cursor-pointer hover:bg-white/15"
+              style={{ color: '#6EE7B7' }}
             >
-              {/* Header — uses the doc's unique palette colour */}
-              <div className={`px-4 py-3 border-b ${dPal.bg} ${dPal.border} flex items-center justify-between`}>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-extrabold uppercase tracking-wider mb-0.5 ${dPal.text} opacity-60`}>Document Details</p>
-                  <h4 className={`text-xs font-bold leading-tight ${dPal.text}`}>{dLabel}</h4>
-                </div>
-                <div className="flex items-center gap-2 ml-3 shrink-0">
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${dStatusCls}`}>
-                    {dStatus}
-                  </span>
-                  <button
-                    onClick={() => setDetailDoc(null)}
-                    className="flex items-center justify-center w-5 h-5 rounded-full bg-black/10 hover:bg-black/20 text-gray-600 text-xs leading-none transition-colors cursor-pointer"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="px-4 py-3.5 space-y-3">
-                {/* Submitted On */}
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-wider text-emerald-500 mb-1">
-                    Submitted On
-                  </label>
-                  {dEntry.submitted ? (
-                    <input
-                      type="date"
-                      value={dEntry.submittedOn}
-                      onChange={(e) => setSubmittedOn(detailDoc.key, e.target.value)}
-                      className="w-full text-xs rounded-lg border border-emerald-200 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 text-gray-700 bg-emerald-50/40"
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-300 italic">Not yet submitted</span>
-                  )}
-                </div>
-
-                {/* Returned On */}
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-wider text-blue-500 mb-1">
-                    Returned On
-                  </label>
-                  {dEntry.returned ? (
-                    <input
-                      type="date"
-                      value={dEntry.returnedOn}
-                      onChange={(e) => setReturnedOn(detailDoc.key, e.target.value)}
-                      className="w-full text-xs rounded-lg border border-blue-200 px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 text-gray-700 bg-blue-50/40"
-                    />
-                  ) : (
-                    <span className="text-xs text-gray-300 italic">
-                      {dEntry.submitted ? 'Not yet returned' : '—'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Remarks */}
-                <div>
-                  <label className="block text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">
-                    Remarks
-                  </label>
-                  <textarea
-                    ref={remarksRef}
-                    value={dEntry.remarks}
-                    onChange={(e) => setRemarks(detailDoc.key, e.target.value)}
-                    placeholder="Add a remark…"
-                    rows={2}
-                    className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-violet-400 focus:border-violet-400 placeholder:text-gray-300 text-gray-700"
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-[9px] text-gray-400 italic">Changes auto-apply · Save when ready</span>
-                <button
-                  onClick={() => setDetailDoc(null)}
-                  className="text-xs font-semibold text-gray-600 hover:text-gray-900 px-3 py-1 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
+              Undo
+            </button>
+            <span
+              className="absolute left-0 bottom-0 h-[2px]"
+              style={{ background: '#6EE7B7', width: '100%', transformOrigin: 'left', animation: `doc-undo-timer ${UNDO_MS}ms linear forwards` }}
+            />
+            <style>{'@keyframes doc-undo-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }'}</style>
           </div>
-        </>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 }

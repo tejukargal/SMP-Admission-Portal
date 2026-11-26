@@ -122,10 +122,83 @@ service cloud.firestore {
     }
 
     // ── Student Documents ─────────────────────────────────────────────────
+    // Physical-document checklist. Admin and staff can both track status, but:
+    //  - every changed entry must be well-formed (returned ⇒ received, bounded remark),
+    //  - the writer must stamp their own email (admins exempt, for backup restore),
+    //  - only admins can delete a record (student delete / Danger Zone reset).
+    // Each change also writes an append-only audit entry under history/.
+    function docKeys() {
+      return ['sslcMarksCard', 'transferCertificate', 'studyCertificate', 'casteCertificate',
+              'incomeCertificate', 'aadharCopy', 'eligibilityCertificate', 'passportPhotos'];
+    }
+
+    function validDocEntry(e) {
+      return e is map
+        && e.submitted is bool && e.returned is bool
+        && (e.returned == false || e.submitted == true)
+        && e.submittedOn is string && e.submittedOn.size() <= 10
+        && e.returnedOn is string && e.returnedOn.size() <= 10
+        && e.remarks is string && e.remarks.size() <= 500
+        && (!('notRequired' in e) || e.notRequired is bool)
+        && (!('copyType' in e) || e.copyType in ['original', 'copy']);
+    }
+
+    function changedDocKeys() {
+      return resource == null
+        ? request.resource.data.docs.keys().toSet()
+        : request.resource.data.docs.diff(resource.data.docs).affectedKeys();
+    }
+
+    function docEntryOk(k) {
+      return !(k in changedDocKeys()) || validDocEntry(request.resource.data.docs[k]);
+    }
+
+    // Only what a write CHANGES is checked, so legacy data already in a record
+    // (e.g. retired doc types characterConduct / physicalFitness from the first
+    // version, or extra top-level fields) never blocks a new, valid change.
+    function validChecklist(studentId) {
+      let d = request.resource.data;
+      return d.docs is map
+        && (resource == null
+              ? (d.keys().hasOnly(['studentId', 'docs', 'updatedAt', 'updatedBy']) && d.studentId == studentId)
+              : (d.diff(resource.data).affectedKeys().hasOnly(['docs', 'updatedAt', 'updatedBy'])
+                 && d.docs.keys().hasAll(resource.data.docs.keys())))
+        && changedDocKeys().hasOnly(docKeys())
+        && docEntryOk('sslcMarksCard')
+        && docEntryOk('transferCertificate')
+        && docEntryOk('studyCertificate')
+        && docEntryOk('casteCertificate')
+        && docEntryOk('incomeCertificate')
+        && docEntryOk('aadharCopy')
+        && docEntryOk('eligibilityCertificate')
+        && docEntryOk('passportPhotos');
+    }
+
     match /studentDocuments/{studentId} {
       allow read:  if isActiveUser();
-      // Both admin and staff can track document status
-      allow write: if isActiveUser();
+      allow create, update: if isActiveUser()
+        && validChecklist(studentId)
+        && (isAdmin() || (
+          request.resource.data.updatedBy == request.auth.token.email
+          && exists(/databases/$(database)/documents/students/$(studentId))
+        ));
+      allow delete: if isAdmin();
+
+      // Append-only audit trail — nobody can edit an entry; only admins may delete
+      // (cascade on student delete / Danger Zone reset).
+      match /history/{entryId} {
+        allow read:   if isActiveUser();
+        allow create: if isActiveUser()
+          && request.resource.data.keys().hasAll(['docKey', 'action', 'before', 'after', 'byUid', 'byEmail', 'at'])
+          && request.resource.data.docKey in docKeys()
+          && (isAdmin() || (
+            request.resource.data.byUid == request.auth.uid
+            && request.resource.data.byEmail == request.auth.token.email
+            && existsAfter(/databases/$(database)/documents/studentDocuments/$(studentId))
+          ));
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
     }
 
     // ── Student Files (scanned letters / documents, Files tab) ────────────

@@ -23,6 +23,7 @@ import { getExamResultsByRegNumber, deleteExamResult } from '../../services/resu
 import { invalidateResultsCache } from '../../hooks/useResults';
 import { mergeResultsBySession } from '../../utils/resultMerge';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
+import { docSummary, hasCopyType } from '../../services/studentDocumentService';
 import { useStudentFiles } from '../../hooks/useStudentFiles';
 import {
   uploadStudentFile, updateStudentFileMeta, deleteStudentFile, downloadStudentFile, studentFileErrorMessage,
@@ -512,11 +513,11 @@ function DocumentsTab({
     );
   }
 
-  const submittedCount = docs
-    ? REQUIRED_DOCS.filter((d) => docs[d.key]?.submitted).length
-    : 0;
-  const allIn = submittedCount === REQUIRED_DOCS.length;
-  const pct = (submittedCount / REQUIRED_DOCS.length) * 100;
+  const sum = docs ? docSummary(docs) : null;
+  const submittedCount = sum?.received ?? 0;
+  const requiredTotal = sum?.required ?? REQUIRED_DOCS.length;
+  const allIn = !!sum?.complete;
+  const pct = requiredTotal ? (submittedCount / requiredTotal) * 100 : 100;
   const stateColor = allIn ? MINT : AMBER;
 
   return (
@@ -542,7 +543,7 @@ function DocumentsTab({
           </div>
         </div>
         <span className="text-[20px] font-semibold tabular-nums shrink-0" style={{ color: inkOf(stateColor) }}>
-          {submittedCount}<span className="text-[13px] text-[#8A93A3] font-medium"> / {REQUIRED_DOCS.length}</span>
+          {submittedCount}<span className="text-[13px] text-[#8A93A3] font-medium"> / {requiredTotal}</span>
         </span>
       </div>
 
@@ -552,6 +553,16 @@ function DocumentsTab({
           const entry = docs?.[d.key];
           const submitted = entry?.submitted ?? false;
           const returned = entry?.returned ?? false;
+          const notRequired = !!entry?.notRequired;
+          if (notRequired) {
+            return (
+              <div key={d.key} className="flex items-center gap-3 rounded-xl border border-dashed bg-[#FAFBFC] px-3 py-2.5" style={{ borderColor: '#E3EAF1' }}>
+                <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[#C4CCD6]" style={{ border: '1.5px solid #E3EAF1' }}>–</span>
+                <span className="flex-1 min-w-0 text-[12px] font-medium text-[#A9B0BB] line-through decoration-[#D5DBE3]">{d.label}</span>
+                <span className="text-[9.5px] font-medium uppercase tracking-[0.6px] text-[#A9B0BB]">Not required</span>
+              </div>
+            );
+          }
           return (
             <div
               key={d.key}
@@ -570,6 +581,9 @@ function DocumentsTab({
                 {d.label}
               </span>
               <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
+                {submitted && hasCopyType(d.key) && (
+                  <LinePill value={entry?.copyType === 'copy' ? 'Copy' : 'Original'} color={SKY} />
+                )}
                 {submitted && entry?.submittedOn && (
                   <LinePill value={entry.submittedOn.split('-').reverse().join('-')} color={MINT} title="Submitted on" />
                 )}

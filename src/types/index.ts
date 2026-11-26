@@ -350,6 +350,21 @@ export const REQUIRED_DOCS = [
 
 export type DocKey = (typeof REQUIRED_DOCS)[number]['key'];
 
+/** Whether the college holds the original or a photocopy of a document. */
+export type DocCopyType = 'original' | 'copy';
+
+/** Default Original/Copy per document when it is marked Received.
+ *  Documents absent here (passport photos) have no Original/Copy toggle. */
+export const DOC_COPY_DEFAULT: Partial<Record<DocKey, DocCopyType>> = {
+  sslcMarksCard: 'original',
+  transferCertificate: 'original',
+  studyCertificate: 'original',
+  casteCertificate: 'original',
+  incomeCertificate: 'original',
+  aadharCopy: 'copy',
+  eligibilityCertificate: 'original',
+};
+
 export interface DocEntry {
   submitted: boolean;
   submittedOn: string;   // 'YYYY-MM-DD' or ''
@@ -357,6 +372,10 @@ export interface DocEntry {
   returnedOn: string;    // 'YYYY-MM-DD' or ''
   remarks: string;
   notRequired?: boolean;
+  copyType?: DocCopyType;
+  /** Email of whoever last changed this entry, and when (ISO). */
+  updatedBy?: string;
+  updatedAt?: string;
 }
 
 export type DocRecord = Record<DocKey, DocEntry>;
@@ -366,6 +385,26 @@ export interface StudentDocuments {
   studentId: string;
   docs: Partial<DocRecord>;
   updatedAt: string;
+  updatedBy?: string;
+}
+
+/** Derived display status of one checklist entry. */
+export type DocStatus = 'pending' | 'received' | 'returned' | 'notRequired';
+
+export type DocHistoryAction =
+  | 'received' | 'returned' | 'pending' | 'unreturned'
+  | 'notRequired' | 'required' | 'date' | 'remarks' | 'copyType' | 'undo';
+
+/** Append-only audit entry — studentDocuments/{studentId}/history/{id}. */
+export interface DocHistoryEntry {
+  id: string;
+  docKey: DocKey;
+  action: DocHistoryAction;
+  before: DocEntry;
+  after: DocEntry;
+  byUid: string;
+  byEmail: string;
+  at: string;            // ISO timestamp
 }
 
 // ─── Merit List Snapshots ─────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { isLateralEntry } from '../utils/wpStudent';
 import { db } from '../config/firebase';
+import { historyRefsFor } from './studentDocumentService';
 import type { Student, StudentFormData, AcademicYear, Course, Year, Gender, NotAdmittedStatusTag } from '../types';
 
 export interface StudentFilters {
@@ -416,12 +417,14 @@ export async function undoStudentDiscontinued(id: string): Promise<void> {
 
 export async function deleteStudent(id: string): Promise<void> {
   // Cascade-delete all associated data: fee records, fee overrides, student documents
-  const [feeRecordsSnap, feeOverridesSnap] = await Promise.all([
+  const [feeRecordsSnap, feeOverridesSnap, docHistoryRefs] = await Promise.all([
     getDocs(query(collection(db, 'feeRecords'), where('studentId', '==', id))),
     getDocs(query(collection(db, 'feeOverrides'), where('studentId', '==', id))),
+    historyRefsFor([id]),
   ]);
 
   const toDelete = [
+    ...docHistoryRefs,
     doc(db, STUDENTS_COLLECTION, id),
     doc(db, 'studentDocuments', id),
     ...feeRecordsSnap.docs.map((d) => d.ref),

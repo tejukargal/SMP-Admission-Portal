@@ -1,5 +1,6 @@
 import type { Student, DocRecord } from '../types';
 import { REQUIRED_DOCS } from '../types';
+import { docSummary } from '../services/studentDocumentService';
 
 export interface DocStatusRow {
   student: Student;
@@ -35,13 +36,15 @@ function esc(s: string | number | undefined | null): string {
 
 export function printDocStatus(rows: DocStatusRow[]): void {
   const today = formatDate(new Date());
-  const total = REQUIRED_DOCS.length;
 
-  // Per-document submitted totals for summary row
+  // Per-document submitted totals for summary row (out of students for whom it is required)
   const docTotals: Record<string, number> = {};
-  for (const { key } of REQUIRED_DOCS) docTotals[key] = 0;
+  const docRequired: Record<string, number> = {};
+  for (const { key } of REQUIRED_DOCS) { docTotals[key] = 0; docRequired[key] = 0; }
   for (const { docs } of rows) {
     for (const { key } of REQUIRED_DOCS) {
+      if (docs[key].notRequired) continue;
+      docRequired[key]++;
       if (docs[key].submitted) docTotals[key]++;
     }
   }
@@ -52,11 +55,14 @@ export function printDocStatus(rows: DocStatusRow[]): void {
     </th>`).join('');
 
   const dataRows = rows.map(({ student: s, docs, submittedCount }, idx) => {
+    const total = docSummary(docs).required;
     const countClass = submittedCount === total ? 'all' : submittedCount === 0 ? 'none' : 'some';
     const yearShort = s.year === '1ST YEAR' ? '1st Yr' : s.year === '2ND YEAR' ? '2nd Yr' : '3rd Yr';
 
     const docCells = REQUIRED_DOCS.map(({ key }) =>
-      docs[key].submitted
+      docs[key].notRequired
+        ? `<td class="td-doc"><span class="na">N/A</span></td>`
+        : docs[key].submitted
         ? `<td class="td-doc"><span class="box box-yes">✓</span></td>`
         : `<td class="td-doc"><span class="box box-no"></span></td>`
     ).join('');
@@ -73,7 +79,7 @@ export function printDocStatus(rows: DocStatusRow[]): void {
   }).join('');
 
   const summaryDocCells = REQUIRED_DOCS.map(({ key }) =>
-    `<td class="td-doc td-summary">${docTotals[key]}/${rows.length}</td>`
+    `<td class="td-doc td-summary">${docTotals[key]}/${docRequired[key]}</td>`
   ).join('');
 
   const html = `<!DOCTYPE html>
@@ -189,6 +195,7 @@ export function printDocStatus(rows: DocStatusRow[]): void {
   }
   .box-yes { background: #dcfce7; border: 0.5pt solid #4ade80; color: #166534; }
   .box-no  { background: #fff;    border: 0.5pt solid #d1d5db; color: #d1d5db; }
+  .na { font-size: 6pt; color: #999; }
 
   /* Summary row */
   .summary-row td {
@@ -262,7 +269,7 @@ export function printDocStatus(rows: DocStatusRow[]): void {
         <td colspan="2" class="summary-label">Summary (submitted / total students)</td>
         <td></td>
         <td></td>
-        <td class="td-summary">${rows.filter(r => r.submittedCount === total).length}/${rows.length}</td>
+        <td class="td-summary">${rows.filter(r => docSummary(r.docs).complete).length}/${rows.length}</td>
         ${summaryDocCells}
       </tr>
     </tbody>

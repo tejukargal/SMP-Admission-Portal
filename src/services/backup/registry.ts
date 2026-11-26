@@ -37,7 +37,7 @@ export interface CollectionSpec {
 export const BACKUP_COLLECTIONS: CollectionSpec[] = [
   // ── Enrollment ─────────────────────────────────────────────────────────────
   { name: 'students',          label: 'Students (incl. TC/PC/letters history)', group: 'Enrollment', yearScope: 'field', restore: 'default' },
-  { name: 'studentDocuments',  label: 'Document Checklist',  group: 'Enrollment', yearScope: 'byStudent', restore: 'default' },
+  { name: 'studentDocuments',  label: 'Document Checklist (incl. change history)', group: 'Enrollment', yearScope: 'byStudent', restore: 'default', subcollections: ['history'] },
   { name: 'studentFiles',      label: 'Student Files (metadata)', group: 'Enrollment', yearScope: 'field', restore: 'default' },
   { name: 'inquiries',         label: 'Inquiries',           group: 'Enrollment', yearScope: 'field', restore: 'default' },
   { name: 'meritListSnapshots', label: 'Merit List Snapshots', group: 'Enrollment', yearScope: 'field', restore: 'default' },

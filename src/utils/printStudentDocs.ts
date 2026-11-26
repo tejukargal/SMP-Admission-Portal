@@ -1,5 +1,6 @@
-import type { Student, DocRecord } from '../types';
+import type { Student, DocRecord, DocKey } from '../types';
 import { REQUIRED_DOCS } from '../types';
+import { docSummary, hasCopyType, todayLocal } from '../services/studentDocumentService';
 
 function formatDate(iso: string): string {
   if (!iso) return '—';
@@ -10,8 +11,15 @@ function formatDate(iso: string): string {
 }
 
 function todayFormatted(): string {
-  return formatDate(new Date().toISOString().slice(0, 10));
+  return formatDate(todayLocal());
 }
+
+function copyLabelOf(key: DocKey, docs: DocRecord): string {
+  if (!hasCopyType(key)) return '—';
+  return docs[key].copyType === 'copy' ? 'Copy' : 'Original';
+}
+
+type SlipKind = 'submission' | 'return';
 
 function esc(s: string | number | undefined | null): string {
   return String(s ?? '')
@@ -35,32 +43,66 @@ const YEAR_LABELS: Record<string, string> = {
   '3RD YEAR': '3rd Year',
 };
 
-function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: string, isLast: boolean): string {
-  const submittedCount = REQUIRED_DOCS.filter(({ key }) => docs[key].submitted).length;
-  const total = REQUIRED_DOCS.length;
-  const allSubmitted = submittedCount === total;
+function buildCopy(
+  student: Student, docs: DocRecord, copyLabel: string, today: string, isLast: boolean,
+  kind: SlipKind = 'submission', returnKeys: DocKey[] = [],
+): string {
+  const sum = docSummary(docs);
 
-  const rows = REQUIRED_DOCS.map(({ key, label }, idx) => {
+  const list = kind === 'return'
+    ? REQUIRED_DOCS.filter(({ key }) => returnKeys.includes(key))
+    : REQUIRED_DOCS;
+
+  const rows = list.map(({ key, label }, idx) => {
     const entry = docs[key];
-    const statusCell = entry.submitted
-      ? `<td class="td-status submitted">&#10003; Submitted</td>
-         <td class="td-date">${esc(formatDate(entry.submittedOn))}</td>`
-      : `<td class="td-status pending">&#9744; Pending</td>
+    let statusCell: string;
+    let remarksCell: string;
+    if (kind === 'return') {
+      statusCell = `<td class="td-status returned">&#8617; Returned</td>
+         <td class="td-date">${esc(formatDate(entry.returnedOn))}</td>`;
+      remarksCell = entry.remarks
+        ? `<td class="td-remarks">${esc(entry.remarks)}</td>`
+        : `<td class="td-remarks td-dash">—</td>`;
+    } else if (entry.notRequired) {
+      statusCell = `<td class="td-status pending">Not Required</td>
          <td class="td-date td-dash">—</td>`;
-    const remarksCell = entry.submitted && entry.returned
-      ? `<td class="td-remarks">Returned ${esc(formatDate(entry.returnedOn))}</td>`
-      : entry.remarks
-      ? `<td class="td-remarks">${esc(entry.remarks)}</td>`
-      : `<td class="td-remarks td-dash">—</td>`;
+      remarksCell = entry.remarks
+        ? `<td class="td-remarks">${esc(entry.remarks)}</td>`
+        : `<td class="td-remarks td-dash">—</td>`;
+    } else {
+      statusCell = entry.submitted
+        ? `<td class="td-status submitted">&#10003; Submitted</td>
+           <td class="td-date">${esc(formatDate(entry.submittedOn))}</td>`
+        : `<td class="td-status pending">&#9744; Pending</td>
+           <td class="td-date td-dash">—</td>`;
+      const parts: string[] = [];
+      if (entry.submitted && entry.returned) parts.push(`Returned ${esc(formatDate(entry.returnedOn))}`);
+      if (entry.remarks) parts.push(esc(entry.remarks));
+      remarksCell = parts.length
+        ? `<td class="td-remarks">${parts.join(' · ')}</td>`
+        : `<td class="td-remarks td-dash">—</td>`;
+    }
 
     return `
       <tr class="${idx % 2 === 1 ? 'row-alt' : ''}">
         <td class="td-num">${idx + 1}</td>
         <td class="td-doc">${esc(label)}</td>
+        <td class="td-copy">${(kind === 'return' || entry.submitted) ? copyLabelOf(key, docs) : '—'}</td>
         ${statusCell}
         ${remarksCell}
       </tr>`;
   }).join('');
+
+  const title = kind === 'return' ? 'Document Return Acknowledgement' : 'Document Submission Acknowledgement';
+  const badge = kind === 'return'
+    ? `<div class="submitted-badge badge-blue">${list.length}<br>Returned</div>`
+    : `<div class="submitted-badge ${sum.complete ? 'badge-green' : sum.received === 0 ? 'badge-red' : 'badge-yellow'}">
+        ${sum.received} / ${sum.required}<br>Submitted
+      </div>`;
+  const ackText = kind === 'return'
+    ? 'I hereby acknowledge that I have received back the above-listed document(s) from the institution in good condition on the date(s) shown.'
+    : 'I acknowledge that the above details are true and correct. All original documents must be submitted within the stipulated time. The institution reserves the right to withhold results/certificates until all required documents are received.';
+  const dateHeader = kind === 'return' ? 'Returned On' : 'Date';
 
   const cutBorderStyle = isLast ? '' : 'border-bottom: 1.2pt dashed #666;';
 
@@ -76,7 +118,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
 
     <!-- Title row -->
     <div class="title-row">
-      <span class="doc-title">Document Submission Acknowledgement</span>
+      <span class="doc-title">${title}</span>
       <span class="copy-label">${esc(copyLabel)}</span>
       <span class="doc-date">Date: ${today}</span>
     </div>
@@ -101,9 +143,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
           <span class="info-val">${esc(YEAR_LABELS[student.year] ?? student.year)} &nbsp;·&nbsp; ${esc(student.academicYear)}</span>
         </div>
       </div>
-      <div class="submitted-badge ${allSubmitted ? 'badge-green' : submittedCount === 0 ? 'badge-red' : 'badge-yellow'}">
-        ${submittedCount} / ${total}<br>Submitted
-      </div>
+      ${badge}
     </div>
 
     <!-- Documents table -->
@@ -112,8 +152,9 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
         <tr>
           <th class="th-num">#</th>
           <th class="th-doc">Document</th>
+          <th class="th-copy">Orig. / Copy</th>
           <th class="th-status">Status</th>
-          <th class="th-date">Date</th>
+          <th class="th-date">${dateHeader}</th>
           <th class="th-remarks">Remarks</th>
         </tr>
       </thead>
@@ -124,7 +165,7 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
 
     <!-- Acknowledgement note -->
     <div class="ack-note">
-      I acknowledge that the above details are true and correct. All original documents must be submitted within the stipulated time. The institution reserves the right to withhold results/certificates until all required documents are received.
+      ${ackText}
     </div>
 
     <!-- Signatures -->
@@ -148,12 +189,37 @@ function buildCopy(student: Student, docs: DocRecord, copyLabel: string, today: 
 
 export function printStudentDocs(student: Student, docs: DocRecord): void {
   const today = todayFormatted();
+  openPrint(
+    `Document Acknowledgement – ${esc(student.studentNameSSLC)}`,
+    buildCopy(student, docs, 'Student Copy', today, false) + buildCopy(student, docs, 'Office Copy', today, true),
+  );
+}
 
+/** Returned documents on a given day (YYYY-MM-DD), in checklist order. */
+export function returnedOnDate(docs: DocRecord, date: string): DocKey[] {
+  return REQUIRED_DOCS
+    .filter(({ key }) => !docs[key].notRequired && docs[key].returned && docs[key].returnedOn === date)
+    .map(({ key }) => key);
+}
+
+/** Half-A4 x2 (student + office copy) acknowledgement for originals handed back on `date`. */
+export function printReturnSlip(student: Student, docs: DocRecord, date: string): void {
+  const keys = returnedOnDate(docs, date);
+  if (keys.length === 0) return;
+  const day = formatDate(date);
+  openPrint(
+    `Document Return – ${esc(student.studentNameSSLC)}`,
+    buildCopy(student, docs, 'Student Copy', day, false, 'return', keys)
+      + buildCopy(student, docs, 'Office Copy', day, true, 'return', keys),
+  );
+}
+
+function openPrint(title: string, body: string): void {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Document Acknowledgement – ${esc(student.studentNameSSLC)}</title>
+<title>${title}</title>
 <style>
   /* Zero-margin page so each copy owns exactly half the A4 sheet */
   @page { size: A4 portrait; margin: 0; }
@@ -236,6 +302,7 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
   }
   .badge-green  { background: #dcfce7; border: 0.5pt solid #4ade80; color: #166534; }
   .badge-yellow { background: #fef9c3; border: 0.5pt solid #fde047; color: #854d0e; }
+  .badge-blue   { background: #dbeafe; border: 0.5pt solid #93c5fd; color: #1e3a8a; }
   .badge-red    { background: #fee2e2; border: 0.5pt solid #fca5a5; color: #991b1b; }
 
   /* ── Documents table ── */
@@ -256,6 +323,7 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
   }
   .th-num    { width: 17pt; text-align: center; }
   .th-doc    { width: auto; }
+  .th-copy   { width: 46pt; }
   .th-status { width: 70pt; }
   .th-date   { width: 55pt; }
   .th-remarks{ width: 76pt; }
@@ -265,6 +333,7 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 
   .td-num    { text-align: center; color: #888; font-size: 6.5pt; }
   .td-doc    { font-weight: 500; }
+  .td-copy   { font-size: 6.5pt; white-space: nowrap; }
   .td-status { font-weight: bold; white-space: nowrap; }
   .td-date   { font-size: 6.5pt; white-space: nowrap; }
   .td-remarks{ font-size: 6.5pt; color: #555; }
@@ -272,6 +341,7 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 
   .submitted { color: #166534; }
   .pending   { color: #9ca3af; }
+  .returned  { color: #1e40af; }
 
   /* ── Acknowledgement note ── */
   .ack-note {
@@ -310,8 +380,7 @@ export function printStudentDocs(student: Student, docs: DocRecord): void {
 </head>
 <body>
 
-  ${buildCopy(student, docs, 'Student Copy', today, false)}
-  ${buildCopy(student, docs, 'Office Copy',  today, true)}
+  ${body}
 
   <script>
     window.onload = function () {

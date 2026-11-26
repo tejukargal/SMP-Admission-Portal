@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getAllStudentDocuments, mergeWithDefaults } from '../../services/studentDocumentService';
+import { getAllStudentDocuments, mergeWithDefaults, docSummary } from '../../services/studentDocumentService';
 import { printDocStatus } from '../../utils/printDocStatus';
 import type { DocRecord, Student } from '../../types';
 import { REQUIRED_DOCS } from '../../types';
@@ -388,9 +388,8 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                 <div className="text-[9px] text-amber-500 font-semibold uppercase tracking-wider">Partial</div>
                 <div className="text-sm font-bold text-amber-700 mt-0.5">
                   {students.filter((s) => {
-                    const docs = docMap.get(s.id) ?? mergeWithDefaults({});
-                    const sub = REQUIRED_DOCS.filter(({ key }) => docs[key].submitted).length;
-                    return sub > 0 && sub < REQUIRED_DOCS.length;
+                    const sum = docSummary(docMap.get(s.id) ?? mergeWithDefaults({}));
+                    return sum.received > 0 && !sum.complete;
                   }).length}
                 </div>
                 <div className="text-[9px] text-gray-400 mt-0.5">need follow-up</div>
@@ -399,8 +398,8 @@ export function MissingDocsModal({ students, onManage, onClose }: Props) {
                 <div className="text-[9px] text-red-400 font-semibold uppercase tracking-wider">None</div>
                 <div className="text-sm font-bold text-red-600 mt-0.5">
                   {students.filter((s) => {
-                    const docs = docMap.get(s.id) ?? mergeWithDefaults({});
-                    return REQUIRED_DOCS.every(({ key }) => !docs[key].submitted);
+                    const sum = docSummary(docMap.get(s.id) ?? mergeWithDefaults({}));
+                    return sum.received === 0 && sum.required > 0;
                   }).length}
                 </div>
                 <div className="text-[9px] text-gray-400 mt-0.5">no docs yet</div>
