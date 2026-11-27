@@ -405,6 +405,8 @@ export interface DocHistoryEntry {
   byUid: string;
   byEmail: string;
   at: string;            // ISO timestamp
+  /** Shared by every entry written in one bulk change. */
+  batchId?: string;
 }
 
 // ─── Merit List Snapshots ─────────────────────────────────────────────────────

@@ -1127,3 +1127,15 @@
 .scroll-fee-h2::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F2FAFA 0 64px, #CDE7E7 64px 65px, transparent 65px); }
 .scroll-fee-h3::-webkit-scrollbar-track:vertical { margin-top: 97px; }
 .scroll-fee-h3::-webkit-scrollbar:vertical { background: linear-gradient(to bottom, #F2FAFA 0 96px, #CDE7E7 96px 97px, transparent 97px); }
+
+/* Manage Documents board — cards glide between columns (document.startViewTransition).
+   Only named cards animate; the rest of the page swaps instantly. */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; }
+::view-transition-group(*) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

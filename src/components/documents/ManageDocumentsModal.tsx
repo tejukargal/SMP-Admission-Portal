@@ -1,147 +1,115 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStudentDocuments } from '../../hooks/useStudentDocuments';
-import {
-  DocOfflineError, docSummary, statusOf, todayLocal, updateDocEntry,
-} from '../../services/studentDocumentService';
+import { statusOf, todayLocal } from '../../services/studentDocumentService';
 import { printStudentDocs, printReturnSlip, returnedOnDate } from '../../utils/printStudentDocs';
-import type { DocEntry, DocHistoryAction, DocKey, DocStatus, Student } from '../../types';
-import { DOC_COPY_DEFAULT, REQUIRED_DOCS } from '../../types';
-import { DocRow, type RowSaveState } from './DocRow';
+import type { DocKey, Student } from '../../types';
+import { REQUIRED_DOCS } from '../../types';
+import { DocColumn } from './DocColumn';
+import { BulkBar } from './BulkBar';
 import { DocHistoryPanel } from './DocHistoryPanel';
-import { OutlinePill, ProgressRing, Spinner, Svg } from './docsUi';
+import { ProgressRing, Spinner, Svg } from './docsUi';
 import { DOC_TONE, STATUS_META, fmtDay } from './docsTokens';
 import { Icon } from './docsIcons';
+import { BOARD_UNDO_MS, LABEL, useDocBoard } from './useDocBoard';
 
 interface Props {
   student: Student;
   onClose: () => void;
 }
 
-type Tab = 'checklist' | 'history';
-interface UndoState { key: DocKey; message: string; before: DocEntry; after: DocEntry; id: number }
-
-const UNDO_MS = 6000;
-const LABEL = Object.fromEntries(REQUIRED_DOCS.map((d) => [d.key, d.label])) as Record<DocKey, string>;
+type Tab = 'board' | 'history';
 
 export function ManageDocumentsModal({ student, onClose }: Props) {
   const { docs, loading, error } = useStudentDocuments(student.id);
+  const board = useDocBoard(student.id, docs);
+  const { view, summary: sum, actions } = board;
 
-  const [tab, setTab] = useState<Tab>('checklist');
-  const [rowState, setRowState] = useState<Partial<Record<DocKey, RowSaveState>>>({});
-  const [rowError, setRowError] = useState<Partial<Record<DocKey, string>>>({});
-  const [offline, setOffline] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState('');
-  const [undo, setUndo] = useState<UndoState | null>(null);
-  const [gmDismissed, setGmDismissed] = useState(false);
+  const [tab, setTab] = useState<Tab>('board');
+  const [historyVisited, setHistoryVisited] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<DocKey>>(new Set());
   const [slipDate, setSlipDate] = useState('');
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const savedTimers = useRef<Partial<Record<DocKey, ReturnType<typeof setTimeout>>>>({});
+  const [animateCards, setAnimateCards] = useState(true);
+  const [closing, setClosing] = useState(false);
+  const [doneError, setDoneError] = useState('');
+  const selectedRef = useRef(selected);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
 
-  // Esc closes (inputs that use Esc stop propagation themselves).
+  // Esc clears a selection first, then closes (inputs that use Esc stop it themselves).
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      if (selectedRef.current.size > 0) setSelected(new Set());
+      else onClose();
+    }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Cards fade in once on first load only.
   useEffect(() => {
-    const goOnline = () => setOffline(false);
-    window.addEventListener('online', goOnline);
-    const timers = savedTimers.current;
-    return () => {
-      window.removeEventListener('online', goOnline);
-      clearTimeout(undoTimer.current);
-      Object.values(timers).forEach(clearTimeout);
-    };
+    if (!docs || !animateCards) return;
+    const t = setTimeout(() => setAnimateCards(false), 700);
+    return () => clearTimeout(t);
+  }, [docs, animateCards]);
+
+  const toggleSelect = useCallback((key: DocKey) => {
+    setSelected((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   }, []);
+  const selectMany = useCallback((keys: DocKey[], on: boolean) => {
+    setSelected((s) => { const n = new Set(s); for (const k of keys) { if (on) n.add(k); else n.delete(k); } return n; });
+  }, []);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  const anySaving = Object.values(rowState).some((s) => s === 'saving');
+  function openTab(t: Tab) {
+    setTab(t);
+    if (t === 'history') setHistoryVisited(true);
+  }
 
-  // ── One atomic, audited change ────────────────────────────────────────────
-  const commit = useCallback(async (
-    key: DocKey, next: DocEntry, action: DocHistoryAction, undoMessage?: string, seenOverride?: DocEntry,
-  ) => {
-    if (!docs) return;
-    const seen = seenOverride ?? docs[key];
-    setRowError((e) => ({ ...e, [key]: '' }));
-    setRowState((s) => ({ ...s, [key]: 'saving' }));
-    try {
-      const saved = await updateDocEntry(student.id, key, seen, next, action);
-      setOffline(false);
-      setLastSavedAt(new Date().toISOString());
-      setRowState((s) => ({ ...s, [key]: 'saved' }));
-      clearTimeout(savedTimers.current[key]);
-      savedTimers.current[key] = setTimeout(() => setRowState((s) => ({ ...s, [key]: 'idle' })), 1800);
-      if (undoMessage) {
-        clearTimeout(undoTimer.current);
-        const id = Date.now();
-        setUndo({ key, message: undoMessage, before: seen, after: saved, id });
-        undoTimer.current = setTimeout(() => setUndo((u) => (u?.id === id ? null : u)), UNDO_MS);
-      }
-    } catch (err) {
-      setRowState((s) => ({ ...s, [key]: 'idle' }));
-      if (err instanceof DocOfflineError) setOffline(true);
-      setRowError((e) => ({ ...e, [key]: err instanceof Error ? err.message : 'Could not save. Please try again.' }));
+  async function done() {
+    setDoneError('');
+    if (!board.saving) { onClose(); return; }
+    setClosing(true);
+    const failed = await board.whenIdle();
+    setClosing(false);
+    if (failed) setDoneError('A change could not be saved — check the highlighted card.');
+    else onClose();
+  }
+
+  // ── Columns ───────────────────────────────────────────────────────────────
+  const columns = useMemo(() => {
+    const c = { pending: [] as DocKey[], held: [] as DocKey[], returned: [] as DocKey[], na: [] as DocKey[] };
+    if (!view) return c;
+    for (const { key } of REQUIRED_DOCS) {
+      const s = statusOf(view[key]);
+      if (s === 'pending') c.pending.push(key);
+      else if (s === 'received') c.held.push(key);
+      else if (s === 'returned') c.returned.push(key);
+      else c.na.push(key);
     }
-  }, [docs, student.id]);
+    return c;
+  }, [view]);
 
-  // ── Status transitions ────────────────────────────────────────────────────
-  function setStatus(key: DocKey, target: DocStatus) {
-    if (!docs) return;
-    const e = docs[key];
-    const from = statusOf(e);
-    const label = LABEL[key];
-    if (target === 'pending') {
-      commit(key, { ...e, submitted: false, submittedOn: '', returned: false, returnedOn: '', notRequired: false, copyType: undefined },
-        from === 'notRequired' ? 'required' : 'pending', `${label} set to Pending`);
-    } else if (target === 'received') {
-      if (from === 'returned') {
-        commit(key, { ...e, returned: false, returnedOn: '' }, 'unreturned', `${label} is back with the college`);
-      } else {
-        commit(key, {
-          ...e, submitted: true, submittedOn: e.submittedOn || todayLocal(),
-          returned: false, returnedOn: '', notRequired: false,
-          copyType: e.copyType ?? DOC_COPY_DEFAULT[key],
-        }, 'received', `${label} marked Received`);
-      }
-    } else if (target === 'notRequired') {
-      commit(key, { ...e, submitted: false, submittedOn: '', returned: false, returnedOn: '', notRequired: true, copyType: undefined },
-        'notRequired', `${label} marked Not required`);
-    }
-  }
+  const selectedList = useMemo(
+    () => REQUIRED_DOCS.map((d) => d.key).filter((k) => selected.has(k) && !columns.na.includes(k)),
+    [selected, columns.na],
+  );
 
-  function confirmReturn(key: DocKey, date: string, reason: string) {
-    if (!docs) return;
-    const e = docs[key];
-    const remarks = reason ? (e.remarks ? `${e.remarks} · ${reason}` : reason) : e.remarks;
-    commit(key, { ...e, returned: true, returnedOn: date, remarks }, 'returned', `${LABEL[key]} marked Returned`);
-    setSlipDate(date);
-  }
-
-  function undoLast() {
-    if (!undo || !docs) return;
-    const { key, before, after } = undo;
-    clearTimeout(undoTimer.current);
-    setUndo(null);
-    commit(key, before, 'undo', undefined, after);
-  }
-
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const sum = docs ? docSummary(docs) : null;
+  const gmHintKey: DocKey | null = student.category === 'GM' && columns.pending.includes('casteCertificate') ? 'casteCertificate' : null;
   const today = todayLocal();
-  const showGmHint = !!docs && student.category === 'GM' && !gmDismissed
-    && statusOf(docs.casteCertificate) === 'pending';
 
   /** Distinct dates on which documents were returned (newest first) — for slip reprints. */
   const returnDates = useMemo(() => {
-    if (!docs) return [];
+    if (!view) return [];
     const set = new Set<string>();
-    for (const { key } of REQUIRED_DOCS) if (docs[key].returned && docs[key].returnedOn) set.add(docs[key].returnedOn);
+    for (const { key } of REQUIRED_DOCS) if (view[key].returned && view[key].returnedOn) set.add(view[key].returnedOn);
     return [...set].sort().reverse();
-  }, [docs]);
-  const activeSlipDate = returnDates.includes(slipDate) ? slipDate : returnDates.includes(today) ? today : '';
-  const slipCount = docs && activeSlipDate ? returnedOnDate(docs, activeSlipDate).length : 0;
+  }, [view]);
+  // The slip defaults to the latest return just made, then today, then the newest date.
+  const wantSlip = slipDate || board.undo?.slipDate || '';
+  const activeSlipDate = returnDates.includes(wantSlip) ? wantSlip : returnDates.includes(today) ? today : (returnDates[0] ?? '');
+  const slipCount = view && activeSlipDate ? returnedOnDate(view, activeSlipDate).length : 0;
 
+  // History refreshes from confirmed (live) data only.
   const historyKey = useMemo(
     () => (docs ? REQUIRED_DOCS.map(({ key }) => docs[key].updatedAt ?? '').join('|') : ''),
     [docs],
@@ -152,53 +120,75 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
     student.course, student.year, student.academicYear, student.category,
   ].filter(Boolean);
 
-  // ── Save state chip ───────────────────────────────────────────────────────
-  const saveChip = offline
-    ? { text: 'Offline — not saved', color: DOC_TONE.coral, icon: <Svg size={12}>{Icon.wifiOff}</Svg> }
-    : anySaving
-      ? { text: 'Saving…', color: DOC_TONE.muted, icon: <Spinner size={12} color={DOC_TONE.muted} /> }
-      : lastSavedAt
-        ? { text: 'All changes saved', color: DOC_TONE.accent, icon: <Svg size={12} strokeWidth={2.6}>{Icon.check}</Svg> }
-        : { text: 'Changes save instantly', color: DOC_TONE.faint, icon: <Svg size={12}>{Icon.shield}</Svg> };
+  // ── Verdict: the one-line answer to "is this student's file complete?" ──
+  const verdict = !sum ? null
+    : sum.required === 0 ? { tone: DOC_TONE.muted, icon: Icon.slash, text: 'No documents required' }
+    : sum.pending > 0 ? {
+        tone: DOC_TONE.coral, icon: Icon.alert,
+        text: `Missing ${sum.pending}: ${columns.pending.slice(0, 3).map((k) => LABEL[k]).join(', ')}${columns.pending.length > 3 ? ` +${columns.pending.length - 3}` : ''}`,
+      }
+    : sum.withCollege > 0 ? {
+        tone: STATUS_META.received.ink, icon: Icon.check,
+        text: `All ${sum.required} received · ${sum.withCollege} with college${sum.returned ? ` · ${sum.returned} returned` : ''}`,
+      }
+    : { tone: STATUS_META.returned.ink, icon: Icon.back, text: `All received · all ${sum.returned} returned to student` };
 
-  const pillBtn = 'inline-flex items-center gap-1.5 rounded-full border px-3.5 h-8 text-[12.5px] font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300';
+  // ── Save state chip ───────────────────────────────────────────────────────
+  const saveChip = board.offline
+    ? { text: 'Offline — not saved', color: DOC_TONE.coral, icon: <Svg size={11}>{Icon.wifiOff}</Svg> }
+    : board.saving
+      ? { text: 'Saving…', color: DOC_TONE.muted, icon: <Spinner size={11} color={DOC_TONE.muted} /> }
+      : board.lastSavedAt
+        ? { text: 'All changes saved', color: STATUS_META.received.ink, icon: <Svg size={11} strokeWidth={2.6}>{Icon.check}</Svg> }
+        : { text: 'Changes save instantly', color: DOC_TONE.faint, icon: <Svg size={11}>{Icon.shield}</Svg> };
+
+  const pillBtn = 'inline-flex items-center justify-center gap-1.5 rounded-full border px-3 h-8 text-[12.5px] font-medium whitespace-nowrap transition-[background-color,transform] duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300';
+  const panelCls = (active: boolean) =>
+    `absolute inset-0 transition-[opacity,visibility] duration-150 ${active ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`;
+
+  const smallShortcut = 'inline-flex items-center gap-1 rounded-full border bg-white px-2 h-6 text-[11px] font-medium whitespace-nowrap cursor-pointer transition-[background-color,transform] duration-150 active:scale-[0.96] hover:shadow-sm';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 font-wp" style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 font-wp" style={{ animation: 'backdrop-enter 0.18s ease-out' }}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Manage documents — ${student.studentNameSSLC}`}
         className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ width: 780, maxWidth: '100%', maxHeight: 'calc(100vh - 2rem)', animation: 'modal-enter 0.22s ease-out' }}
+        style={{
+          width: 1040, maxWidth: '100%',
+          height: 'min(760px, calc(100vh - 1.5rem))', maxHeight: 'calc(100vh - 1.5rem)',
+          animation: 'modal-enter 0.22s ease-out',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="px-5 pt-4 pb-3 shrink-0 border-b" style={{ background: `linear-gradient(180deg, ${DOC_TONE.wash}, #fff)`, borderColor: DOC_TONE.hairline }}>
-          <div className="flex items-start gap-4">
-            {sum ? <ProgressRing value={sum.received} total={sum.required} /> : <div className="skeleton w-[58px] h-[58px] !rounded-full shrink-0" />}
+        <div className="px-5 pt-3 shrink-0 border-b" style={{ background: `linear-gradient(180deg, ${DOC_TONE.wash}, #fff)`, borderColor: DOC_TONE.hairline }}>
+          <div className="flex items-center gap-3">
+            {sum ? <ProgressRing value={sum.received} total={sum.required} size={44} /> : <div className="skeleton w-[44px] h-[44px] !rounded-full shrink-0" />}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.8px]" style={{ color: DOC_TONE.ink }}>Manage Documents</span>
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: saveChip.color }} aria-live="polite">
+              <div className="flex items-center gap-1.5 text-[10.5px] font-medium leading-4 min-w-0">
+                <span className="uppercase tracking-[0.8px] shrink-0" style={{ color: DOC_TONE.ink }}>Manage Documents</span>
+                <span className="inline-flex items-center gap-1 truncate" style={{ color: saveChip.color }} aria-live="polite">
                   · {saveChip.icon}{saveChip.text}
                 </span>
               </div>
-              <h2 className="text-[17px] font-semibold truncate mt-0.5" style={{ color: DOC_TONE.text }}>{student.studentNameSSLC}</h2>
-              <p className="text-[12px] truncate" style={{ color: DOC_TONE.muted }}>{infoBits.join(' · ')}</p>
-              {sum && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <OutlinePill color={STATUS_META.received.ink} wash="#fff">{sum.received}/{sum.required} received</OutlinePill>
-                  {sum.withCollege > 0 && <OutlinePill color={DOC_TONE.ink} wash="#fff">{sum.withCollege} with college</OutlinePill>}
-                  {sum.returned > 0 && <OutlinePill color={STATUS_META.returned.ink} wash="#fff">{sum.returned} returned</OutlinePill>}
-                  {sum.pending > 0
-                    ? <OutlinePill color={DOC_TONE.coral} wash="#fff">{sum.pending} pending</OutlinePill>
-                    : <OutlinePill color={DOC_TONE.accent} wash="#fff">✓ All received</OutlinePill>}
-                  {sum.notRequired > 0 && <OutlinePill color={STATUS_META.notRequired.ink} wash="#fff">{sum.notRequired} N/A</OutlinePill>}
-                </div>
-              )}
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h2 className="text-[15.5px] font-semibold truncate shrink-0 max-w-[55%]" style={{ color: DOC_TONE.text }}>{student.studentNameSSLC}</h2>
+                <p className="text-[11.5px] truncate min-w-0" style={{ color: DOC_TONE.muted }}>{infoBits.join(' · ')}</p>
+              </div>
             </div>
+            {verdict && (
+              <div
+                className="hidden md:flex items-center gap-1.5 rounded-full border bg-white px-3 h-8 text-[12px] font-medium max-w-[44%] min-w-0"
+                style={{ borderColor: `${verdict.tone}55`, color: verdict.tone }}
+                title={verdict.text}
+              >
+                <Svg size={12} strokeWidth={2.4}>{verdict.icon}</Svg>
+                <span className="truncate">{verdict.text}</span>
+              </div>
+            )}
             <button
               type="button" onClick={onClose} aria-label="Close"
               className="w-8 h-8 rounded-full flex items-center justify-center border bg-white hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
@@ -207,96 +197,121 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
               <Svg size={14}>{Icon.close}</Svg>
             </button>
           </div>
+          {verdict && (
+            <p className="md:hidden mt-1 flex items-center gap-1 text-[11.5px] font-medium truncate" style={{ color: verdict.tone }}>
+              <Svg size={11} strokeWidth={2.4}>{verdict.icon}</Svg>{verdict.text}
+            </p>
+          )}
 
-          {/* Tabs */}
-          <div className="flex gap-1 mt-3 -mb-3">
-            {([
-              { id: 'checklist', label: 'Checklist', icon: Icon.list },
-              { id: 'history', label: 'History', icon: Icon.history },
-            ] as const).map((t) => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={active}
-                  className="flex items-center gap-1.5 px-3 h-9 text-[12.5px] font-medium border-b-2 transition-colors cursor-pointer"
-                  style={{ borderColor: active ? DOC_TONE.accent : 'transparent', color: active ? DOC_TONE.ink : DOC_TONE.muted }}
-                >
-                  <Svg size={13}>{t.icon}</Svg>{t.label}
-                </button>
-              );
-            })}
+          {/* Tabs + bulk actions */}
+          <div className="flex items-center gap-3 mt-2 min-h-[36px]">
+            <div role="tablist" className="flex gap-1 shrink-0 self-end">
+              {([
+                { id: 'board', label: 'Board', icon: Icon.board },
+                { id: 'history', label: 'History', icon: Icon.history },
+              ] as const).map((t) => {
+                const active = tab === t.id;
+                return (
+                  <button
+                    key={t.id} type="button" role="tab" aria-selected={active} onClick={() => openTab(t.id)}
+                    className="flex items-center gap-1.5 px-2.5 h-9 text-[12.5px] font-medium border-b-2 -mb-px transition-colors duration-150 cursor-pointer focus:outline-none focus-visible:bg-sky-50"
+                    style={{ borderColor: active ? DOC_TONE.accent : 'transparent', color: active ? DOC_TONE.ink : DOC_TONE.muted }}
+                  >
+                    <Svg size={13}>{t.icon}</Svg>{t.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex-1 min-w-0 flex justify-end pb-1">
+              {tab === 'board' && view && (selectedList.length > 0
+                ? <BulkBar key={selectedList.join()} selected={selectedList} view={view} actions={actions} onClear={clearSelection} />
+                : <span className="hidden sm:inline text-[11px] truncate" style={{ color: DOC_TONE.faint }}>Tick cards to act on several at once</span>)}
+            </div>
           </div>
         </div>
 
         {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4" style={{ background: '#FBFCFD' }}>
+        <div className="flex-1 min-h-0 relative" style={{ background: '#FBFCFD' }}>
           {error ? (
             <div className="py-16 text-center text-[13px]" style={{ color: DOC_TONE.coral }}>{error}</div>
-          ) : tab === 'history' ? (
-            <DocHistoryPanel studentId={student.id} refreshKey={historyKey} />
-          ) : (loading || !docs) ? (
-            <div className="space-y-2">
-              {REQUIRED_DOCS.map(({ key }) => <div key={key} className="skeleton h-[52px] !rounded-xl" />)}
-            </div>
           ) : (
-            <div className="space-y-2">
-              {showGmHint && (
-                <div className="flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px]" style={{ borderColor: '#F5DEB3', background: '#FFFAF0', color: '#92400E' }}>
-                  <Svg size={15}>{Icon.bulb}</Svg>
-                  <span className="flex-1">GM category: the <b className="font-semibold">Caste Certificate</b> is usually not required.</span>
-                  <button
-                    type="button" onClick={() => setStatus('casteCertificate', 'notRequired')}
-                    className="rounded-full border bg-white px-3 h-7 text-[12px] font-medium cursor-pointer hover:bg-amber-50"
-                    style={{ borderColor: '#F0C987' }}
-                  >
-                    Mark N/A
-                  </button>
-                  <button type="button" onClick={() => setGmDismissed(true)} className="px-2 h-7 text-[12px] font-medium cursor-pointer opacity-70 hover:opacity-100">
-                    Dismiss
-                  </button>
+            <>
+              <div role="tabpanel" aria-hidden={tab !== 'board'} className={`${panelCls(tab === 'board')} overflow-y-auto md:overflow-hidden`}>
+                {(loading || !view) ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 md:h-full">
+                    {[0, 1, 2].map((i) => <div key={i} className="skeleton h-[260px] md:h-full !rounded-2xl" />)}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 md:h-full">
+                    <DocColumn
+                      id="pending" keys={columns.pending} naKeys={columns.na} view={view}
+                      selected={selected} busy={board.busy} flash={board.flash} errors={board.errors}
+                      gmHintKey={gmHintKey} animateIn={animateCards} actions={actions}
+                      onToggleSelect={toggleSelect} onSelectMany={selectMany}
+                      shortcut={columns.pending.length > 1 ? (
+                        <button
+                          type="button" onClick={() => actions.receive(columns.pending)}
+                          className={smallShortcut}
+                          style={{ borderColor: `${STATUS_META.received.color}77`, color: STATUS_META.received.ink }}
+                          title="Mark every pending document received today (undoable)"
+                        >
+                          <Svg size={10} strokeWidth={2.8}>{Icon.check}</Svg> Receive all
+                        </button>
+                      ) : undefined}
+                    />
+                    <DocColumn
+                      id="held" keys={columns.held} view={view}
+                      selected={selected} busy={board.busy} flash={board.flash} errors={board.errors}
+                      gmHintKey={null} animateIn={animateCards} actions={actions}
+                      onToggleSelect={toggleSelect} onSelectMany={selectMany}
+                    />
+                    <DocColumn
+                      id="returned" keys={columns.returned} view={view}
+                      selected={selected} busy={board.busy} flash={board.flash} errors={board.errors}
+                      gmHintKey={null} animateIn={animateCards} actions={actions}
+                      onToggleSelect={toggleSelect} onSelectMany={selectMany}
+                      shortcut={activeSlipDate && slipCount > 0 ? (
+                        <button
+                          type="button" onClick={() => printReturnSlip(student, view, activeSlipDate)}
+                          className={smallShortcut}
+                          style={{ borderColor: `${STATUS_META.returned.color}77`, color: STATUS_META.returned.ink }}
+                          title={`Print the return acknowledgement for ${fmtDay(activeSlipDate)}`}
+                        >
+                          <Svg size={10}>{Icon.print}</Svg> Slip
+                        </button>
+                      ) : undefined}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {historyVisited && (
+                <div role="tabpanel" aria-hidden={tab !== 'history'} className={`${panelCls(tab === 'history')} overflow-y-auto px-5 py-4`} style={{ scrollbarGutter: 'stable' }}>
+                  <DocHistoryPanel studentId={student.id} refreshKey={historyKey} />
                 </div>
               )}
-
-              {REQUIRED_DOCS.map(({ key, label }, idx) => (
-                <DocRow
-                  key={key}
-                  docKey={key}
-                  label={label}
-                  entry={docs[key]}
-                  index={idx}
-                  saveState={rowState[key] ?? 'idle'}
-                  error={rowError[key] ?? ''}
-                  onStatus={(t) => setStatus(key, t)}
-                  onConfirmReturn={(d, r) => confirmReturn(key, d, r)}
-                  onDate={(field, date) => commit(key, { ...docs[key], [field]: date }, 'date')}
-                  onRemarks={(remarks) => commit(key, { ...docs[key], remarks }, 'remarks')}
-                  onCopyType={() => commit(key, { ...docs[key], copyType: docs[key].copyType === 'copy' ? 'original' : 'copy' }, 'copyType')}
-                  onDismissError={() => setRowError((e) => ({ ...e, [key]: '' }))}
-                />
-              ))}
-            </div>
+            </>
           )}
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-5 py-3 border-t flex items-center gap-2 flex-wrap shrink-0 bg-white" style={{ borderColor: DOC_TONE.line }}>
+        <div className="px-5 py-2.5 border-t flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0 bg-white" style={{ borderColor: DOC_TONE.line }}>
           <button
-            type="button"
-            disabled={!docs}
-            onClick={() => docs && printStudentDocs(student, docs)}
-            className={`${pillBtn} bg-white hover:bg-gray-50`}
+            type="button" disabled={!view}
+            onClick={() => view && printStudentDocs(student, view)}
+            className={`${pillBtn} bg-white hover:bg-gray-50 shrink-0`}
             style={{ borderColor: DOC_TONE.line, color: DOC_TONE.text }}
           >
             <Svg size={13}>{Icon.print}</Svg> Print checklist
           </button>
 
-          {returnDates.length > 0 && docs && (
-            <div className="flex items-center gap-1.5">
+          {returnDates.length > 0 && view && (
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 disabled={!activeSlipDate || slipCount === 0}
-                onClick={() => printReturnSlip(student, docs, activeSlipDate)}
-                className={`${pillBtn}`}
+                onClick={() => printReturnSlip(student, view, activeSlipDate)}
+                className={pillBtn}
                 style={{
                   borderColor: `${STATUS_META.returned.color}66`,
                   color: STATUS_META.returned.ink,
@@ -305,54 +320,72 @@ export function ManageDocumentsModal({ student, onClose }: Props) {
                 title="Acknowledgement for the student to sign when originals are handed back"
               >
                 <Svg size={13}>{Icon.back}</Svg>
-                Print return slip{slipCount ? ` (${slipCount})` : ''}
+                Return slip{slipCount ? ` (${slipCount})` : ''}
               </button>
               <select
                 value={activeSlipDate}
                 onChange={(e) => setSlipDate(e.target.value)}
                 aria-label="Return slip date"
-                className="h-8 rounded-full border bg-white px-2.5 text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-sky-200 cursor-pointer"
+                className="h-8 rounded-full border bg-white px-2 text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-sky-200 cursor-pointer"
                 style={{ borderColor: DOC_TONE.line, color: DOC_TONE.muted }}
               >
-                {!activeSlipDate && <option value="">Pick a date</option>}
                 {returnDates.map((d) => <option key={d} value={d}>{d === today ? `Today (${fmtDay(d)})` : fmtDay(d)}</option>)}
               </select>
             </div>
           )}
 
-          <div className="flex-1" />
+          <div className="flex-1 min-w-0 flex justify-center">
+            {doneError ? (
+              <span className="text-[12px] font-medium truncate" style={{ color: DOC_TONE.coral }}>{doneError}</span>
+            ) : board.undo && (
+              <div
+                key={board.undo.id}
+                className="relative flex items-center gap-1 min-w-0 max-w-full rounded-full pl-3 pr-1 h-7 text-[12px] font-medium text-white overflow-hidden"
+                style={{ background: '#1F2937', animation: 'toast-in 0.18s ease-out' }}
+                role="status"
+              >
+                <span className="truncate">{board.undo.message}</span>
+                {board.undo.slipDate && view && (
+                  <button
+                    type="button" onClick={() => printReturnSlip(student, view, board.undo!.slipDate!)}
+                    className="shrink-0 rounded-full px-2 h-[22px] text-[11.5px] font-semibold cursor-pointer hover:bg-white/15"
+                    style={{ color: '#93C5FD' }}
+                  >
+                    Print slip
+                  </button>
+                )}
+                <button
+                  type="button" onClick={board.undoLast}
+                  className="shrink-0 rounded-full px-2.5 h-[22px] text-[11.5px] font-semibold cursor-pointer hover:bg-white/15"
+                  style={{ color: '#6EE7B7' }}
+                >
+                  Undo
+                </button>
+                <span
+                  className="absolute left-0 bottom-0 h-[2px] w-full"
+                  style={{ background: '#6EE7B7', transformOrigin: 'left', animation: `doc-undo-timer ${BOARD_UNDO_MS}ms linear forwards` }}
+                />
+                <style>{'@keyframes doc-undo-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }'}</style>
+              </div>
+            )}
+          </div>
+
           <button
             type="button" onClick={onClose}
-            className={`${pillBtn} text-white`}
-            style={{ background: DOC_TONE.accent, borderColor: DOC_TONE.accent }}
+            className={`${pillBtn} bg-white hover:bg-gray-50 shrink-0`}
+            style={{ borderColor: DOC_TONE.line, color: DOC_TONE.muted }}
           >
-            Done
+            Close
+          </button>
+          <button
+            type="button" onClick={done} disabled={closing}
+            className={`${pillBtn} text-white shrink-0 px-4 min-w-[84px]`}
+            style={{ background: DOC_TONE.accent, borderColor: DOC_TONE.accent }}
+            title={board.saving ? 'Finishes saving, then closes' : undefined}
+          >
+            {closing ? <><Spinner size={12} color="#fff" /> Finishing…</> : 'Done'}
           </button>
         </div>
-
-        {/* ── Undo toast ── */}
-        {undo && (
-          <div
-            key={undo.id}
-            className="absolute left-1/2 -translate-x-1/2 bottom-[68px] z-10 flex items-center gap-3 rounded-full pl-4 pr-1.5 py-1.5 shadow-lg text-[12.5px] font-medium text-white overflow-hidden"
-            style={{ background: '#1F2937', animation: 'toast-in 0.2s ease-out' }}
-            role="status"
-          >
-            <span>{undo.message}</span>
-            <button
-              type="button" onClick={undoLast}
-              className="rounded-full px-3 h-7 text-[12px] font-semibold cursor-pointer hover:bg-white/15"
-              style={{ color: '#6EE7B7' }}
-            >
-              Undo
-            </button>
-            <span
-              className="absolute left-0 bottom-0 h-[2px]"
-              style={{ background: '#6EE7B7', width: '100%', transformOrigin: 'left', animation: `doc-undo-timer ${UNDO_MS}ms linear forwards` }}
-            />
-            <style>{'@keyframes doc-undo-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }'}</style>
-          </div>
-        )}
       </div>
     </div>
   );

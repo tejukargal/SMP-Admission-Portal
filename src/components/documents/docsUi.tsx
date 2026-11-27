@@ -26,12 +26,12 @@ export function Spinner({ color = DOC_TONE.accent, size = 14 }: { color?: string
 
 /** Progress ring with a centred "received / required" count. */
 export function ProgressRing({ value, total, size = 58 }: { value: number; total: number; size?: number }) {
-  const stroke = 5;
+  const stroke = size < 50 ? 4 : 5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = total ? Math.min(1, value / total) : 1;
   const done = total > 0 && value >= total;
-  const color = done ? DOC_TONE.accent : value === 0 ? DOC_TONE.coral : DOC_TONE.amber;
+  const color = done ? DOC_TONE.emerald : value === 0 ? DOC_TONE.coral : DOC_TONE.amber;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -43,8 +43,8 @@ export function ProgressRing({ value, total, size = 58 }: { value: number; total
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="text-[15px] font-semibold tabular-nums" style={{ color: DOC_TONE.text }}>
-          {value}<span className="text-[11px] font-medium" style={{ color: DOC_TONE.muted }}>/{total}</span>
+        <span className={`${size < 50 ? 'text-[12.5px]' : 'text-[15px]'} font-semibold tabular-nums`} style={{ color: DOC_TONE.text }}>
+          {value}<span className={`${size < 50 ? 'text-[9.5px]' : 'text-[11px]'} font-medium`} style={{ color: DOC_TONE.muted }}>/{total}</span>
         </span>
       </div>
     </div>

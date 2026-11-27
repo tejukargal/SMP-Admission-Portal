@@ -177,55 +177,72 @@ export class DocOfflineError extends Error {
 
 const SAVE_TIMEOUT_MS = 15_000;
 
+export interface DocChange {
+  key: DocKey;
+  /** The entry the user saw when making the change (conflict check). */
+  seen: DocEntry;
+  next: DocEntry;
+  action: DocHistoryAction;
+}
+
 /**
- * Atomically change ONE checklist entry and append its audit entry.
+ * Atomically change one or more checklist entries and append an audit entry per document.
  *
- * - Writes only `docs.<key>`, so edits to different documents never overwrite each other.
- * - Rejects with DocConflictError if the entry changed since the user saw it (`seen`).
+ * - Writes only `docs.<key>` for the changed keys, so edits to other documents never overwrite each other.
+ * - Rejects with DocConflictError if any entry changed since the user saw it (`seen`).
+ * - Several keys in one call share a `batchId` in the history (shown as one bulk change).
  * - Transactions need the server, so this fails fast offline (DocOfflineError) instead
  *   of leaving a queued write the user can't see.
- * Returns the saved entry (with audit stamps).
+ * Returns the saved entries (with audit stamps).
  */
-export async function updateDocEntry(
+export async function updateDocEntries(
   studentId: string,
-  key: DocKey,
-  seen: DocEntry,
-  next: DocEntry,
-  action: DocHistoryAction,
-): Promise<DocEntry> {
+  changes: DocChange[],
+): Promise<Partial<Record<DocKey, DocEntry>>> {
   const user = auth.currentUser;
   if (!user) throw new Error('Your session has expired — please sign in again.');
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new DocOfflineError();
+  if (changes.length === 0) return {};
 
-  const invalid = validateEntry(next);
-  if (invalid) throw new Error(invalid);
+  for (const c of changes) {
+    const invalid = validateEntry(c.next);
+    if (invalid) throw new Error(changes.length > 1 ? `${labelOf(c.key)}: ${invalid}` : invalid);
+  }
 
   const now = new Date().toISOString();
   const byEmail = user.email ?? '';
-  const saved = cleanEntry({ ...next, updatedBy: byEmail, updatedAt: now });
   const ref = doc(db, COLL, studentId);
-  const histRef: DocumentReference = doc(collection(db, COLL, studentId, HISTORY));
+  const batchId = changes.length > 1 ? `${now}-${user.uid.slice(0, 6)}` : undefined;
+  const saved: Partial<Record<DocKey, DocEntry>> = {};
+  for (const c of changes) saved[c.key] = cleanEntry({ ...c.next, updatedBy: byEmail, updatedAt: now });
 
   const work = runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     const stored = snap.exists() ? (snap.data() as Omit<StudentDocuments, 'id'>) : null;
-    const current = mergeWithDefaults(stored?.docs ?? {})[key];
-    if (!sameEntry(current, seen)) throw new DocConflictError(current);
+    const merged = mergeWithDefaults(stored?.docs ?? {});
+    for (const c of changes) {
+      if (!sameEntry(merged[c.key], c.seen)) throw new DocConflictError(merged[c.key]);
+    }
 
     if (snap.exists()) {
-      tx.update(ref, { [`docs.${key}`]: saved, updatedAt: now, updatedBy: byEmail });
+      const patch: Record<string, unknown> = { updatedAt: now, updatedBy: byEmail };
+      for (const c of changes) patch[`docs.${c.key}`] = saved[c.key];
+      tx.update(ref, patch);
     } else {
-      tx.set(ref, { studentId, docs: { [key]: saved }, updatedAt: now, updatedBy: byEmail });
+      tx.set(ref, { studentId, docs: { ...saved }, updatedAt: now, updatedBy: byEmail });
     }
-    tx.set(histRef, {
-      docKey: key,
-      action,
-      before: cleanEntry(current),
-      after: saved,
-      byUid: user.uid,
-      byEmail,
-      at: now,
-    });
+    for (const c of changes) {
+      tx.set(doc(collection(db, COLL, studentId, HISTORY)), {
+        docKey: c.key,
+        action: c.action,
+        before: cleanEntry(merged[c.key]),
+        after: saved[c.key],
+        byUid: user.uid,
+        byEmail,
+        at: now,
+        ...(batchId ? { batchId } : {}),
+      });
+    }
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -244,6 +261,22 @@ export async function updateDocEntry(
     clearTimeout(timer);
   }
   return saved;
+}
+
+/** Single-document convenience wrapper over updateDocEntries. */
+export async function updateDocEntry(
+  studentId: string,
+  key: DocKey,
+  seen: DocEntry,
+  next: DocEntry,
+  action: DocHistoryAction,
+): Promise<DocEntry> {
+  const out = await updateDocEntries(studentId, [{ key, seen, next, action }]);
+  return out[key]!;
+}
+
+function labelOf(key: DocKey): string {
+  return REQUIRED_DOCS.find((d) => d.key === key)?.label ?? key;
 }
 
 // ─── Deletes (admin-only by rules) ─────────────────────────────────────────────

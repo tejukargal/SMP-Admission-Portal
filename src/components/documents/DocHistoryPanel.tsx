@@ -49,12 +49,16 @@ export function DocHistoryPanel({ studentId, refreshKey }: { studentId: string; 
   const items = current?.items ?? null;
   const error = current?.error ?? '';
 
+  // Day → items, where entries written together in one bulk change form one item.
   const groups = useMemo(() => {
-    const map = new Map<string, DocHistoryEntry[]>();
+    const map = new Map<string, DocHistoryEntry[][]>();
     for (const h of items ?? []) {
       const day = localDayOf(h.at);
       if (!map.has(day)) map.set(day, []);
-      map.get(day)!.push(h);
+      const list = map.get(day)!;
+      const last = list[list.length - 1];
+      if (h.batchId && last && last[0].batchId === h.batchId) last.push(h);
+      else list.push([h]);
     }
     return [...map.entries()];
   }, [items]);
@@ -93,18 +97,37 @@ export function DocHistoryPanel({ studentId, refreshKey }: { studentId: string; 
         <section key={day}>
           <h4 className="text-[11px] font-medium uppercase tracking-[0.7px] mb-2" style={{ color: DOC_TONE.faint }}>{fmtDay(day)}</h4>
           <ol className="relative border-l ml-[7px] space-y-2.5" style={{ borderColor: DOC_TONE.line }}>
-            {rows.map((h) => {
+            {rows.map((batch) => {
+              const h = batch[0];
               const m = STATUS_META[statusOf(h.after)];
+              const isBulk = batch.length > 1;
               return (
                 <li key={h.id} className="pl-4 relative">
                   <span
                     className="absolute -left-[5px] top-[7px] w-[9px] h-[9px] rounded-full"
                     style={{ background: m.color, boxShadow: `0 0 0 3px ${m.wash}` }}
                   />
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-[12.5px] font-medium" style={{ color: DOC_TONE.text }}>{LABEL[h.docKey] ?? h.docKey}</span>
-                    <span className="text-[12.5px]" style={{ color: '#4B5563' }}>{describe(h)}</span>
-                  </div>
+                  {isBulk ? (
+                    <>
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="rounded-full border px-1.5 text-[10.5px] font-medium leading-[16px]" style={{ borderColor: `${DOC_TONE.accent}55`, color: DOC_TONE.ink }}>Bulk</span>
+                        <span className="text-[12.5px] font-medium" style={{ color: DOC_TONE.text }}>{batch.length} documents</span>
+                      </div>
+                      <ul className="mt-1 space-y-0.5">
+                        {batch.map((b) => (
+                          <li key={b.id} className="flex items-baseline gap-2 flex-wrap text-[12px]">
+                            <span className="font-medium" style={{ color: DOC_TONE.text }}>{LABEL[b.docKey] ?? b.docKey}</span>
+                            <span style={{ color: '#4B5563' }}>{describe(b)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-[12.5px] font-medium" style={{ color: DOC_TONE.text }}>{LABEL[h.docKey] ?? h.docKey}</span>
+                      <span className="text-[12.5px]" style={{ color: '#4B5563' }}>{describe(h)}</span>
+                    </div>
+                  )}
                   <div className="text-[11px] mt-0.5" style={{ color: DOC_TONE.muted }}>
                     {fmtTime(h.at)} · <span title={h.byEmail}>{shortUser(h.byEmail) || 'unknown'}</span>
                   </div>
